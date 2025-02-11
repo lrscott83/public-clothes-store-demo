@@ -2,7 +2,7 @@ import { Product, Category } from '../types';
 // import { corbata1 } from '../public/images/corbatas/corbata1.webp'
 
 export const categories: Category[] = [
-  { id: 'botas-hombres', name: 'Botas para Hmbres' },
+  { id: 'botas-hombres', name: 'Botas para Hombres' },
   { id: 'camisas', name: 'Camisas' },
   { id: 'corbatas', name: 'Corbatas' },
   { id: 'enguatadas', name: 'Enguatadas' },
@@ -161,7 +161,7 @@ export const products: Product[] = [
     description: 'Colores: Rosado',
     price: 1200.00,
     category: 'enguatadas',
-    image: '/productos/enguatadas/menguatada1.jpg',
+    image: '/productos/enguatadas/enguatada1.jpg',
   },
   {
     id: 17,
@@ -169,7 +169,7 @@ export const products: Product[] = [
     description: 'Colores: Gris',
     price: 1200.00,
     category: 'enguatadas',
-    image: '/productos/enguatadas/menguatada2.jpg',
+    image: '/productos/enguatadas/enguatada2.jpg',
   },
   {
     id: 18,
@@ -177,7 +177,7 @@ export const products: Product[] = [
     description: 'Colores: Azul',
     price: 1200.00,
     category: 'enguatadas',
-    image: '/productos/enguatadas/menguatada3.jpg',
+    image: '/productos/enguatadas/enguatada3.jpg',
   },
 
 
@@ -327,7 +327,7 @@ export const products: Product[] = [
     description: 'Colores: Gris',
     price: 2100.00,
     category: 'sacos-hombres',
-    image: '/productos/sacos-hombres/saco1.jpg',
+    image: '/productos/sacos-hombres/saco2.jpg',
   },
   {
     id: 32,
@@ -335,7 +335,7 @@ export const products: Product[] = [
     description: 'Colores: Gris Oscuro',
     price: 2000.00,
     category: 'sacos-hombres',
-    image: '/productos/sacos-hombres/saco1.jpg',
+    image: '/productos/sacos-hombres/saco3.jpg',
   },
 
   // sandalias
@@ -434,7 +434,7 @@ export const products: Product[] = [
     description: 'Colores: Claro',
     price: 4300.00,
     category: 'shorts-mujeres',
-    image: '/productos/shorts-mujeres/short1.jpg',
+    image: '/productos/shorts-mujeres/short2.jpg',
   },
 
 
@@ -557,7 +557,7 @@ export const products: Product[] = [
     description: 'Colores: Rojp',
     price: 4200.00,
     category: 'zapatos-altos',
-    image: '/productos/zapatos-altos/zapato3.jpg',
+    image: '/productos/zapatos-altos/zapato3.webp',
   },
   {
     id: 57,

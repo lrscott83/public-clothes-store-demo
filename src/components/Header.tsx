@@ -89,11 +89,11 @@ const Header = () => {
   };[]
 
   const navLinks = [
-    { name: 'Inicio', path: '/' },
-    { name: 'Características', path: '#caracteristicas' },
-    { name: 'Ofertas', path: '#ofertas' },
-    { name: 'Novedades', path: '#novedades' },
-    { name: 'Productos', path: '/productos' },
+    { name: 'INICIO', path: '/' },
+    { name: 'CARACTERÍSTICAS', path: '#caracteristicas' },
+    { name: 'OFERTAS', path: '#ofertas' },
+    { name: 'NOVEDADES', path: '#novedades' },
+    { name: 'PRODUCTOS', path: '#productos' },
   ];
 
   const log = () => {
@@ -114,42 +114,40 @@ const Header = () => {
           <Link 
             to="/" 
             className="flex items-center space-x-2 text-2xl font-bold transition-colors duration-300"
-            style={{ color: theme.logo.color }}
+            style={{ color: theme.colors.primary }}
           >
             <ThemeIcon name={theme.logo.icon} />
-            <span>Boutique Exclusiva</span>
+            <span>Mi Boutique</span>
           </Link>
 
           <nav className="hidden md:flex space-x-8">
             {navLinks.map((link) => (
-              link.path.startsWith('#') ? (
+              // link.path.startsWith('#') ? (
                 <button
                   key={link.path}
                   onClick={() => scrollToSection(link.path)}
                   className="text-sm font-medium transition-colors duration-300"
                   style={{ 
-                    color: isActiveLink(link.path)
-                      ? theme.colors.accent 
-                      : theme.colors.text
+                    color: theme.colors.accent
                   }}
                 >
                   {link.name}
                 </button>
-              ) : (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  className="text-sm font-medium transition-colors duration-300"
-                  style={{ 
-                    color: isActiveLink(link.path)
-                      ? theme.colors.accent 
-                      : theme.colors.text 
-                  }}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  {link.name}
-                </Link>
-              )
+              // ) : (
+              //   <Link
+              //     key={link.path}
+              //     to={link.path}
+              //     className="text-sm font-medium transition-colors duration-300"
+              //     style={{ 
+              //       color: isActiveLink(link.path)
+              //         ? theme.colors.accent 
+              //         : theme.colors.text 
+              //     }}
+              //     onClick={() => setIsMenuOpen(false)}
+              //   >
+              //     {link.name}
+              //   </Link>
+              // )
             ))}
           </nav>
 
@@ -178,7 +176,7 @@ const Header = () => {
             <button
               className="md:hidden p-2"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              style={{ color: theme.colors.text }}
+              style={{ color: theme.colors.accent }}
             >
               {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -201,7 +199,7 @@ const Header = () => {
                   style={{ 
                     color: location.pathname === '/' && location.hash === link.path
                       ? theme.colors.accent 
-                      : theme.colors.text 
+                      : theme.colors.accent 
                   }}
                 >
                   {link.name}
@@ -214,7 +212,7 @@ const Header = () => {
                   style={{ 
                     color: location.pathname === link.path 
                       ? theme.colors.accent 
-                      : theme.colors.text 
+                      : theme.colors.accent 
                   }}
                   onClick={() => setIsMenuOpen(false)}
                 >

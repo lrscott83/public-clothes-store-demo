@@ -3,14 +3,14 @@ import { Store, ShoppingBag, Package } from 'lucide-react';
 import { Theme } from '../types';
 
 const themes: Record<string, Theme> = {
-  old: {
-    name: 'old',
+  light: {
+    name: 'light',
     colors: {
       primary: 'rgb(79, 70, 229)',
       secondary: 'rgb(99, 102, 241)',
       background: 'rgb(249, 250, 251)',
-      surface: 'rgb(255, 255, 255)',
-      text: 'rgb(17, 24, 39)',
+      surface: 'rgb(249, 250, 251)',
+      text: 'rgb(0, 0, 0)',
       textSecondary: 'rgb(107, 114, 128)',
       accent: 'rgb(79, 70, 229)',
       border: 'rgb(229, 231, 235)',
@@ -22,29 +22,7 @@ const themes: Record<string, Theme> = {
     },
     logo: {
       icon: 'Store',
-      color: 'rgb(79, 70, 229)',
-    },
-  },
-  light: {
-    name: 'light',
-    colors: {
-      primary: 'rgb(239, 68, 68)',
-      secondary: 'rgb(99, 102, 241)',
-      background: 'rgb(249, 250, 251)',
-      surface: 'rgb(255, 255, 255)',
-      text: 'rgb(17, 24, 39)',
-      textSecondary: 'rgb(107, 114, 128)',
-      accent: 'rgb(239, 68, 68)',
-      border: 'rgb(229, 231, 235)',
-    },
-    hero: {
-      backgroundImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8',
-      headlineColor: 'rgb(255, 255, 255)',
-      subheadingColor: 'rgb(229, 231, 235)',
-    },
-    logo: {
-      icon: 'Store',
-      color: 'rgb(239, 68, 68)',
+      color: 'rgb(107, 114, 128)',
     },
   },
   dark: {

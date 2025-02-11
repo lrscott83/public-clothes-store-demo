@@ -1,6 +1,7 @@
 import React from 'react';
 import { Product } from '../types';
 import { useTheme } from '../context/ThemeContext';
+import { BadgeInfo, ShoppingCart } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
@@ -69,15 +70,27 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             )}
           </div>
           
-          {/* <button 
-            className="px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-300"
+          <button 
+            className="px-4 py-2 rounded-full flex items-center justify-center text-sm font-medium transition-colors duration-300"
+            style={{ 
+              backgroundColor: theme.colors.surface,
+              color: theme.colors.secondary
+            }}
+          >
+            {/* Comprar Ahora */}
+            <BadgeInfo className="w-6 h-6" />
+          </button>
+
+          <button 
+            className="px-4 py-2 rounded-full flex items-center justify-center text-sm font-medium transition-colors duration-300"
             style={{ 
               backgroundColor: theme.colors.accent,
               color: theme.colors.surface
             }}
           >
-            Comprar Ahora
-          </button> */}
+            {/* Comprar Ahora */}
+            <ShoppingCart className="w-6 h-6" />
+          </button>
         </div>
       </div>
     </div>
