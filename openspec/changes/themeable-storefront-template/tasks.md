@@ -73,18 +73,18 @@ Chain strategy: pending
 - [x] 5.6 Add app-level base rule applying `var(--font-family)` (design 3.3) — new `app/app.css` (`@layer base { html { font-family: var(--font-family, ...) } }`), imported in `root.tsx` after `@store-mgmt/web-common/styles.css`; `web-common` itself untouched
 - [x] 5.7 (added) `templates/apps/static-store/verticals/clothes/store.config.ts` — MINIMAL placeholder clothes `StoreConfig` (brand + theme override + 1 category/1 product) so the app builds/prerenders now; Slice 4 (Phase 8) replaces it with the full legacy-parity catalog + real assets
 
-## Phase 6: Ported UI Components (spec Section 5) — RTL, config-driven
+## Phase 6: Ported UI Components (spec Section 5) — RTL, config-driven — DONE (Slice 3)
 
-- [ ] 6.1 RED: `app/components/__tests__/header.test.tsx` — two `StoreConfig` fixtures render different brand/nav (route vs anchor semantics), zero hardcoded strings
-- [ ] 6.2 GREEN: `app/components/header.tsx` (ported from `src/components/Header.tsx`, re-implemented against `StoreConfig`)
-- [ ] 6.3 RED: `app/components/__tests__/hero.test.tsx` — rendered image equals `config.hero.image` (regression for legacy dead `hero.backgroundImage` bug), heading/subheading/CTA from config, default overlay when `hero.overlay` omitted
-- [ ] 6.4 GREEN: `app/components/hero.tsx` (ported from `src/pages/LandingPage.tsx` hero section)
-- [ ] 6.5 RED: `app/components/__tests__/product-card.test.tsx` — `isNew` badge via theme token, `discount=20` badge, price via `formatMoney` (not `$`+`toFixed`)
-- [ ] 6.6 GREEN: `app/components/product-card.tsx` (ported from `src/components/ProductCard.tsx`)
-- [ ] 6.7 RED: `app/components/__tests__/product-grid.test.tsx` — category filter shows only matching `categoryId`, "all" shows across categories
-- [ ] 6.8 GREEN: `app/components/product-grid.tsx` (ported from `src/pages/ProductsPage.tsx` grid logic)
-- [ ] 6.9 RED: `app/components/__tests__/footer.test.tsx` — two fixtures render different copyright/link sets, zero hardcoded copy (spec 5, new component)
-- [ ] 6.10 GREEN: `app/components/footer.tsx` (new, no legacy equivalent)
+- [x] 6.1 RED: `app/components/__tests__/header.test.tsx` — two `StoreConfig` fixtures render different brand/nav (route vs anchor semantics), zero hardcoded strings
+- [x] 6.2 GREEN: `app/components/header.tsx` (ported from `src/components/Header.tsx`, re-implemented against `StoreConfig`)
+- [x] 6.3 RED: `app/components/__tests__/hero.test.tsx` — rendered image equals `config.hero.image` (regression for legacy dead `hero.backgroundImage` bug), heading/subheading/CTA from config, default overlay when `hero.overlay` omitted
+- [x] 6.4 GREEN: `app/components/hero.tsx` (ported from `src/pages/LandingPage.tsx` hero section)
+- [x] 6.5 RED: `app/components/__tests__/product-card.test.tsx` — `isNew` badge via theme token, `discount=20` badge, price via `formatMoney` (not `$`+`toFixed`)
+- [x] 6.6 GREEN: `app/components/product-card.tsx` (ported from `src/components/ProductCard.tsx`)
+- [x] 6.7 RED: `app/components/__tests__/product-grid.test.tsx` — renders only the given products (a category-filtered subset vs the full set — actual category-filter UI lives in the Slice 4 route/page, this component is purely presentational per the apply scope), "all" shows across categories
+- [x] 6.8 GREEN: `app/components/product-grid.tsx` (ported from `src/pages/ProductsPage.tsx` grid logic; filtering itself deferred to the Slice 4 route)
+- [x] 6.9 RED: `app/components/__tests__/footer.test.tsx` — two fixtures render different copyright/link sets, zero hardcoded copy (spec 5, new component)
+- [x] 6.10 GREEN: `app/components/footer.tsx` (new, no legacy equivalent)
 
 ## Phase 7: Routes + Prerender Config (spec Sections 5, 7)
 
