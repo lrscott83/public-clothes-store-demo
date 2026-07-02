@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import { ThemeProvider } from '@store-mgmt/storefront/theme';
-import { Layout } from '../root';
+import App, { Layout } from '../root';
+import { Header } from '../components/header';
+import { Footer } from '../components/footer';
 import { activeConfig, activeTheme } from '../store/active';
 
 // Layout renders a nested <html>, which real browsers (and jsdom) refuse to
@@ -35,5 +37,30 @@ describe('root Layout', () => {
     expect(themeProviderElement).toBeDefined();
     expect(themeProviderElement?.props.theme).toBe(activeTheme);
     expect(themeProviderElement?.props.config).toBe(activeConfig);
+  });
+});
+
+// App is likewise a plain function component (RR7's default route export) —
+// shallow-inspecting its returned element tree avoids the same nested-<html>
+// jsdom limitation and lets us assert Header/Footer are mounted once, around
+// <Outlet/>, without needing a full router context to actually render Outlet.
+describe('root App', () => {
+  it('wraps <Outlet/> with the config-driven Header and Footer, mounted once for every route', () => {
+    const element = App() as ReactElement<{ children: ReactNode }>;
+    const children = Array.isArray(element.props.children)
+      ? (element.props.children as ReactElement[])
+      : [element.props.children as ReactElement];
+
+    const headerElement = children.find(
+      (node) => typeof node === 'object' && node !== null && node.type === Header,
+    );
+    const footerElement = children.find(
+      (node) => typeof node === 'object' && node !== null && node.type === Footer,
+    );
+
+    expect(headerElement).toBeDefined();
+    expect((headerElement as ReactElement<{ config: unknown }>).props.config).toBe(activeConfig);
+    expect(footerElement).toBeDefined();
+    expect((footerElement as ReactElement<{ config: unknown }>).props.config).toBe(activeConfig);
   });
 });

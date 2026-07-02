@@ -86,25 +86,25 @@ Chain strategy: pending
 - [x] 6.9 RED: `app/components/__tests__/footer.test.tsx` — two fixtures render different copyright/link sets, zero hardcoded copy (spec 5, new component)
 - [x] 6.10 GREEN: `app/components/footer.tsx` (new, no legacy equivalent)
 
-## Phase 7: Routes + Prerender Config (spec Sections 5, 7)
+## Phase 7: Routes + Prerender Config (spec Sections 5, 7) — DONE (Slice 4)
 
-- [ ] 7.1 Edit `templates/apps/static-store/app/routes.ts` — add `route('productos', ...)`, `route('productos/:id', ...)` per design 6.1
-- [ ] 7.2 RED: `app/routes/__tests__/products.test.tsx` — `/productos` renders grid+filters from `activeConfig`+`catalog`
-- [ ] 7.3 GREEN: `app/routes/products.tsx`
-- [ ] 7.4 RED: `app/routes/__tests__/product-detail.test.tsx` — client-side resolution against catalog provider by `:id` param
-- [ ] 7.5 GREEN: `app/routes/product-detail.tsx`
-- [ ] 7.6 Edit `templates/apps/static-store/app/routes/home.tsx` — wire Hero/features/footer from `activeConfig` (replace placeholder home)
-- [ ] 7.7 Edit `templates/apps/static-store/react-router.config.ts` — `prerender: ['/', '/productos']`, `ssr: false`
-- [ ] 7.8 Build/output assertion test: prerendered `index.html` and `productos/index.html` exist after build; no prerendered HTML for product-detail route
+- [x] 7.1 Edit `templates/apps/static-store/app/routes.ts` — add `route('productos', ...)`, `route('productos/:id', ...)` per design 6.1
+- [x] 7.2 RED: `app/routes/__tests__/products.test.tsx` — targets an exported `ProductsPage({config, catalog})` presentational component (same prop-injectable pattern as Slice 3's Header/Hero/etc — see Deviations) rather than the live `activeConfig`/`catalog` singletons, so the test stays deterministic and independent of the Phase 8 data swap; asserts default-shows-all, category-filter narrows, "All" resets
+- [x] 7.3 GREEN: `app/routes/products.tsx` — exports `ProductsPage` (filter state owned here, NOT in `ProductGrid`) + a thin default `ProductsRoute` wrapping it with live `activeConfig`/`catalog`
+- [x] 7.4 RED: `app/routes/__tests__/product-detail.test.tsx` — targets exported `ProductDetailPage({config, catalog})`; client-side resolution against catalog provider by `:id` param (via `MemoryRouter`/`Routes`), found + graceful-not-found cases
+- [x] 7.5 GREEN: `app/routes/product-detail.tsx` — exports `ProductDetailPage` + thin default `ProductDetailRoute`
+- [x] 7.6 Edit `templates/apps/static-store/app/routes/home.tsx` — replaced placeholder; exports `HomePage({config, catalog})` (Hero + optional `config.features` section + discounted/new-arrivals `ProductGrid` strips) + thin default `Home` wrapper; `app/root.tsx`'s `App()` now also mounts `Header`/`Footer` around `<Outlet/>` once for every route (RED/GREEN in `app/__tests__/root.test.tsx`, new `describe('root App', ...)` block)
+- [x] 7.7 Edit `templates/apps/static-store/react-router.config.ts` — `prerender: ['/', '/productos']`, `ssr: false` (product-detail intentionally excluded, resolves client-side)
+- [x] 7.8 Build/output assertion (manual, matching Slices 2-3 precedent — no automated build-shelling-out test added to the unit suite): `pnpm --filter @store-mgmt/static-store build` → `Prerender (html): / -> build/client/index.html` AND `Prerender (html): /productos -> build/client/productos/index.html`; no prerendered HTML for product-detail; verified via evidence in apply-progress
 
-## Phase 8: Clothes Vertical Data (spec Section 8)
+## Phase 8: Clothes Vertical Data (spec Section 8) — DONE (Slice 4)
 
-- [ ] 8.1 Create `templates/apps/static-store/verticals/clothes/store.config.ts` — `brand.name === "Boutique Exclusiva"`, same 16 categories as legacy `src/data/products.ts`
-- [ ] 8.2 Create `templates/apps/static-store/verticals/clothes/catalog.json` — port legacy products, **unique IDs enforced** (no dup 30/32), every `categoryId` resolves
-- [ ] 8.3 Copy/convert assets to `templates/apps/static-store/public/verticals/clothes/{logo,hero,products/**}` from `src/images/**`
-- [ ] 8.4 RED: `verticals/__tests__/clothes-config.test.ts` — `validateStoreConfig(clothesConfig)` passes; required-asset check (every referenced asset key resolves to a file under `public/verticals/clothes/`)
-- [ ] 8.5 GREEN: fix any data gaps until 8.4 passes
-- [ ] 8.6 Register `clothes` in `app/store/verticals.ts` `VERTICALS` map
+- [x] 8.1 Create `templates/apps/static-store/verticals/clothes/store.config.ts` — `brand.name === "Boutique Exclusiva"`; **17** categories ported from legacy `src/data/products.ts` (spec said "16"; legacy actually has 17 — data fidelity to the real legacy source wins over the spec's headcount, see Deviations)
+- [x] 8.2 Create `templates/apps/static-store/verticals/clothes/catalog.json` — 62 products generated from the REAL files under `public/productos/**` (legacy's `products.ts` also declares 62 entries, confirming the count; some legacy `image` string literals didn't match actual on-disk filenames — e.g. `menguatada*.jpg` vs real `enguatada*.jpg`, `pulover*.jpg` vs real `istockphoto-*.jpg` — real filenames used, mapped positionally per category; see Deviations), **unique IDs enforced** (fresh sequential string ids `"1".."62"`, fixes legacy dup ids 30/32), every `categoryId` resolves
+- [x] 8.3 Copy assets to `templates/apps/static-store/public/verticals/clothes/{hero.jpg, products/**}` from `public/productos/**` (62 files) and `public/hero5.jpg` (legacy has no `src/images/**` product tree — real legacy product assets live under repo-root `public/productos/**`, not `src/images`; hero source is `public/hero5.jpg`, matching `LandingPage.tsx`'s `<img src="hero5.jpg">`)
+- [x] 8.4 RED/data-assertion: `verticals/__tests__/clothes-config.test.ts` (added to `vitest.config.ts`'s `include` glob, which previously only covered `app/**`) — `validateStoreConfig(clothesConfig)` passes; no duplicate product ids; every `categoryId` resolves; hero + all 62 product image assets resolve to real files under `public/verticals/clothes/` (`existsSync` check); brand name + catalog counts (62 products / 17 categories)
+- [x] 8.5 GREEN: real data satisfies 8.4 on first run (data was generated from the actual file listing, so no gaps needed fixing)
+- [x] 8.6 Register `clothes` in `app/store/verticals.ts` `VERTICALS` map — unchanged, already registered in Slice 2 (still points at the same `clothesConfig` export, now backed by real data)
 
 ## Phase 9: Demo Vertical + Switchability (late decision — in scope)
 

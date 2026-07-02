@@ -9,6 +9,8 @@ import {
 import type { Route } from './+types/root';
 import { ThemeProvider } from '@store-mgmt/storefront/theme';
 import { activeConfig, activeTheme } from './store/active';
+import { Header } from './components/header';
+import { Footer } from './components/footer';
 
 import '@store-mgmt/web-common/styles.css';
 import './app.css';
@@ -34,7 +36,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  return (
+    <>
+      <Header config={activeConfig} />
+      <Outlet />
+      <Footer config={activeConfig} />
+    </>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
