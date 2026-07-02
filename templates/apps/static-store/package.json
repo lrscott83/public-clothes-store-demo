@@ -16,6 +16,7 @@
     "@react-router/node": "^7.7.1",
     "@react-router/serve": "^7.7.1",
     "@store-mgmt/domain": "workspace:*",
+    "@store-mgmt/storefront": "workspace:*",
     "@store-mgmt/web-common": "workspace:*",
     "isbot": "^5.1.27",
     "react": "^19.1.0",

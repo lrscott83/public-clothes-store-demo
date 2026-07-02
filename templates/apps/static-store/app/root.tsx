@@ -7,12 +7,15 @@ import {
   ScrollRestoration,
 } from 'react-router';
 import type { Route } from './+types/root';
+import { ThemeProvider } from '@store-mgmt/storefront/theme';
+import { activeConfig, activeTheme } from './store/active';
 
 import '@store-mgmt/web-common/styles.css';
+import './app.css';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang={activeConfig.locale} data-vertical={activeConfig.vertical}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -20,7 +23,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        {children}
+        <ThemeProvider theme={activeTheme} config={activeConfig}>
+          {children}
+        </ThemeProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

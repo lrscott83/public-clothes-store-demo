@@ -1,0 +1,23 @@
+/* App-level base rule (design.md Section 3.3): apply the ThemeProvider's
+   `--font-family` custom property so a vertical's typography override takes
+   effect. This intentionally lives in the APP, not `web-common/styles.css`
+   (web-common keeps its literal Inter font-family fallback — see the
+   comment there about the Tailwind v4 @theme self-reference gotcha).
+   Imported AFTER `@store-mgmt/web-common/styles.css` in `app/root.tsx` so
+   this `@layer base` declaration wins the cascade for `html`'s
+   `font-family`. */
+@layer base {
+  html {
+    font-family: var(
+      --font-family,
+      'Inter',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      'Helvetica Neue',
+      Arial,
+      sans-serif
+    );
+  }
+}

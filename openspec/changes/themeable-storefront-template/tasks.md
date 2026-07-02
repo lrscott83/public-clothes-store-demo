@@ -57,20 +57,21 @@ Chain strategy: pending
 - [x] 3.13 Wire barrels: `src/theme/index.ts`, `src/catalog/index.ts`, `src/config/index.ts` per design Section 1 export table
 - [x] 3.14 (added, not in original breakdown) `src/theme/default-theme.ts` (`DEFAULT_STORE_THEME`) + `src/theme/merge-theme.ts` (`mergeTheme`) with `src/__tests__/merge-theme.test.ts` — implements spec 1's "partial theme override with default fallback" requirement, which needed a merge step ahead of `themeToCssVars`
 
-## Phase 4: ThemeProvider (spec Section 1, design Section 3)
+## Phase 4: ThemeProvider (spec Section 1, design Section 3) — DONE (Slice 2)
 
-- [ ] 4.1 RED: `src/__tests__/theme-provider.test.tsx` — mount applies inline `<style>` with expected `--color-*`/`--font-*`/`--radius-*` vars (jsdom); prerender-safe render (no `window`/`localStorage` access outside guard); `useStoreTheme` inside provider returns theme; `useStoreTheme` outside provider throws descriptive error
-- [ ] 4.2 GREEN: implement `src/theme/theme-provider.tsx` (`ThemeProvider`, `useStoreTheme`) per design 3.2
-- [ ] 4.3 Confirm barrel export includes `ThemeProvider`/`useStoreTheme`/`StoreTheme`
+- [x] 4.1 RED: `src/__tests__/theme-provider.test.tsx` — mount applies inline `<style>` with expected `--color-*`/`--font-*`/`--radius-*` vars (jsdom); prerender-safe render (no `window`/`localStorage` access outside guard); `useStoreTheme` inside provider returns theme; `useStoreTheme` outside provider throws descriptive error
+- [x] 4.2 GREEN: implement `src/theme/theme-provider.tsx` (`ThemeProvider`, `useStoreTheme`) per design 3.2
+- [x] 4.3 Confirm barrel export includes `ThemeProvider`/`useStoreTheme`/`StoreTheme`
 
-## Phase 5: static-store Wiring
+## Phase 5: static-store Wiring — DONE (Slice 2)
 
-- [ ] 5.1 Add `"@store-mgmt/storefront": "workspace:*"` to `templates/apps/static-store/package.json`; add to `vite.config.ts` `optimizeDeps.include`
-- [ ] 5.2 Create `templates/apps/static-store/app/store/verticals.ts` — static import registry `VERTICALS` (design 5.1)
-- [ ] 5.3 Create `templates/apps/static-store/app/store/active.ts` — `activeConfig` via `resolveVertical`+`validateStoreConfig`, `catalog` via `createBakedCatalogProvider`
-- [ ] 5.4 RED: `templates/apps/static-store/app/routes/__tests__/root.test.tsx` (or equivalent) — `<html data-vertical>` set, `ThemeProvider` mounted around outlet, theme `<style>` present in rendered output
-- [ ] 5.5 GREEN: edit `templates/apps/static-store/app/root.tsx` — mount `ThemeProvider` in `Layout`, set `data-vertical`/`lang` from `activeConfig`
-- [ ] 5.6 Add app-level base rule applying `var(--font-family)` (design 3.3) — small `styles.css`/inline style addition, not a `web-common` change
+- [x] 5.1 Add `"@store-mgmt/storefront": "workspace:*"` to `templates/apps/static-store/package.json`; add to `vite.config.ts` `optimizeDeps.include`
+- [x] 5.2 Create `templates/apps/static-store/app/store/verticals.ts` — static import registry `VERTICALS` (design 5.1)
+- [x] 5.3 Create `templates/apps/static-store/app/store/active.ts` — `activeConfig` via `resolveVertical`+`validateStoreConfig`, `catalog` via `createBakedCatalogProvider`
+- [x] 5.4 RED: `templates/apps/static-store/app/__tests__/root.test.tsx` (moved from the originally-suggested `app/routes/__tests__/` since `root.tsx` lives at `app/`, not `app/routes/`) — shallow-inspects the `Layout` React element tree for `data-vertical`/`lang` and a `ThemeProvider` wrapping the body children (see Deviations: jsdom refuses to insert a nested `<html>` as a child during `render()`, so a DOM-level RTL assertion was unreliable; verified for real via the prerendered build output instead — see apply-progress)
+- [x] 5.5 GREEN: edit `templates/apps/static-store/app/root.tsx` — mount `ThemeProvider` in `Layout`, set `data-vertical`/`lang` from `activeConfig`
+- [x] 5.6 Add app-level base rule applying `var(--font-family)` (design 3.3) — new `app/app.css` (`@layer base { html { font-family: var(--font-family, ...) } }`), imported in `root.tsx` after `@store-mgmt/web-common/styles.css`; `web-common` itself untouched
+- [x] 5.7 (added) `templates/apps/static-store/verticals/clothes/store.config.ts` — MINIMAL placeholder clothes `StoreConfig` (brand + theme override + 1 category/1 product) so the app builds/prerenders now; Slice 4 (Phase 8) replaces it with the full legacy-parity catalog + real assets
 
 ## Phase 6: Ported UI Components (spec Section 5) — RTL, config-driven
 

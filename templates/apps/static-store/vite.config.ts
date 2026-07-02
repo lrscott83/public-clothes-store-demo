@@ -21,6 +21,6 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', 'react-router'],
   },
   optimizeDeps: {
-    include: ['@store-mgmt/domain'],
+    include: ['@store-mgmt/domain', '@store-mgmt/storefront'],
   },
 });

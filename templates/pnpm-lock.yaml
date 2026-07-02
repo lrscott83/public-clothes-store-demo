@@ -32,6 +32,9 @@ importers:
       '@store-mgmt/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@store-mgmt/storefront':
+        specifier: workspace:*
+        version: link:../../packages/storefront
       '@store-mgmt/web-common':
         specifier: workspace:*
         version: link:../../packages/web-common
