@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+.turbo
+.react-router
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
