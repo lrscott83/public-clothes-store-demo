@@ -7,4 +7,10 @@ describe('VERTICALS registry', () => {
     expect(VERTICALS.clothes.slug).toBe('clothes');
     expect(VERTICALS.clothes.config.vertical).toBe('clothes');
   });
+
+  it('registers the demo vertical under its slug', () => {
+    expect(VERTICALS.demo).toBeDefined();
+    expect(VERTICALS.demo.slug).toBe('demo');
+    expect(VERTICALS.demo.config.vertical).toBe('demo');
+  });
 });

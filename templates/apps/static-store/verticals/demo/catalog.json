@@ -1,0 +1,40 @@
+{
+  "categories": [
+    {
+      "id": "headwear",
+      "name": "Headwear"
+    },
+    {
+      "id": "accessories",
+      "name": "Accessories"
+    }
+  ],
+  "products": [
+    {
+      "id": "d1",
+      "name": "Demo Cap",
+      "description": "A sample headwear product used only to demonstrate the theming engine.",
+      "price": 18,
+      "categoryId": "headwear",
+      "image": "products/headwear/gorra1.jpg",
+      "isNew": true
+    },
+    {
+      "id": "d2",
+      "name": "Demo Hat",
+      "description": "Another sample headwear product, styled entirely through this vertical's config.",
+      "price": 24,
+      "categoryId": "headwear",
+      "image": "products/headwear/sombrero1.webp",
+      "discount": 15
+    },
+    {
+      "id": "d3",
+      "name": "Demo Sandal",
+      "description": "A sample accessories product across a second category, for the demo catalog.",
+      "price": 30,
+      "categoryId": "accessories",
+      "image": "products/accessories/sandalia1.jpg"
+    }
+  ]
+}

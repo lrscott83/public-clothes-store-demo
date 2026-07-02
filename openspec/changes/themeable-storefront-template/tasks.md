@@ -108,14 +108,14 @@ Chain strategy: pending
 
 ## Phase 9: Demo Vertical + Switchability (late decision — in scope)
 
-- [ ] 9.1 Create `templates/apps/static-store/verticals/demo/store.config.ts` — distinct brand name/theme colors, 1-2 categories, 2-3 products
-- [ ] 9.2 Create `templates/apps/static-store/verticals/demo/catalog.json` + `public/verticals/demo/{logo,hero,products/**}` minimal assets
-- [ ] 9.3 RED: `verticals/__tests__/demo-config.test.ts` — `validateStoreConfig(demoConfig)` passes, required-asset check
-- [ ] 9.4 GREEN: fix data gaps
-- [ ] 9.5 Register `demo` in `app/store/verticals.ts` `VERTICALS` map
-- [ ] 9.6 RED: `app/__tests__/switchability.test.ts` — `resolveVertical(VERTICALS, 'demo')` returns demo config with different `brand.name`/`theme.colors.primary`/product set than `resolveVertical(VERTICALS, 'clothes')` (asserts re-skin, not just data presence)
-- [ ] 9.7 GREEN: confirm passes with no engine changes (registry-only diff, proves "add a vertical" == "add a folder + line")
-- [ ] 9.8 Build/output assertion (documented, optional CI): `VITE_STORE_VERTICAL=demo` build succeeds and emits `data-vertical="demo"` in prerendered `index.html`
+- [x] 9.1 Create `templates/apps/static-store/verticals/demo/store.config.ts` — distinct brand name/theme colors, 1-2 categories, 2-3 products
+- [x] 9.2 Create `templates/apps/static-store/verticals/demo/catalog.json` + `public/verticals/demo/{logo,hero,products/**}` minimal assets
+- [x] 9.3 RED: `verticals/__tests__/demo-config.test.ts` — `validateStoreConfig(demoConfig)` passes, required-asset check
+- [x] 9.4 GREEN: fix data gaps
+- [x] 9.5 Register `demo` in `app/store/verticals.ts` `VERTICALS` map
+- [x] 9.6 RED: `app/__tests__/switchability.test.ts` — `resolveVertical(VERTICALS, 'demo')` returns demo config with different `brand.name`/`theme.colors.primary`/product set than `resolveVertical(VERTICALS, 'clothes')` (asserts re-skin, not just data presence)
+- [x] 9.7 GREEN: confirm passes with no engine changes (registry-only diff, proves "add a vertical" == "add a folder + line")
+- [x] 9.8 Build/output assertion (documented, optional CI): `VITE_STORE_VERTICAL=demo` build succeeds and emits `data-vertical="demo"` in prerendered `index.html`
 
 ## Phase 10: GitHub Pages Deploy Wiring (spec Section 7 + late decision on VITE_BASE)
 
