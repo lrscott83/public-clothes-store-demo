@@ -99,7 +99,9 @@ UI consumers (ProductsPage, ProductCard, product detail) MUST depend only on the
 #### Scenario: a test-double provider implementing the interface is substituted and `ProductsPage` renders correctly with zero code changes to `ProductsPage`
 
 ### Requirement: `StoreProduct` / `StoreCategory` shape
-`StoreProduct`: `id` (unique string), `name`, `description`, `price` (number), `currency?`, `originalPrice?`, `categoryId` (ref), `images` (non-empty array), `isNew?`, `discount?`. `StoreCategory`: `id` (unique), `name`, `order?`.
+`StoreProduct`: `id` (unique string), `name`, `description`, `price` (number), `originalPrice?`, `categoryId` (ref), `image` (URL string, required), `images?` (optional gallery), `isNew?`, `discount?`. `StoreCategory`: `id` (unique), `name`, `order?`.
+
+> **Accepted exception (design decision):** currency is store-level only (`StoreConfig.currency`); `StoreProduct` has NO per-product `currency` field. Per-product currency was judged YAGNI for a single themed storefront and dropped. See §6.
 
 ### Requirement: unique product IDs enforced (fixes legacy bug)
 #### Scenario: catalog with two products sharing id `"30"` fails validation with a duplicate-ID error
@@ -145,11 +147,10 @@ UI consumers (ProductsPage, ProductCard, product detail) MUST depend only on the
 ## 6. Money Formatting
 
 ### Requirement: shared money-format helper uses `Intl.NumberFormat`
-Formats `price`/`originalPrice` via `Intl.NumberFormat(locale, {style:'currency', currency})`, `currency` = `product.currency ?? StoreConfig.currency`.
+Formats `price`/`originalPrice` via `Intl.NumberFormat(locale, {style:'currency', currency})`, using the store-level `StoreConfig.currency` and `StoreConfig.locale` (no per-product currency override — see accepted exception in §2).
 
 #### Scenario: locale `es-NI` + currency `NIO` formats per `es-NI`/`NIO` conventions
 #### Scenario: locale `en-US` + currency `USD` formats per `en-US`/`USD` conventions
-#### Scenario: product-level `currency` override takes precedence over `StoreConfig.currency`
 
 ## 7. GitHub Pages Deploy
 
