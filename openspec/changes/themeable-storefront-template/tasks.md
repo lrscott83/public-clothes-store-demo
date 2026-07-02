@@ -1,5 +1,7 @@
 # Tasks: Themeable Storefront Template
 
+**Status: IMPLEMENTATION COMPLETE** — all 6 slices (Phases 1-11) done, all tasks `[x]`. Ready for `sdd-verify`.
+
 ## Review Workload Forecast
 
 | Field | Value |
@@ -117,19 +119,23 @@ Chain strategy: pending
 - [x] 9.7 GREEN: confirm passes with no engine changes (registry-only diff, proves "add a vertical" == "add a folder + line")
 - [x] 9.8 Build/output assertion (documented, optional CI): `VITE_STORE_VERTICAL=demo` build succeeds and emits `data-vertical="demo"` in prerendered `index.html`
 
-## Phase 10: GitHub Pages Deploy Wiring (spec Section 7 + late decision on VITE_BASE)
+## Phase 10: GitHub Pages Deploy Wiring (spec Section 7 + late decision on VITE_BASE) — DONE (Slice 6)
 
-- [ ] 10.1 Edit `templates/apps/static-store/vite.config.ts` — `base: process.env.VITE_BASE ?? '/'`
-- [ ] 10.2 Edit `templates/apps/static-store/react-router.config.ts` — `basename: process.env.VITE_BASE ?? '/'` (MUST match Vite `base`)
-- [ ] 10.3 RED: build/output assertion test — asset URLs in built `index.html` are prefixed with `VITE_BASE` subpath when set; `basename` produces prefixed `<Link>` hrefs (spec 7: base-subpath + basename-match scenarios)
-- [ ] 10.4 GREEN: verify 10.1/10.2 satisfy 10.3; add a `deploy` script step (e.g. `scripts/rename-spa-fallback.mjs` or inline `cp`) that renames `build/client/__spa-fallback.html` -> `404.html` at publish root
-- [ ] 10.5 Add/update `package.json` `deploy` script wiring `gh-pages` package to publish `build/client/` after the 404.html rename step
-- [ ] 10.6 Document `VITE_BASE` env-configurability (default `/`) in `templates/apps/static-store/README.md` (or root docs) — how to set for GH Pages repo subpath, how Vite `base` = RR `basename` = `VITE_BASE` are threaded together
+- [x] 10.1 Edit `templates/apps/static-store/vite.config.ts` — `base: process.env.VITE_BASE || '/'`
+- [x] 10.2 Edit `templates/apps/static-store/react-router.config.ts` — `basename: process.env.VITE_BASE || '/'` (matches Vite `base`)
+- [x] 10.3 RED: `templates/packages/storefront/src/__tests__/asset.test.ts` — new `describe('default base falls back to import.meta.env.BASE_URL', ...)` block (`vi.stubEnv('BASE_URL', '/repo/')`) proving `withBase`/`verticalAsset` fall back to `import.meta.env.BASE_URL` (which Vite populates from `base`, itself threaded from `VITE_BASE`) when no explicit `base` argument is given — confirmed RED against the pre-change hardcoded `base = '/'` default (2 failing assertions, see apply-progress). Build/output-level proof (asset/script/link URLs prefixed under a subpath build) covers the vite.config/react-router.config wiring itself, per this slice's build-vs-unit-test split.
+- [x] 10.4 GREEN: `templates/packages/storefront/src/config/asset.ts` — changed `withBase`/`verticalAsset` default `base` param to `import.meta.env.BASE_URL`; added `templates/packages/storefront/src/vite-env.d.ts` (local ambient `ImportMetaEnv`/`ImportMeta` typing, no `vite` package dependency needed). Added `templates/apps/static-store/scripts/prepare-pages-build.mjs` — **not** a plain `cp` as originally sketched: React Router physically nests prerendered HTML under `build/client/<basename>/` when `basename` is a subpath (assets/static files stay at the build root), which does NOT match how GitHub Pages project pages serve a repo (branch root → `/<repo>/`); the script flattens that nested HTML back up to the build root (discovered + fixed this slice, see apply-progress Deviations), *and* renames `build/client/__spa-fallback.html` → `build/client/404.html`.
+- [x] 10.5 `templates/apps/static-store/package.json` — added `build:pages` (`VITE_BASE=$VITE_BASE react-router build && node scripts/prepare-pages-build.mjs`) and `deploy` (same + `gh-pages -d build/client`) scripts; added `gh-pages@^6.3.0` devDependency (matches the version already used by the legacy root `package.json`). Default `build` script unchanged (`base: '/'`).
+- [x] 10.6 Documented in `templates/apps/static-store/README.md` (new) — full `VITE_BASE` env-configurability section (`Deploying to GitHub Pages`), how Vite `base` = RR `basename` = `VITE_BASE` are threaded, the flatten/404 rationale, and out-of-scope note on GH Pages being read-only. `templates/packages/storefront/README.md` (new) documents the package's own subpath exports and the `import.meta.env.BASE_URL` default-fallback for `withBase`/`verticalAsset`, and points to the static-store README for the full vertical/theming/deploy guide.
 
-## Phase 11: Full Verification Pass
+## Phase 11: Full Verification Pass — DONE (Slice 6)
 
-- [ ] 11.1 Run `vitest run` (or `pnpm test` via turbo) at `templates/` — all unit + RTL tests green
-- [ ] 11.2 Run `pnpm --filter @store-mgmt/storefront typecheck` and `pnpm --filter @store-mgmt/static-store typecheck`
-- [ ] 11.3 Run `VITE_STORE_VERTICAL=clothes pnpm --filter @store-mgmt/static-store build` — confirm prerendered `/` + `/productos`, no product-detail prerender
-- [ ] 11.4 Run `VITE_STORE_VERTICAL=demo pnpm --filter @store-mgmt/static-store build` — confirm distinct branding in output (switchability proof at build level)
-- [ ] 11.5 Confirm legacy `src/` untouched (`git diff --stat src/` empty)
+- [x] 11.1 `corepack pnpm run test` (turbo, from `templates/`) — 4/4 tasks successful: `@store-mgmt/domain` 66/66, `@store-mgmt/web-common` 11/11, `@store-mgmt/storefront` 43/43 (was 40; +3 new asset.test.ts default-base cases), `@store-mgmt/static-store` 57/57. All green.
+- [x] 11.2 `corepack pnpm run typecheck` (turbo) — 7/7 tasks successful, includes both `@store-mgmt/storefront` (`tsc --noEmit`) and `@store-mgmt/static-store` (`react-router typegen && tsc`). Zero errors.
+- [x] 11.3 `VITE_STORE_VERTICAL=clothes corepack pnpm --filter @store-mgmt/static-store build` — `Prerender (html): / -> build/client/index.html`, `/productos -> build/client/productos/index.html`, no product-detail prerender. Confirmed `data-vertical="clothes"`/`"Boutique Exclusiva"` present.
+- [x] 11.4 `VITE_STORE_VERTICAL=demo corepack pnpm --filter @store-mgmt/static-store build` — same prerender shape, `data-vertical="demo"`/`"Demo Store"`/`--color-primary: rgb(37 99 235)` present (distinct from clothes' `rgb(239 68 68)`) — switchability re-confirmed after the base/basename change. Default (clothes) build re-run afterward to restore local `build/client/` state (gitignored, no git-visible effect).
+- [x] 11.5 `git diff --stat -- src/` empty — legacy untouched, confirmed via no output.
+
+### Slice 6 additional verification (Phase 10 GH Pages proof, beyond the original checklist)
+
+- Subpath build: `VITE_BASE=/public-clothes-store-demo/ corepack pnpm --filter @store-mgmt/static-store run build:pages` (from `templates/`, one command) — `build/client/index.html` (flattened, not nested), `build/client/productos/index.html`, `build/client/404.html` all present; every `src="…"`/`href="…"` in `index.html` (scripts, CSS, images, internal `<Link>` hrefs) prefixed with `/public-clothes-store-demo/`. Default (`base: '/'`) build re-verified unprefixed and unaffected immediately after.
