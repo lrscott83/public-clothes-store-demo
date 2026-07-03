@@ -71,6 +71,9 @@ export const clothesConfig: StoreConfig = {
   },
   nav: [
     { label: 'Inicio', path: '/', kind: 'route' },
+    { label: 'Características', path: '#caracteristicas', kind: 'anchor' },
+    { label: 'Ofertas', path: '#ofertas', kind: 'anchor' },
+    { label: 'Novedades', path: '#novedades', kind: 'anchor' },
     { label: 'Productos', path: '/productos', kind: 'route' },
   ],
   features: [

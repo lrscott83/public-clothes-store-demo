@@ -38,7 +38,7 @@ export function HomePage({ config, catalog }: HomePageProps) {
       <Hero config={config} />
 
       {config.features && config.features.length > 0 && (
-        <section className="py-20 bg-background">
+        <section id="caracteristicas" className="py-20 bg-background scroll-mt-20">
           <div className="container mx-auto px-4">
             <h2 className="text-3xl font-bold mb-12 text-center text-text">Features</h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -58,7 +58,7 @@ export function HomePage({ config, catalog }: HomePageProps) {
       )}
 
       {discounted.length > 0 && (
-        <section className="py-20">
+        <section id="ofertas" className="py-20 scroll-mt-20">
           <div className="container mx-auto px-4">
             <h2 className="text-3xl font-bold mb-12 text-center text-text">Special Offers</h2>
             <ProductGrid products={discounted} locale={config.locale} currency={config.currency} />
@@ -67,7 +67,7 @@ export function HomePage({ config, catalog }: HomePageProps) {
       )}
 
       {newest.length > 0 && (
-        <section className="py-20 bg-background">
+        <section id="novedades" className="py-20 bg-background scroll-mt-20">
           <div className="container mx-auto px-4">
             <h2 className="text-3xl font-bold mb-12 text-center text-text">New Arrivals</h2>
             <ProductGrid products={newest} locale={config.locale} currency={config.currency} />

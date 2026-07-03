@@ -78,7 +78,7 @@ export function Header({ config }: HeaderProps) {
       </div>
 
       {isMenuOpen && (
-        <div className="md:hidden bg-surface">
+        <div className="md:hidden bg-surface border-t border-border shadow-card">
           <div className="px-2 pt-2 pb-3 space-y-1">
             {config.nav.map((item) => (
               <NavLink
@@ -105,8 +105,8 @@ function NavLink({
   onNavigate?: () => void;
 }) {
   const className = mobile
-    ? 'block px-3 py-2 text-base font-medium text-text'
-    : 'text-sm font-medium text-text';
+    ? 'block px-3 py-2 rounded-md text-base font-medium text-text hover:bg-background hover:text-primary transition-colors'
+    : 'text-sm font-medium text-text hover:text-primary transition-colors';
 
   if (item.kind === 'route') {
     return (

@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import { Header } from '../header';
@@ -53,5 +54,32 @@ describe('Header', () => {
 
     const logoImg = screen.getByRole('img', { name: 'Fixture logo' });
     expect(logoImg).toHaveAttribute('src', '/fixture-logo.png');
+  });
+
+  it('toggles a collapsible mobile menu open and closed via the menu button', async () => {
+    const user = userEvent.setup();
+    const config = buildStoreConfig({
+      nav: [{ label: 'Productos', path: '/productos', kind: 'route' }],
+    });
+
+    render(
+      <MemoryRouter>
+        <Header config={config} />
+      </MemoryRouter>,
+    );
+
+    const toggle = screen.getByRole('button', { name: 'Toggle navigation menu' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // Closed: only the desktop nav copy of the link is in the DOM.
+    expect(screen.getAllByRole('link', { name: 'Productos' })).toHaveLength(1);
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    // Open: desktop + mobile copies are both present.
+    expect(screen.getAllByRole('link', { name: 'Productos' })).toHaveLength(2);
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getAllByRole('link', { name: 'Productos' })).toHaveLength(1);
   });
 });
