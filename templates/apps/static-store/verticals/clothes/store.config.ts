@@ -34,8 +34,8 @@ export const clothesConfig: StoreConfig = {
     tagline: 'Moda exclusiva para tu estilo de vida',
     copyright: '© 2026 Boutique Exclusiva. Todos los derechos reservados.',
   },
-  locale: 'es-NI',
-  currency: 'NIO',
+  locale: 'en-US',
+  currency: 'USD',
   theme: {
     // Ported from the legacy store's default theme (`ThemeContext.tsx`'s
     // `light` palette — the theme the app actually boots into, despite its
