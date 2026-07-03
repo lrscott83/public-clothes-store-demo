@@ -14,11 +14,11 @@ export default defineConfig({
   base,
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
   server: {
-    port: 3334,
+    port: 3344,
     host: 'localhost',
   },
   preview: {
-    port: 3334,
+    port: 3344,
     host: 'localhost',
   },
   resolve: {
@@ -27,8 +27,24 @@ export default defineConfig({
     // as separate instances, producing "Cannot read properties of null
     // (reading 'useContext')" during client render.
     dedupe: ['react', 'react-dom', 'react-router'],
+    alias: {
+      // This template lives nested inside a legacy repo whose root node_modules
+      // contains react-router-dom@6. Vite's dev dep-scanner otherwise resolves
+      // a phantom `react-router-dom` up into that root copy, whose v6 internals
+      // import `UNSAFE_*` symbols that don't exist in react-router@7 and crash
+      // dev startup. Nothing here imports react-router-dom; alias any such
+      // resolution to the local react-router@7 so it never escapes upward.
+      'react-router-dom': 'react-router',
+    },
   },
   optimizeDeps: {
-    include: ['@store-mgmt/domain', '@store-mgmt/storefront'],
+    // @store-mgmt/storefront exposes only subpath exports (no "." root entry),
+    // so include the subpaths the app imports — listing the bare package here
+    // makes Vite's dep optimizer fail dev with "Missing '.' specifier".
+    include: [
+      '@store-mgmt/storefront/theme',
+      '@store-mgmt/storefront/catalog',
+      '@store-mgmt/storefront/config',
+    ],
   },
 });

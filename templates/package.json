@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "turbo run build && turbo run dev",
     "dev:local": "turbo run dev:local",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
