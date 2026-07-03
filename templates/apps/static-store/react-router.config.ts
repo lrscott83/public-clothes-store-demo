@@ -16,12 +16,19 @@ export default {
   prerender: ['/', '/productos'],
   basename,
   // Opt in early to the React Router v8 behaviors. This is a greenfield
-  // template with no legacy behavior to preserve, so adopting them now keeps
-  // the app aligned with v8 and silences the framework's Future Flag warnings.
+  // template with no legacy behavior to preserve, so adopting them keeps the
+  // app aligned with v8 and silences the framework's Future Flag warnings.
+  //
+  // NOTE: `v8_viteEnvironmentApi` is intentionally NOT enabled. Turning it on
+  // makes Vite's dev server load a second React instance for the linked
+  // workspace packages, so react-router's <Meta> hits a null hook dispatcher
+  // ("Cannot read properties of null (reading 'useContext')") on client
+  // render. The remaining flags don't touch module/dep optimization and are
+  // safe. Its one Future Flag warning is harmless; revisit once the
+  // Environment API integration stabilizes.
   future: {
     v8_middleware: true,
     v8_splitRouteModules: true,
-    v8_viteEnvironmentApi: true,
     v8_passThroughRequests: true,
     v8_trailingSlashAwareDataRequests: true,
   },
