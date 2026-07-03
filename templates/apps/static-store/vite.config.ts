@@ -13,6 +13,15 @@ const base = process.env.VITE_BASE || '/';
 export default defineConfig({
   base,
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
+  css: {
+    // Styling is done entirely by the `@tailwindcss/vite` plugin (Tailwind 4),
+    // which needs NO PostCSS config. Pin an empty inline PostCSS config so Vite
+    // does NOT walk up the directory tree searching for one — this template is
+    // nested inside a legacy repo whose root `postcss.config.js` pulls in
+    // Tailwind 3 + autoprefixer (not installed here), which otherwise crashes
+    // the CSS build with "Cannot find module 'autoprefixer'".
+    postcss: { plugins: [] },
+  },
   server: {
     port: 3344,
     host: 'localhost',
