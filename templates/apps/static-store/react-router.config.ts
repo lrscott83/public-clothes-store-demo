@@ -15,4 +15,14 @@ export default {
   // NOT prerendered (see app/routes/product-detail.tsx).
   prerender: ['/', '/productos'],
   basename,
+  // Opt in early to the React Router v8 behaviors. This is a greenfield
+  // template with no legacy behavior to preserve, so adopting them now keeps
+  // the app aligned with v8 and silences the framework's Future Flag warnings.
+  future: {
+    v8_middleware: true,
+    v8_splitRouteModules: true,
+    v8_viteEnvironmentApi: true,
+    v8_passThroughRequests: true,
+    v8_trailingSlashAwareDataRequests: true,
+  },
 } satisfies Config;
