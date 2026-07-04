@@ -41,7 +41,7 @@ Note: PR 1's extraction-dataset.json lives under `openspec/changes/...` (provena
 - [x] 1.9 Batch 8: same extraction rules.
 - [x] 1.10 Batch 9: same extraction rules.
 - [x] 1.11 Batch 10: 103 records from 100 source files, all accounted for.
-- [x] 1.12 Taxonomy derived in Stage B ETL from published records: 28 distinct category slugs, Title Case names. (Near-synonym merge NOT applied — see note below.)
+- [x] 1.12 Taxonomy finalized: 28 raw extraction slugs merged into 11 owner-approved categories via `CATEGORY_MAP` in the ETL (TV y Audio, Energía Solar, Cocinas, Refrigeración, Lavadoras, Climatización, Ollas, Útiles, Licuadoras, Cafeteras, Freidoras).
 - [x] 1.13 Multi-product-flyer policy applied (103 records > 100 files: split products with attributable per-product price).
 - [x] 1.14 Dataset finalized; every `source_filename` accounted for (74 published + 26 needs_review + 4 skipped, minor flag overlap).
 

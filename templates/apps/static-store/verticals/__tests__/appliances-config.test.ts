@@ -53,8 +53,8 @@ describe('appliances vertical config', () => {
     }
   });
 
-  it('publishes the full extracted catalog (74 products across 28 categories)', () => {
+  it('publishes the full extracted catalog (74 products across 11 categories)', () => {
     expect(appliancesConfig.catalog.products.length).toBe(74);
-    expect(appliancesConfig.catalog.categories.length).toBe(28);
+    expect(appliancesConfig.catalog.categories.length).toBe(11);
   });
 });

@@ -16,6 +16,54 @@ import re
 import shutil
 from pathlib import Path
 
+# Maps each raw extraction category slug to its final merged category slug.
+# Grouping decided with the store owner (28 raw -> 11 final).
+CATEGORY_MAP = {
+    "televisores": "tv-y-audio",
+    "accesorios-tv": "tv-y-audio",
+    "decodificadores": "tv-y-audio",
+    "equipos-de-musica": "tv-y-audio",
+    "luces-solares": "energia-solar",
+    "inversores": "energia-solar",
+    "combustible": "energia-solar",
+    "fogones": "cocinas",
+    "cocinas": "cocinas",
+    "cocinas-induccion": "cocinas",
+    "microondas": "cocinas",
+    "utensilios-cocina": "cocinas",
+    "vajillas": "cocinas",
+    "neveras": "refrigeracion",
+    "dispensadores-agua": "refrigeracion",
+    "lavadoras": "lavadoras",
+    "aires-acondicionados": "climatizacion",
+    "ventiladores": "climatizacion",
+    "ollas-de-presion": "ollas",
+    "ollas-arroceras": "ollas",
+    "calentadores-agua": "utiles",
+    "contadoras-de-billetes": "utiles",
+    "escaleras": "utiles",
+    "hidrolavadoras": "utiles",
+    "licuadoras": "licuadoras",
+    "cafeteras": "cafeteras",
+    "freidoras": "freidoras",
+    "freidoras-de-aire": "freidoras",
+}
+
+# Display names for the merged category slugs (accents preserved).
+DISPLAY_NAMES = {
+    "tv-y-audio": "TV y Audio",
+    "energia-solar": "Energía Solar",
+    "cocinas": "Cocinas",
+    "refrigeracion": "Refrigeración",
+    "lavadoras": "Lavadoras",
+    "climatizacion": "Climatización",
+    "ollas": "Ollas",
+    "utiles": "Útiles",
+    "licuadoras": "Licuadoras",
+    "cafeteras": "Cafeteras",
+    "freidoras": "Freidoras",
+}
+
 REPO = Path(__file__).resolve().parents[4]
 DATASET = REPO / "openspec/changes/appliances-storefront/extraction-dataset.json"
 SRC_DIR = REPO / "assets/appliances"
@@ -66,9 +114,16 @@ def main():
         and r.get("price_usd") not in (None, "", 0)
     ]
 
-    # Taxonomy: distinct categories among published, sorted by slug asc.
-    slugs = sorted({r["category"] for r in published})
-    categories = [{"id": s, "name": title_case(s)} for s in slugs]
+    # Remap each published record to its final merged category slug.
+    for rec in published:
+        raw = rec["category"]
+        if raw not in CATEGORY_MAP:
+            raise KeyError(f"Category '{raw}' has no CATEGORY_MAP entry")
+        rec["final_slug"] = CATEGORY_MAP[raw]
+
+    # Taxonomy: distinct final categories among published, sorted by slug asc.
+    slugs = sorted({r["final_slug"] for r in published})
+    categories = [{"id": s, "name": DISPLAY_NAMES[s]} for s in slugs]
 
     # Reset target folder so re-runs stay clean (never touches assets/appliances).
     if PRODUCTS_DIR.exists():
@@ -77,9 +132,8 @@ def main():
     products = []
     global_id = 0
     for slug in slugs:
-        name = title_case(slug)
         in_cat = sorted(
-            (r for r in published if r["category"] == slug),
+            (r for r in published if r["final_slug"] == slug),
             key=lambda r: r["source_filename"],
         )
         cat_dir = PRODUCTS_DIR / slug
@@ -95,7 +149,9 @@ def main():
             product = {
                 "id": str(global_id),
                 "name": rec["name"],
-                "description": fold_description(rec, name),
+                # Fallback uses the original granular category (more descriptive
+                # than the merged group name) when a record has no spec fields.
+                "description": fold_description(rec, title_case(rec["category"])),
                 "price": rec["price_usd"],
                 "categoryId": slug,
                 "image": f"products/{slug}/{filename}",
