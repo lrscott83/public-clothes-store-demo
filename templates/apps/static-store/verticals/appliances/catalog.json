@@ -1,0 +1,720 @@
+{
+  "categories": [
+    {
+      "id": "accesorios-tv",
+      "name": "Accesorios Tv"
+    },
+    {
+      "id": "aires-acondicionados",
+      "name": "Aires Acondicionados"
+    },
+    {
+      "id": "cafeteras",
+      "name": "Cafeteras"
+    },
+    {
+      "id": "calentadores-agua",
+      "name": "Calentadores Agua"
+    },
+    {
+      "id": "cocinas",
+      "name": "Cocinas"
+    },
+    {
+      "id": "cocinas-induccion",
+      "name": "Cocinas Induccion"
+    },
+    {
+      "id": "combustible",
+      "name": "Combustible"
+    },
+    {
+      "id": "contadoras-de-billetes",
+      "name": "Contadoras De Billetes"
+    },
+    {
+      "id": "decodificadores",
+      "name": "Decodificadores"
+    },
+    {
+      "id": "dispensadores-agua",
+      "name": "Dispensadores Agua"
+    },
+    {
+      "id": "equipos-de-musica",
+      "name": "Equipos De Musica"
+    },
+    {
+      "id": "escaleras",
+      "name": "Escaleras"
+    },
+    {
+      "id": "fogones",
+      "name": "Fogones"
+    },
+    {
+      "id": "freidoras",
+      "name": "Freidoras"
+    },
+    {
+      "id": "freidoras-de-aire",
+      "name": "Freidoras De Aire"
+    },
+    {
+      "id": "hidrolavadoras",
+      "name": "Hidrolavadoras"
+    },
+    {
+      "id": "inversores",
+      "name": "Inversores"
+    },
+    {
+      "id": "lavadoras",
+      "name": "Lavadoras"
+    },
+    {
+      "id": "licuadoras",
+      "name": "Licuadoras"
+    },
+    {
+      "id": "luces-solares",
+      "name": "Luces Solares"
+    },
+    {
+      "id": "microondas",
+      "name": "Microondas"
+    },
+    {
+      "id": "neveras",
+      "name": "Neveras"
+    },
+    {
+      "id": "ollas-arroceras",
+      "name": "Ollas Arroceras"
+    },
+    {
+      "id": "ollas-de-presion",
+      "name": "Ollas De Presion"
+    },
+    {
+      "id": "televisores",
+      "name": "Televisores"
+    },
+    {
+      "id": "utensilios-cocina",
+      "name": "Utensilios Cocina"
+    },
+    {
+      "id": "vajillas",
+      "name": "Vajillas"
+    },
+    {
+      "id": "ventiladores",
+      "name": "Ventiladores"
+    }
+  ],
+  "products": [
+    {
+      "id": "1",
+      "name": "Base Fija para TV",
+      "description": "Marca: ROYAL · 32\"-86\" · Color: Negro",
+      "price": 20,
+      "categoryId": "accesorios-tv",
+      "image": "products/accesorios-tv/accesorios-tv1.jpeg"
+    },
+    {
+      "id": "2",
+      "name": "Split 1T + Base",
+      "description": "Marca: MILEXUS · 1T · 220V · Color: BLANCO",
+      "price": 275,
+      "categoryId": "aires-acondicionados",
+      "image": "products/aires-acondicionados/aires-acondicionados1.jpeg"
+    },
+    {
+      "id": "3",
+      "name": "Split 1T Inverter",
+      "description": "Marca: Milexus · 1T · 220V · Color: Blanco",
+      "price": 310,
+      "categoryId": "aires-acondicionados",
+      "image": "products/aires-acondicionados/aires-acondicionados2.jpeg"
+    },
+    {
+      "id": "4",
+      "name": "Split 1T",
+      "description": "Marca: Milexus · 1T · 220V · Color: Blanco",
+      "price": 260,
+      "categoryId": "aires-acondicionados",
+      "image": "products/aires-acondicionados/aires-acondicionados3.jpeg"
+    },
+    {
+      "id": "5",
+      "name": "Cafetera de fogón 6 tazas",
+      "description": "6 tazas · agotado",
+      "price": 15,
+      "categoryId": "cafeteras",
+      "image": "products/cafeteras/cafeteras1.jpeg"
+    },
+    {
+      "id": "6",
+      "name": "Cafetera de fogón 3 tazas",
+      "description": "3 tazas",
+      "price": 12,
+      "categoryId": "cafeteras",
+      "image": "products/cafeteras/cafeteras2.jpeg"
+    },
+    {
+      "id": "7",
+      "name": "Máquina de Café Expreso Casera",
+      "description": "Marca: ROYAL · Color: Negro",
+      "price": 70,
+      "categoryId": "cafeteras",
+      "image": "products/cafeteras/cafeteras3.jpeg"
+    },
+    {
+      "id": "8",
+      "name": "Cafetera Eléctrica",
+      "description": "Marca: RUDEN · 3-6 tazas · Color: Negro",
+      "price": 40,
+      "categoryId": "cafeteras",
+      "image": "products/cafeteras/cafeteras4.jpeg"
+    },
+    {
+      "id": "9",
+      "name": "Calentador Eléctrico",
+      "description": "Marca: MILEXUS · 50 LT · 220V-240V · Color: Blanco",
+      "price": 180,
+      "categoryId": "calentadores-agua",
+      "image": "products/calentadores-agua/calentadores-agua1.jpeg"
+    },
+    {
+      "id": "10",
+      "name": "Cocina infrarroja",
+      "description": "Marca: MAF · 110V · Color: negro",
+      "price": 45,
+      "categoryId": "cocinas",
+      "image": "products/cocinas/cocinas1.jpeg"
+    },
+    {
+      "id": "11",
+      "name": "Cocina de Inducción Milexus",
+      "description": "Marca: Milexus · Color: Negro",
+      "price": 45,
+      "categoryId": "cocinas-induccion",
+      "image": "products/cocinas-induccion/cocinas-induccion1.jpeg"
+    },
+    {
+      "id": "12",
+      "name": "Galón de combustible 20lt",
+      "description": "20 lt · Garantía 15 Días",
+      "price": 20,
+      "categoryId": "combustible",
+      "image": "products/combustible/combustible1.jpeg"
+    },
+    {
+      "id": "13",
+      "name": "Máquina Contadora de Billetes",
+      "description": "Marca: SACO · 120V/60HZ · Color: Blanco",
+      "price": 115,
+      "categoryId": "contadoras-de-billetes",
+      "image": "products/contadoras-de-billetes/contadoras-de-billetes1.jpeg"
+    },
+    {
+      "id": "14",
+      "name": "Cajita HD para TV",
+      "description": "Marca: Vivamax · Color: Negro",
+      "price": 45,
+      "categoryId": "decodificadores",
+      "image": "products/decodificadores/decodificadores1.jpeg"
+    },
+    {
+      "id": "15",
+      "name": "Dispensador con Filtro de Agua",
+      "description": "Marca: EKO · 16L · Color: Blanco o Azul",
+      "price": 50,
+      "categoryId": "dispensadores-agua",
+      "image": "products/dispensadores-agua/dispensadores-agua1.jpeg"
+    },
+    {
+      "id": "16",
+      "name": "Equipo de Música",
+      "description": "Marca: LG · Color: NEGRO",
+      "price": 180,
+      "categoryId": "equipos-de-musica",
+      "image": "products/equipos-de-musica/equipos-de-musica1.jpeg"
+    },
+    {
+      "id": "17",
+      "name": "Escalera 6 Peldaños",
+      "description": "Marca: METALTECH · Color: GRIS METAL",
+      "price": 130,
+      "categoryId": "escaleras",
+      "image": "products/escaleras/escaleras1.jpeg"
+    },
+    {
+      "id": "18",
+      "name": "Fogón de gas Rudenkov",
+      "description": "Marca: Rudenkov",
+      "price": 35,
+      "categoryId": "fogones",
+      "image": "products/fogones/fogones1.jpeg",
+      "originalPrice": 40,
+      "discount": 12
+    },
+    {
+      "id": "19",
+      "name": "Fogón de Petróleo",
+      "description": "Fogones",
+      "price": 35,
+      "categoryId": "fogones",
+      "image": "products/fogones/fogones2.jpeg"
+    },
+    {
+      "id": "20",
+      "name": "Fogón Infrarrojo",
+      "description": "Marca: ROYAL · Color: Negro",
+      "price": 45,
+      "categoryId": "fogones",
+      "image": "products/fogones/fogones3.jpeg"
+    },
+    {
+      "id": "21",
+      "name": "Fogón Infrarrojo",
+      "description": "Marca: EKO · Color: Negro",
+      "price": 50,
+      "categoryId": "fogones",
+      "image": "products/fogones/fogones4.jpeg"
+    },
+    {
+      "id": "22",
+      "name": "Freidora de Aire 4 lt",
+      "description": "4 lt",
+      "price": 55,
+      "categoryId": "freidoras",
+      "image": "products/freidoras/freidoras1.jpeg",
+      "originalPrice": 60,
+      "discount": 8
+    },
+    {
+      "id": "23",
+      "name": "Freidora de Aire",
+      "description": "Marca: MILEXUS · 4.2 L · Color: Negro",
+      "price": 65,
+      "categoryId": "freidoras-de-aire",
+      "image": "products/freidoras-de-aire/freidoras-de-aire1.jpeg"
+    },
+    {
+      "id": "24",
+      "name": "Hidrolavadora",
+      "description": "Marca: ROYAL · 110V · Color: Blanco",
+      "price": 150,
+      "categoryId": "hidrolavadoras",
+      "image": "products/hidrolavadoras/hidrolavadoras1.jpeg"
+    },
+    {
+      "id": "25",
+      "name": "Inversor Solar 3.6KW",
+      "description": "Marca: Yingfa · 3.6KW · Entrada AC: 110-120V, Salida: 120V, Batería: 24V",
+      "price": 550,
+      "categoryId": "inversores",
+      "image": "products/inversores/inversores1.jpeg"
+    },
+    {
+      "id": "26",
+      "name": "Inversor Solar 10KW",
+      "description": "Marca: Sunpal · 10KW · Salida: 110-220V, Batería: 48V, Entrada AC: 110V",
+      "price": 2100,
+      "categoryId": "inversores",
+      "image": "products/inversores/inversores2.jpeg"
+    },
+    {
+      "id": "27",
+      "name": "Inversor 3KW",
+      "description": "Marca: Must · 3KW · 24VDC / 120VAC, 80A MPPT, Max Input 245VDC, Max Charge 80A",
+      "price": 600,
+      "categoryId": "inversores",
+      "image": "products/inversores/inversores3.jpeg"
+    },
+    {
+      "id": "28",
+      "name": "Inversor Solar 3.6KW",
+      "description": "Marca: Sumry · 3.6KW · Salida: 110V, Batería: 24V · Color: Azul",
+      "price": 570,
+      "categoryId": "inversores",
+      "image": "products/inversores/inversores4.jpeg"
+    },
+    {
+      "id": "29",
+      "name": "Lavadora semi Milexus 7kg",
+      "description": "Marca: Milexus · 7 kg · Garantía 30 Días",
+      "price": 170,
+      "categoryId": "lavadoras",
+      "image": "products/lavadoras/lavadoras1.jpeg"
+    },
+    {
+      "id": "30",
+      "name": "Lavadora Semiautomática 7kg",
+      "description": "Marca: EKO · 7kg",
+      "price": 170,
+      "categoryId": "lavadoras",
+      "image": "products/lavadoras/lavadoras2.jpeg"
+    },
+    {
+      "id": "31",
+      "name": "Lavadora automática",
+      "description": "Marca: SAMSUNG · 9KG · Color: gris-blanco · reparada, sin garantía, 100% funcionamiento, liquidación",
+      "price": 280,
+      "categoryId": "lavadoras",
+      "image": "products/lavadoras/lavadoras3.jpeg"
+    },
+    {
+      "id": "32",
+      "name": "Lavadora automática",
+      "description": "Marca: PREMIER · 11KG · Color: gris · reparada, sin garantía, 100% funcionamiento, liquidación",
+      "price": 300,
+      "categoryId": "lavadoras",
+      "image": "products/lavadoras/lavadoras4.jpeg"
+    },
+    {
+      "id": "33",
+      "name": "Lavadora automática",
+      "description": "Marca: SAMSUNG · 9KG · Color: blanco",
+      "price": 300,
+      "categoryId": "lavadoras",
+      "image": "products/lavadoras/lavadoras5.jpeg"
+    },
+    {
+      "id": "34",
+      "name": "Lavadora Semi Automática",
+      "description": "Marca: MILEXUS · 9 kg · Color: Gris oscuro",
+      "price": 200,
+      "categoryId": "lavadoras",
+      "image": "products/lavadoras/lavadoras6.jpeg"
+    },
+    {
+      "id": "35",
+      "name": "Lavadora/Secadora 10 KG",
+      "description": "Marca: MILEXUS · 10 KG · 110V · Color: GRIS",
+      "price": 600,
+      "categoryId": "lavadoras",
+      "image": "products/lavadoras/lavadoras7.jpeg"
+    },
+    {
+      "id": "36",
+      "name": "Licuadora Milexus 1.5L 2 en 1",
+      "description": "Marca: Milexus · 1.5L",
+      "price": 35,
+      "categoryId": "licuadoras",
+      "image": "products/licuadoras/licuadoras1.jpeg"
+    },
+    {
+      "id": "37",
+      "name": "Licuadora Milexus 1.5 lt Cristal",
+      "description": "Marca: MILEXUS · 1.5 lt",
+      "price": 40,
+      "categoryId": "licuadoras",
+      "image": "products/licuadoras/licuadoras2.jpeg"
+    },
+    {
+      "id": "38",
+      "name": "Licuadora",
+      "description": "Marca: MILEXUS · 1.5L · Color: Negro",
+      "price": 40,
+      "categoryId": "licuadoras",
+      "image": "products/licuadoras/licuadoras3.jpeg"
+    },
+    {
+      "id": "39",
+      "name": "Licuadora 2x1",
+      "description": "Marca: ROYAL · 1.5 L · 110V · Color: Negro",
+      "price": 40,
+      "categoryId": "licuadoras",
+      "image": "products/licuadoras/licuadoras4.jpeg"
+    },
+    {
+      "id": "40",
+      "name": "Lámpara exterior recargable solar 200W",
+      "description": "200 W · Garantía 15 Días",
+      "price": 70,
+      "categoryId": "luces-solares",
+      "image": "products/luces-solares/luces-solares1.jpeg"
+    },
+    {
+      "id": "41",
+      "name": "Luz recargable 100W",
+      "description": "100 W · Garantía 15 Días",
+      "price": 45,
+      "categoryId": "luces-solares",
+      "image": "products/luces-solares/luces-solares2.jpeg"
+    },
+    {
+      "id": "42",
+      "name": "Lámpara Exterior Recargable Solar 100W",
+      "description": "Luces Solares",
+      "price": 50,
+      "categoryId": "luces-solares",
+      "image": "products/luces-solares/luces-solares3.jpeg"
+    },
+    {
+      "id": "43",
+      "name": "Lámpara Solar 800W",
+      "description": "Luces Solares",
+      "price": 120,
+      "categoryId": "luces-solares",
+      "image": "products/luces-solares/luces-solares4.jpeg",
+      "originalPrice": 130,
+      "discount": 8
+    },
+    {
+      "id": "44",
+      "name": "Lámpara solar 1000W",
+      "description": "rebaja",
+      "price": 130,
+      "categoryId": "luces-solares",
+      "image": "products/luces-solares/luces-solares5.jpeg"
+    },
+    {
+      "id": "45",
+      "name": "Lámpara solar 300W",
+      "description": "Luces Solares",
+      "price": 120,
+      "categoryId": "luces-solares",
+      "image": "products/luces-solares/luces-solares6.jpeg"
+    },
+    {
+      "id": "46",
+      "name": "Lámpara solar 200W",
+      "description": "Luces Solares",
+      "price": 90,
+      "categoryId": "luces-solares",
+      "image": "products/luces-solares/luces-solares7.jpeg"
+    },
+    {
+      "id": "47",
+      "name": "Lámpara solar 300W",
+      "description": "Luces Solares",
+      "price": 95,
+      "categoryId": "luces-solares",
+      "image": "products/luces-solares/luces-solares8.jpeg"
+    },
+    {
+      "id": "48",
+      "name": "Microondas",
+      "description": "Marca: MILEXUS · 110V · Color: Espejo plateado",
+      "price": 100,
+      "categoryId": "microondas",
+      "image": "products/microondas/microondas1.jpeg"
+    },
+    {
+      "id": "49",
+      "name": "Nevera 5.5P Royal",
+      "description": "Marca: Royal · 5.5 pies · 110V · Color: Blanco · Garantía 30 días",
+      "price": 240,
+      "categoryId": "neveras",
+      "image": "products/neveras/neveras1.jpeg"
+    },
+    {
+      "id": "50",
+      "name": "Nevera Milexus 6 pies",
+      "description": "Marca: Milexus · 6 pies · Garantía 30 Días",
+      "price": 250,
+      "categoryId": "neveras",
+      "image": "products/neveras/neveras2.jpeg",
+      "originalPrice": 255,
+      "discount": 2
+    },
+    {
+      "id": "51",
+      "name": "Nevera 3.5P Milexus",
+      "description": "Marca: Milexus · 3.5 pies · 110V · Color: Gris · Garantía 30 Días",
+      "price": 210,
+      "categoryId": "neveras",
+      "image": "products/neveras/neveras3.jpeg"
+    },
+    {
+      "id": "52",
+      "name": "Refrigerador Enerlife 10.5p No Frost",
+      "description": "Marca: Enerlife · 10.5p · 110-120V~/60Hz · Color: Acero",
+      "price": 550,
+      "categoryId": "neveras",
+      "image": "products/neveras/neveras4.jpeg"
+    },
+    {
+      "id": "53",
+      "name": "Refrigerador 9.1p",
+      "description": "Marca: MILEXUS · 9.1 p",
+      "price": 500,
+      "categoryId": "neveras",
+      "image": "products/neveras/neveras5.jpeg"
+    },
+    {
+      "id": "54",
+      "name": "Refrigerador Doble Puerta 16P",
+      "description": "Marca: MILEXUS · 16P · 110V · Color: GRIS",
+      "price": 850,
+      "categoryId": "neveras",
+      "image": "products/neveras/neveras6.jpeg"
+    },
+    {
+      "id": "55",
+      "name": "Olla Arrocera EKO 1.8L",
+      "description": "Marca: EKO · 1.8 L · 120V · Color: Gris / Rojo / Negro",
+      "price": 40,
+      "categoryId": "ollas-arroceras",
+      "image": "products/ollas-arroceras/ollas-arroceras1.jpeg"
+    },
+    {
+      "id": "56",
+      "name": "Olla de Presión Bryderk 5.5lt",
+      "description": "Marca: Bryderk · 5.5 lt",
+      "price": 40,
+      "categoryId": "ollas-de-presion",
+      "image": "products/ollas-de-presion/ollas-de-presion1.jpeg"
+    },
+    {
+      "id": "57",
+      "name": "Olla de Presión 7lt",
+      "description": "7 lt · Garantía 15 Días",
+      "price": 45,
+      "categoryId": "ollas-de-presion",
+      "image": "products/ollas-de-presion/ollas-de-presion2.jpeg"
+    },
+    {
+      "id": "58",
+      "name": "Olla Reina",
+      "description": "Marca: ESTELECTRIC · 7 L · Color: Negro",
+      "price": 65,
+      "categoryId": "ollas-de-presion",
+      "image": "products/ollas-de-presion/ollas-de-presion3.jpeg"
+    },
+    {
+      "id": "59",
+      "name": "Olla Reina",
+      "description": "Marca: EON · 6 L · Color: Gris metal",
+      "price": 65,
+      "categoryId": "ollas-de-presion",
+      "image": "products/ollas-de-presion/ollas-de-presion4.jpeg"
+    },
+    {
+      "id": "60",
+      "name": "Smart TV 40 pulgadas",
+      "description": "Marca: SANKEY · 40\" · Color: negro · garantía 30 días",
+      "price": 250,
+      "categoryId": "televisores",
+      "image": "products/televisores/televisores1.jpeg"
+    },
+    {
+      "id": "61",
+      "name": "Smart TV",
+      "description": "Marca: Hisense · 43\" · Color: Negro",
+      "price": 260,
+      "categoryId": "televisores",
+      "image": "products/televisores/televisores2.jpeg"
+    },
+    {
+      "id": "62",
+      "name": "Smart TV + Cajita Decodificadora HD + Base de Pared Giratoria",
+      "description": "Marca: Hisense · 43\" · Color: Negro",
+      "price": 310,
+      "categoryId": "televisores",
+      "image": "products/televisores/televisores3.jpeg"
+    },
+    {
+      "id": "63",
+      "name": "Smart TV + Cajita Decodificadora HD + Base de Pared Giratoria",
+      "description": "Marca: Sankey · 50\" · Color: Negro",
+      "price": 410,
+      "categoryId": "televisores",
+      "image": "products/televisores/televisores4.jpeg"
+    },
+    {
+      "id": "64",
+      "name": "Smart TV",
+      "description": "Marca: Sankey · 50\" · Color: Negro",
+      "price": 360,
+      "categoryId": "televisores",
+      "image": "products/televisores/televisores5.jpeg"
+    },
+    {
+      "id": "65",
+      "name": "Smart TV + Cajita Decodificadora HD + Base de Pared Giratoria",
+      "description": "Marca: Sankey · 40\" · Color: Negro",
+      "price": 300,
+      "categoryId": "televisores",
+      "image": "products/televisores/televisores6.jpeg"
+    },
+    {
+      "id": "66",
+      "name": "Smart TV 43\" + Base Giratoria",
+      "description": "Marca: Kodak · 43\" · Color: Negro",
+      "price": 270,
+      "categoryId": "televisores",
+      "image": "products/televisores/televisores7.jpeg"
+    },
+    {
+      "id": "67",
+      "name": "Smart TV 43\" HD",
+      "description": "Marca: KODAK · Color: NEGRO",
+      "price": 255,
+      "categoryId": "televisores",
+      "image": "products/televisores/televisores8.jpeg"
+    },
+    {
+      "id": "68",
+      "name": "Smart TV 43\" HD + Base Giratoria + Cajita HD",
+      "description": "Marca: KODAK · Color: NEGRO",
+      "price": 305,
+      "categoryId": "televisores",
+      "image": "products/televisores/televisores9.jpeg"
+    },
+    {
+      "id": "69",
+      "name": "Smart TV 32\" + Base Giratoria + Cajita HD",
+      "description": "Marca: MILEXUS · Color: NEGRO",
+      "price": 225,
+      "categoryId": "televisores",
+      "image": "products/televisores/televisores10.jpeg"
+    },
+    {
+      "id": "70",
+      "name": "Smart TV 32\" + Base Giratoria",
+      "description": "Marca: MILEXUS · Color: NEGRO",
+      "price": 190,
+      "categoryId": "televisores",
+      "image": "products/televisores/televisores11.jpeg"
+    },
+    {
+      "id": "71",
+      "name": "Juego de Calderos",
+      "description": "Marca: EON · 5 piezas · Color: Gris metal",
+      "price": 50,
+      "categoryId": "utensilios-cocina",
+      "image": "products/utensilios-cocina/utensilios-cocina1.jpeg"
+    },
+    {
+      "id": "72",
+      "name": "Vajilla de Porcelana",
+      "description": "Marca: EON · 16 piezas",
+      "price": 30,
+      "categoryId": "vajillas",
+      "image": "products/vajillas/vajillas1.jpeg"
+    },
+    {
+      "id": "73",
+      "name": "Ventilador Industrial 30\" Royal",
+      "description": "Marca: Royal · 30 pulgadas",
+      "price": 140,
+      "categoryId": "ventiladores",
+      "image": "products/ventiladores/ventiladores1.jpeg",
+      "originalPrice": 150,
+      "discount": 7
+    },
+    {
+      "id": "74",
+      "name": "Ventilador 18\"",
+      "description": "Marca: SACO · 18\" · Color: Negro-Rojo / Azul",
+      "price": 45,
+      "categoryId": "ventiladores",
+      "image": "products/ventiladores/ventiladores2.jpeg"
+    }
+  ]
+}

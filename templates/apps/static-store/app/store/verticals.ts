@@ -1,4 +1,5 @@
 import type { StoreVertical } from '@store-mgmt/storefront/config';
+import { appliancesConfig } from '../../verticals/appliances/store.config';
 import { clothesConfig } from '../../verticals/clothes/store.config';
 import { demoConfig } from '../../verticals/demo/store.config';
 
@@ -13,6 +14,7 @@ import { demoConfig } from '../../verticals/demo/store.config';
  * or component changes, only this line + its own data folder.
  */
 export const VERTICALS: Record<string, StoreVertical> = {
+  appliances: { slug: 'appliances', config: appliancesConfig },
   clothes: { slug: 'clothes', config: clothesConfig },
   demo: { slug: 'demo', config: demoConfig },
 };
