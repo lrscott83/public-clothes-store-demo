@@ -171,9 +171,10 @@
     "condition": null,
     "raw_text": "Somos NOVA Tienda en línea / Bomba Periférica / Silverpoint / 1 HP / $60 USD / *1\"X1\" / 1/2 HP 110V / SP-QB60 / *Bobinas e impulsor de gran rendimiento para mayor durabilidad. / *Operación silenciosa y larga vida. / *Gran caudal, bajo consumo. / Mensajería *NO incluída Con coste adicional a toda la provincia / Ubicados Consolación del Sur Herradura / pump body brand sticker: Santul",
     "notes": "Flyer header states brand 'Silverpoint' and '1 HP', but body specs list '1/2 HP 110V' and the physical pump sticker reads 'Santul' instead — conflicting brand/spec info across the same flyer.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 11
+    "id": 11,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.25.43 AM.jpeg",
@@ -187,9 +188,10 @@
     "condition": "Garantía 15 Días",
     "raw_text": "NOVA / Olla Arrocera MILEXUS / 2.2 lt / $45 USD / Mensajería *NO incluída Con coste adicional a toda la provincia / Garantía 15 Días / Ubicados Consolación del Sur Herradura / Contenido generado por IA / unit label: MILEXUS",
     "notes": "Flyer itself contains a disclaimer 'Contenido generado por IA', suggesting the product photo may be AI-generated rather than an actual photo of stock.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 12
+    "id": 12,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.25.44 AM.jpeg",
@@ -267,9 +269,10 @@
     "condition": null,
     "raw_text": "Lámpara Recargable DC 5V | 60W / 6500K 50CM INCREÍBLE PRECIO: $10",
     "notes": "60W, 6500K color temperature, 50cm rechargeable work/tube light, sold in retail box. Box printed brand text is too small/blurred to read reliably.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 17
+    "id": 17,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.25.49 AM (1).jpeg",
@@ -507,9 +510,10 @@
     "condition": "reparada, sin garantía, 100% funcionamiento, liquidación",
     "raw_text": "NOVA / LAVADORA AUTOMÁTICA / $180 / CAPACIDAD: 7.5KG / MARCA: MILEXUS / COLOR: GRIS-BLANCO / LIQUIDACIÓN / REPARADA / SIN GARANTÍA / 100% FUNCIONAMIENTO / CONSOLACIÓN Y HERRADURA / INCLUÍDO EN CONSOLACIÓN Y HERRADURA CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS",
     "notes": "Unidad reparada en liquidación, sin garantía. La foto del producto muestra un logo 'AKAI' en el panel de control, que difiere de la marca impresa MILEXUS en el flyer — posible foto de stock no coincidente.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 32
+    "id": 32,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.25.59 AM.jpeg",
@@ -635,9 +639,10 @@
     "condition": null,
     "raw_text": "NOVA / LAVADORA AUTOMÁTICA / $225 / CAPACIDAD: 7.5KG / MARCA: MILEXUS / COLOR: GRIS-BLANCO / CONSOLACIÓN Y HERRADURA / INCLUÍDO EN CONSOLACIÓN Y HERRADURA CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS",
     "notes": "La foto del producto muestra un logo 'AKAI' en el panel de control, que difiere de la marca impresa MILEXUS en el flyer — mismo caso que otra lavadora Milexus del lote (posible foto de stock no coincidente).",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 40
+    "id": 40,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.04 AM.jpeg",
@@ -731,9 +736,10 @@
     "condition": null,
     "raw_text": "NOVA Refrigerador Hisense 7.23 p Hisense Water Tempered $395 USD Garantía 30Días Ubicados Consolación del Sur Herradura Mensajería Incluída en Consolación y Herradura. Con coste adicional a toda la provincia Contenido generado por IA",
     "notes": "El valor de capacidad aparece cortado en la imagen como '7.23 p' (probablemente pies cúbicos). La imagen incluye marca de agua 'NOVA' repetida y el aviso 'Contenido generado por IA' sobre la foto del producto.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 46
+    "id": 46,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.09 AM (1).jpeg",
@@ -795,9 +801,10 @@
     "condition": null,
     "raw_text": "NOVA $170 LAVADORA SEMI AUTOMÁTICA MARCA: ENERLIFE COLOR: BLANCO ENERLIFE 7.0 :UPER SPIN Comfort and Care... ENERLIFE Air Dry Ages Heat Baby Energy 30 DÍAS CONSOLACIÓN Y HERRADURA INCLUIDO EN CONSOLACIÓN Y HERRADURA CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS",
     "notes": "Texto '7.0 :UPER SPIN' parcialmente ilegible en el logo del equipo, probablemente indica capacidad 7.0 (kg) y función 'SUPER SPIN'. Garantía 30 días.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 50
+    "id": 50,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.11 AM.jpeg",
@@ -891,9 +898,10 @@
     "condition": null,
     "raw_text": "NOVA $550 REFRIGERADOR INVERTER CON DISPENSADOR CAPACIDAD: 10 P MARCA: SANKEY COLOR: GRIS OSCURO SANKEY 30 DÍAS CONSOLACIÓN Y HERRADURA INCLUÍDO EN CONSOLACIÓN Y HERRADURA CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS",
     "notes": "Capacity printed literally as '10 P' (likely abbreviation for pies/cubic feet); kept as printed since unit is not specified.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 56
+    "id": 56,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.16 AM.jpeg",
@@ -939,9 +947,10 @@
     "condition": "Desarmado en caja",
     "raw_text": "NOVA $230 ESCRITORIO DESARMADO EN CAJA 3 GAVETAS CIERRE CON LLAVE 75 CM 120CM 60 CM CONSOLACIÓN Y HERRADURA INCLUÍDO EN CONSOLACIÓN Y HERRADURA CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS",
     "notes": "This is furniture, not an appliance. Dimensions 120cm (width) x 75cm (height) x 60cm (depth), 3 drawers with key lock. No brand or color name printed (finish is a gray woodgrain laminate but not labeled with a color name).",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 59
+    "id": 59,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.19 AM (1).jpeg",
@@ -1019,9 +1028,10 @@
     "condition": null,
     "raw_text": "Somos NOVA Tienda en línea Sandwichera EKO 800W $30 USD FuturoTech Mensajería *NO incluída Con coste adicional a toda la provincia Garantía 15 Días Ubicados Consolación del Sur Herradura",
     "notes": "Flyer title states 'Sandwichera EKO', but the physical unit in the photo is printed with 'FuturoTech' instead — brand discrepancy between title and product label, flagged for human review to confirm the correct brand.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 64
+    "id": 64,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.22 AM.jpeg",
@@ -1035,9 +1045,10 @@
     "condition": "Rebajado por golpe en letrero de cristal",
     "raw_text": "NOVA ANTES: $1050 $1020 REBAJA POR GOLPE EN LETRERO DE CRISTAL EXHIBIDOR VERTICAL 20P MARCA: MILEXUS COLOR: GRIS CORRIENTE: 110V DOBLE PUERTA MILEXUS ANCHO: ENTRE 90 CM Y 100 CM. ALTO: ENTRE 195 CM Y 210 CM (CONTANDO EL COPETE PUBLICITARIO Y LAS RUEDAS/PATAS). PROFUNDIDAD: ENTRE 60 CM Y 70 CM. 30 DÍAS CONSOLACIÓN Y HERRADURA INCLUÍDO EN CONSOLACIÓN Y HERRADURA CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS",
     "notes": "Original price $1050 discounted to $1020 due to a cosmetic defect (cracked glass advertising sign panel on top). '20P' in the name likely denotes ~20 cubic feet capacity, kept as printed. Dimensions given as ranges rather than fixed values: width 90-100cm, height 195-210cm (including top sign and casters), depth 60-70cm.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 65
+    "id": 65,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.23 AM.jpeg",
@@ -1051,9 +1062,10 @@
     "condition": null,
     "raw_text": "NOVA $220 TOLDO IMPERMEABLE 280G/M2 MATERIAL: POLIÉSTER MEDIDA: 2*1.5M COLORES: SOPORTE DE ALUMINIO SÓLIDO BRAZOS RETRÁCTILES BARRA DE SOPORTE FRONTAL DESLIZANTE SUAVE BORDE DECORATIVO CONSOLACIÓN, HERRADURA Y PINAR DEL RÍO INCLUÍDO EN CONSOLACIÓN, HERRADURA Y PINAR CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS.",
     "notes": "Retractable awning (toldo), not a conventional home appliance; category invented (not in the given example list). Measurement 2x1.5m, 280g/m2 polyester. Three color swatches shown (green, wine, navy) with no printed color name, so color left null. Main photo shows navy awning installed over a patio.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 66
+    "id": 66,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.24 AM.jpeg",
@@ -1067,9 +1079,10 @@
     "condition": null,
     "raw_text": "NOVA $240 TOLDO IMPERMEABLE 280G/M2 MATERIAL: POLIÉSTER MEDIDA: 3*2M COLORES: SOPORTE DE ALUMINIO SÓLIDO BRAZOS RETRÁCTILES BARRA DE SOPORTE FRONTAL DESLIZANTE SUAVE BORDE DECORATIVO CONSOLACIÓN, HERRADURA Y PINAR DEL RÍO INCLUÍDO EN CONSOLACIÓN, HERRADURA Y PINAR CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS.",
     "notes": "Retractable awning (toldo), not a conventional home appliance; category invented. Measurement 3x2m, 280g/m2 polyester. Three color swatches shown (green, wine, navy) with no printed color name, so color left null. Main photo shows a maroon/wine awning over a restaurant terrace.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 67
+    "id": 67,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.25 AM (1).jpeg",
@@ -1083,9 +1096,10 @@
     "condition": null,
     "raw_text": "NOVA $280 TOLDO IMPERMEABLE 280G/M2 MATERIAL: POLIÉSTER MEDIDA: 4*2.5M COLORES: SOPORTE DE ALUMINIO SÓLIDO BRAZOS RETRÁCTILES BARRA DE SOPORTE FRONTAL DESLIZANTE SUAVE BORDE DECORATIVO CONSOLACIÓN, HERRADURA Y PINAR DEL RÍO INCLUÍDO EN CONSOLACIÓN, HERRADURA Y PINAR CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS.",
     "notes": "Retractable awning (toldo), not a conventional home appliance; category invented. Measurement 4x2.5m, 280g/m2 polyester. Two color swatches visible (green, wine) with no printed color name, so color left null. Main photo shows a green awning over an outdoor dining set.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 68
+    "id": 68,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.25 AM.jpeg",
@@ -1115,9 +1129,10 @@
     "condition": null,
     "raw_text": "NOVA $45 BOMBA DE AGUA 1/2 HP COLOR: ROJO CORRIENTE: 110V 15 DÍAS CONSOLACIÓN, HERRADURA Y PINAR DEL RÍO CON COSTO ADICIONAL",
     "notes": "Category invented (water pump, not in given example list). A small sticker/label is visible on the pump housing but is illegible in the photo, so brand could not be confirmed and is left null.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 70
+    "id": 70,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.27 AM.jpeg",
@@ -1163,9 +1178,10 @@
     "condition": null,
     "raw_text": "NOVA $25 BASE PARA TV A LA PARED GIRATORIA DE 30 - 55\" CONSOLACIÓN, HERRADURA Y PINAR DEL RÍO CON COSTO ADICIONAL",
     "notes": "Full-motion (giratoria) wall mount for TVs sized 30-55 inch. Mount is visually black but no printed color label appears in the flyer, so color is left null. Category invented (not in given example list).",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 73
+    "id": 73,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.29 AM.jpeg",
@@ -1307,9 +1323,10 @@
     "condition": null,
     "raw_text": "NOVA $235 EQUIPO DE MÚSICA MARCA: LG COLOR: NEGRO BLUETOOTH DOBLE PUERTO USB KARAOKE MÓDULO:35*16.*25.1CM PARLANTE:26.6*314*23.4CM/(2) 30 DÍAS CONSOLACIÓN, HERRADURA Y PINAR DEL RÍO INCLUÍDO EN CONSOLACIÓN, HERRADURA Y PINAR CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS.",
     "notes": "Larger LG audio system (bigger cabinets than the $180 model in image 9.26.38). Features Bluetooth, dual USB, karaoke. Module dimensions 35*16.*25.1cm, speaker dimensions 26.6*314*23.4cm (x2) as printed (one dimension possibly a printed typo).",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 82
+    "id": 82,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.35 AM.jpeg",
@@ -1339,9 +1356,10 @@
     "condition": null,
     "raw_text": "NOVA $75 ESCALERA PELDAÑOS: 4 COLOR: ROJO/ GRIS/ NEGRO DIMENSIONES: 140CM 90CM CONSOLACIÓN, HERRADURA Y PINAR DEL RÍO INCLUÍDO EN CONSOLACIÓN, HERRADURA Y PINAR CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS.",
     "notes": "4-step folding step ladder, available in red, gray or black. Main dimension label 140CM; a secondary '90CM' label appears next to the gray ladder in the photo (unclear if it refers to open height or a separate size).",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 84
+    "id": 84,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.37 AM.jpeg",
@@ -1435,9 +1453,10 @@
     "condition": null,
     "raw_text": "NOVA $20 BASE PARA SPLIT MARCA: LOTUS SOPORTA: 200KG LOTUS HOME & LIVING SOPORTE PARA AIRE ACONDICIONADO 1set CONSOLACIÓN, HERRADURA Y PINAR DEL RÍO INCLUÍDO EN CONSOLACIÓN, HERRADURA Y PINAR CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS.",
     "notes": "Wall-mount support bracket set for outdoor split A/C units, Lotus brand, rated to hold 200kg. This is an accessory/mounting hardware item rather than a standalone appliance; flagged for review on categorization.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 90
+    "id": 90,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.41 AM.jpeg",
@@ -1499,9 +1518,10 @@
     "condition": null,
     "raw_text": "Máquina de frío / Somos NOVA Tienda en línea / EV1516WC / 1/8 / 115 V- 60Hz / 1PH / R134a / $80 USD / Garantía 15 Días / Ubicados Consolación del Sur Herradura / Mensajería Incluída en Consolación, Herradura y Pinar del Río",
     "notes": "Refrigeration compressor (spare part), model EV1516WC, uses R134a refrigerant. No MARCA field printed, so brand left null. Borderline: this is a component/spare part rather than a complete appliance.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 94
+    "id": 94,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.45 AM.jpeg",
@@ -1531,9 +1551,10 @@
     "condition": null,
     "raw_text": "NOVA / BASE PARA PANELES / ESTRUCTURA PARA 2 PANELES $100 / ESTRUCTURA PARA 4 PANELES $190 / BASE TRASERA AJUSTABLE / 4 ABRAZADERA INTERNA / PLACAS A TIERRA / CONECTORES A TIERRA / 6 ABRAZADERA EXTERNA / BASES / RAILES / REPRESENTACIÓN GRÁFICA DEL MONTAJE / CONSOLACIÓN Y HERRADURA / CON COSTO ADICIONAL",
     "notes": "Multi-product flyer: mounting/rail hardware kit for solar panels, two sizes listed with separate prices, split into two records (this is the 2-panel structure). This is a mechanical mounting accessory, not itself an electrical appliance; flagged for review.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 96
+    "id": 96,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.46 AM.jpeg",
@@ -1547,9 +1568,10 @@
     "condition": null,
     "raw_text": "NOVA / BASE PARA PANELES / ESTRUCTURA PARA 2 PANELES $100 / ESTRUCTURA PARA 4 PANELES $190 / BASE TRASERA AJUSTABLE / 4 ABRAZADERA INTERNA / PLACAS A TIERRA / CONECTORES A TIERRA / 6 ABRAZADERA EXTERNA / BASES / RAILES / REPRESENTACIÓN GRÁFICA DEL MONTAJE / CONSOLACIÓN Y HERRADURA / CON COSTO ADICIONAL",
     "notes": "Multi-product flyer: mounting/rail hardware kit for solar panels, two sizes listed with separate prices, split into two records (this is the 4-panel structure). Mechanical mounting accessory, not itself an electrical appliance; flagged for review.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 97
+    "id": 97,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.47 AM (1).jpeg",
@@ -1579,9 +1601,10 @@
     "condition": null,
     "raw_text": "NOVA / INVERSOR SOLAR / $850 / CAPACIDAD: 5KW / MARCA: SAKO / VOLTAJE DE SALIDA: 120V / VOLTAJE DE BATERÍA: 48V / CAPACIDAD SOLAR: 5500W / SAKO (logo) / SUNSEE MERY WIFI SOLAR INVERTER 110V (secondary label on unit) / 30 DÍAS SOLO SI INSTALA CON EQUIPO RECOMENDADO POR NOSOTROS / CONSOLACIÓN Y HERRADURA / INCLUÍDO EN CONSOLACIÓN Y HERRADURA CON COSTO ADICIONAL A LOS DEMÁS PUEBLOS",
     "notes": "Max solar capacity 5500W. Device also has a secondary printed label 'SUNSEE MERY WIFI Solar Inverter 110V' in addition to the SAKO logo; flagged for review due to dual branding on the unit.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 99
+    "id": 99,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.48 AM.jpeg",
@@ -1595,9 +1618,10 @@
     "condition": null,
     "raw_text": "NOVA / KIT / 3 CON 3.84 KW / TODO X $1500 / INVERSOR MUST 3KW 24V/110V / 2 BATERÍA SAKO 1.92KWH 12.8V/150AH / MUST Power Inverter (3kw label) / 3.84kWh / SACO 12.8V LiFePO4 150 Ah High Performance Intelligent BMS",
     "notes": "Bundle kit, single all-inclusive price for inverter + 2 batteries, not split into separate records since only one combined price is given. Brand left null because the kit combines a MUST inverter with batteries printed as 'SACO' on the product image, while the flyer heading text spells it 'SAKO' — spelling inconsistency between title and battery photo, flagged for review.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 100
+    "id": 100,
+    "rescued": true
   },
   {
     "source_filename": "WhatsApp Image 2026-07-03 at 9.26.49 AM (1).jpeg",
@@ -1643,8 +1667,9 @@
     "condition": null,
     "raw_text": "NOVA / KIT / 3 CON 5.12 KW / TODO X $1700 / INVERSOR MUST 3KW 24V/110V / BATERÍA HUMSIENK 5.12KWH 24V/2000AH / MUST Power Inverter (3kw label) / 5.12kWh / Humsienk 24V 200Ah 5120Wh LiFePO4 PLUS BMS 250A",
     "notes": "Bundle kit, single all-inclusive price for inverter + battery. Flyer title text states battery is '24V/2000AH' but the battery product photo itself is printed '24V 200Ah / 5120Wh' — likely a typo (extra zero) in the heading text; flagged for review. Brand left null since kit combines MUST inverter with Humsienk battery.",
-    "needs_review": true,
+    "needs_review": false,
     "skipped": false,
-    "id": 103
+    "id": 103,
+    "rescued": true
   }
 ]

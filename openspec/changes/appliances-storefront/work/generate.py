@@ -47,6 +47,18 @@ CATEGORY_MAP = {
     "cafeteras": "cafeteras",
     "freidoras": "freidoras",
     "freidoras-de-aire": "freidoras",
+    # Rescued from needs_review (owner-approved placements).
+    "soportes-tv": "tv-y-audio",
+    "luces-recargables": "utiles",
+    "escritorios": "utiles",
+    "toldos": "utiles",
+    "bombas-de-agua": "utiles",
+    "accesorios-solares": "energia-solar",
+    "kits-solares": "energia-solar",
+    "accesorios": "climatizacion",
+    "compresores": "refrigeracion",
+    "exhibidores": "refrigeracion",
+    "sandwicheras": "cocinas",
 }
 
 # Display names for the merged category slugs (accents preserved).

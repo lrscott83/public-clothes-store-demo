@@ -52,7 +52,7 @@ Note: PR 1's extraction-dataset.json lives under `openspec/changes/...` (provena
 - [x] 2.3 Global sequential string `id` assigned `(slug asc, index asc)` — 74 unique ids verified.
 - [x] 2.4 `catalog.json` `categories[]` generated (28, slug asc).
 - [x] 2.5 `catalog.json` `products[]` generated: folded `description` per §5; 5 `originalPrice`/`discount` from printed previous prices.
-- [x] 2.6 `needs_review`/unpriced records excluded (74 of 103 published).
+- [x] 2.6 Owner rescued all 25 `needs_review` records (flagged `rescued: true` in the dataset, owner-approved category placements); only the 4 non-appliance `skipped` records excluded → 99 of 103 published.
 - [x] 2.7 `catalog.json` written to `templates/apps/static-store/verticals/appliances/`.
 - [x] 2.8 `store.config.ts` created mirroring `clothes` (verticalAsset mapping, en-US/USD, steel-blue theme, nav/features/footer).
 - [x] 2.9 **[D6 resolved]** `brand.name` = "NOVA Electrodomésticos" (user-confirmed); `hero.jpg` = free-license Pexels photo (pexels.com/photo/15409513, no attribution required), stored locally.
