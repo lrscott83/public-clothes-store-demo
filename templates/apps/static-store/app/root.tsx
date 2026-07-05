@@ -9,11 +9,19 @@ import {
 import type { Route } from './+types/root';
 import { ThemeProvider } from '@store-mgmt/storefront/theme';
 import { activeConfig, activeTheme } from './store/active';
+import { faviconHref } from './store/favicon';
 import { Header } from './components/header';
 import { Footer } from './components/footer';
 
 import '@store-mgmt/web-common/styles.css';
 import './app.css';
+
+// Declaring an icon link makes the browser use it instead of auto-requesting
+// `/favicon.ico` (which has no route and logs a 404). The favicon follows the
+// active vertical — Nova's Store glyph in its primary color, clothes' its own.
+export const links: Route.LinksFunction = () => [
+  { rel: 'icon', type: 'image/svg+xml', href: faviconHref },
+];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
