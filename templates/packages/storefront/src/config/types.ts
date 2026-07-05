@@ -39,6 +39,20 @@ export interface FeatureItem {
   description: string;
 }
 
+/**
+ * Localized copy for the home page's catalog section headings. Optional and
+ * per-field: a vertical overrides only what it needs, and anything omitted
+ * falls back to the English structural default in `home.tsx`. This lets a
+ * Spanish vertical (NOVA, clothes) show Spanish headings that match its
+ * Spanish nav labels without forcing the English `demo` vertical off its
+ * defaults.
+ */
+export interface HomeSectionCopy {
+  features?: string;
+  offers?: string;
+  newArrivals?: string;
+}
+
 export interface FooterLink {
   label: string;
   path: string;
@@ -72,6 +86,7 @@ export interface StoreConfig {
   hero: HeroConfig;
   nav: NavItem[];
   features?: FeatureItem[];
+  homeSections?: HomeSectionCopy;
   footer: FooterConfig;
   catalog: CatalogData;
 }

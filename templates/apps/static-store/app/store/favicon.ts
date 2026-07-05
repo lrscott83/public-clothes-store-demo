@@ -34,6 +34,8 @@ export function buildFaviconDataUri(iconName: string, color: string): string {
  * resolved primary color. Follows `VITE_STORE_VERTICAL` like everything else.
  */
 export const faviconHref = buildFaviconDataUri(
-  activeConfig.logo.icon,
+  // `logo.icon` is optional in the config; mirror the Header's `?? 'Store'`
+  // fallback so the favicon matches the rendered logo when no icon is set.
+  activeConfig.logo.icon ?? 'Store',
   activeTheme.colors.primary,
 );

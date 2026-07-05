@@ -8,8 +8,9 @@ import {
 } from 'react-router';
 import type { Route } from './+types/root';
 import { ThemeProvider } from '@store-mgmt/storefront/theme';
-import { activeConfig, activeTheme } from './store/active';
+import { activeConfig, activeTheme, catalog } from './store/active';
 import { faviconHref } from './store/favicon';
+import { hiddenHomeAnchors, resolveHomeSections } from './store/home-sections';
 import { Header } from './components/header';
 import { Footer } from './components/footer';
 
@@ -43,10 +44,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Derived once at module load (catalog + config are static per build): the nav
+// anchors whose home-page section won't render, so the header can hide them.
+const hiddenAnchors = hiddenHomeAnchors(resolveHomeSections(activeConfig, catalog));
+
 export default function App() {
   return (
     <>
-      <Header config={activeConfig} />
+      <Header config={activeConfig} hiddenAnchors={hiddenAnchors} />
       <Outlet />
       <Footer config={activeConfig} />
     </>

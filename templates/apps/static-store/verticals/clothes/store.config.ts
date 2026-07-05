@@ -76,6 +76,13 @@ export const clothesConfig: StoreConfig = {
     { label: 'Novedades', path: '#novedades', kind: 'anchor' },
     { label: 'Productos', path: '/productos', kind: 'route' },
   ],
+  // Spanish section headings so the home page matches its Spanish nav labels
+  // (nav "Ofertas"/"Novedades"/"Características" ↔ these headings).
+  homeSections: {
+    features: 'Características',
+    offers: 'Ofertas Especiales',
+    newArrivals: 'Novedades',
+  },
   features: [
     {
       icon: 'Star',

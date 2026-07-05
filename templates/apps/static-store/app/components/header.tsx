@@ -29,24 +29,40 @@ const TINT_CLASS: Record<string, string> = {
 
 export interface HeaderProps {
   config: StoreConfig;
+  /**
+   * Anchor `path`s (`#id`) to drop from the nav because their target section
+   * isn't rendered — e.g. `#novedades` when the catalog has no new products.
+   * Route entries are never filtered. Defaults to showing every nav item.
+   */
+  hiddenAnchors?: string[];
 }
 
 /**
  * Config-driven storefront header: brand + logo (image or a whitelisted
  * lucide icon fallback, tinted via a theme token) and the nav, rendering
  * router `<Link>`s for `kind: 'route'` entries and plain anchors for
- * `kind: 'anchor'` entries. Contains zero hardcoded brand/nav copy.
+ * `kind: 'anchor'` entries. Contains zero hardcoded brand/nav copy. Stays
+ * `fixed` to the top across every route.
  */
-export function Header({ config }: HeaderProps) {
+export function Header({ config, hiddenAnchors = [] }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const LogoIcon = LOGO_ICONS[config.logo.icon ?? 'Store'];
   const tintClass = TINT_CLASS[config.logo.tintToken ?? 'primary'] ?? 'text-primary';
 
+  // Keep the nav in lockstep with the sections the home page actually renders:
+  // an anchor whose section is absent would otherwise scroll to nothing.
+  const navItems = config.nav.filter(
+    (item) => !(item.kind === 'anchor' && hiddenAnchors.includes(item.path)),
+  );
+
   return (
-    <header className="fixed top-0 w-full z-50 bg-surface shadow-card">
+    <header className="fixed top-0 inset-x-0 z-50 bg-surface/95 backdrop-blur-sm shadow-card">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-2 text-2xl font-bold text-text">
+          <Link
+            to="/"
+            className="flex items-center gap-2 text-lg sm:text-xl font-bold text-text"
+          >
             {config.logo.image ? (
               <img
                 src={config.logo.image}
@@ -54,20 +70,20 @@ export function Header({ config }: HeaderProps) {
                 className="h-8 w-8 object-contain"
               />
             ) : (
-              <LogoIcon className={`h-8 w-8 ${tintClass}`} aria-hidden="true" />
+              <LogoIcon className={`h-7 w-7 shrink-0 ${tintClass}`} aria-hidden="true" />
             )}
-            <span>{config.brand.name}</span>
+            <span className="truncate">{config.brand.name}</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-8">
-            {config.nav.map((item) => (
+            {navItems.map((item) => (
               <NavLink key={item.path} item={item} />
             ))}
           </nav>
 
           <button
             type="button"
-            className="md:hidden p-2 text-text"
+            className="md:hidden p-2 -mr-2 text-text"
             aria-label="Toggle navigation menu"
             aria-expanded={isMenuOpen}
             onClick={() => setIsMenuOpen((open) => !open)}
@@ -80,7 +96,7 @@ export function Header({ config }: HeaderProps) {
       {isMenuOpen && (
         <div className="md:hidden bg-surface border-t border-border shadow-card">
           <div className="px-2 pt-2 pb-3 space-y-1">
-            {config.nav.map((item) => (
+            {navItems.map((item) => (
               <NavLink
                 key={item.path}
                 item={item}

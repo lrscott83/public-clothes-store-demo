@@ -56,6 +56,26 @@ describe('Header', () => {
     expect(logoImg).toHaveAttribute('src', '/fixture-logo.png');
   });
 
+  it('drops anchor nav entries listed in hiddenAnchors but keeps routes', () => {
+    const config = buildStoreConfig({
+      nav: [
+        { label: 'Inicio', path: '/', kind: 'route' },
+        { label: 'Ofertas', path: '#ofertas', kind: 'anchor' },
+        { label: 'Novedades', path: '#novedades', kind: 'anchor' },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Header config={config} hiddenAnchors={['#novedades']} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Ofertas' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Inicio' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Novedades' })).not.toBeInTheDocument();
+  });
+
   it('toggles a collapsible mobile menu open and closed via the menu button', async () => {
     const user = userEvent.setup();
     const config = buildStoreConfig({
