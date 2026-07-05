@@ -53,6 +53,32 @@ export interface HomeSectionCopy {
   newArrivals?: string;
 }
 
+/**
+ * Localized copy for the products page's filter toolbar and pager. Optional and
+ * per-field like `HomeSectionCopy`: a vertical overrides only what it needs and
+ * anything omitted falls back to the English default in `products.tsx`, so the
+ * Spanish verticals get Spanish controls while `demo` stays English.
+ */
+export interface ProductsPageCopy {
+  searchPlaceholder?: string;
+  categoryLabel?: string;
+  allCategories?: string;
+  sortLabel?: string;
+  sortFeatured?: string;
+  sortPriceAsc?: string;
+  sortPriceDesc?: string;
+  sortNameAsc?: string;
+  perPageLabel?: string;
+  /** Suffix appended to each page-size number, e.g. "12 per page". */
+  perPageOptionSuffix?: string;
+  /** Noun in the results count, e.g. "1 product" / "24 products". */
+  resultsSingular?: string;
+  resultsPlural?: string;
+  emptyMessage?: string;
+  previousPage?: string;
+  nextPage?: string;
+}
+
 export interface FooterLink {
   label: string;
   path: string;
@@ -87,6 +113,7 @@ export interface StoreConfig {
   nav: NavItem[];
   features?: FeatureItem[];
   homeSections?: HomeSectionCopy;
+  productsPage?: ProductsPageCopy;
   footer: FooterConfig;
   catalog: CatalogData;
 }

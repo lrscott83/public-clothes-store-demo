@@ -83,6 +83,24 @@ export const appliancesConfig: StoreConfig = {
     offers: 'Ofertas Especiales',
     newArrivals: 'Novedades',
   },
+  // Spanish copy for the products page filter toolbar + pager.
+  productsPage: {
+    searchPlaceholder: 'Buscar productos…',
+    categoryLabel: 'Categoría',
+    allCategories: 'Todas las categorías',
+    sortLabel: 'Ordenar por',
+    sortFeatured: 'Destacados',
+    sortPriceAsc: 'Precio: menor a mayor',
+    sortPriceDesc: 'Precio: mayor a menor',
+    sortNameAsc: 'Nombre: A a Z',
+    perPageLabel: 'Mostrar',
+    perPageOptionSuffix: 'por página',
+    resultsSingular: 'producto',
+    resultsPlural: 'productos',
+    emptyMessage: 'No hay productos que coincidan con tu búsqueda.',
+    previousPage: 'Anterior',
+    nextPage: 'Siguiente',
+  },
   features: [
     {
       icon: 'Star',
