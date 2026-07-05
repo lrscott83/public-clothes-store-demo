@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { activeConfig, activeTheme, catalog } from '../active';
 
 // VITE_STORE_VERTICAL is unset in the test env, so this exercises the
-// documented default-vertical fallback (resolveVertical -> DEFAULT_VERTICAL).
+// app-level default-vertical fallback (resolveVertical -> APP_DEFAULT_VERTICAL).
 describe('active vertical resolution', () => {
-  it('resolves a valid StoreConfig for the default (clothes) vertical', () => {
-    expect(activeConfig.vertical).toBe('clothes');
+  it('resolves a valid StoreConfig for the default (appliances) vertical', () => {
+    expect(activeConfig.vertical).toBe('appliances');
     expect(activeConfig.brand.name).toBeTruthy();
   });
 
