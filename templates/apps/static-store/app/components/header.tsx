@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { Menu, Package, Store, ShoppingBag, X } from 'lucide-react';
 import type { StoreConfig } from '@store-mgmt/storefront/config';
 
@@ -124,9 +124,24 @@ function NavLink({
     ? 'block px-3 py-2 rounded-md text-base font-medium text-text hover:bg-background hover:text-primary transition-colors'
     : 'text-sm font-medium text-text hover:text-primary transition-colors';
 
+  const { pathname } = useLocation();
+
   if (item.kind === 'route') {
     return (
       <Link key={item.path} to={item.path} className={className} onClick={onNavigate}>
+        {item.label}
+      </Link>
+    );
+  }
+
+  // Anchor (`#section`) entries target a home-page section. On the home route a
+  // plain in-page anchor scrolls natively. On any other route (e.g. `/productos`)
+  // that same anchor would resolve against the current page and scroll to
+  // nothing — so route through the router to `/#section` instead. React Router's
+  // <ScrollRestoration> then scrolls the section into view once home mounts.
+  if (pathname !== '/') {
+    return (
+      <Link key={item.path} to={`/${item.path}`} className={className} onClick={onNavigate}>
         {item.label}
       </Link>
     );

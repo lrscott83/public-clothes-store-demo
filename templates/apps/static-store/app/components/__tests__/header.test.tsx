@@ -76,6 +76,52 @@ describe('Header', () => {
     expect(screen.queryByRole('link', { name: 'Novedades' })).not.toBeInTheDocument();
   });
 
+  it('rewrites every anchor nav link to /#section when the user is off the home route', () => {
+    const config = buildStoreConfig({
+      nav: [
+        { label: 'Características', path: '#caracteristicas', kind: 'anchor' },
+        { label: 'Ofertas', path: '#ofertas', kind: 'anchor' },
+        { label: 'Novedades', path: '#novedades', kind: 'anchor' },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/productos']}>
+        <Header config={config} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Características' })).toHaveAttribute(
+      'href',
+      '/#caracteristicas',
+    );
+    expect(screen.getByRole('link', { name: 'Ofertas' })).toHaveAttribute('href', '/#ofertas');
+    expect(screen.getByRole('link', { name: 'Novedades' })).toHaveAttribute('href', '/#novedades');
+  });
+
+  it('keeps anchor nav links as in-page hashes when already on the home route', () => {
+    const config = buildStoreConfig({
+      nav: [
+        { label: 'Características', path: '#caracteristicas', kind: 'anchor' },
+        { label: 'Ofertas', path: '#ofertas', kind: 'anchor' },
+        { label: 'Novedades', path: '#novedades', kind: 'anchor' },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Header config={config} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Características' })).toHaveAttribute(
+      'href',
+      '#caracteristicas',
+    );
+    expect(screen.getByRole('link', { name: 'Ofertas' })).toHaveAttribute('href', '#ofertas');
+    expect(screen.getByRole('link', { name: 'Novedades' })).toHaveAttribute('href', '#novedades');
+  });
+
   it('toggles a collapsible mobile menu open and closed via the menu button', async () => {
     const user = userEvent.setup();
     const config = buildStoreConfig({
