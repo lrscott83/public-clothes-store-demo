@@ -1,0 +1,1 @@
+const t=new Map;function n(a,e){const c=`${e.locale}|${e.currency}`;let r=t.get(c);return r||(r=new Intl.NumberFormat(e.locale,{style:"currency",currency:e.currency}),t.set(c,r)),r.format(a)}export{n as f};
