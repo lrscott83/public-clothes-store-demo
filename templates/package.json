@@ -8,6 +8,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "build:pages:all": "pnpm --filter @store-mgmt/static-store build:pages:all",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "clean": "turbo run clean && rimraf node_modules/.cache .turbo"
   },

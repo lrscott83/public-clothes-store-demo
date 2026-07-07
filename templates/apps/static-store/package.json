@@ -12,6 +12,7 @@
     "clean": "rimraf build .react-router",
     "test": "vitest run",
     "build:pages": "VITE_BASE=$VITE_BASE react-router build && node scripts/prepare-pages-build.mjs",
+    "build:pages:all": "node scripts/build-pages-verticals.mjs",
     "deploy": "VITE_BASE=$VITE_BASE react-router build && node scripts/prepare-pages-build.mjs && gh-pages -d build/client"
   },
   "dependencies": {
