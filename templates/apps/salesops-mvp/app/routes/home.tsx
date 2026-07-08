@@ -1,4 +1,6 @@
 import type { Route } from './+types/home';
+import { ProductCard } from '../components/product-card';
+import { catalogProvider, resolveCatalogImage } from '../data/catalog';
 
 export function meta(_args: Route.MetaArgs) {
   return [
@@ -6,6 +8,11 @@ export function meta(_args: Route.MetaArgs) {
     { name: 'description', content: 'Panel interno de gestión de pedidos y operaciones.' },
   ];
 }
+
+// Smoke proof that the local catalog + ProductCard wiring works end to end
+// (design.md Task 4.6) — not the real "Nuevo pedido" screen, which Task 3
+// implements later against this same catalog data.
+const sampleProduct = catalogProvider.getProducts()[0];
 
 /**
  * Welcome/overview landing page, rendered INSIDE the `_shell` layout (see
@@ -20,6 +27,16 @@ export default function Home() {
       <p className="mt-2 text-sm text-text-muted">
         Elegí una pantalla en la barra lateral para empezar.
       </p>
+
+      {sampleProduct && (
+        <div className="mt-8 max-w-xs">
+          <ProductCard
+            product={{ ...sampleProduct, image: resolveCatalogImage(sampleProduct.image) }}
+            locale="es-NI"
+            currency="NIO"
+          />
+        </div>
+      )}
     </main>
   );
 }
