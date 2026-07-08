@@ -102,6 +102,16 @@ Bundle pre-check: if normalized name contains `" + "`, split, resolve each segme
 
 Ordered keyword → MN (most specific first):
 
+> **2026-07-08 business review correction**: 4 TV/split *accessories* (id74, id75,
+> id76, id8) and 3 cooktop models (id11, id12, id14) had been mis-priced because
+> the broad `tv` / `split` tiers below (whose alt lists include the bare word)
+> matched them before their more specific tier could fire, and 3 cooktops fell
+> through to the `cocinas` category default entirely. Fixed by inserting
+> `cocina de induccion` / `fogon de gas` / `cocina infrarroja` (2000) ahead of
+> the generic cocina items, and `base para split` (1000) + the TV-base variants
+> (500) + `cajita` (raised 500→1000) ahead of the bare `smart tv`/`tv`/`split`
+> tiers. Table below reflects the corrected, final order.
+
 | # | keyword (normalized `includes`) | MN |
 |---|------|----|
 |1| `lavadora semi` | 3000 |
@@ -111,40 +121,44 @@ Ordered keyword → MN (most specific first):
 |5| `cafetera de fogon` | 500 |
 |6| `maquina de cafe` / `expreso` | 1000 |
 |7| `cafetera` | 500 |
-|8| `microondas` | 2000 |
-|9| `hidrolavadora` | 2000 |
-|10| `contadora` | 2000 |
-|11| `toldo` | 2000 |
-|12| `escalera 6` | 2000 |
-|13| `escalera 4` / `escalera` | 1000 |
-|14| `bomba` | 1000 |
-|15| `calentador` | 3000 |
-|16| `inversor` | 5000 |
-|17| `bateria` | 5000 |
-|18| `panel solar` | 1000 |
-|19| `base para paneles` / `base de paneles` | 1000 |
-|20| `lampara solar` / `luz recargable` / `recargable solar` | 2000 |
-|21| `lampara` | 500 |
-|22| `exhibidor 20` | 5000 |
-|23| `exhibidor` | 4000 |
-|24| `refrigerador` | 4000 |
-|25| `nevera` | 3000 |
-|26| `dispensador` | 2000 |
-|27| `filtro de agua` | 1000 |
-|28| `maquina de frio` / `maquina de refrigerador` | 1000 |
-|29| `smart tv` / `tv` | 3000 |
-|30| `equipo de musica` | 2000 |
-|31| `cajita` | 500 |
-|32| `base fija para tv` / `base para tv` / `base giratoria` / `base de pared` | 500 |
-|33| `split` | 3000 |
-|34| `ventilador industrial` | 3000 |
-|35| `ventilador de techo` | 2000 |
-|36| `ventilador` | 1000 |
-|37| `fogon de petroleo` | 500 |
-|38| `fogon infrarrojo` | 1500 |
-|39| `fogon grande con horno` / `fogon ... horno` | 3000 |
-|40| `escritorio` | 2000 |
-|41| `base` (bare, last) | 500 |
+|8| `cocina de induccion` | 2000 |
+|9| `fogon de gas` | 2000 |
+|10| `cocina infrarroja` | 2000 |
+|11| `microondas` | 2000 |
+|12| `hidrolavadora` | 2000 |
+|13| `contadora` | 2000 |
+|14| `toldo` | 2000 |
+|15| `escalera 6` | 2000 |
+|16| `escalera 4` / `escalera` | 1000 |
+|17| `bomba` | 1000 |
+|18| `calentador` | 3000 |
+|19| `inversor` | 5000 |
+|20| `bateria` | 5000 |
+|21| `panel solar` | 1000 |
+|22| `base para paneles` / `base de paneles` | 1000 |
+|23| `lampara solar` / `luz recargable` / `recargable solar` | 2000 |
+|24| `lampara` | 500 |
+|25| `exhibidor 20` | 5000 |
+|26| `exhibidor` | 4000 |
+|27| `refrigerador` | 4000 |
+|28| `nevera` | 3000 |
+|29| `dispensador` | 2000 |
+|30| `filtro de agua` | 1000 |
+|31| `maquina de frio` / `maquina de refrigerador` | 1000 |
+|32| `base para split` | 1000 |
+|33| `base fija para tv` / `base para tv` / `base giratoria` / `base de pared` | 500 |
+|34| `cajita` | 1000 |
+|35| `smart tv` / `tv` | 3000 |
+|36| `equipo de musica` | 2000 |
+|37| `split` | 3000 |
+|38| `ventilador industrial` | 3000 |
+|39| `ventilador de techo` | 2000 |
+|40| `ventilador` | 1000 |
+|41| `fogon de petroleo` | 500 |
+|42| `fogon infrarrojo` | 1500 |
+|43| `fogon grande con horno` / `fogon ... horno` | 3000 |
+|44| `escritorio` | 2000 |
+|45| `base` (bare, last) | 500 |
 
 Per-category defaults (used when no keyword matches):
 
@@ -163,8 +177,9 @@ Per-category defaults (used when no keyword matches):
 | utiles | 1000 |
 
 Catch-all (no keyword, no category): `1000` (grounded in "Demás equipos pequeños | 1000").
-Bundles resolved by sum: e.g. id77/78/80 `Smart TV + Cajita + Base` → 3000+500+500 = 4000; id35/38 kits
-`Inversor + Batería` → 5000+5000 = 10000.
+Bundles resolved by sum: e.g. id77/78/80/83/84 `Smart TV + Cajita + Base` → 3000+1000+500 = 4500
+(post-correction: `cajita` = 1000, not 500); id81/86 `Smart TV + Base` (no cajita segment) →
+3000+500 = 3500, unchanged; id35/38 kits `Inversor + Batería` → 5000+5000 = 10000.
 
 ## Review table (surface — dual, locked)
 

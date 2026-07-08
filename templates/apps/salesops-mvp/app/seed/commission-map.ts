@@ -41,6 +41,12 @@ export const KEYWORD_COMMISSIONS: KeywordEntry[] = [
   { keywords: ['cafetera de fogon'], commissionMN: 500 },
   { keywords: ['maquina de cafe', 'expreso'], commissionMN: 1000 },
   { keywords: ['cafetera'], commissionMN: 500 },
+  // 2026-07-08 business review: these 3 cooktop/stove models were falling
+  // through to the `cocinas` category default (1000) — they're large enough
+  // appliances to warrant their own 2000 tier, ahead of any generic fallback.
+  { keywords: ['cocina de induccion'], commissionMN: 2000 },
+  { keywords: ['fogon de gas'], commissionMN: 2000 },
+  { keywords: ['cocina infrarroja'], commissionMN: 2000 },
   { keywords: ['microondas'], commissionMN: 2000 },
   { keywords: ['hidrolavadora'], commissionMN: 2000 },
   { keywords: ['contadora'], commissionMN: 2000 },
@@ -62,13 +68,19 @@ export const KEYWORD_COMMISSIONS: KeywordEntry[] = [
   { keywords: ['dispensador'], commissionMN: 2000 },
   { keywords: ['filtro de agua'], commissionMN: 1000 },
   { keywords: ['maquina de frio', 'maquina de refrigerador'], commissionMN: 1000 },
-  { keywords: ['smart tv', 'tv'], commissionMN: 3000 },
-  { keywords: ['equipo de musica'], commissionMN: 2000 },
-  { keywords: ['cajita'], commissionMN: 500 },
+  // 2026-07-08 business review: TV/split *accessories* (bases, cajitas) were
+  // being swallowed by the broad "tv" / "split" tiers below — bare `tv` and
+  // `split` match ANY product whose name merely mentions a TV or a split,
+  // including accessory names. These more specific tiers MUST be checked
+  // first so an accessory doesn't get priced like the full appliance.
+  { keywords: ['base para split'], commissionMN: 1000 },
   {
     keywords: ['base fija para tv', 'base para tv', 'base giratoria', 'base de pared'],
     commissionMN: 500,
   },
+  { keywords: ['cajita'], commissionMN: 1000 },
+  { keywords: ['smart tv', 'tv'], commissionMN: 3000 },
+  { keywords: ['equipo de musica'], commissionMN: 2000 },
   { keywords: ['split'], commissionMN: 3000 },
   { keywords: ['ventilador industrial'], commissionMN: 3000 },
   { keywords: ['ventilador de techo'], commissionMN: 2000 },

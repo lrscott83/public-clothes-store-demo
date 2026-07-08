@@ -40,9 +40,9 @@ describe('deriveCommission — keyword precedence', () => {
     });
   });
 
-  it('matches a more specific keyword ("split") before the bare "base" tier', () => {
+  it('matches the specific "base para split" accessory tier before the bare "split" tier', () => {
     expect(deriveCommission('Base para Split', 'climatizacion')).toEqual({
-      commissionMN: 3000,
+      commissionMN: 1000,
       rule: 'keyword',
     });
   });
@@ -72,5 +72,53 @@ describe('deriveCommission — keyword precedence', () => {
       commissionMN: 10000,
       rule: 'bundle-sum',
     });
+  });
+});
+
+describe('deriveCommission — 2026-07-08 business review corrections', () => {
+  it('resolves TV base accessories to the 500 base tier, not the 3000 bare "tv" tier', () => {
+    expect(deriveCommission('Base Fija para TV', 'tv-y-audio')).toEqual({
+      commissionMN: 500,
+      rule: 'keyword',
+    });
+    expect(deriveCommission('Base para TV a la Pared Giratoria', 'tv-y-audio')).toEqual({
+      commissionMN: 500,
+      rule: 'keyword',
+    });
+  });
+
+  it('resolves a bare "cajita" product to 1000, not the 3000 bare "tv" tier', () => {
+    expect(deriveCommission('Cajita HD para TV', 'tv-y-audio')).toEqual({
+      commissionMN: 1000,
+      rule: 'keyword',
+    });
+  });
+
+  it('resolves "Cocina de Inducción" / "Fogón de gas" / "Cocina infrarroja" to 2000, not the cocinas category default', () => {
+    expect(deriveCommission('Cocina de Inducción Milexus', 'cocinas')).toEqual({
+      commissionMN: 2000,
+      rule: 'keyword',
+    });
+    expect(deriveCommission('Fogón de gas Rudenkov', 'cocinas')).toEqual({
+      commissionMN: 2000,
+      rule: 'keyword',
+    });
+    expect(deriveCommission('Cocina infrarroja', 'cocinas')).toEqual({
+      commissionMN: 2000,
+      rule: 'keyword',
+    });
+  });
+
+  it('recomputes 3-segment TV bundles (smart tv + cajita + base) to the corrected 4500 total', () => {
+    expect(
+      deriveCommission('Smart TV + Cajita Decodificadora HD + Base de Pared Giratoria', 'tv-y-audio'),
+    ).toEqual({ commissionMN: 4500, rule: 'bundle-sum' }); // 3000 + 1000 + 500
+  });
+
+  it('leaves 2-segment TV bundles (smart tv + base, no cajita) unchanged at 3500', () => {
+    expect(deriveCommission('Smart TV 43" + Base Giratoria', 'tv-y-audio')).toEqual({
+      commissionMN: 3500,
+      rule: 'bundle-sum',
+    }); // 3000 + 500, no cajita segment involved
   });
 });

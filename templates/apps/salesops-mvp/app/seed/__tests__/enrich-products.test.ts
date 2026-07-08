@@ -28,3 +28,46 @@ describe('enrichProducts', () => {
     }
   });
 });
+
+describe('enrichProducts — 2026-07-08 business review corrections (real catalog rows)', () => {
+  function byId(products: ReturnType<typeof enrichProducts>, id: string) {
+    const product = products.find((p) => p.id === id);
+    if (!product) throw new Error(`fixture catalog is missing product id ${id}`);
+    return product;
+  }
+
+  it('gives the corrected accessory/cooktop products their new commissionMN', () => {
+    const enriched = enrichProducts(catalog);
+
+    expect(byId(enriched, '74').commissionMN).toBe(500); // Base Fija para TV
+    expect(byId(enriched, '76').commissionMN).toBe(500); // Base para TV a la Pared Giratoria
+    expect(byId(enriched, '75').commissionMN).toBe(1000); // Cajita HD para TV
+    expect(byId(enriched, '8').commissionMN).toBe(1000); // Base para Split
+    expect(byId(enriched, '11').commissionMN).toBe(2000); // Fogón de gas Rudenkov
+    expect(byId(enriched, '12').commissionMN).toBe(2000); // Cocina de Inducción Milexus
+    expect(byId(enriched, '14').commissionMN).toBe(2000); // Cocina infrarroja
+  });
+
+  it('recomputes the 3-segment "smart tv + cajita + base" bundles to 4500', () => {
+    const enriched = enrichProducts(catalog);
+    for (const id of ['77', '78', '80', '83', '84']) {
+      expect(byId(enriched, id).commissionMN).toBe(4500);
+    }
+  });
+
+  it('leaves the 2-segment "smart tv + base" bundles (no cajita) unchanged at 3500', () => {
+    const enriched = enrichProducts(catalog);
+    for (const id of ['81', '86']) {
+      expect(byId(enriched, id).commissionMN).toBe(3500);
+    }
+  });
+
+  it('does not disturb the other 92 products (spot-check unaffected keyword/category rows)', () => {
+    const enriched = enrichProducts(catalog);
+    expect(byId(enriched, '1').commissionMN).toBe(500); // Cafetera de fogón (keyword, unaffected)
+    expect(byId(enriched, '41').commissionMN).toBe(3000); // Lavadora semi (keyword, unaffected)
+    expect(byId(enriched, '51').commissionMN).toBe(1000); // Licuadora (category-default, unaffected)
+    expect(byId(enriched, '7').commissionMN).toBe(3500); // Split 1T + Base (bundle, unaffected)
+    expect(byId(enriched, '72').commissionMN).toBe(3000); // Smart TV 40 pulgadas (bare tv, unaffected)
+  });
+});
