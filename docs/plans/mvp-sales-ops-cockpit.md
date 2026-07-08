@@ -10,6 +10,18 @@
 - **Propósito:** Anzuelo comercial. Mostrar el valor del sistema sin detalles técnicos
   para abrir la puerta a un contrato de implementación.
 
+## Referencias (material fuente)
+
+El material del negocio está en [reference/](reference/). Es la fuente de verdad para los
+datos que siembra el demo — mantener actualizado:
+
+- [reference/01-business-context.md](reference/01-business-context.md) — qué es el negocio y cómo opera hoy.
+- [reference/02-sales-process.md](reference/02-sales-process.md) — las 8 etapas, roles, entidades, horarios.
+- [reference/03-order-format.md](reference/03-order-format.md) — formato de pedido actual.
+- [reference/04-commissions.md](reference/04-commissions.md) — tabla de comisiones por producto (MN).
+- [reference/05-exchange-rates.md](reference/05-exchange-rates.md) — tasas de cambio y comportamiento.
+- [reference/06-mvp-requirements.md](reference/06-mvp-requirements.md) — características y restricciones del MVP.
+
 ---
 
 ## 1. La idea en una frase
