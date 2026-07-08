@@ -167,17 +167,20 @@ regenera los datos.
 - **React Router** para las 7 pantallas.
 - **localStorage** para datos sembrados y estado del flujo.
 - Librería de charts para los dashboards.
-- Reusa `packages/storefront` (vista de productos / `ProductCard`) y `packages/domain`
-  (datos y tipos de los productos de electrodomésticos).
+- **Reuso por copia (no import):** `ProductCard` y el catálogo de electrodomésticos NO son
+  exports compartidos (viven locales en `static-store`). Se **copia** el `catalog.json` de
+  appliances y se adapta un `ProductCard` local dentro de `salesops-mvp`. Los tipos del dominio
+  (pedido, almacén, gestor, etc.) se definen **locales al app**. Sí se reusan, cuando ayuden,
+  `packages/web-common` (Spinner/Card) y las convenciones de config de `static-store`.
 
 ## 9. Plan de tareas (pasos simples)
 
 1. **Setup** — crear la app como un **nuevo paquete dentro del monorepo `templates/`**
    (Turborepo + pnpm workspace `store-mgmt-template`), en `apps/salesops-mvp`,
-   junto a `apps/static-store`. Reusa los paquetes compartidos (`packages/storefront` para la
-   vista de productos, `packages/domain` para datos/tipos, `packages/web-common` y las configs
-   de `typescript-config` / `eslint-config`). Base Vite + Tailwind + Router; layout con barra
-   lateral (7 pantallas).
+   junto a `apps/static-store`, clonando sus convenciones (Vite + Tailwind v4 + React Router v7
+   framework mode + vitest). Copia local del `catalog.json` de appliances y un `ProductCard`
+   adaptado; tipos de dominio locales; reuso de `packages/web-common` donde ayude. Layout con
+   barra lateral (7 pantallas).
 2. **Modelo + seed** — tipos e generador de datos sembrados (productos, almacenes, gestores,
    transportistas, inventario, tasas, 20 días de pedidos). Persistir en localStorage + botón "Reiniciar demo".
 3. **Pantalla 1 (Gestor)** — flujo de 3 pasos con validación de disponibilidad de carrito completo.
