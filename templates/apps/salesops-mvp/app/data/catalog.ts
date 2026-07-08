@@ -1,10 +1,12 @@
 import { createBakedCatalogProvider, type CatalogData, type CatalogProvider } from '@store-mgmt/storefront/catalog';
-import catalogData from '../../public/catalog/appliances/catalog.json';
+import catalogData from './catalog.json';
 
-// Local copy of the appliances catalog — copied verbatim into
-// public/catalog/appliances/ at scaffold time (design.md: copy-local, no
-// cross-app import precedent exists in this repo). `catalog.json` stores
-// image paths relative to that folder (e.g.
+// Local copy of the appliances catalog — copied verbatim into app/data/ at
+// scaffold time (design.md: copy-local, no cross-app import precedent exists
+// in this repo). Kept as a source-only JSON module (bundled by Vite, not
+// served from public/) so it isn't ALSO shipped as a duplicate static asset —
+// only the product images live under public/catalog/appliances/. `catalog.json`
+// stores image paths relative to that public folder (e.g.
 // "products/cafeteras/cafeteras1.jpeg"), resolved via `resolveCatalogImage`
 // below, never hardcoded absolute paths.
 const data = catalogData as CatalogData;
