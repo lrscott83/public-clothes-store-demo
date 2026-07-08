@@ -11,4 +11,6 @@ export default [
     route('decisiones', 'routes/decisiones.tsx'),
     route('finanzas', 'routes/finanzas.tsx'),
   ]),
+  // Dev-only, not part of the persistent sidebar shell — visit directly.
+  route('dev-commissions', 'routes/dev-commissions.tsx'),
 ] satisfies RouteConfig;
