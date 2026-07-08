@@ -16,7 +16,7 @@ export default [
       }
     },
     rules: {
-      'turbo/no-undeclared-env-vars': ['warn', { allowList: ['DEV'] }]
+      'turbo/no-undeclared-env-vars': ['warn', { allowList: ['DEV', 'BASE_URL'] }]
     }
   },
   { ignores: ['eslint.config.mjs', 'build/**', '.react-router/**'] }

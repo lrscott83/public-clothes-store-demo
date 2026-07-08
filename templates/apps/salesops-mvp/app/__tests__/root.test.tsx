@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { Outlet } from 'react-router';
 import { describe, it, expect } from 'vitest';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import App, { ErrorBoundary, Layout } from '../root';
 import type { Route } from '../+types/root';
 
