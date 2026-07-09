@@ -288,5 +288,3 @@ regenerates identically. The screen is read-only — reloading never mutates sta
   `<Form>`/loader/`useNavigate` — identical to `inventario.tsx`.
 - **Scope bleed into Finanzas / operador-gestores (Low→mitigated)**: read-only, per-order
   only; no aggregate reporting and no payout mutation.
-</content>
-</invoke>
