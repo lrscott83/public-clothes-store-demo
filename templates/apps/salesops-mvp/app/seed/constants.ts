@@ -28,9 +28,9 @@ export const GESTORES: Gestor[] = [
 ];
 
 export const TRANSPORTISTAS: Transportista[] = [
-  { id: 'transportista-1', name: 'Ernesto Junco' },
-  { id: 'transportista-2', name: 'Yailin Pupo' },
-  { id: 'transportista-3', name: 'Roberto Nápoles' },
+  { id: 'transportista-1', name: 'Ernesto Junco', phone: '+53 5678 1234', zona: 'Nave Central' },
+  { id: 'transportista-2', name: 'Yailin Pupo', phone: '+53 5789 2345', zona: 'Sucursal Este' },
+  { id: 'transportista-3', name: 'Roberto Nápoles', phone: '+53 5890 3456', zona: 'Sucursal Oeste' },
 ];
 
 /** Orders/day range (inclusive): PRNG-drawn 3-6. */

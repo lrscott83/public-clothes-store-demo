@@ -54,4 +54,36 @@ describe('KanbanBoard', () => {
     expect(container.querySelector('[draggable]')).toBeNull();
     expect(container.innerHTML).not.toMatch(/ondrag/i);
   });
+
+  it('renders only the columns listed in visibleStates, in that order', () => {
+    render(
+      <KanbanBoard
+        orders={[buildOrder('order-1', 'verificado'), buildOrder('order-2', 'transportando')]}
+        visibleStates={['verificado', 'transportando', 'entregado']}
+      />,
+    );
+
+    const headings = screen.getAllByRole('heading');
+    expect(headings).toHaveLength(3);
+    expect(headings.map((h) => h.textContent)).toEqual([
+      expect.stringMatching(/^verificado/i),
+      expect.stringMatching(/^transportando/i),
+      expect.stringMatching(/^entregado/i),
+    ]);
+  });
+
+  it('passes onAsignarTransportista/onMarcarEntregado through to the columns/cards', () => {
+    const onAsignarTransportista = vi.fn();
+    const onMarcarEntregado = vi.fn();
+    render(
+      <KanbanBoard
+        orders={[buildOrder('order-1', 'verificado')]}
+        visibleStates={['verificado']}
+        onAsignarTransportista={onAsignarTransportista}
+        onMarcarEntregado={onMarcarEntregado}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /asignar transportista/i })).toBeInTheDocument();
+  });
 });

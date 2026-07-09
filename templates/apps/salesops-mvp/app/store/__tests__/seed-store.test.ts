@@ -315,5 +315,170 @@ describe('seed-store', () => {
 
       expect(reset.orders.some((order) => order.id === created.id)).toBe(false);
     });
+
+    describe('assignTransportista', () => {
+      it('transitions verificado→transportando, sets transportistaId, and stamps transportingAt', async () => {
+        const { createOrder, loadSeedState, verifyOrder, assignTransportista } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+        verifyOrder(created.id, new Date());
+        const now = new Date('2026-07-09T16:00:00.000Z');
+
+        const result = assignTransportista(created.id, 'transportista-1', now);
+
+        expect(result.state).toBe('transportando');
+        expect(result.transportistaId).toBe('transportista-1');
+        expect(result.transportingAt).toBe(now.toISOString());
+      });
+
+      it('persists the assignment so it survives a loadSeedState reload', async () => {
+        const { createOrder, loadSeedState, verifyOrder, assignTransportista } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+        verifyOrder(created.id, new Date());
+        const assigned = assignTransportista(created.id, 'transportista-1', new Date());
+
+        const reloaded = loadSeedState().orders.find((o) => o.id === created.id);
+
+        expect(reloaded).toEqual(assigned);
+      });
+
+      it('throws when the order is not in state "verificado"', async () => {
+        const { createOrder, loadSeedState, assignTransportista } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+
+        expect(() => assignTransportista(created.id, 'transportista-1')).toThrow(/verificado/i);
+        expect(loadSeedState().orders.find((o) => o.id === created.id)?.state).toBe('creado');
+      });
+
+      it('throws when the order id does not exist', async () => {
+        const { loadSeedState, assignTransportista } = await import('../seed-store');
+        loadSeedState();
+
+        expect(() => assignTransportista('order-does-not-exist', 'transportista-1')).toThrow(/not found/i);
+      });
+
+      it('IMMUTABILITY regression: assigning a transportista does not alter frozen totals even after a later rate change', async () => {
+        const { createOrder, loadSeedState, saveSeedState, verifyOrder, assignTransportista } = await import(
+          '../seed-store'
+        );
+        const seedState = loadSeedState();
+        seedState.exchangeRates.usdToMn = 40;
+        saveSeedState(seedState);
+        const created = createOrder(baseInput, new Date());
+        const verified = verifyOrder(created.id, new Date());
+
+        expect(verified.exchangeRateSnapshot).toEqual({ usdToMn: 40 });
+
+        const rateChangedState = loadSeedState();
+        rateChangedState.exchangeRates.usdToMn = 999;
+        saveSeedState(rateChangedState);
+
+        const assigned = assignTransportista(created.id, 'transportista-1', new Date());
+
+        expect(assigned.exchangeRateSnapshot).toEqual({ usdToMn: 40 });
+        expect(assigned.totalMN).toBe(verified.totalMN);
+        expect(assigned.commissionMN).toBe(verified.commissionMN);
+
+        const reloaded = loadSeedState().orders.find((o) => o.id === created.id)!;
+        expect(reloaded.exchangeRateSnapshot).toEqual({ usdToMn: 40 });
+        expect(reloaded.totalMN).toBe(verified.totalMN);
+        expect(reloaded.commissionMN).toBe(verified.commissionMN);
+      });
+    });
+
+    describe('markDelivered', () => {
+      it('transitions transportando→entregado and stamps deliveredAt', async () => {
+        const { createOrder, loadSeedState, verifyOrder, assignTransportista, markDelivered } = await import(
+          '../seed-store'
+        );
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+        verifyOrder(created.id, new Date());
+        assignTransportista(created.id, 'transportista-1', new Date());
+        const now = new Date('2026-07-10T09:00:00.000Z');
+
+        const result = markDelivered(created.id, now);
+
+        expect(result.state).toBe('entregado');
+        expect(result.deliveredAt).toBe(now.toISOString());
+      });
+
+      it('persists the delivery so it survives a loadSeedState reload', async () => {
+        const { createOrder, loadSeedState, verifyOrder, assignTransportista, markDelivered } = await import(
+          '../seed-store'
+        );
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+        verifyOrder(created.id, new Date());
+        assignTransportista(created.id, 'transportista-1', new Date());
+        const delivered = markDelivered(created.id, new Date());
+
+        const reloaded = loadSeedState().orders.find((o) => o.id === created.id);
+
+        expect(reloaded).toEqual(delivered);
+      });
+
+      it('throws when the order is not in state "transportando"', async () => {
+        const { createOrder, loadSeedState, verifyOrder, markDelivered } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+        verifyOrder(created.id, new Date());
+
+        expect(() => markDelivered(created.id)).toThrow(/transportando/i);
+        expect(loadSeedState().orders.find((o) => o.id === created.id)?.state).toBe('verificado');
+      });
+
+      it('throws when the order id does not exist', async () => {
+        const { loadSeedState, markDelivered } = await import('../seed-store');
+        loadSeedState();
+
+        expect(() => markDelivered('order-does-not-exist')).toThrow(/not found/i);
+      });
+
+      it('IMMUTABILITY regression: marking delivered does not alter frozen totals even after a later rate change', async () => {
+        const { createOrder, loadSeedState, saveSeedState, verifyOrder, assignTransportista, markDelivered } =
+          await import('../seed-store');
+        const seedState = loadSeedState();
+        seedState.exchangeRates.usdToMn = 40;
+        saveSeedState(seedState);
+        const created = createOrder(baseInput, new Date());
+        const verified = verifyOrder(created.id, new Date());
+        const assigned = assignTransportista(created.id, 'transportista-1', new Date());
+
+        expect(assigned.exchangeRateSnapshot).toEqual({ usdToMn: 40 });
+
+        const rateChangedState = loadSeedState();
+        rateChangedState.exchangeRates.usdToMn = 999;
+        saveSeedState(rateChangedState);
+
+        const delivered = markDelivered(created.id, new Date());
+
+        expect(delivered.exchangeRateSnapshot).toEqual({ usdToMn: 40 });
+        expect(delivered.totalMN).toBe(verified.totalMN);
+        expect(delivered.commissionMN).toBe(verified.commissionMN);
+
+        const reloaded = loadSeedState().orders.find((o) => o.id === created.id)!;
+        expect(reloaded.exchangeRateSnapshot).toEqual({ usdToMn: 40 });
+        expect(reloaded.totalMN).toBe(verified.totalMN);
+        expect(reloaded.commissionMN).toBe(verified.commissionMN);
+      });
+    });
+
+    it('resetDemo discards assignTransportista/markDelivered transitions (regenerated orders revert to deterministic seed state)', async () => {
+      const { createOrder, loadSeedState, verifyOrder, assignTransportista, markDelivered, resetDemo } =
+        await import('../seed-store');
+      loadSeedState();
+      const created = createOrder(baseInput, new Date());
+      verifyOrder(created.id, new Date());
+      assignTransportista(created.id, 'transportista-1', new Date());
+      markDelivered(created.id, new Date());
+      expect(loadSeedState().orders.some((order) => order.id === created.id)).toBe(true);
+
+      const reset = resetDemo();
+
+      expect(reset.orders.some((order) => order.id === created.id)).toBe(false);
+    });
   });
 });

@@ -3,8 +3,11 @@ import { OrderColumn } from './order-column';
 
 export interface KanbanBoardProps {
   orders: Order[];
-  onRevisar: (id: string) => void;
-  onMarkPaid: (id: string) => void;
+  onRevisar?: (id: string) => void;
+  onMarkPaid?: (id: string) => void;
+  onAsignarTransportista?: (id: string) => void;
+  onMarcarEntregado?: (id: string) => void;
+  visibleStates?: OrderState[];
 }
 
 // Record keys are exhaustiveness-checked: if `OrderState` grows, this fails to
@@ -26,13 +29,21 @@ const COLUMN_ORDER: OrderState[] = [
 ];
 
 /**
- * Read-only 5-column board — no drag & drop. Orders move columns only via
- * the "Revisar"/"Marcar comisión pagada" actions surfaced by `OrderCard`.
+ * Read-only kanban board — no drag & drop. Orders move columns only via the
+ * per-state actions surfaced by `OrderCard`. Renders all 5 columns unless
+ * `visibleStates` narrows the set (e.g. `operador-almacen` shows only 3).
  */
-export function KanbanBoard({ orders, onRevisar, onMarkPaid }: KanbanBoardProps) {
+export function KanbanBoard({
+  orders,
+  onRevisar,
+  onMarkPaid,
+  onAsignarTransportista,
+  onMarcarEntregado,
+  visibleStates,
+}: KanbanBoardProps) {
   return (
     <div className="mt-4 flex gap-4 overflow-x-auto">
-      {COLUMN_ORDER.map((state) => (
+      {(visibleStates ?? COLUMN_ORDER).map((state) => (
         <OrderColumn
           key={state}
           title={COLUMN_TITLES[state]}
@@ -40,6 +51,8 @@ export function KanbanBoard({ orders, onRevisar, onMarkPaid }: KanbanBoardProps)
           orders={orders.filter((order) => order.state === state)}
           onRevisar={onRevisar}
           onMarkPaid={onMarkPaid}
+          onAsignarTransportista={onAsignarTransportista}
+          onMarcarEntregado={onMarcarEntregado}
         />
       ))}
     </div>

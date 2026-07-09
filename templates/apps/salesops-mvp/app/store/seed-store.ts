@@ -133,6 +133,42 @@ export function verifyOrder(id: string, now: Date = new Date()): Order {
 }
 
 /**
+ * Transitions a `verificado` order to `transportando`. Sets
+ * `transportistaId` to the selected carrier's id and stamps
+ * `transportingAt`. MUST NOT touch `exchangeRateSnapshot`, `totalMN`, or
+ * `commissionMN` — those are frozen for good by `verifyOrder`. Throws if the
+ * order isn't in state `verificado`.
+ */
+export function assignTransportista(id: string, transportistaId: string, now: Date = new Date()): Order {
+  return updateOrder(id, (order) => {
+    if (order.state !== 'verificado') {
+      throw new Error(`Order ${id} is not in state 'verificado' (current: ${order.state})`);
+    }
+
+    order.transportistaId = transportistaId;
+    order.state = 'transportando';
+    order.transportingAt = now.toISOString();
+  });
+}
+
+/**
+ * Transitions a `transportando` order to `entregado` and stamps
+ * `deliveredAt`. MUST NOT touch `exchangeRateSnapshot`, `totalMN`, or
+ * `commissionMN` — those are frozen for good by `verifyOrder`. Throws if the
+ * order isn't in state `transportando`.
+ */
+export function markDelivered(id: string, now: Date = new Date()): Order {
+  return updateOrder(id, (order) => {
+    if (order.state !== 'transportando') {
+      throw new Error(`Order ${id} is not in state 'transportando' (current: ${order.state})`);
+    }
+
+    order.state = 'entregado';
+    order.deliveredAt = now.toISOString();
+  });
+}
+
+/**
  * Transitions an `entregado` order to `comision_pagada` and stamps
  * `commissionPaidAt`. MUST NOT touch `exchangeRateSnapshot`, `totalMN`, or
  * `commissionMN` — those are frozen for good by `verifyOrder`. Throws if the

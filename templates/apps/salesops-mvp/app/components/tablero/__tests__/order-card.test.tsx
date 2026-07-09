@@ -67,4 +67,44 @@ describe('OrderCard', () => {
     expect(screen.queryByRole('button', { name: /^revisar$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /marcar comisión pagada/i })).not.toBeInTheDocument();
   });
+
+  it('renders with no crash and no action buttons when onRevisar/onMarkPaid are omitted', () => {
+    render(<OrderCard order={buildOrder({ state: 'creado' })} />);
+
+    expect(screen.getByText('order-1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^revisar$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /marcar comisión pagada/i })).not.toBeInTheDocument();
+  });
+
+  it('renders "Asignar transportista" only on a "verificado" card, and clicking it calls onAsignarTransportista with the order id', () => {
+    const onAsignarTransportista = vi.fn();
+    render(
+      <OrderCard order={buildOrder({ state: 'verificado' })} onAsignarTransportista={onAsignarTransportista} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /asignar transportista/i }));
+
+    expect(onAsignarTransportista).toHaveBeenCalledWith('order-1');
+  });
+
+  it('does not render "Asignar transportista" when the callback is omitted, even on a "verificado" card', () => {
+    render(<OrderCard order={buildOrder({ state: 'verificado' })} />);
+
+    expect(screen.queryByRole('button', { name: /asignar transportista/i })).not.toBeInTheDocument();
+  });
+
+  it('renders "Marcar entregado" only on a "transportando" card, and clicking it calls onMarcarEntregado with the order id', () => {
+    const onMarcarEntregado = vi.fn();
+    render(<OrderCard order={buildOrder({ state: 'transportando' })} onMarcarEntregado={onMarcarEntregado} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /marcar entregado/i }));
+
+    expect(onMarcarEntregado).toHaveBeenCalledWith('order-1');
+  });
+
+  it('does not render "Marcar entregado" when the callback is omitted, even on a "transportando" card (no-button-on-transportando regression)', () => {
+    render(<OrderCard order={buildOrder({ state: 'transportando' })} onRevisar={vi.fn()} onMarkPaid={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /marcar entregado/i })).not.toBeInTheDocument();
+  });
 });

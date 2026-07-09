@@ -71,4 +71,45 @@ describe('OrderColumn', () => {
 
     expect(onMarkPaid).toHaveBeenCalledWith('order-1');
   });
+
+  it('renders with no crash when onRevisar/onMarkPaid are omitted', () => {
+    const orders = [buildOrder({ id: 'order-1', state: 'creado' })];
+    render(<OrderColumn title="Creado" state="creado" orders={orders} />);
+
+    expect(screen.getByText('order-1')).toBeInTheDocument();
+  });
+
+  it('passes onAsignarTransportista through to the card and it fires with the order id', () => {
+    const onAsignarTransportista = vi.fn();
+    const orders = [buildOrder({ id: 'order-1', state: 'verificado' })];
+    render(
+      <OrderColumn
+        title="Verificado"
+        state="verificado"
+        orders={orders}
+        onAsignarTransportista={onAsignarTransportista}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /asignar transportista/i }));
+
+    expect(onAsignarTransportista).toHaveBeenCalledWith('order-1');
+  });
+
+  it('passes onMarcarEntregado through to the card and it fires with the order id', () => {
+    const onMarcarEntregado = vi.fn();
+    const orders = [buildOrder({ id: 'order-1', state: 'transportando' })];
+    render(
+      <OrderColumn
+        title="Transportando"
+        state="transportando"
+        orders={orders}
+        onMarcarEntregado={onMarcarEntregado}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /marcar entregado/i }));
+
+    expect(onMarcarEntregado).toHaveBeenCalledWith('order-1');
+  });
 });

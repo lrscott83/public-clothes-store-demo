@@ -20,6 +20,8 @@ export interface Gestor {
 export interface Transportista {
   id: string;
   name: string;
+  phone?: string;
+  zona?: string;
 }
 
 export interface ExchangeRates {
