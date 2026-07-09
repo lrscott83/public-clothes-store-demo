@@ -1,8 +1,8 @@
-# Spec — salesops-mvp (Tasks 1–5)
+# Spec — salesops-mvp (Tasks 1–6)
 
 ## Purpose
 
-Define the testable contract for the `@store-mgmt/salesops-mvp` app: a workspace app that registers correctly, serves on a distinct port, resolves 7 placeholder routes with a sidebar, renders a product against a local catalog, and ships with a deterministic frozen domain model + seed generator powering all seven screens. Tasks 1–3 complete: app skeleton, local ProductCard, full seed/domain/localStorage implementation, and the 3-step "crear pedido" wizard (Carrito → Cliente → Almacén). Task 4 complete: Pantalla 2 (Operador de gestores verifica pedidos) — read-only kanban board with rate-freeze verification and commission-paid marking. Task 5 complete: Pantalla 3 (Operador de almacén) — warehouse selector, carrier assignment, delivery marking, and backward-compatible board extension. Tasks 6–9 (dashboards and screens) remain out of scope.
+Define the testable contract for the `@store-mgmt/salesops-mvp` app: a workspace app that registers correctly, serves on a distinct port, resolves 7 placeholder routes with a sidebar, renders a product against a local catalog, and ships with a deterministic frozen domain model + seed generator powering all seven screens. Tasks 1–3 complete: app skeleton, local ProductCard, full seed/domain/localStorage implementation, and the 3-step "crear pedido" wizard (Carrito → Cliente → Almacén). Task 4 complete: Pantalla 2 (Operador de gestores verifica pedidos) — read-only kanban board with rate-freeze verification and commission-paid marking. Task 5 complete: Pantalla 3 (Operador de almacén) — warehouse selector, carrier assignment, delivery marking, and backward-compatible board extension. Task 6 complete: Pantalla 4 (Tasas de cambio) — exchange rate editor (USD→MN, Zelle, EUR) rendering as editable numeric fields, saved via a new pure store action `updateExchangeRates` that writes only `state.exchangeRates` and never touches `state.orders`, preserving the frozen-snapshot invariant. Tasks 7–9 (dashboards and screens) remain out of scope.
 
 ## Requirements
 
@@ -690,6 +690,91 @@ persist to the same localStorage-backed `SeedState` used by
 - GIVEN an order was transitioned via `assignTransportista` or `markDelivered` after the last seed generation
 - WHEN "Reiniciar demo" (`resetDemo`) runs
 - THEN the regenerated `SeedState.orders` no longer reflects that transition (the order reverts to its deterministic seed state)
+
+### Requirement: Tasas Route Renders the Rates Editor
+
+The `/tasas` route MUST replace the placeholder screen with a direct-render
+container (no `<Form>`, no loader, no `useNavigate`) that loads
+`SeedState.exchangeRates` on mount and renders a `RatesForm` pre-filled with
+the three current rates: `usdToMn`, `zelle`, `eur`.
+
+#### Scenario: Route renders the three current rates as editable fields
+
+- GIVEN `SeedState.exchangeRates` is `{ usdToMn: 680, zelle: 1, eur: 1 }`
+- WHEN the app navigates to `/tasas`
+- THEN three editable numeric fields are rendered
+- AND their initial values are `680`, `1`, and `1` respectively
+
+### Requirement: Saving Valid Rates Persists via `updateExchangeRates`
+
+`updateExchangeRates(rates: ExchangeRates): SeedState` MUST replace
+`state.exchangeRates` with `rates` in one write and persist via
+`saveSeedState`. It MUST NOT read, iterate, or write `state.orders` in any
+way. Saving from the `/tasas` container MUST call this action and reflect
+the new values after a reload.
+
+#### Scenario: Saving valid rates persists and survives a reload
+
+- GIVEN the operator edits `usdToMn` from `680` to `700` on `/tasas`
+- WHEN the operator saves
+- THEN `updateExchangeRates` is called with the new rates
+- AND reloading via `loadSeedState` shows `exchangeRates.usdToMn` as `700`
+
+#### Scenario: `updateExchangeRates` never touches `state.orders`
+
+- GIVEN a `SeedState` with existing orders in any state
+- WHEN `updateExchangeRates(rates)` is called
+- THEN `state.orders` is reference-unchanged (same array, same order objects)
+- AND only `state.exchangeRates` differs from the prior state
+
+### Requirement: Non-Positive or Invalid Rates Block Save
+
+The rates editor MUST reject a save when any of `usdToMn`, `zelle`, or `eur`
+is empty, non-numeric (`NaN`), or `<= 0`. On rejection it MUST show an
+inline error, keep the form editable, and MUST NOT call
+`updateExchangeRates` or persist any value. All three rates MUST be valid
+positive numbers before a save is allowed.
+
+#### Scenario: Non-positive rate blocks save
+
+- GIVEN the operator sets `zelle` to `0` on `/tasas`
+- WHEN the operator attempts to save
+- THEN an inline error is shown
+- AND the form remains editable
+- AND `updateExchangeRates` is not called
+
+#### Scenario: Empty or non-numeric rate blocks save
+
+- GIVEN the operator clears the `eur` field (or types a non-numeric value)
+- WHEN the operator attempts to save
+- THEN an inline error is shown
+- AND `updateExchangeRates` is not called
+- AND no partial rates are persisted
+
+### Requirement: Editing Rates Does Not Recalculate Verified Orders
+
+(Reinforces the existing "Frozen Verify Totals Are Immutable" requirement
+from the `verifyOrder` side by exercising it through the new write path.)
+After `updateExchangeRates` runs, orders already in state `verificado` or
+later MUST keep their frozen `exchangeRateSnapshot`, `totalMN`, and
+`commissionMN` untouched. A `creado` order verified AFTER the rate edit
+MUST use the NEW `usdToMn` when `verifyOrder` computes its snapshot and
+totals.
+
+#### Scenario: A verified order keeps its frozen snapshot after a rate edit
+
+- GIVEN a `verificado` order with `exchangeRateSnapshot.usdToMn: 40` and `totalMN: 8000`
+- WHEN the operator edits `SeedState.exchangeRates.usdToMn` to `45` via `updateExchangeRates` and saves
+- THEN that order's `exchangeRateSnapshot.usdToMn` is still `40`
+- AND that order's `totalMN` is still `8000`
+
+#### Scenario: A newly verified order uses the new rate after the edit
+
+- GIVEN `SeedState.exchangeRates.usdToMn` is edited from `40` to `45` via `updateExchangeRates`
+- AND a `creado` order with `totalUSD: 200`
+- WHEN the operator later runs `verifyOrder` on that order
+- THEN `exchangeRateSnapshot.usdToMn` is `45`
+- AND `totalMN` is `Math.round(200 * 45)` = `9000`
 
 ## Out of Scope (explicit non-requirements)
 
