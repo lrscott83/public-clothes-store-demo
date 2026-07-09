@@ -35,4 +35,14 @@ describe('CommissionSummary', () => {
     expect(container.textContent).not.toMatch(/\$[\d,]+\.\d{2}/);
     expect(screen.queryAllByText(/^\$[\d,]+\.\d{2}$/)).toHaveLength(0);
   });
+
+  it('renders no gross-revenue / ingreso USD KPI card — revenue belongs only to the per-state table (non-duplication guard vs /decisiones)', () => {
+    const { container } = render(<CommissionSummary kpis={buildKpis()} />);
+
+    // Exactly the four commission KPIs; a fifth card would signal a revenue KPI crept in.
+    expect(container.querySelectorAll('dt')).toHaveLength(4);
+    // No revenue/ingreso label and no USD figure anywhere in the commission KPI block.
+    expect(screen.queryByText(/ingreso|revenue/i)).not.toBeInTheDocument();
+    expect(container.textContent).not.toContain('$');
+  });
 });
