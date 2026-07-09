@@ -481,4 +481,66 @@ describe('seed-store', () => {
       expect(reset.orders.some((order) => order.id === created.id)).toBe(false);
     });
   });
+
+  describe('updateExchangeRates', () => {
+    it('replaces all three rates in one call and reflects them after a reload', async () => {
+      const { loadSeedState, updateExchangeRates } = await import('../seed-store');
+      loadSeedState();
+
+      const result = updateExchangeRates({ usdToMn: 700, zelle: 1.05, eur: 1.1 });
+
+      expect(result.exchangeRates).toEqual({ usdToMn: 700, zelle: 1.05, eur: 1.1 });
+      expect(loadSeedState().exchangeRates).toEqual({ usdToMn: 700, zelle: 1.05, eur: 1.1 });
+    });
+
+    it('does not touch state.orders', async () => {
+      const { createOrder, loadSeedState, updateExchangeRates } = await import('../seed-store');
+      loadSeedState();
+      createOrder(
+        {
+          items: [{ productId: 'p-1', quantity: 1, priceUSD: 50, commissionMN: 10 }],
+          client: { id: 'client-user-1', name: 'Ana Pérez' },
+          payment: { method: 'efectivo' },
+          warehouseId: 'wh-1',
+          gestorId: 'gestor-1',
+        },
+        new Date(),
+      );
+      const ordersBefore = JSON.stringify(loadSeedState().orders);
+
+      updateExchangeRates({ usdToMn: 700, zelle: 1.05, eur: 1.1 });
+
+      expect(JSON.stringify(loadSeedState().orders)).toBe(ordersBefore);
+    });
+
+    it('IMMUTABILITY regression: a verified order keeps its frozen snapshot after updateExchangeRates, and a later-verified order uses the new rate', async () => {
+      const { createOrder, loadSeedState, verifyOrder, updateExchangeRates } = await import('../seed-store');
+      loadSeedState();
+      const items = [{ productId: 'p-1', quantity: 1, priceUSD: 50, commissionMN: 10 }];
+      const baseInput: CreateOrderInput = {
+        items,
+        client: { id: 'client-user-1', name: 'Ana Pérez' },
+        payment: { method: 'efectivo' },
+        warehouseId: 'wh-1',
+        gestorId: 'gestor-1',
+      };
+
+      const createdBefore = createOrder(baseInput, new Date());
+      const verified = verifyOrder(createdBefore.id, new Date());
+      expect(verified.exchangeRateSnapshot).toEqual({ usdToMn: 680 });
+
+      updateExchangeRates({ usdToMn: 999, zelle: 2, eur: 2 });
+
+      const reloaded = loadSeedState().orders.find((o) => o.id === createdBefore.id)!;
+      expect(reloaded.exchangeRateSnapshot).toEqual({ usdToMn: 680 });
+      expect(reloaded.totalMN).toBe(verified.totalMN);
+      expect(reloaded.commissionMN).toBe(verified.commissionMN);
+
+      const createdAfter = createOrder(baseInput, new Date());
+      const verifiedAfter = verifyOrder(createdAfter.id, new Date());
+
+      expect(verifiedAfter.exchangeRateSnapshot).toEqual({ usdToMn: 999 });
+      expect(verifiedAfter.totalMN).toBe(Math.round(createdAfter.totalUSD * 999));
+    });
+  });
 });

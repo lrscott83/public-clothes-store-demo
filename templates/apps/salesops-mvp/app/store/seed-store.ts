@@ -1,4 +1,4 @@
-import type { Client, Order, OrderItem, PaymentInfo, SeedState } from '../domain/types';
+import type { Client, ExchangeRates, Order, OrderItem, PaymentInfo, SeedState } from '../domain/types';
 import { cartTotalUSD } from '../domain/cart';
 import { buildVerifiedTotals } from '../domain/verify';
 import { generateSeedState } from '../seed/generate';
@@ -48,6 +48,20 @@ export function resetDemo(): SeedState {
   const fresh = generateSeedState();
   saveSeedState(fresh);
   return fresh;
+}
+
+/**
+ * Replaces `state.exchangeRates` wholesale with `rates` and persists.
+ * A singleton write — NOT built on `updateOrder` — so it MUST NOT read or
+ * write `state.orders` in any way. Existing `verificado`+ orders keep their
+ * frozen `exchangeRateSnapshot`/`totalMN`/`commissionMN` untouched; only a
+ * FUTURE `verifyOrder` call picks up the new `usdToMn`.
+ */
+export function updateExchangeRates(rates: ExchangeRates): SeedState {
+  const state = loadSeedState();
+  state.exchangeRates = rates;
+  saveSeedState(state);
+  return state;
 }
 
 export interface CreateOrderInput {
