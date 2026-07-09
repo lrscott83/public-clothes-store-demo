@@ -1,15 +1,32 @@
+import { useState } from 'react';
 import type { Route } from './+types/inventario';
-import { PlaceholderScreen } from '../components/placeholder-screen';
+import { buildInventorySummary } from '../domain/inventory';
+import { loadSeedState } from '../store/seed-store';
+import { InventorySummary } from '../components/inventario/inventory-summary';
+import { WarehouseDetail } from '../components/inventario/warehouse-detail';
 
 export function meta(_args: Route.MetaArgs) {
   return [{ title: 'Inventario — Sales Ops Cockpit' }];
 }
 
+/**
+ * Read-only inventory container driven by local `useState` — direct render,
+ * no RR7 `<Form>`/action/loader, no `useNavigate` (sidesteps the jsdom+undici
+ * `AbortSignal` gotcha), mirroring `tasas.tsx`. Computes its view model once
+ * from `loadSeedState()` via `buildInventorySummary`; no mutation affordance.
+ */
 export default function Inventario() {
+  const [summary] = useState(() => buildInventorySummary(loadSeedState()));
+
   return (
-    <PlaceholderScreen
-      heading="Inventario"
-      description="Resumen de 3 almacenes, detalle y valor de costo. Pendiente de implementación."
-    />
+    <main className="p-8">
+      <h1 className="text-2xl font-bold text-text">Inventario</h1>
+      <InventorySummary summary={summary} />
+      <div className="mt-8 space-y-8">
+        {summary.warehouses.map((warehouse) => (
+          <WarehouseDetail key={warehouse.warehouseId} warehouse={warehouse} />
+        ))}
+      </div>
+    </main>
   );
 }
