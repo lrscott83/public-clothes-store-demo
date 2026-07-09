@@ -1,5 +1,6 @@
 import type { Client, Order, OrderItem, PaymentInfo, SeedState } from '../domain/types';
 import { cartTotalUSD } from '../domain/cart';
+import { buildVerifiedTotals } from '../domain/verify';
 import { generateSeedState } from '../seed/generate';
 import { STORAGE_KEY, VERSION } from '../seed/constants';
 
@@ -89,4 +90,61 @@ export function createOrder(input: CreateOrderInput, now: Date = new Date()): Or
   state.orders.push(order);
   saveSeedState(state);
   return order;
+}
+
+/**
+ * Shared private read-modify-write helper for order state transitions:
+ * loads the persisted state, finds the order by id (throws if missing),
+ * runs `mutator` against it IN PLACE (may read `state` too, e.g. current
+ * exchange rates), persists the whole state, and returns the updated order.
+ * Generalizes to future transitions (transportando/entregado) without
+ * re-solving persistence each time.
+ */
+function updateOrder(id: string, mutator: (order: Order, state: SeedState) => void): Order {
+  const state = loadSeedState();
+  const order = state.orders.find((o) => o.id === id);
+  if (!order) throw new Error(`Order ${id} not found`);
+
+  mutator(order, state);
+  saveSeedState(state);
+  return order;
+}
+
+/**
+ * Transitions a `creado` order to `verificado`. Freezes the current
+ * `state.exchangeRates.usdToMn` + `totalMN` + `commissionMN` via
+ * `buildVerifiedTotals` (pure, mirrors the seed's own precedent) and stamps
+ * `verifiedAt`. Throws if the order isn't in state `creado`. These frozen
+ * fields are NEVER recomputed afterward — see `markCommissionPaid`.
+ */
+export function verifyOrder(id: string, now: Date = new Date()): Order {
+  return updateOrder(id, (order, state) => {
+    if (order.state !== 'creado') {
+      throw new Error(`Order ${id} is not in state 'creado' (current: ${order.state})`);
+    }
+
+    const totals = buildVerifiedTotals(order.totalUSD, state.exchangeRates.usdToMn, order.items);
+    order.exchangeRateSnapshot = totals.exchangeRateSnapshot;
+    order.totalMN = totals.totalMN;
+    order.commissionMN = totals.commissionMN;
+    order.state = 'verificado';
+    order.verifiedAt = now.toISOString();
+  });
+}
+
+/**
+ * Transitions an `entregado` order to `comision_pagada` and stamps
+ * `commissionPaidAt`. MUST NOT touch `exchangeRateSnapshot`, `totalMN`, or
+ * `commissionMN` — those are frozen for good by `verifyOrder`. Throws if the
+ * order isn't in state `entregado`.
+ */
+export function markCommissionPaid(id: string, now: Date = new Date()): Order {
+  return updateOrder(id, (order) => {
+    if (order.state !== 'entregado') {
+      throw new Error(`Order ${id} is not in state 'entregado' (current: ${order.state})`);
+    }
+
+    order.state = 'comision_pagada';
+    order.commissionPaidAt = now.toISOString();
+  });
 }

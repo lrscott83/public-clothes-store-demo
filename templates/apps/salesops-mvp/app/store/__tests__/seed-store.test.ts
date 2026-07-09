@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { STORAGE_KEY, VERSION } from '../../seed/constants';
 import type { CreateOrderInput } from '../seed-store';
-import type { OrderItem } from '../../domain/types';
+import type { OrderItem, OrderState } from '../../domain/types';
+import { sumOrderCommission } from '../../seed/enrich-products';
 
 describe('seed-store', () => {
   beforeEach(() => {
@@ -131,6 +132,183 @@ describe('seed-store', () => {
       const { createOrder, loadSeedState, resetDemo } = await import('../seed-store');
       loadSeedState();
       const created = createOrder(baseInput, new Date());
+      expect(loadSeedState().orders.some((order) => order.id === created.id)).toBe(true);
+
+      const reset = resetDemo();
+
+      expect(reset.orders.some((order) => order.id === created.id)).toBe(false);
+    });
+  });
+
+  describe('verifyOrder / markCommissionPaid', () => {
+    const items: OrderItem[] = [
+      { productId: 'p-1', quantity: 2, priceUSD: 50, commissionMN: 100 },
+      { productId: 'p-2', quantity: 1, priceUSD: 30, commissionMN: 50 },
+    ];
+
+    const baseInput: CreateOrderInput = {
+      items,
+      client: { id: 'client-user-1', name: 'Ana Pérez' },
+      payment: { method: 'efectivo' },
+      warehouseId: 'wh-1',
+      gestorId: 'gestor-1',
+    };
+
+    /** Directly force an order's `state` field, bypassing the store's own
+     * transition APIs — used only to set up guard-test fixtures for states
+     * that `createOrder` cannot produce on its own (e.g. `entregado`). */
+    async function forceOrderState(orderId: string, state: OrderState) {
+      const { loadSeedState, saveSeedState } = await import('../seed-store');
+      const seedState = loadSeedState();
+      const order = seedState.orders.find((o) => o.id === orderId);
+      if (!order) throw new Error(`order ${orderId} not found`);
+      order.state = state;
+      saveSeedState(seedState);
+    }
+
+    describe('verifyOrder', () => {
+      it('transitions creado→verificado and freezes exact totals', async () => {
+        const { createOrder, loadSeedState, verifyOrder } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date('2026-07-09T12:00:00.000Z'));
+        const now = new Date('2026-07-09T15:30:00.000Z');
+
+        const result = verifyOrder(created.id, now);
+
+        expect(result.state).toBe('verificado');
+        expect(result.exchangeRateSnapshot).toEqual({ usdToMn: 680 });
+        expect(result.totalMN).toBe(Math.round(created.totalUSD * 680));
+        expect(result.commissionMN).toBe(sumOrderCommission(items));
+        expect(result.verifiedAt).toBe(now.toISOString());
+      });
+
+      it('freezes from the CURRENT state.exchangeRates.usdToMn at verify time', async () => {
+        const { createOrder, loadSeedState, saveSeedState, verifyOrder } = await import('../seed-store');
+        const seedState = loadSeedState();
+        seedState.exchangeRates.usdToMn = 700;
+        saveSeedState(seedState);
+        const created = createOrder(baseInput, new Date());
+
+        const result = verifyOrder(created.id, new Date());
+
+        expect(result.exchangeRateSnapshot).toEqual({ usdToMn: 700 });
+        expect(result.totalMN).toBe(Math.round(created.totalUSD * 700));
+      });
+
+      it('does not mutate SeedState.inventory (availability is informational only)', async () => {
+        const { createOrder, loadSeedState, verifyOrder } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+        const inventoryBefore = JSON.stringify(loadSeedState().inventory);
+
+        verifyOrder(created.id, new Date());
+
+        expect(JSON.stringify(loadSeedState().inventory)).toBe(inventoryBefore);
+      });
+
+      it('throws when the order is not in state "creado"', async () => {
+        const { createOrder, loadSeedState, verifyOrder } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+        await forceOrderState(created.id, 'verificado');
+
+        expect(() => verifyOrder(created.id)).toThrow(/creado/i);
+        expect(loadSeedState().orders.find((o) => o.id === created.id)?.state).toBe('verificado');
+      });
+
+      it('throws when the order id does not exist', async () => {
+        const { loadSeedState, verifyOrder } = await import('../seed-store');
+        loadSeedState();
+
+        expect(() => verifyOrder('order-does-not-exist')).toThrow(/not found/i);
+      });
+
+      it('persists the verification so it survives a loadSeedState reload', async () => {
+        const { createOrder, loadSeedState, verifyOrder } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+        const now = new Date('2026-07-09T15:30:00.000Z');
+        const verified = verifyOrder(created.id, now);
+
+        const reloaded = loadSeedState().orders.find((o) => o.id === created.id);
+
+        expect(reloaded).toEqual(verified);
+      });
+
+      it('IMMUTABILITY regression: a later rate change does not alter a verified order frozen totals', async () => {
+        const { createOrder, loadSeedState, saveSeedState, verifyOrder } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+        const verified = verifyOrder(created.id, new Date('2026-07-09T15:30:00.000Z'));
+
+        expect(verified.exchangeRateSnapshot).toEqual({ usdToMn: 680 });
+
+        const seedState = loadSeedState();
+        seedState.exchangeRates.usdToMn = 999;
+        saveSeedState(seedState);
+
+        const reloaded = loadSeedState().orders.find((o) => o.id === created.id)!;
+
+        expect(reloaded.exchangeRateSnapshot).toEqual({ usdToMn: 680 });
+        expect(reloaded.totalMN).toBe(verified.totalMN);
+        expect(reloaded.commissionMN).toBe(verified.commissionMN);
+      });
+    });
+
+    describe('markCommissionPaid', () => {
+      it('transitions entregado→comision_pagada and stamps commissionPaidAt without touching frozen fields', async () => {
+        const { createOrder, loadSeedState, verifyOrder, markCommissionPaid } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+        const verified = verifyOrder(created.id, new Date('2026-07-09T15:30:00.000Z'));
+        await forceOrderState(created.id, 'entregado');
+        const now = new Date('2026-07-10T09:00:00.000Z');
+
+        const result = markCommissionPaid(created.id, now);
+
+        expect(result.state).toBe('comision_pagada');
+        expect(result.commissionPaidAt).toBe(now.toISOString());
+        expect(result.exchangeRateSnapshot).toEqual(verified.exchangeRateSnapshot);
+        expect(result.totalMN).toBe(verified.totalMN);
+        expect(result.commissionMN).toBe(verified.commissionMN);
+      });
+
+      it('throws when the order is not in state "entregado"', async () => {
+        const { createOrder, loadSeedState, markCommissionPaid } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+
+        expect(() => markCommissionPaid(created.id)).toThrow(/entregado/i);
+        expect(loadSeedState().orders.find((o) => o.id === created.id)?.state).toBe('creado');
+      });
+
+      it('throws when the order id does not exist', async () => {
+        const { loadSeedState, markCommissionPaid } = await import('../seed-store');
+        loadSeedState();
+
+        expect(() => markCommissionPaid('order-does-not-exist')).toThrow(/not found/i);
+      });
+
+      it('persists the commission-paid transition so it survives a loadSeedState reload', async () => {
+        const { createOrder, loadSeedState, verifyOrder, markCommissionPaid } = await import('../seed-store');
+        loadSeedState();
+        const created = createOrder(baseInput, new Date());
+        verifyOrder(created.id, new Date());
+        await forceOrderState(created.id, 'entregado');
+        const now = new Date('2026-07-10T09:00:00.000Z');
+        const paid = markCommissionPaid(created.id, now);
+
+        const reloaded = loadSeedState().orders.find((o) => o.id === created.id);
+
+        expect(reloaded).toEqual(paid);
+      });
+    });
+
+    it('resetDemo discards verify/paid transitions (regenerated orders revert to deterministic seed state)', async () => {
+      const { createOrder, loadSeedState, verifyOrder, resetDemo } = await import('../seed-store');
+      loadSeedState();
+      const created = createOrder(baseInput, new Date());
+      verifyOrder(created.id, new Date());
       expect(loadSeedState().orders.some((order) => order.id === created.id)).toBe(true);
 
       const reset = resetDemo();

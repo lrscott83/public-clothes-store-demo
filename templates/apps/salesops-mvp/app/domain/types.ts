@@ -14,6 +14,7 @@ export interface Warehouse {
 export interface Gestor {
   id: string;
   name: string;
+  phone?: string;
 }
 
 export interface Transportista {

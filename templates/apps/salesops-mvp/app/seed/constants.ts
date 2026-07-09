@@ -20,11 +20,11 @@ export const WAREHOUSES: Warehouse[] = [
 ];
 
 export const GESTORES: Gestor[] = [
-  { id: 'gestor-1', name: 'Yasmani Alonso' },
-  { id: 'gestor-2', name: 'Liset Fonseca' },
-  { id: 'gestor-3', name: 'Reinier Castillo' },
-  { id: 'gestor-4', name: 'Dayana Herrera' },
-  { id: 'gestor-5', name: 'Maikel Suárez' },
+  { id: 'gestor-1', name: 'Yasmani Alonso', phone: '+53 5123 4567' },
+  { id: 'gestor-2', name: 'Liset Fonseca', phone: '+53 5234 5678' },
+  { id: 'gestor-3', name: 'Reinier Castillo', phone: '+53 5345 6789' },
+  { id: 'gestor-4', name: 'Dayana Herrera', phone: '+53 5456 7890' },
+  { id: 'gestor-5', name: 'Maikel Suárez', phone: '+53 5567 8901' },
 ];
 
 export const TRANSPORTISTAS: Transportista[] = [
