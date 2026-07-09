@@ -1,4 +1,5 @@
-import type { SeedState } from '../domain/types';
+import type { Client, Order, OrderItem, PaymentInfo, SeedState } from '../domain/types';
+import { cartTotalUSD } from '../domain/cart';
 import { generateSeedState } from '../seed/generate';
 import { STORAGE_KEY, VERSION } from '../seed/constants';
 
@@ -46,4 +47,46 @@ export function resetDemo(): SeedState {
   const fresh = generateSeedState();
   saveSeedState(fresh);
   return fresh;
+}
+
+export interface CreateOrderInput {
+  items: OrderItem[];
+  client: Client;
+  payment: PaymentInfo;
+  warehouseId: string;
+  gestorId: string;
+  saleType?: string;
+  observations?: string;
+}
+
+/**
+ * Appends a new gestor-created `Order` (state `'creado'`) to the persisted
+ * SeedState and returns it. The id is `order-user-${n}`, where `n` is the
+ * count of existing `order-user-*` orders — NOT array length, since seeded
+ * order ids are non-contiguous and would collide. `commissionMN`, `totalMN`,
+ * and `exchangeRateSnapshot` are intentionally left unset; they are filled
+ * in by later verification/commission stages.
+ */
+export function createOrder(input: CreateOrderInput, now: Date = new Date()): Order {
+  const state = loadSeedState();
+  const existingUserOrders = state.orders.filter((order) => order.id.startsWith('order-user-'));
+  const id = `order-user-${existingUserOrders.length}`;
+
+  const order: Order = {
+    id,
+    items: input.items,
+    client: input.client,
+    payment: input.payment,
+    warehouseId: input.warehouseId,
+    gestorId: input.gestorId,
+    state: 'creado',
+    totalUSD: cartTotalUSD(input.items),
+    saleType: input.saleType,
+    observations: input.observations,
+    createdAt: now.toISOString(),
+  };
+
+  state.orders.push(order);
+  saveSeedState(state);
+  return order;
 }

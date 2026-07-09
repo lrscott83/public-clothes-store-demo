@@ -43,10 +43,14 @@ export interface OrderItem {
 export interface Client {
   id: string;
   name: string;
+  phone?: string;
+  address?: string;
+  deliveryMode?: 'domicilio' | 'recogida';
 }
 
 export interface PaymentInfo {
   method: string;
+  needsChange?: boolean;
 }
 
 export type OrderState = 'creado' | 'verificado' | 'transportando' | 'entregado' | 'comision_pagada';
