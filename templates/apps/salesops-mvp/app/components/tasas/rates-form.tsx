@@ -70,52 +70,54 @@ export function RatesForm({ draft, onChange, onSave, saved }: RatesFormProps) {
   const eurError = fieldError(draft.eur);
 
   return (
-    <section>
-      <div className="mt-4 flex max-w-md flex-col gap-3">
-        <label className="flex flex-col gap-1 text-sm text-text">
-          USD→MN
-          <input
-            type="number"
-            value={draft.usdToMn}
-            onChange={(event) => set('usdToMn', event.target.value)}
-            className="rounded border border-border px-3 py-2"
-          />
-          {usdToMnError && <span className="text-sm text-red-600">{usdToMnError}</span>}
-        </label>
+    <section className="border-t border-border p-6">
+      <div className="rounded-lg border border-border bg-surface p-6">
+        <div className="flex max-w-md flex-col gap-4">
+          <label className="flex flex-col gap-1 text-sm text-text">
+            USD→MN
+            <input
+              type="number"
+              value={draft.usdToMn}
+              onChange={(event) => set('usdToMn', event.target.value)}
+              className="rounded border border-border px-3 py-2"
+            />
+            {usdToMnError && <span className="text-sm text-red-600">{usdToMnError}</span>}
+          </label>
 
-        <label className="flex flex-col gap-1 text-sm text-text">
-          Zelle
-          <input
-            type="number"
-            value={draft.zelle}
-            onChange={(event) => set('zelle', event.target.value)}
-            className="rounded border border-border px-3 py-2"
-          />
-          {zelleError && <span className="text-sm text-red-600">{zelleError}</span>}
-        </label>
+          <label className="flex flex-col gap-1 text-sm text-text">
+            Zelle
+            <input
+              type="number"
+              value={draft.zelle}
+              onChange={(event) => set('zelle', event.target.value)}
+              className="rounded border border-border px-3 py-2"
+            />
+            {zelleError && <span className="text-sm text-red-600">{zelleError}</span>}
+          </label>
 
-        <label className="flex flex-col gap-1 text-sm text-text">
-          EUR
-          <input
-            type="number"
-            value={draft.eur}
-            onChange={(event) => set('eur', event.target.value)}
-            className="rounded border border-border px-3 py-2"
-          />
-          {eurError && <span className="text-sm text-red-600">{eurError}</span>}
-        </label>
-      </div>
+          <label className="flex flex-col gap-1 text-sm text-text">
+            EUR
+            <input
+              type="number"
+              value={draft.eur}
+              onChange={(event) => set('eur', event.target.value)}
+              className="rounded border border-border px-3 py-2"
+            />
+            {eurError && <span className="text-sm text-red-600">{eurError}</span>}
+          </label>
+        </div>
 
-      <div className="mt-6 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={!canSave}
-          className="rounded bg-primary px-4 py-2 text-white disabled:opacity-50"
-        >
-          Guardar
-        </button>
-        {saved && <span className="text-sm text-green-600">Tasas guardadas</span>}
+        <div className="mt-6 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={!canSave}
+            className="rounded bg-primary px-4 py-2 text-white disabled:opacity-50"
+          >
+            Guardar
+          </button>
+          {saved && <span className="text-sm text-green-600">Tasas guardadas</span>}
+        </div>
       </div>
     </section>
   );
