@@ -97,16 +97,4 @@ describe('CartStep', () => {
     );
     expect(screen.getByRole('button', { name: /disminuir cantidad de cafetera/i })).toBeDisabled();
   });
-
-  it('displays the live total as priceUSD * quantity summed across lines', () => {
-    render(
-      <CartStep
-        catalog={[buildProduct({ price: 100 })]}
-        cart={[{ productId: 'p-1', quantity: 2 }]}
-        onChange={vi.fn()}
-        onNext={vi.fn()}
-      />,
-    );
-    expect(screen.getByText(/200/)).toBeInTheDocument();
-  });
 });

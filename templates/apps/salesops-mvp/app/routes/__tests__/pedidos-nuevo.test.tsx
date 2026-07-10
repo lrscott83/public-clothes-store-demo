@@ -86,6 +86,121 @@ describe('PedidosNuevo wizard container', () => {
     expect(screen.getByRole('heading', { name: /almacén/i })).toBeInTheDocument();
   });
 
+  it('renders a floating bar with Total: $0.00 and a cart icon (no badge) when cart is empty', () => {
+    render(<PedidosNuevo />);
+
+    expect(screen.getByText('Total: $0.00')).toBeInTheDocument();
+    // Cart icon button is present, no badge rendered.
+    expect(screen.getByRole('button', { name: /abrir carrito/i })).toBeInTheDocument();
+    // Badge only renders as a child of the button when cart.length > 0.
+    const cartBtn = screen.getByRole('button', { name: /abrir carrito/i });
+    expect(cartBtn.querySelector('span.bg-primary')).toBeNull();
+  });
+
+  it('floating bar badge shows count after adding a product', () => {
+    const { products } = loadSeedState();
+    render(<PedidosNuevo />);
+
+    const product = products[0];
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)} al carrito$`, 'i') }),
+    );
+
+    const cartBtn = screen.getByRole('button', { name: /abrir carrito/i });
+    const badge = cartBtn.querySelector('span.bg-primary');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent('1');
+  });
+
+  it('popup opens when clicking the cart icon and shows Carrito heading', () => {
+    const { products } = loadSeedState();
+    render(<PedidosNuevo />);
+
+    const product = products[0];
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)} al carrito$`, 'i') }),
+    );
+
+    // Popup not visible yet.
+    expect(screen.queryByRole('heading', { name: /carrito/i })).not.toBeInTheDocument();
+
+    // Click cart icon → popup appears.
+    fireEvent.click(screen.getByRole('button', { name: /abrir carrito/i }));
+
+    expect(screen.getByRole('heading', { name: /carrito/i })).toBeInTheDocument();
+  });
+
+  it('popup closes via the X close button', () => {
+    const { products } = loadSeedState();
+    render(<PedidosNuevo />);
+
+    const product = products[0];
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)} al carrito$`, 'i') }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /abrir carrito/i }));
+    expect(screen.getByRole('heading', { name: /carrito/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /cerrar carrito/i }));
+
+    expect(screen.queryByRole('heading', { name: /carrito/i })).not.toBeInTheDocument();
+  });
+
+  it('popup closes when clicking the backdrop (outer overlay)', () => {
+    const { products } = loadSeedState();
+    render(<PedidosNuevo />);
+
+    const product = products[0];
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)} al carrito$`, 'i') }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /abrir carrito/i }));
+    expect(screen.getByRole('heading', { name: /carrito/i })).toBeInTheDocument();
+
+    // The backdrop is the outermost overlay div with class fixed inset-0.
+    const overlay = document.querySelector('.fixed.inset-0');
+    expect(overlay).toBeInTheDocument();
+    fireEvent.click(overlay!);
+
+    expect(screen.queryByRole('heading', { name: /carrito/i })).not.toBeInTheDocument();
+  });
+
+  it('popup shows "El carrito está vacío" when cart has no items', () => {
+    render(<PedidosNuevo />);
+
+    // Open popup with empty cart.
+    fireEvent.click(screen.getByRole('button', { name: /abrir carrito/i }));
+
+    expect(screen.getByText(/el carrito está vacío/i)).toBeInTheDocument();
+  });
+
+  it('popup Trash2 button removes a line and the line disappears from the popup', () => {
+    const { products } = loadSeedState();
+    render(<PedidosNuevo />);
+
+    const product = products[0];
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)} al carrito$`, 'i') }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /abrir carrito/i }));
+
+    // Product name appears in both the grid card and the popup.
+    expect(screen.getAllByText(product.name).length).toBeGreaterThanOrEqual(2);
+
+    // There are two "Quitar" buttons (one in the grid card, one in the popup).
+    // Click the LAST one — the popup renders after the grid in the DOM.
+    const quitarButtons = screen.getAllByRole('button', {
+      name: new RegExp(`^quitar ${escapeRegExp(product.name)} del carrito$`, 'i'),
+    });
+    fireEvent.click(quitarButtons[quitarButtons.length - 1]);
+
+    // Line gone from popup: "El carrito está vacío" is now visible.
+    expect(screen.getByText(/el carrito está vacío/i)).toBeInTheDocument();
+
+    // Product name still visible in the grid (ProductCard) but no longer shown in popup.
+    expect(screen.getAllByText(product.name).length).toBe(1);
+  });
+
   it('drives the full wizard to confirm, calling createOrder and rendering the in-place success view', () => {
     const { products, inventory, warehouses } = loadSeedState();
     // Pick the (product, warehouse) pair with the largest stock to guarantee eligibility.

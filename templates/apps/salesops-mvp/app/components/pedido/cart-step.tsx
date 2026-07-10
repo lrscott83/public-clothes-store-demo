@@ -1,5 +1,4 @@
 import type { CartLine } from '../../domain/availability';
-import { cartTotalUSD } from '../../domain/cart';
 import type { SeededProduct } from '../../domain/types';
 import { ProductCard } from '../product-card';
 
@@ -20,12 +19,6 @@ export interface CartStepProps {
  * original price, cart controls) instead of inline `<li>` markup.
  */
 export function CartStep({ catalog, cart, onChange, onNext }: CartStepProps) {
-  const lines = cart.map((line) => {
-    const product = catalog.find((item) => item.id === line.productId);
-    return { priceUSD: product?.price ?? 0, quantity: line.quantity };
-  });
-  const total = cartTotalUSD(lines);
-
   function quantityFor(productId: string): number {
     return cart.find((line) => line.productId === productId)?.quantity ?? 0;
   }
@@ -57,10 +50,7 @@ export function CartStep({ catalog, cart, onChange, onNext }: CartStepProps) {
   }
 
   return (
-    <section className="p-8">
-      <h2 className="text-xl font-semibold text-text">Carrito</h2>
-      <p className="mt-2 text-sm text-text-muted">Total: ${total}</p>
-
+    <section>
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {catalog.map((product) => {
           const quantity = quantityFor(product.id);
