@@ -5,11 +5,11 @@ import { formatMoney } from '@store-mgmt/storefront/config';
 import { CartStep } from '../components/pedido/cart-step';
 import { ClientStep, type ClientStepDraft } from '../components/pedido/client-step';
 import { WarehouseStep } from '../components/pedido/warehouse-step';
-import { cartTotalUSD } from '../domain/cart';
+import { cartTotalUSD, convertTotal, formatConvertedTotal } from '../domain/cart';
 import { eligibleWarehouses, type CartLine } from '../domain/availability';
 import { GESTORES } from '../seed/constants';
 import { createOrder, loadSeedState } from '../store/seed-store';
-import type { Client, Order, OrderItem, PaymentInfo } from '../domain/types';
+import type { Client, ExchangeRates, Order, OrderItem, PaymentInfo } from '../domain/types';
 
 export function meta(_args: Route.MetaArgs) {
   return [{ title: 'Nuevo pedido — Sales Ops Cockpit' }];
@@ -26,7 +26,6 @@ function buildEmptyClientDraft(): ClientStepDraft {
     phone: '',
     address: '',
     deliveryMode: 'domicilio',
-    method: 'efectivo',
     needsChange: false,
     observations: '',
   };
@@ -46,6 +45,8 @@ export default function PedidosNuevo() {
   const [warehouseId, setWarehouseId] = useState<string | null>(null);
   const [created, setCreated] = useState<Order | null>(null);
   const [popupOpen, setPopupOpen] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('USD');
+  const [exchangeRates] = useState<ExchangeRates>(() => loadSeedState().exchangeRates);
 
   const { products, inventory, warehouses } = loadSeedState();
 
@@ -91,7 +92,7 @@ export default function PedidosNuevo() {
     };
 
     const payment: PaymentInfo = {
-      method: clientDraft.method,
+      method: selectedCurrency,
       needsChange: clientDraft.needsChange,
     };
 
@@ -118,6 +119,7 @@ export default function PedidosNuevo() {
   }
 
   const total = cartTotalUSD(cartLines());
+  const convertedTotal = convertTotal(total, selectedCurrency, exchangeRates);
 
   function removeFromCart(productId: string) {
     setCart(cart.filter((line) => line.productId !== productId));
@@ -170,8 +172,18 @@ export default function PedidosNuevo() {
           <div className="sticky top-0 z-40 -mx-8 mb-6 border-b border-border bg-surface px-8 py-3">
             <div className="flex items-center justify-end gap-3">
               <span className="text-lg font-bold text-text">
-                Total: {formatMoney(total, MONEY)}
+                Total: {formatConvertedTotal(convertedTotal, selectedCurrency)}
               </span>
+              <select
+                value={selectedCurrency}
+                onChange={(e) => setSelectedCurrency(e.target.value)}
+                className="rounded border border-border bg-surface px-2 py-1 text-sm text-text"
+              >
+                <option value="USD">USD</option>
+                <option value="MN">MN</option>
+                <option value="ZELLE">ZELLE</option>
+                <option value="EUR">EUR</option>
+              </select>
               <button
                 type="button"
                 onClick={() => setPopupOpen(true)}

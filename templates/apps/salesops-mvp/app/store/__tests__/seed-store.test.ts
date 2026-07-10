@@ -66,7 +66,7 @@ describe('seed-store', () => {
         address: 'Calle 1',
         deliveryMode: 'domicilio',
       },
-      payment: { method: 'efectivo', needsChange: true },
+      payment: { method: 'USD', needsChange: true },
       warehouseId: 'wh-1',
       gestorId: 'gestor-1',
     };
@@ -149,7 +149,7 @@ describe('seed-store', () => {
     const baseInput: CreateOrderInput = {
       items,
       client: { id: 'client-user-1', name: 'Ana Pérez' },
-      payment: { method: 'efectivo' },
+      payment: { method: 'USD' },
       warehouseId: 'wh-1',
       gestorId: 'gestor-1',
     };
@@ -500,7 +500,7 @@ describe('seed-store', () => {
         {
           items: [{ productId: 'p-1', quantity: 1, priceUSD: 50, commissionMN: 10 }],
           client: { id: 'client-user-1', name: 'Ana Pérez' },
-          payment: { method: 'efectivo' },
+          payment: { method: 'USD' },
           warehouseId: 'wh-1',
           gestorId: 'gestor-1',
         },
@@ -520,7 +520,7 @@ describe('seed-store', () => {
       const baseInput: CreateOrderInput = {
         items,
         client: { id: 'client-user-1', name: 'Ana Pérez' },
-        payment: { method: 'efectivo' },
+        payment: { method: 'USD' },
         warehouseId: 'wh-1',
         gestorId: 'gestor-1',
       };

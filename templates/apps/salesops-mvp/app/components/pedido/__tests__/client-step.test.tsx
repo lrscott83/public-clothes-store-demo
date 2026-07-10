@@ -8,7 +8,6 @@ function buildDraft(overrides: Partial<ClientStepDraft> = {}): ClientStepDraft {
     phone: '',
     address: '',
     deliveryMode: 'domicilio',
-    method: 'efectivo',
     needsChange: false,
     observations: '',
     ...overrides,

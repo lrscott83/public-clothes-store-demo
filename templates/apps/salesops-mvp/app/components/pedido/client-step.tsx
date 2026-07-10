@@ -5,7 +5,6 @@ export interface ClientStepDraft {
   phone: string;
   address: string;
   deliveryMode: 'domicilio' | 'recogida';
-  method: string;
   needsChange: boolean;
   observations: string;
 }
@@ -94,16 +93,6 @@ export function ClientStep({ draft, onChange, cartItems, cartTotalUSD }: ClientS
                 />
               </label>
             )}
-
-            <label className="flex flex-col gap-1 text-sm text-text">
-              Forma de pago
-              <input
-                type="text"
-                value={draft.method}
-                onChange={(event) => set('method', event.target.value)}
-                className="rounded border border-border px-3 py-2"
-              />
-            </label>
 
             <label className="flex items-center gap-2 text-sm text-text">
               <input

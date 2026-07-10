@@ -8,7 +8,7 @@ function buildOrder(id: string, state: OrderState): Order {
     id,
     items: [],
     client: { id: `client-${id}`, name: `Cliente ${id}` },
-    payment: { method: 'efectivo' },
+    payment: { method: 'USD' },
     warehouseId: 'wh-1',
     gestorId: 'gestor-1',
     state,

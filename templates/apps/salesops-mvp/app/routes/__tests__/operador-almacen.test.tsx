@@ -18,7 +18,7 @@ function buildVerificadoOrder(id: string, warehouseId: string): Order {
     id,
     items: [{ productId: 'p-1', quantity: 1, priceUSD: 50, commissionMN: 10 }],
     client: { id: `client-${id}`, name: `Cliente ${id}` },
-    payment: { method: 'efectivo' },
+    payment: { method: 'USD' },
     warehouseId,
     gestorId: 'gestor-1',
     state: 'verificado',

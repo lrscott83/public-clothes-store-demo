@@ -8,7 +8,7 @@ function buildOrder(overrides: Partial<Order> = {}): Order {
     id: 'order-1',
     items: [],
     client: { id: 'client-1', name: 'Ana Pérez' },
-    payment: { method: 'efectivo' },
+    payment: { method: 'USD' },
     warehouseId: 'wh-1',
     gestorId: 'gestor-1',
     state: 'verificado',

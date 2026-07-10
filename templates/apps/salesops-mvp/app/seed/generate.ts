@@ -195,7 +195,7 @@ function buildOrder(
     id: `order-${orderIndex}`,
     items,
     client: { id: `client-${orderIndex}`, name: clientName },
-    payment: { method: 'efectivo' },
+    payment: { method: 'USD' },
     warehouseId: warehouse.id,
     gestorId: gestor.id,
     transportistaId: transportista?.id,

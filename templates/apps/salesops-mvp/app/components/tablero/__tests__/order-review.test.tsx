@@ -8,7 +8,7 @@ function buildOrder(overrides: Partial<Order> = {}): Order {
     id: 'order-1',
     items: [{ productId: 'p-1', quantity: 2, priceUSD: 50, commissionMN: 10 }],
     client: { id: 'client-1', name: 'Ana Pérez', phone: '555-1234', address: 'Calle 1', deliveryMode: 'domicilio' },
-    payment: { method: 'efectivo', needsChange: true },
+    payment: { method: 'USD', needsChange: true },
     warehouseId: 'wh-1',
     gestorId: 'gestor-1',
     state: 'creado',
@@ -30,7 +30,7 @@ describe('OrderReview', () => {
     expect(screen.getByText('Ana Pérez')).toBeInTheDocument();
     expect(screen.getByText('555-1234')).toBeInTheDocument();
     expect(screen.getByText('Calle 1')).toBeInTheDocument();
-    expect(screen.getByText('efectivo')).toBeInTheDocument();
+    expect(screen.getByText('USD')).toBeInTheDocument();
     expect(screen.getByText('Yasmani Alonso')).toBeInTheDocument();
     expect(screen.getByText('+53 5123 4567')).toBeInTheDocument();
     expect(screen.getByText(/stock disponible/i)).toBeInTheDocument();
