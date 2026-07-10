@@ -40,6 +40,15 @@ function buildTransportandoOrder(id: string, warehouseId: string): Order {
   };
 }
 
+/** Opens the ⋮ action menu of the card that shows the given client name, then
+ * clicks the menu item with the given label. Mirrors the operador-gestores
+ * card interaction. */
+function runCardAction(clientName: string, actionLabel: string) {
+  const card = screen.getByText(clientName).closest('li')!;
+  fireEvent.click(card.querySelector('button')!); // the ⋮ menu button
+  fireEvent.click(screen.getByText(actionLabel));
+}
+
 describe('OperadorAlmacen container', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -56,11 +65,12 @@ describe('OperadorAlmacen container', () => {
 
     expect(screen.getByRole('heading', { name: /operador de almacén/i })).toBeInTheDocument();
     const headings = screen.getAllByRole('heading');
-    // 1 h1 + 3 column headings (verificado/transportando/entregado)
+    // 1 h1 + 1 selector h2 + 3 column headings (verificado/transportando/entregado)
     expect(headings.length).toBeGreaterThanOrEqual(4);
 
-    expect(screen.getByText('order-wh1')).toBeInTheDocument();
-    expect(screen.queryByText('order-wh2')).not.toBeInTheDocument();
+    // Cards show the client name, not the order id.
+    expect(screen.getByText('Cliente order-wh1')).toBeInTheDocument();
+    expect(screen.queryByText('Cliente order-wh2')).not.toBeInTheDocument();
   });
 
   it('switching the warehouse selector re-filters the board without unmounting', () => {
@@ -70,14 +80,14 @@ describe('OperadorAlmacen container', () => {
 
     render(<OperadorAlmacen />);
 
-    expect(screen.getByText('order-wh1')).toBeInTheDocument();
-    expect(screen.queryByText('order-wh2')).not.toBeInTheDocument();
+    expect(screen.getByText('Cliente order-wh1')).toBeInTheDocument();
+    expect(screen.queryByText('Cliente order-wh2')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText(/consolación/i));
+    fireEvent.click(screen.getByRole('button', { name: /consolación/i }));
 
     expect(screen.getByRole('heading', { name: /operador de almacén/i })).toBeInTheDocument();
-    expect(screen.queryByText('order-wh1')).not.toBeInTheDocument();
-    expect(screen.getByText('order-wh2')).toBeInTheDocument();
+    expect(screen.queryByText('Cliente order-wh1')).not.toBeInTheDocument();
+    expect(screen.getByText('Cliente order-wh2')).toBeInTheDocument();
   });
 
   it('"Asignar transportista" opens the picker; confirming a carrier assigns it and moves the order to transportando', () => {
@@ -86,8 +96,7 @@ describe('OperadorAlmacen container', () => {
     pushOrder(order);
     const { container } = render(<OperadorAlmacen />);
 
-    const card = screen.getByText(order.id).closest('li')!;
-    fireEvent.click(card.querySelector('button')!);
+    runCardAction('Cliente order-wh1', 'Asignar transportista');
 
     expect(screen.getByRole('heading', { name: /operador de almacén/i })).toBeInTheDocument();
     expect(screen.getByText(/asignar transportista/i)).toBeInTheDocument();
@@ -97,7 +106,7 @@ describe('OperadorAlmacen container', () => {
 
     expect(screen.getByRole('heading', { name: /operador de almacén/i })).toBeInTheDocument();
     const transportandoSection = container.querySelector('[data-state="transportando"]')!;
-    expect(transportandoSection.textContent).toContain(order.id);
+    expect(transportandoSection.textContent).toContain('Cliente order-wh1');
 
     const persisted = loadSeedState().orders.find((o) => o.id === order.id);
     expect(persisted?.state).toBe('transportando');
@@ -110,15 +119,24 @@ describe('OperadorAlmacen container', () => {
     pushOrder(order);
     const { container } = render(<OperadorAlmacen />);
 
-    const card = screen.getByText(order.id).closest('li')!;
-    fireEvent.click(card.querySelector('button')!);
+    runCardAction('Cliente order-wh1', 'Marcar entregado');
 
     const entregadoSection = container.querySelector('[data-state="entregado"]')!;
-    expect(entregadoSection.textContent).toContain(order.id);
+    expect(entregadoSection.textContent).toContain('Cliente order-wh1');
 
     const persisted = loadSeedState().orders.find((o) => o.id === order.id);
     expect(persisted?.state).toBe('entregado');
     expect(persisted?.deliveredAt).toBeDefined();
+  });
+
+  it('"Detalles" opens the order detail popup', () => {
+    loadSeedState();
+    pushOrder(buildVerificadoOrder('order-wh1', 'wh-1'));
+    render(<OperadorAlmacen />);
+
+    runCardAction('Cliente order-wh1', 'Detalles');
+
+    expect(screen.getByTestId('detail-popup')).toBeInTheDocument();
   });
 
   it('the "Operador de almacén" heading persists across board and picker views', () => {
@@ -129,8 +147,7 @@ describe('OperadorAlmacen container', () => {
 
     expect(screen.getByRole('heading', { name: /operador de almacén/i })).toBeInTheDocument();
 
-    const card = screen.getByText(order.id).closest('li')!;
-    fireEvent.click(card.querySelector('button')!);
+    runCardAction('Cliente order-wh1', 'Asignar transportista');
 
     expect(screen.getByRole('heading', { name: /operador de almacén/i })).toBeInTheDocument();
   });

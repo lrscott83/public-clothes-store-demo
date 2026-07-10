@@ -10,30 +10,31 @@ const warehouses: Warehouse[] = [
 ];
 
 describe('WarehouseSelector', () => {
-  it('lists each warehouse by name in a radio fieldset, not a <select>', () => {
+  it('lists each warehouse as a segmented button, not radios or a <select>', () => {
     const { container } = render(
       <WarehouseSelector warehouses={warehouses} selectedWarehouseId="wh-1" onSelect={vi.fn()} />,
     );
 
-    expect(screen.getByText('Pinar del Río')).toBeInTheDocument();
-    expect(screen.getByText('Consolación del Sur')).toBeInTheDocument();
-    expect(screen.getByText('Herradura')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pinar del Río' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Consolación del Sur' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Herradura' })).toBeInTheDocument();
     expect(container.querySelector('select')).toBeNull();
-    expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(3);
+    expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+    expect(container.querySelectorAll('button')).toHaveLength(3);
   });
 
-  it('marks the selected warehouse radio as checked', () => {
+  it('marks the selected warehouse button as pressed', () => {
     render(<WarehouseSelector warehouses={warehouses} selectedWarehouseId="wh-2" onSelect={vi.fn()} />);
 
-    expect(screen.getByLabelText(/consolación/i)).toBeChecked();
-    expect(screen.getByLabelText(/pinar del río/i)).not.toBeChecked();
+    expect(screen.getByRole('button', { name: /consolación/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /pinar del río/i })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('fires onSelect with the clicked warehouse id', () => {
     const onSelect = vi.fn();
     render(<WarehouseSelector warehouses={warehouses} selectedWarehouseId="wh-1" onSelect={onSelect} />);
 
-    fireEvent.click(screen.getByLabelText(/herradura/i));
+    fireEvent.click(screen.getByRole('button', { name: /herradura/i }));
 
     expect(onSelect).toHaveBeenCalledWith('wh-3');
   });
