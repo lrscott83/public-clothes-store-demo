@@ -263,8 +263,9 @@ describe('OperadorGestores — OrderDetailPopup', () => {
     const clientNames = screen.getAllByText('Juan Pérez');
     expect(clientNames.length).toBe(2); // card + popup
 
-    // Popup-specific content
-    expect(popup.textContent).toContain('Pedido o1');
+    // Popup-specific content (order id is intentionally NOT shown)
+    expect(popup.textContent).toContain('Detalle del pedido');
+    expect(popup.textContent).not.toContain('Pedido o1');
     expect(popup.textContent).toContain('Método: USD');
     expect(popup.textContent).toContain('Total USD: $50.00');
     expect(popup.textContent).toContain('prod-1');

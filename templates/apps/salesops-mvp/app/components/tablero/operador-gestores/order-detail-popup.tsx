@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import type { Gestor, Order, OrderState } from '../../../domain/types';
 import { eligibleWarehouses } from '../../../domain/availability';
 import { loadSeedState } from '../../../store/seed-store';
+import { catalogProvider } from '../../../data/catalog';
 
 interface OrderDetailPopupProps {
   order: Order;
@@ -36,10 +37,13 @@ export function OrderDetailPopup({ order, gestor, onClose }: OrderDetailPopupPro
     return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
-  // Compute warehouse availability internally
+  // Resolve the selected warehouse name and stock availability from seed state.
   let availableAtWarehouse: boolean | null = null;
+  let warehouseName: string | null = null;
   try {
     const { inventory, warehouses } = loadSeedState();
+    warehouseName =
+      warehouses.find((warehouse) => warehouse.id === order.warehouseId)?.name ?? null;
     availableAtWarehouse = eligibleWarehouses(order.items, inventory, warehouses).some(
       (warehouse) => warehouse.id === order.warehouseId,
     );
@@ -65,7 +69,7 @@ export function OrderDetailPopup({ order, gestor, onClose }: OrderDetailPopupPro
         <div className="mb-6 flex items-start justify-between">
           <div>
             <h2 className="text-xl font-semibold text-text">
-              Pedido {order.id}
+              Detalle del pedido
             </h2>
             <div className="mt-2 flex items-center gap-3">
               <span
@@ -93,6 +97,19 @@ export function OrderDetailPopup({ order, gestor, onClose }: OrderDetailPopupPro
           >
             <X size={20} />
           </button>
+        </div>
+
+        {/* Warehouse section — the selected warehouse, shown first */}
+        <div className="mb-4">
+          <h3 className="mb-2 text-sm font-semibold text-text">Almacén</h3>
+          <p className="text-sm text-text-muted">{warehouseName ?? order.warehouseId}</p>
+          <p className="text-sm text-text-muted">
+            {availableAtWarehouse === null
+              ? 'Disponibilidad no verificada'
+              : availableAtWarehouse
+                ? 'Stock disponible en el almacén asignado.'
+                : 'Stock insuficiente en el almacén asignado.'}
+          </p>
         </div>
 
         {/* Client section */}
@@ -157,25 +174,17 @@ export function OrderDetailPopup({ order, gestor, onClose }: OrderDetailPopupPro
             <p className="text-sm text-text-muted">Sin artículos</p>
           ) : (
             <ul className="flex flex-col gap-1 text-sm text-text-muted">
-              {order.items.map((item) => (
-                <li key={item.productId}>
-                  {item.productId} × {item.quantity} — ${item.priceUSD.toFixed(2)}
-                </li>
-              ))}
+              {order.items.map((item) => {
+                const product = catalogProvider.getProductById(item.productId);
+                const lineTotalUSD = item.priceUSD * item.quantity;
+                return (
+                  <li key={item.productId}>
+                    {product?.name ?? item.productId} × {item.quantity} — ${lineTotalUSD.toFixed(2)}
+                  </li>
+                );
+              })}
             </ul>
           )}
-        </div>
-
-        {/* Warehouse availability */}
-        <div className="mb-6">
-          <h3 className="mb-2 text-sm font-semibold text-text">Almacén</h3>
-          <p className="text-sm text-text-muted">
-            {availableAtWarehouse === null
-              ? 'No disponible'
-              : availableAtWarehouse
-                ? 'Stock disponible en el almacén asignado.'
-                : 'Stock insuficiente en el almacén asignado.'}
-          </p>
         </div>
 
         {/* Cerrar button */}

@@ -10,22 +10,6 @@ export interface GestorOrderCardProps {
   onMarkCommissionPaid: (id: string) => void;
 }
 
-const BADGE_STYLES: Record<string, string> = {
-  creado: 'bg-gray-100 text-gray-800',
-  verificado: 'bg-blue-100 text-blue-800',
-  transportando: 'bg-yellow-100 text-yellow-800',
-  entregado: 'bg-green-100 text-green-800',
-  comision_pagada: 'bg-purple-100 text-purple-800',
-};
-
-const STATE_LABELS: Record<string, string> = {
-  creado: 'Creado',
-  verificado: 'Verificado',
-  transportando: 'Transportando',
-  entregado: 'Entregado',
-  comision_pagada: 'Comisión pagada',
-};
-
 export function GestorOrderCard({ order, gestor, onDetalles, onVerifyOrder, onMarkCommissionPaid }: GestorOrderCardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -138,13 +122,6 @@ export function GestorOrderCard({ order, gestor, onDetalles, onVerifyOrder, onMa
           <span>{Number(order.totalMN).toLocaleString('en-US')} Mn</span>
         )}
       </div>
-
-      {/* State badge */}
-      <span
-        className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES[order.state] ?? 'bg-gray-100 text-gray-800'}`}
-      >
-        {STATE_LABELS[order.state] ?? order.state}
-      </span>
     </div>
   );
 }
