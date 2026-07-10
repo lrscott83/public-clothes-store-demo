@@ -19,30 +19,9 @@ function buildProduct(overrides: Partial<SeededProduct> = {}): SeededProduct {
 }
 
 describe('CartStep', () => {
-  it('disables "Siguiente" when the cart is empty', () => {
-    render(<CartStep catalog={[buildProduct()]} cart={[]} onChange={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /siguiente/i })).toBeDisabled();
-  });
-
-  it('enables "Siguiente" and calls onNext when the cart has lines', () => {
-    const onNext = vi.fn();
-    render(
-      <CartStep
-        catalog={[buildProduct()]}
-        cart={[{ productId: 'p-1', quantity: 1 }]}
-        onChange={vi.fn()}
-        onNext={onNext}
-      />,
-    );
-    const next = screen.getByRole('button', { name: /siguiente/i });
-    expect(next).toBeEnabled();
-    fireEvent.click(next);
-    expect(onNext).toHaveBeenCalledTimes(1);
-  });
-
   it('adding a product calls onChange with a new cart line', () => {
     const onChange = vi.fn();
-    render(<CartStep catalog={[buildProduct()]} cart={[]} onChange={onChange} onNext={vi.fn()} />);
+    render(<CartStep catalog={[buildProduct()]} cart={[]} onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: /agregar cafetera al carrito/i }));
     expect(onChange).toHaveBeenCalledWith([{ productId: 'p-1', quantity: 1 }]);
   });
@@ -54,7 +33,7 @@ describe('CartStep', () => {
         catalog={[buildProduct()]}
         cart={[{ productId: 'p-1', quantity: 2 }]}
         onChange={onChange}
-        onNext={vi.fn()}
+       
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /quitar cafetera del carrito/i }));
@@ -68,7 +47,7 @@ describe('CartStep', () => {
         catalog={[buildProduct()]}
         cart={[{ productId: 'p-1', quantity: 1 }]}
         onChange={onChange}
-        onNext={vi.fn()}
+       
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /aumentar cantidad de cafetera/i }));
@@ -82,7 +61,7 @@ describe('CartStep', () => {
         catalog={[buildProduct()]}
         cart={[{ productId: 'p-1', quantity: 2 }]}
         onChange={onChange}
-        onNext={vi.fn()}
+       
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /disminuir cantidad de cafetera/i }));
@@ -93,7 +72,7 @@ describe('CartStep', () => {
         catalog={[buildProduct()]}
         cart={[{ productId: 'p-1', quantity: 1 }]}
         onChange={onChange}
-        onNext={vi.fn()}
+       
       />,
     );
     expect(screen.getByRole('button', { name: /disminuir cantidad de cafetera/i })).toBeDisabled();
@@ -111,7 +90,7 @@ describe('CartStep', () => {
         catalog={[buildProduct2('p-1', 'A', 'cat-1'), buildProduct2('p-2', 'B', 'cat-2')]}
         cart={[]}
         onChange={vi.fn()}
-        onNext={vi.fn()}
+       
       />,
     );
     expect(screen.getByText('A')).toBeInTheDocument();
@@ -127,7 +106,7 @@ describe('CartStep', () => {
         catalog={[buildProduct2('p-1', 'A', catA), buildProduct2('p-2', 'B', catB)]}
         cart={[]}
         onChange={vi.fn()}
-        onNext={vi.fn()}
+       
       />,
     );
     fireEvent.change(screen.getByRole('combobox'), { target: { value: catA } });
@@ -144,7 +123,7 @@ describe('CartStep', () => {
         ]}
         cart={[]}
         onChange={vi.fn()}
-        onNext={vi.fn()}
+       
       />,
     );
     fireEvent.change(screen.getByPlaceholderText(/buscar producto/i), { target: { value: 'cafe' } });
@@ -159,7 +138,7 @@ describe('CartStep', () => {
     const p1 = buildProduct2('p-1', 'Cafetera A', catA);
     const p2 = buildProduct2('p-2', 'Cafetera B', catB);
     const p3 = buildProduct2('p-3', 'Licuadora', catA);
-    render(<CartStep catalog={[p1, p2, p3]} cart={[]} onChange={vi.fn()} onNext={vi.fn()} />);
+    render(<CartStep catalog={[p1, p2, p3]} cart={[]} onChange={vi.fn()} />);
 
     fireEvent.change(screen.getByRole('combobox'), { target: { value: catA } });
     fireEvent.change(screen.getByPlaceholderText(/buscar producto/i), { target: { value: 'cafe' } });
@@ -169,7 +148,7 @@ describe('CartStep', () => {
   });
 
   it('shows empty state message when no products match filters', () => {
-    render(<CartStep catalog={[buildProduct()]} cart={[]} onChange={vi.fn()} onNext={vi.fn()} />);
+    render(<CartStep catalog={[buildProduct()]} cart={[]} onChange={vi.fn()} />);
     fireEvent.change(screen.getByPlaceholderText(/buscar producto/i), { target: { value: 'NONEXISTENT' } });
     expect(screen.getByText(/no se encontraron productos/i)).toBeInTheDocument();
   });
@@ -180,7 +159,7 @@ describe('CartStep', () => {
         catalog={[buildProduct2('p-1', 'Cafetera', 'cat-1', { description: 'hidden desc' })]}
         cart={[]}
         onChange={vi.fn()}
-        onNext={vi.fn()}
+       
       />,
     );
     fireEvent.change(screen.getByPlaceholderText(/buscar producto/i), { target: { value: 'hidden' } });
@@ -188,7 +167,7 @@ describe('CartStep', () => {
   });
 
   it('renders category filter options', () => {
-    render(<CartStep catalog={[buildProduct()]} cart={[]} onChange={vi.fn()} onNext={vi.fn()} />);
+    render(<CartStep catalog={[buildProduct()]} cart={[]} onChange={vi.fn()} />);
     expect(screen.getByRole('combobox')).toBeInTheDocument();
     expect(screen.getByText('Todas las categorías')).toBeInTheDocument();
   });

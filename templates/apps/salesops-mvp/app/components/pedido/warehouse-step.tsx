@@ -4,8 +4,6 @@ export interface WarehouseStepProps {
   eligible: Warehouse[];
   warehouseId: string | null;
   onSelect: (warehouseId: string) => void;
-  onConfirm: () => void;
-  onBack: () => void;
 }
 
 /**
@@ -14,8 +12,7 @@ export interface WarehouseStepProps {
  * qualify, order creation is blocked with an explanatory message and
  * "Confirmar" stays disabled.
  */
-export function WarehouseStep({ eligible, warehouseId, onSelect, onConfirm, onBack }: WarehouseStepProps) {
-  const canConfirm = eligible.length > 0 && warehouseId !== null;
+export function WarehouseStep({ eligible, warehouseId, onSelect }: WarehouseStepProps) {
 
   return (
     <section className="p-8">
@@ -43,19 +40,6 @@ export function WarehouseStep({ eligible, warehouseId, onSelect, onConfirm, onBa
         </fieldset>
       )}
 
-      <div className="mt-6 flex gap-3">
-        <button type="button" onClick={onBack} className="rounded border border-border px-4 py-2">
-          Atrás
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={!canConfirm}
-          className="rounded bg-primary px-4 py-2 text-white disabled:opacity-50"
-        >
-          Confirmar
-        </button>
-      </div>
     </section>
   );
 }

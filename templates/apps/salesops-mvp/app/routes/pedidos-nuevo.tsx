@@ -149,26 +149,65 @@ export default function PedidosNuevo() {
       <p className="mt-1 text-sm text-text-muted">Gestor: {GESTOR.name}</p>
 
       {/* Cart Floating Bar — visible across all steps */}
-      <div className="sticky top-0 z-40 -mx-8 mb-6 border-b border-border bg-surface px-8 py-3">
-        <div className="flex items-center justify-end gap-4">
-          <span className="text-lg font-bold text-text">
-            Total: {formatMoney(total, MONEY)}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPopupOpen(true)}
-            className="relative rounded-full p-2 hover:bg-primary-light transition-colors"
-            aria-label="Abrir carrito"
-          >
-            <ShoppingCart size={20} className="text-primary" />
-            {cart.length > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-white">
-                {cart.length}
+      {(() => {
+        const nextLabel = step === 'almacen' ? 'Confirmar' : 'Siguiente';
+        const nextDisabled = (() => {
+          if (step === 'carrito') return cart.length === 0;
+          if (step === 'almacen') return !warehouseId || eligible.length === 0;
+          return false;
+        })();
+        const handleNext = () => {
+          if (step === 'carrito') handleCarritoNext();
+          else if (step === 'cliente') handleClienteNext();
+          else handleConfirm();
+        };
+        const handleBack = () => {
+          if (step === 'cliente') setStep('carrito');
+          else if (step === 'almacen') setStep('cliente');
+        };
+
+        return (
+          <div className="sticky top-0 z-40 -mx-8 mb-6 border-b border-border bg-surface px-8 py-3">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-lg font-bold text-text">
+                Total: {formatMoney(total, MONEY)}
               </span>
-            )}
-          </button>
-        </div>
-      </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPopupOpen(true)}
+                  className="relative rounded-full p-2 hover:bg-primary-light transition-colors"
+                  aria-label="Abrir carrito"
+                >
+                  <ShoppingCart size={20} className="text-primary" />
+                  {cart.length > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-white">
+                      {cart.length}
+                    </span>
+                  )}
+                </button>
+                {step !== 'carrito' && (
+                  <button
+                    type="button"
+                    onClick={handleBack}
+                    className="rounded border border-border px-4 py-2 text-sm font-medium text-text"
+                  >
+                    Atrás
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={nextDisabled}
+                  className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {nextLabel}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {step === 'carrito' && (
         <CartStep catalog={products} cart={cart} onChange={setCart} onNext={handleCarritoNext} />
@@ -178,8 +217,6 @@ export default function PedidosNuevo() {
         <ClientStep
           draft={clientDraft}
           onChange={setClientDraft}
-          onNext={handleClienteNext}
-          onBack={() => setStep('carrito')}
         />
       )}
 
@@ -188,8 +225,6 @@ export default function PedidosNuevo() {
           eligible={eligible}
           warehouseId={warehouseId}
           onSelect={setWarehouseId}
-          onConfirm={handleConfirm}
-          onBack={() => setStep('cliente')}
         />
       )}
 

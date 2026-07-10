@@ -11,7 +11,6 @@ export interface ClientStepDraft {
 export interface ClientStepProps {
   draft: ClientStepDraft;
   onChange: (draft: ClientStepDraft) => void;
-  onNext: () => void;
   onBack: () => void;
 }
 
@@ -23,11 +22,7 @@ export interface ClientStepProps {
  * "Siguiente" is enabled only when name && phone && (mode !== 'domicilio'
  * || address).
  */
-export function ClientStep({ draft, onChange, onNext, onBack }: ClientStepProps) {
-  const canAdvance =
-    draft.name.trim() !== '' &&
-    draft.phone.trim() !== '' &&
-    (draft.deliveryMode !== 'domicilio' || draft.address.trim() !== '');
+export function ClientStep({ draft, onChange, onBack }: ClientStepProps) {
 
   function set<K extends keyof ClientStepDraft>(key: K, value: ClientStepDraft[K]) {
     onChange({ ...draft, [key]: value });
@@ -124,19 +119,6 @@ export function ClientStep({ draft, onChange, onNext, onBack }: ClientStepProps)
         </label>
       </div>
 
-      <div className="mt-6 flex gap-3">
-        <button type="button" onClick={onBack} className="rounded border border-border px-4 py-2">
-          Atrás
-        </button>
-        <button
-          type="button"
-          onClick={onNext}
-          disabled={!canAdvance}
-          className="rounded bg-primary px-4 py-2 text-white disabled:opacity-50"
-        >
-          Siguiente
-        </button>
-      </div>
     </section>
   );
 }

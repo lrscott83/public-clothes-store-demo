@@ -15,8 +15,6 @@ describe('WarehouseStep', () => {
         eligible={warehouses}
         warehouseId={null}
         onSelect={vi.fn()}
-        onConfirm={vi.fn()}
-        onBack={vi.fn()}
       />,
     );
 
@@ -31,8 +29,6 @@ describe('WarehouseStep', () => {
         eligible={warehouses}
         warehouseId={null}
         onSelect={onSelect}
-        onConfirm={vi.fn()}
-        onBack={vi.fn()}
       />,
     );
 
@@ -41,62 +37,12 @@ describe('WarehouseStep', () => {
     expect(onSelect).toHaveBeenCalledWith('wh-1');
   });
 
-  it('disables "Confirmar" until a warehouse is selected', () => {
+  it('shows a block message when zero warehouses are eligible', () => {
     render(
-      <WarehouseStep
-        eligible={warehouses}
-        warehouseId={null}
-        onSelect={vi.fn()}
-        onConfirm={vi.fn()}
-        onBack={vi.fn()}
-      />,
+      <WarehouseStep eligible={[]} warehouseId={null} onSelect={vi.fn()} />,
     );
 
-    expect(screen.getByRole('button', { name: /confirmar/i })).toBeDisabled();
-  });
-
-  it('enables "Confirmar" and calls onConfirm once a warehouse is selected', () => {
-    const onConfirm = vi.fn();
-    render(
-      <WarehouseStep
-        eligible={warehouses}
-        warehouseId="wh-1"
-        onSelect={vi.fn()}
-        onConfirm={onConfirm}
-        onBack={vi.fn()}
-      />,
-    );
-
-    const confirm = screen.getByRole('button', { name: /confirmar/i });
-    expect(confirm).toBeEnabled();
-    fireEvent.click(confirm);
-    expect(onConfirm).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows a block message and disables "Confirmar" when zero warehouses are eligible', () => {
-    render(
-      <WarehouseStep eligible={[]} warehouseId={null} onSelect={vi.fn()} onConfirm={vi.fn()} onBack={vi.fn()} />,
-    );
-
-    expect(screen.getByRole('button', { name: /confirmar/i })).toBeDisabled();
     expect(screen.getByText(/ningún almacén/i)).toBeInTheDocument();
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-  });
-
-  it('calls onBack when "Atrás" is clicked', () => {
-    const onBack = vi.fn();
-    render(
-      <WarehouseStep
-        eligible={warehouses}
-        warehouseId={null}
-        onSelect={vi.fn()}
-        onConfirm={vi.fn()}
-        onBack={onBack}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /atrás/i }));
-
-    expect(onBack).toHaveBeenCalledTimes(1);
   });
 });
