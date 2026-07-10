@@ -32,7 +32,7 @@ describe('PedidosNuevo wizard container', () => {
     const product = products[0];
     render(<PedidosNuevo />);
 
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)}$`, 'i') }));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)} al carrito$`, 'i') }));
     fireEvent.click(screen.getByRole('button', { name: /^siguiente$/i }));
     expect(screen.getByLabelText(/nombre/i)).toBeInTheDocument();
 
@@ -40,7 +40,7 @@ describe('PedidosNuevo wizard container', () => {
 
     // Back on Carrito: the "Quitar" control (not "Agregar") proves the line survived.
     expect(
-      screen.getByRole('button', { name: new RegExp(`^quitar ${escapeRegExp(product.name)}$`, 'i') }),
+      screen.getByRole('button', { name: new RegExp(`^quitar ${escapeRegExp(product.name)} del carrito$`, 'i') }),
     ).toBeInTheDocument();
   });
 
@@ -49,7 +49,7 @@ describe('PedidosNuevo wizard container', () => {
     const product = products[0];
     render(<PedidosNuevo />);
 
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)}$`, 'i') }));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)} al carrito$`, 'i') }));
     fireEvent.click(screen.getByRole('button', { name: /^siguiente$/i }));
 
     // Default deliveryMode is domicilio -> address field visible.
@@ -73,7 +73,7 @@ describe('PedidosNuevo wizard container', () => {
     const product = products[0];
     render(<PedidosNuevo />);
 
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)}$`, 'i') }));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)} al carrito$`, 'i') }));
     fireEvent.click(screen.getByRole('button', { name: /^siguiente$/i }));
 
     fireEvent.click(screen.getByRole('radio', { name: /recogida/i }));
@@ -95,7 +95,7 @@ describe('PedidosNuevo wizard container', () => {
 
     render(<PedidosNuevo />);
 
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)}$`, 'i') }));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^agregar ${escapeRegExp(product.name)} al carrito$`, 'i') }));
     fireEvent.click(screen.getByRole('button', { name: /^siguiente$/i }));
 
     fireEvent.change(screen.getByLabelText(/nombre/i), { target: { value: 'Ana Pérez' } });

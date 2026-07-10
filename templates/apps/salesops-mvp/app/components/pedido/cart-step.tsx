@@ -1,6 +1,7 @@
 import type { CartLine } from '../../domain/availability';
 import { cartTotalUSD } from '../../domain/cart';
 import type { SeededProduct } from '../../domain/types';
+import { ProductCard } from '../product-card';
 
 export interface CartStepProps {
   catalog: SeededProduct[];
@@ -14,6 +15,9 @@ export interface CartStepProps {
  * USD total. Purely presentational — all cart state lives in the container
  * (`routes/pedidos-nuevo.tsx`); every interaction calls `onChange` with the
  * next full `CartLine[]`.
+ *
+ * Each product is rendered via the enhanced `ProductCard` component (badges,
+ * original price, cart controls) instead of inline `<li>` markup.
  */
 export function CartStep({ catalog, cart, onChange, onNext }: CartStepProps) {
   const lines = cart.map((line) => {
@@ -32,14 +36,18 @@ export function CartStep({ catalog, cart, onChange, onNext }: CartStepProps) {
 
   function increment(productId: string) {
     onChange(
-      cart.map((line) => (line.productId === productId ? { ...line, quantity: line.quantity + 1 } : line)),
+      cart.map((line) =>
+        line.productId === productId ? { ...line, quantity: line.quantity + 1 } : line,
+      ),
     );
   }
 
   function decrement(productId: string) {
     onChange(
       cart
-        .map((line) => (line.productId === productId ? { ...line, quantity: line.quantity - 1 } : line))
+        .map((line) =>
+          line.productId === productId ? { ...line, quantity: line.quantity - 1 } : line,
+        )
         .filter((line) => line.quantity > 0),
     );
   }
@@ -53,56 +61,27 @@ export function CartStep({ catalog, cart, onChange, onNext }: CartStepProps) {
       <h2 className="text-xl font-semibold text-text">Carrito</h2>
       <p className="mt-2 text-sm text-text-muted">Total: ${total}</p>
 
-      <ul className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {catalog.map((product) => {
           const quantity = quantityFor(product.id);
 
           return (
-            <li key={product.id} className="rounded-lg border border-border p-4">
-              <p className="font-medium text-text">{product.name}</p>
-              <p className="text-sm text-text-muted">${product.price}</p>
-
-              {quantity === 0 ? (
-                <button
-                  type="button"
-                  onClick={() => add(product.id)}
-                  className="mt-2 rounded bg-primary px-3 py-1 text-sm text-white"
-                >
-                  {`Agregar ${product.name}`}
-                </button>
-              ) : (
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    aria-label={`Disminuir cantidad de ${product.name}`}
-                    onClick={() => decrement(product.id)}
-                    disabled={quantity <= 1}
-                    className="rounded border border-border px-2 disabled:opacity-50"
-                  >
-                    -
-                  </button>
-                  <span>{quantity}</span>
-                  <button
-                    type="button"
-                    aria-label={`Aumentar cantidad de ${product.name}`}
-                    onClick={() => increment(product.id)}
-                    className="rounded border border-border px-2"
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => remove(product.id)}
-                    className="ml-2 text-sm text-red-600"
-                  >
-                    {`Quitar ${product.name}`}
-                  </button>
-                </div>
-              )}
-            </li>
+            <ProductCard
+              key={product.id}
+              product={product}
+              locale="en-US"
+              currency="USD"
+              cart={{
+                quantity,
+                onAddToCart: () => add(product.id),
+                onIncrement: () => increment(product.id),
+                onDecrement: () => decrement(product.id),
+                onRemove: () => remove(product.id),
+              }}
+            />
           );
         })}
-      </ul>
+      </div>
 
       <button
         type="button"

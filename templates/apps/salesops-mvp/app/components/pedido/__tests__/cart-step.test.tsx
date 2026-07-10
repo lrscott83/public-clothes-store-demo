@@ -20,7 +20,6 @@ function buildProduct(overrides: Partial<SeededProduct> = {}): SeededProduct {
 describe('CartStep', () => {
   it('disables "Siguiente" when the cart is empty', () => {
     render(<CartStep catalog={[buildProduct()]} cart={[]} onChange={vi.fn()} onNext={vi.fn()} />);
-
     expect(screen.getByRole('button', { name: /siguiente/i })).toBeDisabled();
   });
 
@@ -34,7 +33,6 @@ describe('CartStep', () => {
         onNext={onNext}
       />,
     );
-
     const next = screen.getByRole('button', { name: /siguiente/i });
     expect(next).toBeEnabled();
     fireEvent.click(next);
@@ -44,9 +42,7 @@ describe('CartStep', () => {
   it('adding a product calls onChange with a new cart line', () => {
     const onChange = vi.fn();
     render(<CartStep catalog={[buildProduct()]} cart={[]} onChange={onChange} onNext={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /agregar cafetera/i }));
-
+    fireEvent.click(screen.getByRole('button', { name: /agregar cafetera al carrito/i }));
     expect(onChange).toHaveBeenCalledWith([{ productId: 'p-1', quantity: 1 }]);
   });
 
@@ -60,9 +56,7 @@ describe('CartStep', () => {
         onNext={vi.fn()}
       />,
     );
-
-    fireEvent.click(screen.getByRole('button', { name: /quitar cafetera/i }));
-
+    fireEvent.click(screen.getByRole('button', { name: /quitar cafetera del carrito/i }));
     expect(onChange).toHaveBeenCalledWith([]);
   });
 
@@ -76,9 +70,7 @@ describe('CartStep', () => {
         onNext={vi.fn()}
       />,
     );
-
     fireEvent.click(screen.getByRole('button', { name: /aumentar cantidad de cafetera/i }));
-
     expect(onChange).toHaveBeenCalledWith([{ productId: 'p-1', quantity: 2 }]);
   });
 
@@ -92,7 +84,6 @@ describe('CartStep', () => {
         onNext={vi.fn()}
       />,
     );
-
     fireEvent.click(screen.getByRole('button', { name: /disminuir cantidad de cafetera/i }));
     expect(onChange).toHaveBeenCalledWith([{ productId: 'p-1', quantity: 1 }]);
 
@@ -116,7 +107,6 @@ describe('CartStep', () => {
         onNext={vi.fn()}
       />,
     );
-
     expect(screen.getByText(/200/)).toBeInTheDocument();
   });
 });
