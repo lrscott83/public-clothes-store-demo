@@ -14,9 +14,9 @@ export const WINDOW_DAYS = 20;
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const WAREHOUSES: Warehouse[] = [
-  { id: 'wh-1', name: 'Nave Central' },
-  { id: 'wh-2', name: 'Sucursal Este' },
-  { id: 'wh-3', name: 'Sucursal Oeste' },
+  { id: 'wh-1', name: 'Pinar del Río' },
+  { id: 'wh-2', name: 'Consolación del Sur' },
+  { id: 'wh-3', name: 'Herradura' },
 ];
 
 export const GESTORES: Gestor[] = [
@@ -28,9 +28,9 @@ export const GESTORES: Gestor[] = [
 ];
 
 export const TRANSPORTISTAS: Transportista[] = [
-  { id: 'transportista-1', name: 'Ernesto Junco', phone: '+53 5678 1234', zona: 'Nave Central' },
-  { id: 'transportista-2', name: 'Yailin Pupo', phone: '+53 5789 2345', zona: 'Sucursal Este' },
-  { id: 'transportista-3', name: 'Roberto Nápoles', phone: '+53 5890 3456', zona: 'Sucursal Oeste' },
+  { id: 'transportista-1', name: 'Ernesto Junco', phone: '+53 5678 1234', zona: 'Pinar del Río' },
+  { id: 'transportista-2', name: 'Yailin Pupo', phone: '+53 5789 2345', zona: 'Consolación del Sur' },
+  { id: 'transportista-3', name: 'Roberto Nápoles', phone: '+53 5890 3456', zona: 'Herradura' },
 ];
 
 /** Orders/day range (inclusive): PRNG-drawn 3-6. */
@@ -101,4 +101,4 @@ export const CLIENT_NAME_POOL: string[] = [
 ];
 
 export const STORAGE_KEY = 'salesops-mvp:seed:v1';
-export const VERSION = 1;
+export const VERSION = 2;

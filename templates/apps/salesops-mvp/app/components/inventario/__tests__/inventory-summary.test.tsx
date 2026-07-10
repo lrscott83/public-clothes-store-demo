@@ -8,7 +8,7 @@ function buildSummary(): InventorySummaryModel {
     warehouses: [
       {
         warehouseId: 'wh-1',
-        warehouseName: 'Nave Central',
+        warehouseName: 'Pinar del Río',
         totalUnits: 10,
         retailValueUSD: 100,
         costValueUSD: 40,
@@ -16,7 +16,7 @@ function buildSummary(): InventorySummaryModel {
       },
       {
         warehouseId: 'wh-2',
-        warehouseName: 'Sucursal Este',
+        warehouseName: 'Consolación del Sur',
         totalUnits: 5,
         retailValueUSD: 50,
         costValueUSD: 20,
@@ -45,8 +45,8 @@ describe('InventorySummary', () => {
   it('renders one summary block per warehouse with its own totals', () => {
     render(<InventorySummary summary={buildSummary()} />);
 
-    expect(screen.getByText('Nave Central')).toBeInTheDocument();
-    expect(screen.getByText('Sucursal Este')).toBeInTheDocument();
+    expect(screen.getByText('Pinar del Río')).toBeInTheDocument();
+    expect(screen.getByText('Consolación del Sur')).toBeInTheDocument();
     expect(screen.getByText('$100.00')).toBeInTheDocument();
     expect(screen.getByText('$40.00')).toBeInTheDocument();
     expect(screen.getByText('$50.00')).toBeInTheDocument();

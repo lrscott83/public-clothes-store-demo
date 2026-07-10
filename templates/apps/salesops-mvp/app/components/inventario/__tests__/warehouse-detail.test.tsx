@@ -6,7 +6,7 @@ import type { WarehouseInventory } from '../../../domain/inventory';
 function buildWarehouse(): WarehouseInventory {
   return {
     warehouseId: 'wh-1',
-    warehouseName: 'Nave Central',
+    warehouseName: 'Pinar del Río',
     totalUnits: 8,
     retailValueUSD: 80,
     costValueUSD: 32,
@@ -22,7 +22,7 @@ describe('WarehouseDetail', () => {
   it('renders an h2 with the warehouse name (not "Inventario")', () => {
     render(<WarehouseDetail warehouse={buildWarehouse()} />);
 
-    const heading = screen.getByRole('heading', { name: 'Nave Central' });
+    const heading = screen.getByRole('heading', { name: 'Pinar del Río' });
     expect(heading.tagName).toBe('H2');
   });
 

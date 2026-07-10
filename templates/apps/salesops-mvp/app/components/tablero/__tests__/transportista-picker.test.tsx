@@ -19,7 +19,7 @@ function buildOrder(overrides: Partial<Order> = {}): Order {
 }
 
 const transportistas: Transportista[] = [
-  { id: 'transportista-1', name: 'Ernesto Junco', phone: '+53 5678 1234', zona: 'Nave Central' },
+  { id: 'transportista-1', name: 'Ernesto Junco', phone: '+53 5678 1234', zona: 'Pinar del Río' },
   { id: 'transportista-2', name: 'Yailin Pupo' },
 ];
 
@@ -38,7 +38,7 @@ describe('TransportistaPicker', () => {
 
     expect(screen.getByText('Ernesto Junco')).toBeInTheDocument();
     expect(screen.getByText(/\+53 5678 1234/)).toBeInTheDocument();
-    expect(screen.getByText(/Nave Central/)).toBeInTheDocument();
+    expect(screen.getByText(/Pinar del Río/)).toBeInTheDocument();
     expect(screen.getByText('Yailin Pupo')).toBeInTheDocument();
   });
 

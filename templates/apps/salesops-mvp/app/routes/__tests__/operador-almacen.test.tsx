@@ -73,7 +73,7 @@ describe('OperadorAlmacen container', () => {
     expect(screen.getByText('order-wh1')).toBeInTheDocument();
     expect(screen.queryByText('order-wh2')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText(/sucursal este/i));
+    fireEvent.click(screen.getByLabelText(/consolación/i));
 
     expect(screen.getByRole('heading', { name: /operador de almacén/i })).toBeInTheDocument();
     expect(screen.queryByText('order-wh1')).not.toBeInTheDocument();

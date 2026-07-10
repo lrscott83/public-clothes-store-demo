@@ -1,4 +1,5 @@
 import { formatMoney } from '@store-mgmt/storefront/config';
+import type { Warehouse } from '../../domain/types';
 
 export interface ClientStepDraft {
   name: string;
@@ -20,11 +21,22 @@ export interface ClientStepProps {
     quantity: number;
   }>;
   cartTotalUSD: number;
+  eligible: Warehouse[];
+  warehouseId: string | null;
+  onWarehouseSelect: (warehouseId: string) => void;
 }
 
 const MONEY = { locale: 'en-US', currency: 'USD' } as const;
 
-export function ClientStep({ draft, onChange, cartItems, cartTotalUSD }: ClientStepProps) {
+export function ClientStep({
+  draft,
+  onChange,
+  cartItems,
+  cartTotalUSD,
+  eligible,
+  warehouseId,
+  onWarehouseSelect,
+}: ClientStepProps) {
   function set<K extends keyof ClientStepDraft>(key: K, value: ClientStepDraft[K]) {
     onChange({ ...draft, [key]: value });
   }
@@ -32,85 +44,119 @@ export function ClientStep({ draft, onChange, cartItems, cartTotalUSD }: ClientS
   return (
     <section className="border-t border-border p-6">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Left column — form fields */}
-        <div className="rounded-lg border border-border bg-surface p-6">
-          <h2 className="text-xl font-semibold text-text">Cliente</h2>
+        {/* Left column — warehouse selector + form fields */}
+        <div className="flex flex-col gap-6">
+          {/* Warehouse selector — always first */}
+          <div className="rounded-lg border border-border bg-surface p-6">
+            <h2 className="mb-4 text-lg font-semibold text-text">Almacén de despacho</h2>
 
-          <div className="mt-4 flex flex-col gap-4">
-            <label className="flex flex-col gap-1 text-sm text-text">
-              Nombre
-              <input
-                type="text"
-                value={draft.name}
-                onChange={(event) => set('name', event.target.value)}
-                className="rounded border border-border px-3 py-2"
-              />
-            </label>
+            {eligible.length === 0 ? (
+              <p className="text-sm text-red-600">
+                Ningún almacén tiene stock suficiente para cubrir este pedido.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                {eligible.map((warehouse) => {
+                  const selected = warehouseId === warehouse.id;
+                  return (
+                    <button
+                      key={warehouse.id}
+                      type="button"
+                      onClick={() => onWarehouseSelect(warehouse.id)}
+                      className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors min-w-[140px] ${
+                        selected
+                          ? 'border-accent bg-accent/10 text-accent'
+                          : 'border-border bg-surface text-text hover:border-text-muted'
+                      }`}
+                    >
+                      {warehouse.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
-            <label className="flex flex-col gap-1 text-sm text-text">
-              Teléfono
-              <input
-                type="text"
-                value={draft.phone}
-                onChange={(event) => set('phone', event.target.value)}
-                className="rounded border border-border px-3 py-2"
-              />
-            </label>
+          {/* Client form */}
+          <div className="rounded-lg border border-border bg-surface p-6">
+            <h2 className="text-xl font-semibold text-text">Cliente</h2>
 
-            <fieldset className="flex flex-col gap-1 text-sm text-text">
-              <legend>Modalidad de entrega</legend>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="deliveryMode"
-                  value="domicilio"
-                  checked={draft.deliveryMode === 'domicilio'}
-                  onChange={() => set('deliveryMode', 'domicilio')}
-                />
-                Domicilio
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="deliveryMode"
-                  value="recogida"
-                  checked={draft.deliveryMode === 'recogida'}
-                  onChange={() => set('deliveryMode', 'recogida')}
-                />
-                Recogida
-              </label>
-            </fieldset>
-
-            {draft.deliveryMode === 'domicilio' && (
+            <div className="mt-4 flex flex-col gap-4">
               <label className="flex flex-col gap-1 text-sm text-text">
-                Dirección
+                Nombre
                 <input
                   type="text"
-                  required
-                  value={draft.address}
-                  onChange={(event) => set('address', event.target.value)}
+                  value={draft.name}
+                  onChange={(event) => set('name', event.target.value)}
                   className="rounded border border-border px-3 py-2"
                 />
               </label>
-            )}
 
-            <label className="flex items-center gap-2 text-sm text-text">
-              <input
-                type="checkbox"
-                checked={draft.needsChange}
-                onChange={(event) => set('needsChange', event.target.checked)}
-              />
-              ¿Lleva cambio?
-            </label>
+              <label className="flex flex-col gap-1 text-sm text-text">
+                Teléfono
+                <input
+                  type="text"
+                  value={draft.phone}
+                  onChange={(event) => set('phone', event.target.value)}
+                  className="rounded border border-border px-3 py-2"
+                />
+              </label>
 
-            <label className="flex flex-col gap-1 text-sm text-text">
-              Observaciones
-              <textarea
-                value={draft.observations}
-                onChange={(event) => set('observations', event.target.value)}
-                className="rounded border border-border px-3 py-2"
-              />
-            </label>
+              <fieldset className="flex flex-col gap-1 text-sm text-text">
+                <legend>Modalidad de entrega</legend>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="deliveryMode"
+                    value="domicilio"
+                    checked={draft.deliveryMode === 'domicilio'}
+                    onChange={() => set('deliveryMode', 'domicilio')}
+                  />
+                  Domicilio
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="deliveryMode"
+                    value="recogida"
+                    checked={draft.deliveryMode === 'recogida'}
+                    onChange={() => set('deliveryMode', 'recogida')}
+                  />
+                  Recogida
+                </label>
+              </fieldset>
+
+              {draft.deliveryMode === 'domicilio' && (
+                <label className="flex flex-col gap-1 text-sm text-text">
+                  Dirección
+                  <input
+                    type="text"
+                    required
+                    value={draft.address}
+                    onChange={(event) => set('address', event.target.value)}
+                    className="rounded border border-border px-3 py-2"
+                  />
+                </label>
+              )}
+
+              <label className="flex items-center gap-2 text-sm text-text">
+                <input
+                  type="checkbox"
+                  checked={draft.needsChange}
+                  onChange={(event) => set('needsChange', event.target.checked)}
+                />
+                ¿Lleva cambio?
+              </label>
+
+              <label className="flex flex-col gap-1 text-sm text-text">
+                Observaciones
+                <textarea
+                  value={draft.observations}
+                  onChange={(event) => set('observations', event.target.value)}
+                  className="rounded border border-border px-3 py-2"
+                />
+              </label>
+            </div>
           </div>
         </div>
 

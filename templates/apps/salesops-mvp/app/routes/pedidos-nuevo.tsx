@@ -4,7 +4,7 @@ import { ShoppingCart, X, Trash2 } from 'lucide-react';
 import { formatMoney } from '@store-mgmt/storefront/config';
 import { CartStep } from '../components/pedido/cart-step';
 import { ClientStep, type ClientStepDraft } from '../components/pedido/client-step';
-import { WarehouseStep } from '../components/pedido/warehouse-step';
+
 import { cartTotalUSD, convertTotal, formatConvertedTotal } from '../domain/cart';
 import { eligibleWarehouses, type CartLine } from '../domain/availability';
 import { GESTORES } from '../seed/constants';
@@ -15,7 +15,7 @@ export function meta(_args: Route.MetaArgs) {
   return [{ title: 'Nuevo pedido — Sales Ops Cockpit' }];
 }
 
-type Step = 'carrito' | 'cliente' | 'almacen';
+type Step = 'carrito' | 'cliente';
 
 // MVP has no auth: the wizard header shows the fixed demo gestor persona.
 const GESTOR = GESTORES[0];
@@ -32,7 +32,7 @@ function buildEmptyClientDraft(): ClientStepDraft {
 }
 
 /**
- * Three-step wizard container (carrito → cliente → almacen) driven by local
+ * Two-step wizard container (carrito → cliente+almacen) driven by local
  * `useState` — no nested routes, no RR7 `<Form>`/action/loader navigation
  * (sidesteps the jsdom+undici `AbortSignal` gotcha). Confirm is a plain
  * `onClick` that calls `createOrder` and renders an in-place success view
@@ -58,18 +58,14 @@ export default function PedidosNuevo() {
     setStep('cliente');
   }
 
-  function handleClienteNext() {
-    const canAdvance =
+  function handleConfirm() {
+    const canConfirm =
       clientDraft.name.trim() !== '' &&
       clientDraft.phone.trim() !== '' &&
-      (clientDraft.deliveryMode !== 'domicilio' || clientDraft.address.trim() !== '');
-    if (!canAdvance) return;
-    setWarehouseId(null);
-    setStep('almacen');
-  }
-
-  function handleConfirm() {
-    if (!warehouseId || eligible.length === 0) return;
+      (clientDraft.deliveryMode !== 'domicilio' || clientDraft.address.trim() !== '') &&
+      warehouseId !== null &&
+      eligible.length > 0;
+    if (!canConfirm) return;
 
     const items: OrderItem[] = cart.map((line) => {
       const product = products.find((item) => item.id === line.productId);
@@ -125,6 +121,13 @@ export default function PedidosNuevo() {
     setCart(cart.filter((line) => line.productId !== productId));
   }
 
+  // Auto-select first eligible warehouse when none is selected
+  useEffect(() => {
+    if (warehouseId === null && eligible.length > 0) {
+      setWarehouseId(eligible[0].id);
+    }
+  }, [eligible, warehouseId]);
+
   useEffect(() => {
     if (!popupOpen) return;
     function onKey(e: KeyboardEvent) {
@@ -152,20 +155,23 @@ export default function PedidosNuevo() {
 
       {/* Cart Floating Bar — visible across all steps */}
       {(() => {
-        const nextLabel = step === 'almacen' ? 'Confirmar' : 'Siguiente';
+        const nextLabel = step === 'cliente' ? 'Confirmar' : 'Siguiente';
         const nextDisabled = (() => {
           if (step === 'carrito') return cart.length === 0;
-          if (step === 'almacen') return !warehouseId || eligible.length === 0;
-          return false;
+          return (
+            !warehouseId ||
+            eligible.length === 0 ||
+            clientDraft.name.trim() === '' ||
+            clientDraft.phone.trim() === '' ||
+            (clientDraft.deliveryMode === 'domicilio' && clientDraft.address.trim() === '')
+          );
         })();
         const handleNext = () => {
           if (step === 'carrito') handleCarritoNext();
-          else if (step === 'cliente') handleClienteNext();
           else handleConfirm();
         };
         const handleBack = () => {
-          if (step === 'cliente') setStep('carrito');
-          else if (step === 'almacen') setStep('cliente');
+          setStep('carrito');
         };
 
         return (
@@ -232,14 +238,9 @@ export default function PedidosNuevo() {
             return { productId: line.productId, name: product.name, image: product.image, price: product.price, quantity: line.quantity };
           })}
           cartTotalUSD={total}
-        />
-      )}
-
-      {step === 'almacen' && (
-        <WarehouseStep
           eligible={eligible}
           warehouseId={warehouseId}
-          onSelect={setWarehouseId}
+          onWarehouseSelect={setWarehouseId}
         />
       )}
 

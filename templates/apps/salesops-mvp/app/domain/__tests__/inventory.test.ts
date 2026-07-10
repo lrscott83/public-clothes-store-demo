@@ -17,8 +17,8 @@ function buildProduct(overrides: Partial<SeededProduct> = {}): SeededProduct {
 }
 
 const warehouses: Warehouse[] = [
-  { id: 'wh-1', name: 'Nave Central' },
-  { id: 'wh-2', name: 'Sucursal Este' },
+  { id: 'wh-1', name: 'Pinar del Río' },
+  { id: 'wh-2', name: 'Consolación del Sur' },
 ];
 
 function buildState(overrides: Partial<SeedState> = {}): SeedState {

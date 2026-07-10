@@ -55,20 +55,21 @@ describe('PedidosNuevo wizard container', () => {
     // Default deliveryMode is domicilio -> address field visible.
     expect(screen.getByLabelText(/dirección/i)).toBeInTheDocument();
 
-    // Blocked: name+phone empty.
-    fireEvent.click(screen.getByRole('button', { name: /^siguiente$/i }));
-    expect(screen.queryByRole('radio', { name: /^(?!domicilio$)(?!recogida$).+/i })).not.toBeInTheDocument();
+    // Blocked: name+phone empty. Button now says Confirmar.
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
+    // Still on Cliente: "Almacén de despacho" heading visible (warehouse selector on same page).
+    expect(screen.getByText('Almacén de despacho')).toBeInTheDocument();
     expect(screen.getByLabelText(/nombre/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/nombre/i), { target: { value: 'Ana Pérez' } });
     fireEvent.change(screen.getByLabelText(/teléfono/i), { target: { value: '555-1234' } });
 
     // Domicilio requires address -> still blocked (address input still empty).
-    fireEvent.click(screen.getByRole('button', { name: /^siguiente$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
     expect(screen.getByLabelText(/nombre/i)).toBeInTheDocument();
   });
 
-  it('recogida mode advances to Almacén without requiring an address', () => {
+  it('recogida mode confirms the order without requiring an address', () => {
     const { products } = loadSeedState();
     const product = products[0];
     render(<PedidosNuevo />);
@@ -79,11 +80,10 @@ describe('PedidosNuevo wizard container', () => {
     fireEvent.click(screen.getByRole('radio', { name: /recogida/i }));
     fireEvent.change(screen.getByLabelText(/nombre/i), { target: { value: 'Ana' } });
     fireEvent.change(screen.getByLabelText(/teléfono/i), { target: { value: '555' } });
-    fireEvent.click(screen.getByRole('button', { name: /^siguiente$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
 
-    // No longer on Cliente (address/nombre inputs gone) — reached Almacén.
-    expect(screen.queryByLabelText(/nombre/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /almacén/i })).toBeInTheDocument();
+    // Order created — success view replaces the wizard.
+    expect(screen.getByText(/pedido creado/i)).toBeInTheDocument();
   });
 
   it('renders a floating bar with Total: $0.00 and a cart icon (no badge) when cart is empty', () => {
@@ -216,9 +216,8 @@ describe('PedidosNuevo wizard container', () => {
     fireEvent.change(screen.getByLabelText(/nombre/i), { target: { value: 'Ana Pérez' } });
     fireEvent.change(screen.getByLabelText(/teléfono/i), { target: { value: '555-1234' } });
     fireEvent.change(screen.getByLabelText(/dirección/i), { target: { value: 'Calle 1' } });
-    fireEvent.click(screen.getByRole('button', { name: /^siguiente$/i }));
 
-    fireEvent.click(screen.getByRole('radio', { name: new RegExp(escapeRegExp(warehouseName), 'i') }));
+    // Warehouse is auto-selected by the effect; just confirm.
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
 
     expect(screen.getByText(/pedido creado/i)).toBeInTheDocument();
