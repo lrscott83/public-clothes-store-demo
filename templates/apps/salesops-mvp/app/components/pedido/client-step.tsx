@@ -31,13 +31,13 @@ export function ClientStep({ draft, onChange, cartItems, cartTotalUSD }: ClientS
   }
 
   return (
-    <section>
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+    <section className="border-t border-border p-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Left column — form fields */}
-        <div>
+        <div className="rounded-lg border border-border bg-surface p-6">
           <h2 className="text-xl font-semibold text-text">Cliente</h2>
 
-          <div className="mt-4 flex flex-col gap-3">
+          <div className="mt-4 flex flex-col gap-4">
             <label className="flex flex-col gap-1 text-sm text-text">
               Nombre
               <input
@@ -126,7 +126,7 @@ export function ClientStep({ draft, onChange, cartItems, cartTotalUSD }: ClientS
         </div>
 
         {/* Right column — readonly cart summary */}
-        <div>
+        <div className="rounded-lg border border-border bg-surface p-6">
           <h2 className="text-xl font-semibold text-text">Resumen del pedido</h2>
 
           {cartItems.length === 0 ? (
