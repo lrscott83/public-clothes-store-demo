@@ -226,7 +226,7 @@ export default function PedidosNuevo() {
       })()}
 
       {step === 'carrito' && (
-        <CartStep catalog={products} cart={cart} onChange={setCart} onNext={handleCarritoNext} />
+        <CartStep catalog={products} cart={cart} onChange={setCart} />
       )}
 
       {step === 'cliente' && (

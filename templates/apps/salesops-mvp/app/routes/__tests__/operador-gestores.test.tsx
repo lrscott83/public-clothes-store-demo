@@ -22,9 +22,10 @@ function buildGestorOrder(overrides: Partial<Order> = {}): Order {
     id: 'order-test-1',
     state: 'creado',
     gestorId: 'gestor-1',
-    client: { name: 'Juan Pérez', phone: '+53 5555 0100', address: 'Calle 123' },
+    warehouseId: 'warehouse-1',
+    client: { id: 'client-1', name: 'Juan Pérez', phone: '+53 5555 0100', address: 'Calle 123' },
     payment: { method: 'USD' },
-    items: [{ productId: 'prod-1', name: 'Camisa', quantity: 2, priceUSD: 25, commissionMN: 0 }],
+    items: [{ productId: 'prod-1', quantity: 2, priceUSD: 25, commissionMN: 0 }],
     totalUSD: 50,
     exchangeRateSnapshot: { usdToMn: 680 },
     totalMN: 34000,
@@ -107,8 +108,8 @@ describe('OperadorGestores — columns', () => {
 
   it('places orders in the correct column by state', () => {
     const orders = [
-      buildGestorOrder({ id: 'o-creado', state: 'creado', client: { name: 'Creado Client', phone: '', address: '' } }),
-      buildGestorOrder({ id: 'o-entregado', state: 'entregado', client: { name: 'Entregado Client', phone: '', address: '' } }),
+      buildGestorOrder({ id: 'o-creado', state: 'creado', client: { id: 'client-creado', name: 'Creado Client', phone: '', address: '' } }),
+      buildGestorOrder({ id: 'o-entregado', state: 'entregado', client: { id: 'client-entregado', name: 'Entregado Client', phone: '', address: '' } }),
     ];
     setupStore(orders);
     render(<OperadorGestores />);
