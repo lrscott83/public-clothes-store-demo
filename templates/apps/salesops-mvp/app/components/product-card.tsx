@@ -15,6 +15,7 @@ export interface ProductCardProps {
   locale: string;
   currency: string;
   cart?: ProductCardCartProps;
+  showDescription?: boolean;
 }
 
 /**
@@ -26,7 +27,7 @@ export interface ProductCardProps {
  * optional cart controls (ShoppingCart icon / quantity stepper). When `cart`
  * prop is absent, the render is identical to the original (non-cart usage).
  */
-export function ProductCard({ product, locale, currency, cart }: ProductCardProps) {
+export function ProductCard({ product, locale, currency, cart, showDescription = true }: ProductCardProps) {
   const hasBadge = product.isNew || product.discount;
 
   return (
@@ -56,7 +57,9 @@ export function ProductCard({ product, locale, currency, cart }: ProductCardProp
 
       <div className="relative p-4">
         <h3 className="text-lg font-semibold text-text">{product.name}</h3>
-        <p className="mt-1 text-sm text-text-muted">{product.description}</p>
+        {showDescription && (
+          <p className="mt-1 text-sm text-text-muted">{product.description}</p>
+        )}
 
         <div className="mt-2 flex items-center gap-2">
           <span className="text-lg font-bold text-accent">

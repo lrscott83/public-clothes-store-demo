@@ -113,4 +113,27 @@ describe('ProductCard', () => {
     render(<ProductCard product={buildProduct()} locale="en-US" currency="USD" />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  it('hides description when showDescription is false', () => {
+    render(
+      <ProductCard
+        product={buildProduct({ description: 'Hidden desc' })}
+        locale="en-US"
+        currency="USD"
+        showDescription={false}
+      />,
+    );
+    expect(screen.queryByText('Hidden desc')).not.toBeInTheDocument();
+  });
+
+  it('shows description by default when showDescription is not provided', () => {
+    render(
+      <ProductCard
+        product={buildProduct({ description: 'Default desc' })}
+        locale="en-US"
+        currency="USD"
+      />,
+    );
+    expect(screen.getByText('Default desc')).toBeInTheDocument();
+  });
 });
