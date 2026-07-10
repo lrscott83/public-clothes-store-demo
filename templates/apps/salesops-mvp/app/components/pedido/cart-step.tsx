@@ -125,14 +125,16 @@ export function CartStep({ catalog, cart, onChange, onNext }: CartStepProps) {
       )}
       </div>
 
-      <button
-        type="button"
-        onClick={onNext}
-        disabled={cart.length === 0}
-        className="mt-6 rounded bg-primary px-4 py-2 text-white disabled:opacity-50"
-      >
-        Siguiente
-      </button>
+      <div className="mt-6 flex justify-end">
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={cart.length === 0}
+          className="rounded bg-primary px-4 py-2 text-white disabled:opacity-50"
+        >
+          Siguiente
+        </button>
+      </div>
     </section>
   );
 }
