@@ -12,6 +12,10 @@ export function enrichProducts(catalog: Pick<CatalogData, 'products'>): SeededPr
     const { commissionMN } = deriveCommission(product.name, product.categoryId);
     return {
       ...product,
+      // catalog.json stores relative image paths (e.g. "products/...").
+      // The public/ folder mirrors them under /catalog/appliances/products/...
+      // so prepend the base path to get a server-absolute URL.
+      image: `/catalog/appliances/${product.image}`,
       costUSD: Math.round(product.price * 0.6),
       commissionMN,
     };
