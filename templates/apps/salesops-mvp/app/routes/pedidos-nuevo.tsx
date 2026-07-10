@@ -168,42 +168,40 @@ export default function PedidosNuevo() {
 
         return (
           <div className="sticky top-0 z-40 -mx-8 mb-6 border-b border-border bg-surface px-8 py-3">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center justify-end gap-3">
               <span className="text-lg font-bold text-text">
                 Total: {formatMoney(total, MONEY)}
               </span>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPopupOpen(true)}
-                  className="relative rounded-full p-2 hover:bg-primary-light transition-colors"
-                  aria-label="Abrir carrito"
-                >
-                  <ShoppingCart size={20} className="text-primary" />
-                  {cart.length > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-white">
-                      {cart.length}
-                    </span>
-                  )}
-                </button>
-                {step !== 'carrito' && (
-                  <button
-                    type="button"
-                    onClick={handleBack}
-                    className="rounded border border-border px-4 py-2 text-sm font-medium text-text"
-                  >
-                    Atrás
-                  </button>
+              <button
+                type="button"
+                onClick={() => setPopupOpen(true)}
+                className="relative rounded-full p-2 hover:bg-primary-light transition-colors"
+                aria-label="Abrir carrito"
+              >
+                <ShoppingCart size={20} className="text-primary" />
+                {cart.length > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-white">
+                    {cart.length}
+                  </span>
                 )}
+              </button>
+              {step !== 'carrito' && (
                 <button
                   type="button"
-                  onClick={handleNext}
-                  disabled={nextDisabled}
-                  className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  onClick={handleBack}
+                  className="rounded border border-border px-4 py-2 text-sm font-medium text-text"
                 >
-                  {nextLabel}
+                  Atrás
                 </button>
-              </div>
+              )}
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={nextDisabled}
+                className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {nextLabel}
+              </button>
             </div>
           </div>
         );
@@ -217,6 +215,11 @@ export default function PedidosNuevo() {
         <ClientStep
           draft={clientDraft}
           onChange={setClientDraft}
+          cartItems={cart.map((line) => {
+            const product = products.find((p) => p.id === line.productId)!;
+            return { productId: line.productId, name: product.name, image: product.image, price: product.price, quantity: line.quantity };
+          })}
+          cartTotalUSD={total}
         />
       )}
 

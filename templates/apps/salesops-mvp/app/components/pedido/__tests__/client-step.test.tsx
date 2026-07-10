@@ -15,9 +15,11 @@ function buildDraft(overrides: Partial<ClientStepDraft> = {}): ClientStepDraft {
   };
 }
 
+const emptyCart = { cartItems: [], cartTotalUSD: 0 };
+
 describe('ClientStep', () => {
   it('shows the address field when deliveryMode is domicilio', () => {
-    render(<ClientStep draft={buildDraft()} onChange={vi.fn()} />);
+    render(<ClientStep draft={buildDraft()} onChange={vi.fn()} {...emptyCart} />);
 
     expect(screen.getByLabelText(/dirección/i)).toBeInTheDocument();
   });
@@ -27,6 +29,7 @@ describe('ClientStep', () => {
       <ClientStep
         draft={buildDraft({ deliveryMode: 'recogida' })}
         onChange={vi.fn()}
+        {...emptyCart}
       />,
     );
 
@@ -36,7 +39,7 @@ describe('ClientStep', () => {
   it('typing in the name field calls onChange with the updated draft', () => {
     const onChange = vi.fn();
     const draft = buildDraft();
-    render(<ClientStep draft={draft} onChange={onChange} />);
+    render(<ClientStep draft={draft} onChange={onChange} {...emptyCart} />);
 
     fireEvent.change(screen.getByLabelText(/nombre/i), { target: { value: 'Ana' } });
 
@@ -46,10 +49,32 @@ describe('ClientStep', () => {
   it('selecting "Recogida" calls onChange with deliveryMode "recogida"', () => {
     const onChange = vi.fn();
     const draft = buildDraft();
-    render(<ClientStep draft={draft} onChange={onChange} />);
+    render(<ClientStep draft={draft} onChange={onChange} {...emptyCart} />);
 
     fireEvent.click(screen.getByRole('radio', { name: /recogida/i }));
 
     expect(onChange).toHaveBeenCalledWith({ ...draft, deliveryMode: 'recogida' });
+  });
+
+  it('renders the readonly cart summary heading', () => {
+    render(<ClientStep draft={buildDraft()} onChange={vi.fn()} {...emptyCart} />);
+
+    expect(screen.getByText('Resumen del pedido')).toBeInTheDocument();
+  });
+
+  it('shows cart items details right column', () => {
+    render(
+      <ClientStep
+        draft={buildDraft()}
+        onChange={vi.fn()}
+        cartItems={[
+          { productId: 'p-1', name: 'Cafetera', image: '/img.jpg', price: 100, quantity: 2 },
+        ]}
+        cartTotalUSD={200}
+      />,
+    );
+
+    expect(screen.getByText('Cafetera')).toBeInTheDocument();
+    expect(screen.getAllByText('$200.00')).toHaveLength(2);
   });
 });
