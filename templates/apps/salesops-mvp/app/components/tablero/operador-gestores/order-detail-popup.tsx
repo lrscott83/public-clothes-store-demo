@@ -53,6 +53,15 @@ export function OrderDetailPopup({ order, gestor, onClose }: OrderDetailPopupPro
 
   const digits = gestor?.phone?.replace(/\D/g, '');
 
+  // Show the total in the currency the client actually pays in; the exchange
+  // rate + equivalent are surfaced whenever a rate snapshot was captured.
+  const isMNPayment = order.payment.method === 'MN';
+  const usdTotalText = `$${order.totalUSD.toFixed(2)}`;
+  const mnTotalText =
+    order.totalMN !== undefined ? `${order.totalMN.toLocaleString('en-US')} Mn` : null;
+  const primaryTotal = isMNPayment && mnTotalText ? mnTotalText : usdTotalText;
+  const equivalentTotal = isMNPayment ? usdTotalText : mnTotalText;
+
   return (
     <div
       data-testid="detail-popup"
@@ -133,13 +142,16 @@ export function OrderDetailPopup({ order, gestor, onClose }: OrderDetailPopupPro
         <div className="mb-4">
           <h3 className="mb-2 text-sm font-semibold text-text">Pago</h3>
           <p className="text-sm text-text-muted">Método: {order.payment.method}</p>
-          <p className="text-sm text-text-muted">
-            Total USD: ${order.totalUSD.toFixed(2)}
-          </p>
-          {order.totalMN !== undefined && (
-            <p className="text-sm text-text-muted">
-              Total MN: {order.totalMN.toLocaleString('en-US')} Mn
-            </p>
+          <p className="text-sm text-text-muted">Total: {primaryTotal}</p>
+          {order.exchangeRateSnapshot && (
+            <>
+              <p className="text-sm text-text-muted">
+                Tasa de cambio: 1 USD = {order.exchangeRateSnapshot.usdToMn} MN
+              </p>
+              {equivalentTotal && (
+                <p className="text-sm text-text-muted">Equivalente: {equivalentTotal}</p>
+              )}
+            </>
           )}
         </div>
 

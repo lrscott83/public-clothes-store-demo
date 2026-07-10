@@ -102,6 +102,21 @@ describe('seed-store', () => {
       expect(order.exchangeRateSnapshot).toBeUndefined();
     });
 
+    it('snapshots the current exchange rate + totalMN when the payment method is non-USD (MN)', async () => {
+      const { createOrder, loadSeedState } = await import('../seed-store');
+      const { cartTotalUSD } = await import('../../domain/cart');
+      const state = loadSeedState();
+      const rate = state.exchangeRates.usdToMn;
+
+      const mnInput: CreateOrderInput = { ...baseInput, payment: { method: 'MN' } };
+      const order = createOrder(mnInput, new Date('2026-07-09T12:00:00.000Z'));
+
+      expect(order.exchangeRateSnapshot).toEqual({ usdToMn: rate });
+      expect(order.totalMN).toBe(Math.round(cartTotalUSD(items) * rate));
+      // commission is still frozen only at verification, not at creation.
+      expect(order.commissionMN).toBeUndefined();
+    });
+
     it('assigns unique, incrementing order-user-N ids', async () => {
       const { createOrder, loadSeedState } = await import('../seed-store');
       loadSeedState();

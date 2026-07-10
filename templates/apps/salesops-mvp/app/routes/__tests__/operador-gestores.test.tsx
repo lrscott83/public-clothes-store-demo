@@ -267,7 +267,8 @@ describe('OperadorGestores — OrderDetailPopup', () => {
     expect(popup.textContent).toContain('Detalle del pedido');
     expect(popup.textContent).not.toContain('Pedido o1');
     expect(popup.textContent).toContain('Método: USD');
-    expect(popup.textContent).toContain('Total USD: $50.00');
+    expect(popup.textContent).toContain('Total: $50.00');
+    expect(popup.textContent).toContain('Tasa de cambio: 1 USD = 680 MN');
     expect(popup.textContent).toContain('prod-1');
   });
 });

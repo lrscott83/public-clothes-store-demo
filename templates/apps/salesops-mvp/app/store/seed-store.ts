@@ -78,14 +78,20 @@ export interface CreateOrderInput {
  * Appends a new gestor-created `Order` (state `'creado'`) to the persisted
  * SeedState and returns it. The id is `order-user-${n}`, where `n` is the
  * count of existing `order-user-*` orders — NOT array length, since seeded
- * order ids are non-contiguous and would collide. `commissionMN`, `totalMN`,
- * and `exchangeRateSnapshot` are intentionally left unset; they are filled
- * in by later verification/commission stages.
+ * order ids are non-contiguous and would collide. `commissionMN` is left unset
+ * until verification. `exchangeRateSnapshot`/`totalMN` are captured now for
+ * non-USD payments (the sale-time rate is needed to know the local-currency
+ * amount) and left unset for USD orders until verification freezes them.
  */
 export function createOrder(input: CreateOrderInput, now: Date = new Date()): Order {
   const state = loadSeedState();
   const existingUserOrders = state.orders.filter((order) => order.id.startsWith('order-user-'));
   const id = `order-user-${existingUserOrders.length}`;
+
+  const totalUSD = cartTotalUSD(input.items);
+  const exchangeRateSnapshot =
+    input.payment.method !== 'USD' ? { usdToMn: state.exchangeRates.usdToMn } : undefined;
+  const totalMN = exchangeRateSnapshot ? Math.round(totalUSD * exchangeRateSnapshot.usdToMn) : undefined;
 
   const order: Order = {
     id,
@@ -95,7 +101,9 @@ export function createOrder(input: CreateOrderInput, now: Date = new Date()): Or
     warehouseId: input.warehouseId,
     gestorId: input.gestorId,
     state: 'creado',
-    totalUSD: cartTotalUSD(input.items),
+    totalUSD,
+    exchangeRateSnapshot,
+    totalMN,
     saleType: input.saleType,
     observations: input.observations,
     createdAt: now.toISOString(),

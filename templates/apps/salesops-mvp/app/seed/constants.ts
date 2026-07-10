@@ -61,6 +61,16 @@ export const EXCHANGE_RATES = {
 /** Pool of possible frozen per-order rate snapshots (verificado+ orders). */
 export const RATE_SNAPSHOT_POOL: number[] = [660, 670, 680, 690];
 
+/**
+ * Payment-method distribution: most sales are settled in USD, a meaningful
+ * slice in MN (moneda nacional). MN orders always carry a rate snapshot so the
+ * amount charged in local currency is known at the moment of sale.
+ */
+export const PAYMENT_METHOD_WEIGHTS: Array<{ method: string; weight: number }> = [
+  { method: 'USD', weight: 60 },
+  { method: 'MN', weight: 40 },
+];
+
 /** State funnel weights (out of 100) by day-offset bucket — see design.md. */
 export const STATE_FUNNEL_WEIGHTS: Array<{
   maxOffset: number;
@@ -101,4 +111,6 @@ export const CLIENT_NAME_POOL: string[] = [
 ];
 
 export const STORAGE_KEY = 'salesops-mvp:seed:v1';
-export const VERSION = 2;
+// Bumped to 3 when seed orders gained varied payment methods (USD/MN) + their
+// sale-time rate snapshots — forces a regenerate over stale all-USD v2 seeds.
+export const VERSION = 3;

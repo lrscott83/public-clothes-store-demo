@@ -37,6 +37,7 @@ import {
   MAX_ORDERS_PER_DAY,
   MIN_INVENTORY_QTY,
   MIN_ORDERS_PER_DAY,
+  PAYMENT_METHOD_WEIGHTS,
   RATE_SNAPSHOT_POOL,
   SEED,
   STATE_FUNNEL_WEIGHTS,
@@ -178,13 +179,19 @@ function buildOrder(
   const createdAtIso = new Date(dayMs).toISOString();
   const stamps = buildStateTimestamps(rng, dayMs, reachedIndex, anchorMs);
 
+  const paymentMethod = pickWeighted(rng, PAYMENT_METHOD_WEIGHTS).method;
+  const isNonUSD = paymentMethod !== 'USD';
   const isVerifiedOrLater = reachedIndex >= 1;
-  const exchangeRateSnapshot = isVerifiedOrLater
-    ? { usdToMn: RATE_SNAPSHOT_POOL[pickInt(rng, 0, RATE_SNAPSHOT_POOL.length - 1)] }
-    : undefined;
+  // A rate snapshot is captured when the order is verified+ (historical rate at
+  // verification) OR whenever it's settled in a non-USD currency (the rate at
+  // the moment of sale is needed to know the amount charged in local currency).
+  const exchangeRateSnapshot =
+    isVerifiedOrLater || isNonUSD
+      ? { usdToMn: RATE_SNAPSHOT_POOL[pickInt(rng, 0, RATE_SNAPSHOT_POOL.length - 1)] }
+      : undefined;
+  // Commission is still frozen only at verification, independent of payment method.
   const commissionMN = isVerifiedOrLater ? sumOrderCommission(items) : undefined;
-  const totalMN =
-    isVerifiedOrLater && exchangeRateSnapshot ? Math.round(totalUSD * exchangeRateSnapshot.usdToMn) : undefined;
+  const totalMN = exchangeRateSnapshot ? Math.round(totalUSD * exchangeRateSnapshot.usdToMn) : undefined;
 
   const clientName = CLIENT_NAME_POOL[pickInt(rng, 0, CLIENT_NAME_POOL.length - 1)];
   const gestor = GESTORES[pickInt(rng, 0, GESTORES.length - 1)];
@@ -195,7 +202,7 @@ function buildOrder(
     id: `order-${orderIndex}`,
     items,
     client: { id: `client-${orderIndex}`, name: clientName },
-    payment: { method: 'USD' },
+    payment: { method: paymentMethod },
     warehouseId: warehouse.id,
     gestorId: gestor.id,
     transportistaId: transportista?.id,
