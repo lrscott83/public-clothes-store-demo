@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { Route } from './+types/operador-gestores';
-import { GestorOrderList } from '../components/tablero/operador-gestores/gestor-order-list';
+import { KanbanBoard } from '../components/tablero/kanban-board';
+import { GestorOrderCard } from '../components/tablero/operador-gestores/gestor-order-card';
 import { OrderDetailPopup } from '../components/tablero/operador-gestores/order-detail-popup';
 import type { Order } from '../domain/types';
 import { GESTORES } from '../seed/constants';
@@ -11,10 +12,9 @@ export function meta(_args: Route.MetaArgs) {
 }
 
 /**
- * Flat-list container for gestor orders. Renders all orders in a single
- * scrollable column regardless of state. Actions (Detalles, Aceptar, Pagar
- * Comisión) live in a gated dropdown per card. No kanban board, no review
- * view — the popup is a read-only detail overlay.
+ * Gestor kanban board. One column per order state, each card shows the
+ * assigned gestor's info, client details, totals, and an action dropdown
+ * (Detalles, Aceptar, Pagar Comisión) gated by order state.
  */
 export default function OperadorGestores() {
   const [orders, setOrders] = useState<Order[]>(() => loadSeedState().orders);
@@ -46,12 +46,17 @@ export default function OperadorGestores() {
   return (
     <main className="p-8">
       <h1 className="text-2xl font-bold text-text">Operador de gestores</h1>
-      <GestorOrderList
+      <KanbanBoard
         orders={orders}
-        gestorMap={gestorMap}
-        onDetalles={handleDetalles}
-        onVerifyOrder={handleVerifyOrder}
-        onMarkCommissionPaid={handleMarkCommissionPaid}
+        renderCard={(order) => (
+          <GestorOrderCard
+            order={order}
+            gestor={gestorMap[order.gestorId]}
+            onDetalles={handleDetalles}
+            onVerifyOrder={handleVerifyOrder}
+            onMarkCommissionPaid={handleMarkCommissionPaid}
+          />
+        )}
       />
       {selectedOrder && (
         <OrderDetailPopup

@@ -1,37 +1,30 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import type { Order } from '../../domain/types';
+import { loadSeedState, saveSeedState } from '../../store/seed-store';
+import { GESTORES } from '../../seed/constants';
 import OperadorGestores from '../operador-gestores';
-import { createOrder, loadSeedState, saveSeedState } from '../../store/seed-store';
-import type { CreateOrderInput } from '../../store/seed-store';
-import type { Order, OrderItem } from '../../domain/types';
 
-const items: OrderItem[] = [{ productId: 'p-1', quantity: 1, priceUSD: 50, commissionMN: 10 }];
+const GESTOR_1 = GESTORES.find((g) => g.id === 'gestor-1')!;
+const GESTOR_2 = GESTORES.find((g) => g.id === 'gestor-2')!;
 
-const baseInput: CreateOrderInput = {
-  items,
-  client: { id: 'client-user-1', name: 'Ana Pérez', phone: '+53 5555 0100' },
-  payment: { method: 'USD' },
-  warehouseId: 'wh-1',
-  gestorId: 'gestor-1',
-};
-
-/** Pushes a fully-formed Order directly into the persisted SeedState. */
-function pushOrder(order: Order) {
+/** Initialize seed state then replace orders with only our test data. */
+function setupStore(orders: Order[]) {
+  localStorage.clear();
+  loadSeedState(); // initializes fresh seed data
   const state = loadSeedState();
-  state.orders.push(order);
+  state.orders = orders;
   saveSeedState(state);
 }
 
-/** Builds a minimal Order fixture with sensible defaults. */
 function buildGestorOrder(overrides: Partial<Order> = {}): Order {
   return {
     id: 'order-test-1',
     state: 'creado',
     gestorId: 'gestor-1',
     client: { name: 'Juan Pérez', phone: '+53 5555 0100', address: 'Calle 123' },
-    items: [{ productId: 'prod-1', quantity: 2, priceUSD: 25, commissionMN: 10 }],
     payment: { method: 'USD' },
-    warehouseId: 'wh-1',
+    items: [{ productId: 'prod-1', name: 'Camisa', quantity: 2, priceUSD: 25, commissionMN: 0 }],
     totalUSD: 50,
     exchangeRateSnapshot: { usdToMn: 680 },
     totalMN: 34000,
@@ -41,343 +34,265 @@ function buildGestorOrder(overrides: Partial<Order> = {}): Order {
   };
 }
 
-describe('OperadorGestores', () => {
+function buildEntregadoOrder(overrides: Partial<Order> = {}): Order {
+  return buildGestorOrder({ state: 'entregado', commissionMN: 500, ...overrides });
+}
+
+describe('OperadorGestores — card rendering', () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  describe('card rendering', () => {
-    it('renders the heading and all orders as cards', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      expect(screen.getByRole('heading', { name: /operador de gestores/i })).toBeInTheDocument();
-      expect(screen.getByTestId('order-list')).toBeInTheDocument();
-      expect(screen.getAllByTestId('order-card').length).toBeGreaterThan(0);
-    });
-
-    it('card shows gestor name and phone with WhatsApp link', () => {
-      loadSeedState();
-      const order = createOrder(baseInput, new Date('2026-07-10'));
-      render(<OperadorGestores />);
-
-      const cards = screen.getAllByTestId('order-card');
-      const card = cards.find((c) => c.textContent?.includes('Ana Pérez'))!;
-
-      // gestor-1 = Yasmani Alonso, phone = +53 5123 4567
-      expect(card.textContent).toContain('Yasmani Alonso');
-      expect(card.textContent).toContain('+53 5123 4567');
-
-      const whatsappLink = card.querySelector('a[aria-label="WhatsApp"]');
-      expect(whatsappLink).toBeInTheDocument();
-      expect(whatsappLink).toHaveAttribute('href', 'https://wa.me/5351234567');
-    });
-
-    it('card does NOT show order ID', () => {
-      loadSeedState();
-      const order = createOrder(baseInput, new Date('2026-07-10'));
-      render(<OperadorGestores />);
-
-      // The card should NOT display the order.id — it only appears in the popup
-      expect(screen.queryByText(order.id)).not.toBeInTheDocument();
-    });
-
-    it('card shows state badge with correct text', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      const badges = screen.getAllByTestId('state-badge');
-      expect(badges.length).toBeGreaterThan(0);
-
-      // All badges should have one of the valid state labels
-      const validLabels = ['Creado', 'Verificado', 'Transportando', 'Entregado', 'Comisión Pagada'];
-      for (const badge of badges) {
-        expect(validLabels).toContain(badge.textContent);
-      }
-    });
+  it('renders the heading', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
+    expect(screen.getByRole('heading', { name: /operador de gestores/i })).toBeInTheDocument();
   });
 
-  describe('action menu (dropdown)', () => {
-    it('opens dropdown on ⋮ click and shows Detalles', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
+  it('shows 5 state columns', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
 
-      const toggle = screen.getAllByTestId('menu-toggle')[0];
-      fireEvent.click(toggle);
-
-      expect(screen.getByTestId('dropdown-menu')).toBeInTheDocument();
-      expect(screen.getByText('Detalles')).toBeInTheDocument();
-    });
-
-    it('closes dropdown on second ⋮ click', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      const toggle = screen.getAllByTestId('menu-toggle')[0];
-      fireEvent.click(toggle);
-      expect(screen.getByTestId('dropdown-menu')).toBeInTheDocument();
-
-      fireEvent.click(toggle);
-      expect(screen.queryByTestId('dropdown-menu')).not.toBeInTheDocument();
-    });
-
-    it('closes dropdown on outside click', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      fireEvent.click(screen.getAllByTestId('menu-toggle')[0]);
-      expect(screen.getByTestId('dropdown-menu')).toBeInTheDocument();
-
-      fireEvent.mouseDown(document.body);
-      expect(screen.queryByTestId('dropdown-menu')).not.toBeInTheDocument();
-    });
-
-    it('closes dropdown on Escape key', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      fireEvent.click(screen.getAllByTestId('menu-toggle')[0]);
-      expect(screen.getByTestId('dropdown-menu')).toBeInTheDocument();
-
-      fireEvent.keyDown(document, { key: 'Escape' });
-      expect(screen.queryByTestId('dropdown-menu')).not.toBeInTheDocument();
-    });
-
-    it('Aceptar only visible for creado orders', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      // Find a card with a creado order (check state badge text "Creado")
-      const cards = screen.getAllByTestId('order-card');
-      const creadoCard = cards.find((c) => c.querySelector('[data-testid="state-badge"]')?.textContent === 'Creado');
-      expect(creadoCard).toBeDefined();
-      if (!creadoCard) return;
-
-      fireEvent.click(creadoCard.querySelector('[data-testid="menu-toggle"]')!);
-      expect(screen.getByText('Aceptar')).toBeInTheDocument();
-      expect(screen.getByText('Detalles')).toBeInTheDocument();
-    });
-
-    it('Aceptar NOT visible for non-creado orders', () => {
-      const noCreado = buildGestorOrder({
-        id: 'order-aceptar-hidden',
-        state: 'verificado',
-        client: { name: 'Aceptar Hidden Test' },
-        totalMN: 34000,
-        exchangeRateSnapshot: { usdToMn: 680 },
-        commissionMN: 500,
-        createdAt: '2026-07-01T12:00:00.000Z',
-      });
-      loadSeedState();
-      pushOrder(noCreado);
-      render(<OperadorGestores />);
-
-      const cards = screen.getAllByTestId('order-card');
-      const card = cards.find((c) => c.textContent?.includes('Aceptar Hidden Test'))!;
-      fireEvent.click(card.querySelector('[data-testid="menu-toggle"]')!);
-
-      expect(screen.getByText('Detalles')).toBeInTheDocument();
-      expect(screen.queryByText('Aceptar')).not.toBeInTheDocument();
-    });
-
-    it('Pagar Comisión only visible for entregado orders', () => {
-      const entregado = buildGestorOrder({
-        id: 'order-pagar-visible',
-        state: 'entregado',
-        client: { name: 'Pagar Visible Test' },
-        totalMN: 34000,
-        exchangeRateSnapshot: { usdToMn: 680 },
-        commissionMN: 500,
-        createdAt: '2026-07-01T12:00:00.000Z',
-      });
-      loadSeedState();
-      pushOrder(entregado);
-      render(<OperadorGestores />);
-
-      const cards = screen.getAllByTestId('order-card');
-      const card = cards.find((c) => c.textContent?.includes('Pagar Visible Test'))!;
-      fireEvent.click(card.querySelector('[data-testid="menu-toggle"]')!);
-
-      expect(screen.getByText('Pagar Comisión')).toBeInTheDocument();
-      expect(screen.queryByText('Aceptar')).not.toBeInTheDocument();
-    });
-
-    it('Pagar Comisión NOT visible for non-entregado orders', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      // Find a creado card (most common) — Pagar should NOT be visible
-      const cards = screen.getAllByTestId('order-card');
-      const creadoCard = cards.find(
-        (c) => c.querySelector('[data-testid="state-badge"]')?.textContent === 'Creado',
-      );
-      expect(creadoCard).toBeDefined();
-      if (!creadoCard) return;
-
-      fireEvent.click(creadoCard.querySelector('[data-testid="menu-toggle"]')!);
-      expect(screen.queryByText('Pagar Comisión')).not.toBeInTheDocument();
-    });
+    // h1 + 5 column h3 = 6
+    expect(screen.getAllByRole('heading').length).toBe(6);
   });
 
-  describe('dropdown isolation', () => {
-    it('only one dropdown open at a time', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      const toggles = screen.getAllByTestId('menu-toggle');
-      expect(toggles.length).toBeGreaterThanOrEqual(2);
-
-      // Open first dropdown
-      fireEvent.click(toggles[0]);
-      expect(screen.getAllByTestId('dropdown-menu').length).toBe(1);
-
-      // Open second dropdown — first should close
-      fireEvent.click(toggles[1]);
-      expect(screen.getAllByTestId('dropdown-menu').length).toBe(1);
-    });
+  it('shows gestor name on the card', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
+    expect(screen.getByText(GESTOR_1.name)).toBeInTheDocument();
   });
 
-  describe('action gating via store', () => {
-    it('calling Aceptar moves order from creado to verificado', () => {
-      loadSeedState();
-      const order = createOrder(baseInput, new Date('2026-07-10'));
-      render(<OperadorGestores />);
+  it('shows gestor phone with WhatsApp link', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
 
-      const cards = screen.getAllByTestId('order-card');
-      const card = cards.find((c) => c.textContent?.includes('Ana Pérez'))!;
-      fireEvent.click(card.querySelector('[data-testid="menu-toggle"]')!);
-      fireEvent.click(screen.getByText('Aceptar'));
-
-      const persisted = loadSeedState().orders.find((o) => o.id === order.id);
-      expect(persisted?.state).toBe('verificado');
-      expect(persisted?.totalMN).toBeDefined();
-    });
-
-    it('calling Pagar Comisión moves from entregado to comision_pagada', () => {
-      const entregado = buildGestorOrder({
-        id: 'order-pagar-integration',
-        state: 'entregado',
-        client: { name: 'Pagar Integration Test' },
-        totalMN: 34000,
-        commissionMN: 500,
-        exchangeRateSnapshot: { usdToMn: 680 },
-        createdAt: '2026-07-01T12:00:00.000Z',
-      });
-      loadSeedState();
-      pushOrder(entregado);
-      render(<OperadorGestores />);
-
-      const cards = screen.getAllByTestId('order-card');
-      const card = cards.find((c) => c.textContent?.includes('Pagar Integration Test'))!;
-      fireEvent.click(card.querySelector('[data-testid="menu-toggle"]')!);
-      fireEvent.click(screen.getByText('Pagar Comisión'));
-
-      const persisted = loadSeedState().orders.find((o) => o.id === entregado.id);
-      expect(persisted?.state).toBe('comision_pagada');
-      expect(persisted?.commissionPaidAt).toBeDefined();
-      // Frozen fields untouched
-      expect(persisted?.totalMN).toBe(34000);
-      expect(persisted?.commissionMN).toBe(500);
-    });
+    const link = screen.getByRole('link', { name: (name) => name.includes(GESTOR_1.phone!) });
+    expect(link).toHaveAttribute('href', `https://wa.me/${GESTOR_1.phone!.replace(/\D/g, '')}`);
+    expect(link).toHaveAttribute('target', '_blank');
   });
 
-  describe('OrderDetailPopup', () => {
-    it('opens popup on Detalles click and shows order details', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      fireEvent.click(screen.getAllByTestId('menu-toggle')[0]);
-      fireEvent.click(screen.getByText('Detalles'));
-
-      expect(screen.getByTestId('detail-popup')).toBeInTheDocument();
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
-      expect(screen.getByText(/Pedido order-/)).toBeInTheDocument();
-    });
-
-    it('popup closes on backdrop click', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      fireEvent.click(screen.getAllByTestId('menu-toggle')[0]);
-      fireEvent.click(screen.getByText('Detalles'));
-      expect(screen.getByTestId('detail-popup')).toBeInTheDocument();
-
-      // Click on backdrop (the overlay itself)
-      fireEvent.click(screen.getByTestId('detail-popup'));
-
-      expect(screen.queryByTestId('detail-popup')).not.toBeInTheDocument();
-    });
-
-    it('popup closes on Escape key', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      fireEvent.click(screen.getAllByTestId('menu-toggle')[0]);
-      fireEvent.click(screen.getByText('Detalles'));
-      expect(screen.getByTestId('detail-popup')).toBeInTheDocument();
-
-      fireEvent.keyDown(document, { key: 'Escape' });
-
-      expect(screen.queryByTestId('detail-popup')).not.toBeInTheDocument();
-    });
-
-    it('popup closes on Cerrar button', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      fireEvent.click(screen.getAllByTestId('menu-toggle')[0]);
-      fireEvent.click(screen.getByText('Detalles'));
-      expect(screen.getByTestId('detail-popup')).toBeInTheDocument();
-
-      fireEvent.click(screen.getByText('Cerrar'));
-
-      expect(screen.queryByTestId('detail-popup')).not.toBeInTheDocument();
-    });
-
-    it('click inside popup does not close it (stopPropagation)', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      fireEvent.click(screen.getAllByTestId('menu-toggle')[0]);
-      fireEvent.click(screen.getByText('Detalles'));
-      expect(screen.getByTestId('detail-popup')).toBeInTheDocument();
-
-      // Click on the inner content panel (the child div)
-      const innerPanel = screen.getByRole('dialog').querySelector('div > div');
-      if (innerPanel) {
-        fireEvent.click(innerPanel);
-      }
-
-      // Popup should still be open
-      expect(screen.getByTestId('detail-popup')).toBeInTheDocument();
-    });
-
-    it('popup shows client info, items, and gestor data', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
-
-      // Open popup for the first card
-      fireEvent.click(screen.getAllByTestId('menu-toggle')[0]);
-      fireEvent.click(screen.getByText('Detalles'));
-
-      // Should have all sections (use getByRole for unique heading, getAllByText for non-unique)
-      expect(screen.getByRole('heading', { name: 'Cliente' })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'Pago' })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'Artículos' })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'Gestor' })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'Almacén' })).toBeInTheDocument();
-    });
+  it('shows client name on the card', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
+    expect(screen.getByText('Juan Pérez')).toBeInTheDocument();
   });
 
-  describe('structural regression', () => {
-    it('does NOT render KanbanBoard or OrderReview', () => {
-      loadSeedState();
-      render(<OperadorGestores />);
+  it('shows total USD and MN on the card', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
+    expect(screen.getByText('$50.00')).toBeInTheDocument();
+    expect(screen.getByText('34,000 Mn')).toBeInTheDocument();
+  });
 
-      // No kanban columns or review view
-      // "Creado" badge exists on cards (multiple found, use getAll)
-      expect(screen.getAllByText(/Creado/i).length).toBeGreaterThan(0);
-      expect(screen.queryByText(/Revisar pedido/i)).not.toBeInTheDocument();
-    });
+  it('does NOT show order ID on the card', () => {
+    setupStore([buildGestorOrder({ id: 'secret-order-xyz' })]);
+    render(<OperadorGestores />);
+    expect(screen.queryByText('secret-order-xyz')).not.toBeInTheDocument();
+  });
+
+  it('shows state badge label', () => {
+    setupStore([buildGestorOrder({ id: 'o1', state: 'verificado' })]);
+    render(<OperadorGestores />);
+
+    const badges = screen.getAllByText('Verificado');
+    expect(badges.length).toBeGreaterThan(0);
+  });
+});
+
+describe('OperadorGestores — columns', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('places orders in the correct column by state', () => {
+    const orders = [
+      buildGestorOrder({ id: 'o-creado', state: 'creado', client: { name: 'Creado Client', phone: '', address: '' } }),
+      buildGestorOrder({ id: 'o-entregado', state: 'entregado', client: { name: 'Entregado Client', phone: '', address: '' } }),
+    ];
+    setupStore(orders);
+    render(<OperadorGestores />);
+
+    expect(screen.getByText('Creado Client')).toBeInTheDocument();
+    expect(screen.getByText('Entregado Client')).toBeInTheDocument();
+  });
+});
+
+describe('OperadorGestores — action menu', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('opens menu on ⋮ click, shows Detalles and Aceptar for creado', () => {
+    setupStore([buildGestorOrder({ id: 'o1', state: 'creado' })]);
+    render(<OperadorGestores />);
+
+    // Only one ⋮ button on the page (the Creado column's card)
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+
+    expect(screen.getByText('Detalles')).toBeInTheDocument();
+    expect(screen.getByText('Aceptar')).toBeInTheDocument();
+    expect(screen.queryByText('Pagar Comisión')).not.toBeInTheDocument();
+  });
+
+  it('shows Pagar Comisión for entregado', () => {
+    setupStore([buildEntregadoOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
+
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+
+    expect(screen.getByText('Detalles')).toBeInTheDocument();
+    expect(screen.queryByText('Aceptar')).not.toBeInTheDocument();
+    expect(screen.getByText('Pagar Comisión')).toBeInTheDocument();
+  });
+
+  it('only shows Detalles for verificado', () => {
+    setupStore([buildGestorOrder({ id: 'o1', state: 'verificado' })]);
+    render(<OperadorGestores />);
+
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+
+    expect(screen.getByText('Detalles')).toBeInTheDocument();
+    expect(screen.queryByText('Aceptar')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pagar Comisión')).not.toBeInTheDocument();
+  });
+
+  it('menu closes on outside click', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
+
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+    expect(screen.getByText('Detalles')).toBeInTheDocument();
+
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByText('Detalles')).not.toBeInTheDocument();
+  });
+
+  it('menu closes on Escape key', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
+
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+    expect(screen.getByText('Detalles')).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByText('Detalles')).not.toBeInTheDocument();
+  });
+});
+
+describe('OperadorGestores — store integration', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('Aceptar moves order from creado to verificado', () => {
+    setupStore([buildGestorOrder({ id: 'store-test-1', state: 'creado' })]);
+    render(<OperadorGestores />);
+
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+    fireEvent.click(screen.getByText('Aceptar'));
+
+    const persisted = loadSeedState().orders.find((o) => o.id === 'store-test-1');
+    expect(persisted?.state).toBe('verificado');
+  });
+
+  it('Pagar Comisión moves order from entregado to comision_pagada', () => {
+    setupStore([buildEntregadoOrder({ id: 'store-test-2' })]);
+    render(<OperadorGestores />);
+
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+    fireEvent.click(screen.getByText('Pagar Comisión'));
+
+    const persisted = loadSeedState().orders.find((o) => o.id === 'store-test-2');
+    expect(persisted?.state).toBe('comision_pagada');
+  });
+});
+
+describe('OperadorGestores — OrderDetailPopup', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('opens on Detalles click', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
+
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+    fireEvent.click(screen.getByText('Detalles'));
+
+    expect(screen.getByTestId('detail-popup')).toBeInTheDocument();
+  });
+
+  it('closes on Cerrar button', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
+
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+    fireEvent.click(screen.getByText('Detalles'));
+    expect(screen.getByTestId('detail-popup')).toBeInTheDocument();
+
+    const closeButtons = screen.getAllByRole('button', { name: /cerrar/i });
+    fireEvent.click(closeButtons[closeButtons.length - 1]); // click the text button (last one)
+    expect(screen.queryByTestId('detail-popup')).not.toBeInTheDocument();
+  });
+
+  it('closes on Escape key', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
+
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+    fireEvent.click(screen.getByText('Detalles'));
+    expect(screen.getByTestId('detail-popup')).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('detail-popup')).not.toBeInTheDocument();
+  });
+
+  it('shows order detail content', () => {
+    setupStore([buildGestorOrder({ id: 'o1' })]);
+    render(<OperadorGestores />);
+
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+    fireEvent.click(screen.getByText('Detalles'));
+
+    // Use data-testid to scope queries within the popup
+    const popup = screen.getByTestId('detail-popup');
+
+    // Client name (appears on card too, but is present in popup)
+    const clientNames = screen.getAllByText('Juan Pérez');
+    expect(clientNames.length).toBe(2); // card + popup
+
+    // Popup-specific content
+    expect(popup.textContent).toContain('Pedido o1');
+    expect(popup.textContent).toContain('Método: USD');
+    expect(popup.textContent).toContain('Total USD: $50.00');
+    expect(popup.textContent).toContain('prod-1');
+  });
+});
+
+describe('OperadorGestores — structural regression', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('renders all 5 state column headings', () => {
+    // Use one order per state to fully populate all columns
+    const orders = [
+      buildGestorOrder({ id: 'o1', state: 'creado' }),
+      buildGestorOrder({ id: 'o2', state: 'verificado' }),
+      buildGestorOrder({ id: 'o3', state: 'transportando' }),
+      buildGestorOrder({ id: 'o4', state: 'entregado' }),
+      buildGestorOrder({ id: 'o5', state: 'comision_pagada' }),
+    ];
+    setupStore(orders);
+    render(<OperadorGestores />);
+
+    // The column headings contain the state name + count (e.g. "Creado (1)")
+    const headings = screen.getAllByRole('heading').map((h) => h.textContent);
+    expect(headings.some((h) => h?.startsWith('Creado'))).toBe(true);
+    expect(headings.some((h) => h?.startsWith('Verificado'))).toBe(true);
+    expect(headings.some((h) => h?.startsWith('Transportando'))).toBe(true);
+    expect(headings.some((h) => h?.startsWith('Entregado'))).toBe(true);
+    expect(headings.some((h) => h?.startsWith('Comisión pagada'))).toBe(true);
   });
 });

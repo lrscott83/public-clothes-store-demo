@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Order, OrderState } from '../../domain/types';
 import { OrderColumn } from './order-column';
 
@@ -8,6 +9,9 @@ export interface KanbanBoardProps {
   onAsignarTransportista?: (id: string) => void;
   onMarcarEntregado?: (id: string) => void;
   visibleStates?: OrderState[];
+  /** When provided, renders a custom card for each order instead of the
+   *  default <OrderCard>. Used by operador-gestores for gestor cards. */
+  renderCard?: (order: Order) => ReactNode;
 }
 
 // Record keys are exhaustiveness-checked: if `OrderState` grows, this fails to
@@ -40,6 +44,7 @@ export function KanbanBoard({
   onAsignarTransportista,
   onMarcarEntregado,
   visibleStates,
+  renderCard,
 }: KanbanBoardProps) {
   return (
     <div className="mt-4 flex gap-4 overflow-x-auto">
@@ -53,6 +58,7 @@ export function KanbanBoard({
           onMarkPaid={onMarkPaid}
           onAsignarTransportista={onAsignarTransportista}
           onMarcarEntregado={onMarcarEntregado}
+          renderCard={renderCard}
         />
       ))}
     </div>
