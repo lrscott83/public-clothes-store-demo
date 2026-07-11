@@ -84,10 +84,13 @@ describe('rateFor', () => {
 });
 
 describe('currencyOptionLabel', () => {
-  it('appends the exchange rate in parentheses', () => {
+  it('appends the exchange rate in parentheses for non-reference currencies', () => {
     expect(currencyOptionLabel('MN', RATES)).toBe('MN (680)');
-    expect(currencyOptionLabel('USD', RATES)).toBe('USD (1)');
     expect(currencyOptionLabel('EUR', RATES)).toBe('EUR (0.92)');
+  });
+
+  it('shows USD alone — it is the default reference currency, no rate', () => {
+    expect(currencyOptionLabel('USD', RATES)).toBe('USD');
   });
 });
 

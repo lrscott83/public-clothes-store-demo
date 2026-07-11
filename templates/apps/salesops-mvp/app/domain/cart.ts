@@ -52,9 +52,11 @@ export function rateFor(currency: string, rates: ExchangeRates): number {
 
 /**
  * Label for a currency `<option>`: the code plus its exchange rate in
- * parentheses, e.g. `"MN (680)"`.
+ * parentheses, e.g. `"MN (680)"`. USD is the default reference currency
+ * (rate 1) so it renders alone as `"USD"`, with no parentheses.
  */
 export function currencyOptionLabel(currency: string, rates: ExchangeRates): string {
+  if (currency === 'USD') return currency;
   return `${currency} (${rateFor(currency, rates)})`;
 }
 

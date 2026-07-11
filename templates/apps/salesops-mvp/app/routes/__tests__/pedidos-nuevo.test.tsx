@@ -22,7 +22,8 @@ describe('PedidosNuevo wizard container', () => {
     render(<PedidosNuevo />);
 
     const select = screen.getByRole('combobox', { name: /moneda/i });
-    expect(within(select).getByRole('option', { name: 'USD (1)' })).toBeInTheDocument();
+    // USD is the reference currency → shown alone, no "(1)".
+    expect(within(select).getByRole('option', { name: 'USD' })).toBeInTheDocument();
     expect(within(select).getByRole('option', { name: 'MN (680)' })).toBeInTheDocument();
   });
 
