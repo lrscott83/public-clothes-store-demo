@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildInventorySummary } from '../inventory';
+import { buildInventorySummary, sortInventoryRows } from '../inventory';
+import type { ProductStockRow } from '../inventory';
 import type { InventoryEntry, SeedState, SeededProduct, Warehouse } from '../types';
 
 function buildProduct(overrides: Partial<SeededProduct> = {}): SeededProduct {
@@ -135,5 +136,43 @@ describe('buildInventorySummary', () => {
     const wh1 = summary.warehouses.find((w) => w.warehouseId === 'wh-1')!;
 
     expect(wh1.rows.map((r) => r.name)).toEqual(['Alfa', 'Beta', 'Zeta']);
+  });
+});
+
+describe('sortInventoryRows', () => {
+  const rows: ProductStockRow[] = [
+    { productId: 'p-1', name: 'Beta', categoryId: 'cat-b', quantity: 5, status: 'disponible' },
+    { productId: 'p-2', name: 'Alfa', categoryId: 'cat-a', quantity: 0, status: 'agotado' },
+    { productId: 'p-3', name: 'Gamma', categoryId: 'cat-a', quantity: 12, status: 'disponible' },
+  ];
+
+  it('sorts by name ascending and descending', () => {
+    expect(sortInventoryRows(rows, 'name', 'asc').map((r) => r.name)).toEqual(['Alfa', 'Beta', 'Gamma']);
+    expect(sortInventoryRows(rows, 'name', 'desc').map((r) => r.name)).toEqual(['Gamma', 'Beta', 'Alfa']);
+  });
+
+  it('sorts by quantity numerically, not lexicographically (12 after 5, not before)', () => {
+    expect(sortInventoryRows(rows, 'quantity', 'asc').map((r) => r.quantity)).toEqual([0, 5, 12]);
+    expect(sortInventoryRows(rows, 'quantity', 'desc').map((r) => r.quantity)).toEqual([12, 5, 0]);
+  });
+
+  it('sorts by categoryId and by status', () => {
+    expect(sortInventoryRows(rows, 'categoryId', 'asc').map((r) => r.categoryId)).toEqual([
+      'cat-a',
+      'cat-a',
+      'cat-b',
+    ]);
+    expect(sortInventoryRows(rows, 'status', 'asc').map((r) => r.status)).toEqual([
+      'agotado',
+      'disponible',
+      'disponible',
+    ]);
+  });
+
+  it('returns a new array without mutating the input', () => {
+    const snapshot = rows.map((r) => ({ ...r }));
+    const result = sortInventoryRows(rows, 'name', 'desc');
+    expect(result).not.toBe(rows);
+    expect(rows).toEqual(snapshot);
   });
 });

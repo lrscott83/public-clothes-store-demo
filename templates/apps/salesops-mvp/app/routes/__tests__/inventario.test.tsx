@@ -53,12 +53,13 @@ describe('Inventario container', () => {
     expect(moneyStrings.length).toBeGreaterThan(0);
   });
 
-  it('renders no mutation affordance (no form; only tab navigation, no mutating buttons)', () => {
+  it('renders no data-mutation affordance (no <form>; tabs and column sorting are view-only)', () => {
     loadSeedState();
     const { container } = render(<Inventario />);
 
+    // This app mutates only through RR7 <Form> actions; a read-only screen has
+    // none. Tabs (role="tab") and column-sort headers are view controls that
+    // never write to the store, so their presence is expected.
     expect(container.querySelector('form')).toBeNull();
-    // Warehouse tabs are view navigation (role="tab"), not data-mutating buttons.
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 });

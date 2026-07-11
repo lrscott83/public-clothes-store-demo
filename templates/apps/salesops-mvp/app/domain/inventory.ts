@@ -19,6 +19,30 @@ export interface WarehouseInventory {
   rows: ProductStockRow[]; // sorted by categoryId then name
 }
 
+export type InventorySortKey = 'name' | 'categoryId' | 'quantity' | 'status';
+export type SortDirection = 'asc' | 'desc';
+
+/**
+ * Pure, non-mutating sort of inventory rows by any column. `quantity` sorts
+ * numerically (so 12 follows 5, not the lexicographic reverse); the string
+ * columns (name/categoryId/status) sort via `localeCompare`. Returns a new
+ * array — the caller keeps the domain-provided order untouched.
+ */
+export function sortInventoryRows(
+  rows: ProductStockRow[],
+  key: InventorySortKey,
+  direction: SortDirection,
+): ProductStockRow[] {
+  const factor = direction === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const cmp =
+      key === 'quantity'
+        ? a.quantity - b.quantity
+        : String(a[key]).localeCompare(String(b[key]));
+    return factor * cmp;
+  });
+}
+
 export interface InventorySummary {
   warehouses: WarehouseInventory[]; // preserves state.warehouses order
   totalUnits: number;
