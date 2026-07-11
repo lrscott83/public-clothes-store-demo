@@ -16,6 +16,12 @@ export interface ProductCardProps {
   currency: string;
   cart?: ProductCardCartProps;
   showDescription?: boolean;
+  /**
+   * Optional price formatter (e.g. to show the selected currency with the USD
+   * price in parentheses). When omitted, prices render via `formatMoney` with
+   * `{ locale, currency }` — the original behavior.
+   */
+  formatPrice?: (usdAmount: number) => string;
 }
 
 /**
@@ -27,8 +33,22 @@ export interface ProductCardProps {
  * optional cart controls (ShoppingCart icon / quantity stepper). When `cart`
  * prop is absent, the render is identical to the original (non-cart usage).
  */
-export function ProductCard({ product, locale, currency, cart, showDescription = true }: ProductCardProps) {
+export function ProductCard({
+  product,
+  locale,
+  currency,
+  cart,
+  showDescription = true,
+  formatPrice,
+}: ProductCardProps) {
   const hasBadge = product.isNew || product.discount;
+  const priceText = formatPrice ? formatPrice(product.price) : formatMoney(product.price, { locale, currency });
+  const originalPriceText =
+    product.originalPrice !== undefined
+      ? formatPrice
+        ? formatPrice(product.originalPrice)
+        : formatMoney(product.originalPrice, { locale, currency })
+      : null;
 
   return (
     <div className="group relative rounded-lg shadow-card overflow-hidden bg-surface transition-transform duration-300 hover:scale-[1.02]">
@@ -63,11 +83,11 @@ export function ProductCard({ product, locale, currency, cart, showDescription =
 
         <div className="mt-2 flex items-center gap-2">
           <span className="text-lg font-bold text-accent">
-            {formatMoney(product.price, { locale, currency })}
+            {priceText}
           </span>
-          {product.originalPrice && (
+          {originalPriceText && (
             <span className="text-sm line-through text-text-muted">
-              {formatMoney(product.originalPrice, { locale, currency })}
+              {originalPriceText}
             </span>
           )}
         </div>

@@ -81,6 +81,26 @@ describe('ClientStep', () => {
     expect(screen.getAllByText('$200.00')).toHaveLength(2);
   });
 
+  it('renders cart prices in the selected currency with the USD price in parentheses', () => {
+    render(
+      <ClientStep
+        draft={buildDraft()}
+        onChange={vi.fn()}
+        cartItems={[
+          { productId: 'p-1', name: 'Cafetera', image: '/img.jpg', price: 15, quantity: 2 },
+        ]}
+        cartTotalUSD={30}
+        selectedCurrency="MN"
+        exchangeRates={{ usdToMn: 680, zelle: 1, eur: 1 }}
+        {...EMPTY_WAREHOUSE}
+      />,
+    );
+
+    // unit price and line/grand total in MN with USD in parentheses
+    expect(screen.getByText(/10,200\.00 MN \(\$15\.00\)/)).toBeInTheDocument();
+    expect(screen.getAllByText(/20,400\.00 MN \(\$30\.00\)/).length).toBeGreaterThan(0);
+  });
+
   it('renders warehouse selector heading', () => {
     render(<ClientStep draft={buildDraft()} onChange={vi.fn()} {...emptyCart} {...EMPTY_WAREHOUSE} />);
 

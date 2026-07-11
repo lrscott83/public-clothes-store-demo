@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { CartLine } from '../../domain/availability';
-import type { SeededProduct } from '../../domain/types';
+import type { ExchangeRates, SeededProduct } from '../../domain/types';
+import { formatPriceWithUSD } from '../../domain/cart';
 import { catalogProvider } from '../../data/catalog';
 import { ProductCard } from '../product-card';
 
@@ -9,7 +10,11 @@ export interface CartStepProps {
   catalog: SeededProduct[];
   cart: CartLine[];
   onChange: (cart: CartLine[]) => void;
+  selectedCurrency?: string;
+  exchangeRates?: ExchangeRates;
 }
+
+const IDENTITY_RATES: ExchangeRates = { usdToMn: 1, zelle: 1, eur: 1 };
 
 /**
  * Carrito step: product grid with add/remove/qty-change controls and a live
@@ -20,7 +25,13 @@ export interface CartStepProps {
  * Each product is rendered via the enhanced `ProductCard` component (badges,
  * original price, cart controls) instead of inline `<li>` markup.
  */
-export function CartStep({ catalog, cart, onChange }: CartStepProps) {
+export function CartStep({
+  catalog,
+  cart,
+  onChange,
+  selectedCurrency = 'USD',
+  exchangeRates = IDENTITY_RATES,
+}: CartStepProps) {
   function quantityFor(productId: string): number {
     return cart.find((line) => line.productId === productId)?.quantity ?? 0;
   }
@@ -110,6 +121,7 @@ export function CartStep({ catalog, cart, onChange }: CartStepProps) {
               product={product}
               locale="en-US"
               currency="USD"
+              formatPrice={(usd) => formatPriceWithUSD(usd, selectedCurrency, exchangeRates)}
               showDescription={false}
               cart={{
                 quantity,

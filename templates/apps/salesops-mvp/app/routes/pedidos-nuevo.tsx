@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
 import type { Route } from './+types/pedidos-nuevo';
 import { ShoppingCart, X, Trash2 } from 'lucide-react';
-import { formatMoney } from '@store-mgmt/storefront/config';
 import { CartStep } from '../components/pedido/cart-step';
 import { ClientStep, type ClientStepDraft } from '../components/pedido/client-step';
 
-import { cartTotalUSD, convertTotal, formatConvertedTotal } from '../domain/cart';
+import {
+  cartTotalUSD,
+  convertTotal,
+  currencyOptionLabel,
+  formatConvertedTotal,
+  formatPriceWithUSD,
+} from '../domain/cart';
 import { eligibleWarehouses, type CartLine } from '../domain/availability';
 import { GESTORES } from '../seed/constants';
 import { createOrder, loadSeedState } from '../store/seed-store';
@@ -50,7 +55,6 @@ export default function PedidosNuevo() {
 
   const { products, inventory, warehouses } = loadSeedState();
 
-  const MONEY = { locale: 'en-US', currency: 'USD' } as const;
   const eligible = eligibleWarehouses(cart, inventory, warehouses);
 
   function handleCarritoNext() {
@@ -181,14 +185,16 @@ export default function PedidosNuevo() {
                 Total: {formatConvertedTotal(convertedTotal, selectedCurrency)}
               </span>
               <select
+                aria-label="Moneda"
                 value={selectedCurrency}
                 onChange={(e) => setSelectedCurrency(e.target.value)}
                 className="rounded border border-border bg-surface px-2 py-1 text-sm text-text"
               >
-                <option value="USD">USD</option>
-                <option value="MN">MN</option>
-                <option value="ZELLE">ZELLE</option>
-                <option value="EUR">EUR</option>
+                {['USD', 'MN', 'ZELLE', 'EUR'].map((currency) => (
+                  <option key={currency} value={currency}>
+                    {currencyOptionLabel(currency, exchangeRates)}
+                  </option>
+                ))}
               </select>
               <button
                 type="button"
@@ -226,7 +232,13 @@ export default function PedidosNuevo() {
       })()}
 
       {step === 'carrito' && (
-        <CartStep catalog={products} cart={cart} onChange={setCart} />
+        <CartStep
+          catalog={products}
+          cart={cart}
+          onChange={setCart}
+          selectedCurrency={selectedCurrency}
+          exchangeRates={exchangeRates}
+        />
       )}
 
       {step === 'cliente' && (
@@ -241,6 +253,8 @@ export default function PedidosNuevo() {
           eligible={eligible}
           warehouseId={warehouseId}
           onWarehouseSelect={setWarehouseId}
+          selectedCurrency={selectedCurrency}
+          exchangeRates={exchangeRates}
         />
       )}
 
@@ -290,7 +304,7 @@ export default function PedidosNuevo() {
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-text truncate">{product.name}</p>
                           <p className="text-xs text-text-muted">
-                            {formatMoney(product.price, MONEY)} x {line.quantity} = {formatMoney(lineTotal, MONEY)}
+                            {formatPriceWithUSD(product.price, selectedCurrency, exchangeRates)} x {line.quantity} = {formatPriceWithUSD(lineTotal, selectedCurrency, exchangeRates)}
                           </p>
                         </div>
                         <button
@@ -312,7 +326,7 @@ export default function PedidosNuevo() {
             <div className="flex items-center justify-between border-t border-border p-4">
               <span className="text-base font-semibold text-text">Total</span>
               <span className="text-lg font-bold text-accent">
-                {formatMoney(total, MONEY)}
+                {formatPriceWithUSD(total, selectedCurrency, exchangeRates)}
               </span>
             </div>
           </div>

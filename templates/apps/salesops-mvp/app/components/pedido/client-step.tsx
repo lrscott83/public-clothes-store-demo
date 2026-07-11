@@ -1,5 +1,5 @@
-import { formatMoney } from '@store-mgmt/storefront/config';
-import type { Warehouse } from '../../domain/types';
+import type { ExchangeRates, Warehouse } from '../../domain/types';
+import { formatPriceWithUSD } from '../../domain/cart';
 
 export interface ClientStepDraft {
   name: string;
@@ -24,9 +24,11 @@ export interface ClientStepProps {
   eligible: Warehouse[];
   warehouseId: string | null;
   onWarehouseSelect: (warehouseId: string) => void;
+  selectedCurrency?: string;
+  exchangeRates?: ExchangeRates;
 }
 
-const MONEY = { locale: 'en-US', currency: 'USD' } as const;
+const IDENTITY_RATES: ExchangeRates = { usdToMn: 1, zelle: 1, eur: 1 };
 
 export function ClientStep({
   draft,
@@ -36,7 +38,10 @@ export function ClientStep({
   eligible,
   warehouseId,
   onWarehouseSelect,
+  selectedCurrency = 'USD',
+  exchangeRates = IDENTITY_RATES,
 }: ClientStepProps) {
+  const price = (usdAmount: number) => formatPriceWithUSD(usdAmount, selectedCurrency, exchangeRates);
   function set<K extends keyof ClientStepDraft>(key: K, value: ClientStepDraft[K]) {
     onChange({ ...draft, [key]: value });
   }
@@ -179,11 +184,11 @@ export function ClientStep({
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-text">{item.name}</p>
                       <p className="text-xs text-text-muted">
-                        {formatMoney(item.price, MONEY)} x {item.quantity}
+                        {price(item.price)} x {item.quantity}
                       </p>
                     </div>
                     <span className="text-sm font-semibold text-text">
-                      {formatMoney(item.price * item.quantity, MONEY)}
+                      {price(item.price * item.quantity)}
                     </span>
                   </li>
                 ))}
@@ -192,7 +197,7 @@ export function ClientStep({
               <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
                 <span className="text-base font-semibold text-text">Total</span>
                 <span className="text-lg font-bold text-accent">
-                  {formatMoney(cartTotalUSD, MONEY)}
+                  {price(cartTotalUSD)}
                 </span>
               </div>
             </>

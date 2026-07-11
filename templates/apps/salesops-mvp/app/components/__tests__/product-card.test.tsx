@@ -28,6 +28,20 @@ describe('ProductCard', () => {
     expect(screen.getByText('$1,234.50')).toBeInTheDocument();
   });
 
+  it('uses the formatPrice callback for the price when provided', () => {
+    const product = buildProduct({ price: 15 });
+    render(
+      <ProductCard
+        product={product}
+        locale="en-US"
+        currency="USD"
+        formatPrice={(usd) => `${usd * 680}.00 MN ($${usd}.00)`}
+      />,
+    );
+    expect(screen.getByText('10200.00 MN ($15.00)')).toBeInTheDocument();
+    expect(screen.queryByText('$15.00')).not.toBeInTheDocument();
+  });
+
   it('shows a New badge when product.isNew is true', () => {
     const product = buildProduct({ isNew: true });
     render(<ProductCard product={product} locale="en-US" currency="USD" />);

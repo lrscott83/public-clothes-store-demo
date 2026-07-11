@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { cartTotalUSD, convertTotal, formatConvertedTotal } from '../cart';
+import {
+  cartTotalUSD,
+  convertTotal,
+  currencyOptionLabel,
+  formatConvertedTotal,
+  formatPriceWithUSD,
+  rateFor,
+} from '../cart';
 import type { ExchangeRates } from '../types';
 
 const RATES: ExchangeRates = { usdToMn: 680, zelle: 1, eur: 0.92 };
@@ -60,5 +67,40 @@ describe('formatConvertedTotal', () => {
 
   it('falls back to USD format for unknown currency', () => {
     expect(formatConvertedTotal(250, 'GBP')).toBe('$250.00');
+  });
+});
+
+describe('rateFor', () => {
+  it('returns 1 for USD and the matching rate for each other currency', () => {
+    expect(rateFor('USD', RATES)).toBe(1);
+    expect(rateFor('MN', RATES)).toBe(680);
+    expect(rateFor('ZELLE', RATES)).toBe(1);
+    expect(rateFor('EUR', RATES)).toBe(0.92);
+  });
+
+  it('falls back to 1 for an unknown currency', () => {
+    expect(rateFor('GBP', RATES)).toBe(1);
+  });
+});
+
+describe('currencyOptionLabel', () => {
+  it('appends the exchange rate in parentheses', () => {
+    expect(currencyOptionLabel('MN', RATES)).toBe('MN (680)');
+    expect(currencyOptionLabel('USD', RATES)).toBe('USD (1)');
+    expect(currencyOptionLabel('EUR', RATES)).toBe('EUR (0.92)');
+  });
+});
+
+describe('formatPriceWithUSD', () => {
+  it('returns plain USD when the selected currency is USD', () => {
+    expect(formatPriceWithUSD(15, 'USD', RATES)).toBe('$15.00');
+  });
+
+  it('shows the converted amount + currency with the USD price in parentheses', () => {
+    expect(formatPriceWithUSD(15, 'MN', RATES)).toBe('10,200.00 MN ($15.00)');
+  });
+
+  it('is uniform across non-USD currencies (amount + code + USD in parens)', () => {
+    expect(formatPriceWithUSD(10, 'ZELLE', RATES)).toBe('10.00 ZELLE ($10.00)');
   });
 });

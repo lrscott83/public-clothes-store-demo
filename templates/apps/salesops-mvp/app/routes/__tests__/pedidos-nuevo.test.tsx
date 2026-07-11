@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import PedidosNuevo from '../pedidos-nuevo';
 import { loadSeedState } from '../../store/seed-store';
@@ -16,6 +16,23 @@ describe('PedidosNuevo wizard container', () => {
     render(<PedidosNuevo />);
 
     expect(screen.getByRole('heading', { name: /nuevo pedido/i })).toBeInTheDocument();
+  });
+
+  it('shows the exchange rate next to each currency in the Moneda select, e.g. "MN (680)"', () => {
+    render(<PedidosNuevo />);
+
+    const select = screen.getByRole('combobox', { name: /moneda/i });
+    expect(within(select).getByRole('option', { name: 'USD (1)' })).toBeInTheDocument();
+    expect(within(select).getByRole('option', { name: 'MN (680)' })).toBeInTheDocument();
+  });
+
+  it('renders product prices in the selected currency with the USD price in parentheses', () => {
+    render(<PedidosNuevo />);
+
+    fireEvent.change(screen.getByRole('combobox', { name: /moneda/i }), { target: { value: 'MN' } });
+
+    // At least one product card now shows the dual "<amount> MN ($<usd>)" format.
+    expect(screen.getAllByText(/ MN \(\$[\d,]+\.\d{2}\)/).length).toBeGreaterThan(0);
   });
 
   it('blocks advancing from Carrito with an empty cart', () => {
