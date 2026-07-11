@@ -46,8 +46,8 @@ describe('formatConvertedTotal', () => {
     expect(formatConvertedTotal(250, 'USD')).toBe('$250.00');
   });
 
-  it('formats MN with numeric value and Mn suffix', () => {
-    expect(formatConvertedTotal(170_000, 'MN')).toBe('170,000.00 Mn');
+  it('formats MN with numeric value and MN suffix', () => {
+    expect(formatConvertedTotal(170_000, 'MN')).toBe('170,000.00 MN');
   });
 
   it('formats ZELLE with dollar sign and (Zelle) suffix', () => {

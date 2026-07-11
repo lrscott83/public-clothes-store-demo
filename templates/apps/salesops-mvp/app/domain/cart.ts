@@ -42,7 +42,7 @@ export function formatConvertedTotal(amount: number, currency: string): string {
     case 'USD':
       return formatMoney(amount, MONEY);
     case 'MN':
-      return `${Intl.NumberFormat('en-US', { style: 'decimal', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)} Mn`;
+      return `${Intl.NumberFormat('en-US', { style: 'decimal', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)} MN`;
     case 'ZELLE':
       return `${formatMoney(amount, MONEY)} (Zelle)`;
     case 'EUR':

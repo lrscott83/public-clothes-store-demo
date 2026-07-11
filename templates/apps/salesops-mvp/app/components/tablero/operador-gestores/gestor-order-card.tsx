@@ -118,8 +118,8 @@ export function GestorOrderCard({ order, gestor, onDetalles, onVerifyOrder, onMa
       {/* Totals row */}
       <div className="mt-1 flex items-center gap-3 text-sm text-text-muted">
         <span>${order.totalUSD.toFixed(2)}</span>
-        {order.totalMN !== undefined && (
-          <span>{Number(order.totalMN).toLocaleString('en-US')} Mn</span>
+        {order.payment.method === 'MN' && order.totalMN !== undefined && (
+          <span>{Number(order.totalMN).toLocaleString('en-US')} MN</span>
         )}
       </div>
     </div>

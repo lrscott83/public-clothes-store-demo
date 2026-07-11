@@ -79,11 +79,18 @@ describe('OperadorGestores — card rendering', () => {
     expect(screen.getByText('Juan Pérez')).toBeInTheDocument();
   });
 
-  it('shows total USD and MN on the card', () => {
-    setupStore([buildGestorOrder({ id: 'o1' })]);
+  it('shows the USD total and the MN amount on an MN-payment card', () => {
+    setupStore([buildGestorOrder({ id: 'o1', payment: { method: 'MN' } })]);
     render(<OperadorGestores />);
     expect(screen.getByText('$50.00')).toBeInTheDocument();
-    expect(screen.getByText('34,000 Mn')).toBeInTheDocument();
+    expect(screen.getByText('34,000 MN')).toBeInTheDocument();
+  });
+
+  it('does NOT show an MN amount on a USD-payment card', () => {
+    setupStore([buildGestorOrder({ id: 'o1', payment: { method: 'USD' } })]);
+    render(<OperadorGestores />);
+    expect(screen.getByText('$50.00')).toBeInTheDocument();
+    expect(screen.queryByText(/34,000/)).not.toBeInTheDocument();
   });
 
   it('does NOT show order ID on the card', () => {
@@ -268,8 +275,24 @@ describe('OperadorGestores — OrderDetailPopup', () => {
     expect(popup.textContent).not.toContain('Pedido o1');
     expect(popup.textContent).toContain('Método: USD');
     expect(popup.textContent).toContain('Total: $50.00');
-    expect(popup.textContent).toContain('Tasa de cambio: 1 USD = 680 MN');
+    // USD orders show no MN conversion in the popup.
+    expect(popup.textContent).not.toContain('Tasa de cambio');
+    expect(popup.textContent).not.toContain('Equivalente');
     expect(popup.textContent).toContain('prod-1');
+  });
+
+  it('shows the exchange rate and MN equivalent for an MN-payment order', () => {
+    setupStore([buildGestorOrder({ id: 'o1', payment: { method: 'MN' } })]);
+    render(<OperadorGestores />);
+
+    fireEvent.click(screen.getByLabelText(/acciones del pedido/i));
+    fireEvent.click(screen.getByText('Detalles'));
+
+    const popup = screen.getByTestId('detail-popup');
+    expect(popup.textContent).toContain('Método: MN');
+    expect(popup.textContent).toContain('Total: $50.00');
+    expect(popup.textContent).toContain('Tasa de cambio: 1 USD = 680 MN');
+    expect(popup.textContent).toContain('Equivalente: 34,000 MN');
   });
 });
 

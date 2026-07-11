@@ -53,14 +53,13 @@ export function OrderDetailPopup({ order, gestor, onClose }: OrderDetailPopupPro
 
   const digits = gestor?.phone?.replace(/\D/g, '');
 
-  // Show the total in the currency the client actually pays in; the exchange
-  // rate + equivalent are surfaced whenever a rate snapshot was captured.
+  // MN amounts are shown only for MN-settled orders, so anything displaying an
+  // MN figure always carries "MN" as its payment method (USD orders show USD
+  // only, even though verified orders still hold a rate snapshot for finance).
   const isMNPayment = order.payment.method === 'MN';
   const usdTotalText = `$${order.totalUSD.toFixed(2)}`;
-  const mnTotalText =
-    order.totalMN !== undefined ? `${order.totalMN.toLocaleString('en-US')} Mn` : null;
-  const primaryTotal = isMNPayment && mnTotalText ? mnTotalText : usdTotalText;
-  const equivalentTotal = isMNPayment ? usdTotalText : mnTotalText;
+  const mnEquivalentText =
+    order.totalMN !== undefined ? `${order.totalMN.toLocaleString('en-US')} MN` : null;
 
   return (
     <div
@@ -142,15 +141,13 @@ export function OrderDetailPopup({ order, gestor, onClose }: OrderDetailPopupPro
         <div className="mb-4">
           <h3 className="mb-2 text-sm font-semibold text-text">Pago</h3>
           <p className="text-sm text-text-muted">Método: {order.payment.method}</p>
-          <p className="text-sm text-text-muted">Total: {primaryTotal}</p>
-          {order.exchangeRateSnapshot && (
+          <p className="text-sm text-text-muted">Total: {usdTotalText}</p>
+          {isMNPayment && order.exchangeRateSnapshot && mnEquivalentText && (
             <>
               <p className="text-sm text-text-muted">
                 Tasa de cambio: 1 USD = {order.exchangeRateSnapshot.usdToMn} MN
               </p>
-              {equivalentTotal && (
-                <p className="text-sm text-text-muted">Equivalente: {equivalentTotal}</p>
-              )}
+              <p className="text-sm text-text-muted">Equivalente: {mnEquivalentText}</p>
             </>
           )}
         </div>
