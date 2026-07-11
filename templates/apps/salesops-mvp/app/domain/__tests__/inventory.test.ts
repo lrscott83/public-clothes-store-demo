@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildInventorySummary, sortInventoryRows } from '../inventory';
+import {
+  buildInventorySummary,
+  filterInventoryRows,
+  inventoryCategories,
+  sortInventoryRows,
+} from '../inventory';
 import type { ProductStockRow } from '../inventory';
 import type { InventoryEntry, SeedState, SeededProduct, Warehouse } from '../types';
 
@@ -174,5 +179,48 @@ describe('sortInventoryRows', () => {
     const result = sortInventoryRows(rows, 'name', 'desc');
     expect(result).not.toBe(rows);
     expect(rows).toEqual(snapshot);
+  });
+});
+
+describe('filterInventoryRows', () => {
+  const rows: ProductStockRow[] = [
+    { productId: 'p-1', name: 'Cafetera Express', categoryId: 'cafeteras', quantity: 5, status: 'disponible' },
+    { productId: 'p-2', name: 'Olla a Presión', categoryId: 'ollas', quantity: 0, status: 'agotado' },
+    { productId: 'p-3', name: 'Cafetera Italiana', categoryId: 'cafeteras', quantity: 3, status: 'disponible' },
+  ];
+
+  it('filters by name text, case-insensitively', () => {
+    expect(filterInventoryRows(rows, { text: 'cafetera' }).map((r) => r.name)).toEqual([
+      'Cafetera Express',
+      'Cafetera Italiana',
+    ]);
+  });
+
+  it('filters by exact categoryId', () => {
+    expect(filterInventoryRows(rows, { categoryId: 'ollas' }).map((r) => r.name)).toEqual([
+      'Olla a Presión',
+    ]);
+  });
+
+  it('combines text AND category', () => {
+    expect(filterInventoryRows(rows, { text: 'italiana', categoryId: 'cafeteras' }).map((r) => r.name)).toEqual([
+      'Cafetera Italiana',
+    ]);
+  });
+
+  it('returns all rows when the filter is empty', () => {
+    expect(filterInventoryRows(rows, {})).toHaveLength(3);
+    expect(filterInventoryRows(rows, { text: '  ', categoryId: '' })).toHaveLength(3);
+  });
+});
+
+describe('inventoryCategories', () => {
+  it('returns sorted, de-duplicated categoryIds', () => {
+    const rows: ProductStockRow[] = [
+      { productId: 'p-1', name: 'A', categoryId: 'ollas', quantity: 1, status: 'disponible' },
+      { productId: 'p-2', name: 'B', categoryId: 'cafeteras', quantity: 1, status: 'disponible' },
+      { productId: 'p-3', name: 'C', categoryId: 'ollas', quantity: 1, status: 'disponible' },
+    ];
+    expect(inventoryCategories(rows)).toEqual(['cafeteras', 'ollas']);
   });
 });

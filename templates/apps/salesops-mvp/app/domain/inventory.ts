@@ -43,6 +43,37 @@ export function sortInventoryRows(
   });
 }
 
+export interface InventoryRowFilter {
+  text?: string; // free-text match against product name (case-insensitive, trimmed)
+  categoryId?: string; // exact categoryId; empty/undefined means "all categories"
+}
+
+/**
+ * Pure, non-mutating row filter: keeps rows whose name contains `text`
+ * (case-insensitive) AND whose categoryId equals `categoryId`. An empty/blank
+ * `text` or empty `categoryId` disables that criterion. Both empty → all rows.
+ */
+export function filterInventoryRows(
+  rows: ProductStockRow[],
+  filter: InventoryRowFilter,
+): ProductStockRow[] {
+  const text = filter.text?.trim().toLowerCase() ?? '';
+  const categoryId = filter.categoryId ?? '';
+  return rows.filter((row) => {
+    const matchesText = text === '' || row.name.toLowerCase().includes(text);
+    const matchesCategory = categoryId === '' || row.categoryId === categoryId;
+    return matchesText && matchesCategory;
+  });
+}
+
+/**
+ * Sorted, de-duplicated list of the categoryIds present in `rows` — the option
+ * set for a per-warehouse category filter.
+ */
+export function inventoryCategories(rows: ProductStockRow[]): string[] {
+  return [...new Set(rows.map((row) => row.categoryId))].sort((a, b) => a.localeCompare(b));
+}
+
 export interface InventorySummary {
   warehouses: WarehouseInventory[]; // preserves state.warehouses order
   totalUnits: number;

@@ -71,6 +71,15 @@ describe('WarehouseDetail', () => {
     expect(screen.getByRole('button', { name: /estado/i })).toBeInTheDocument();
   });
 
+  it('shows a sort-arrow indicator on every column header, not just the active one', () => {
+    render(<WarehouseDetail warehouse={buildWarehouse()} />);
+
+    for (const label of ['Producto', 'Categoría', 'Unidades', 'Estado']) {
+      const header = screen.getByRole('button', { name: new RegExp(label, 'i') });
+      expect(header.textContent).toMatch(/[↕▲▼]/);
+    }
+  });
+
   it('sorts by Unidades ascending then descending on repeated clicks', async () => {
     const user = userEvent.setup();
     render(<WarehouseDetail warehouse={buildWarehouse()} />);
@@ -97,5 +106,33 @@ describe('WarehouseDetail', () => {
 
     await user.click(screen.getByRole('button', { name: /unidades/i }));
     expect(unidades).toHaveAttribute('aria-sort', 'descending');
+  });
+
+  it('filters rows by the free-text search (product name, case-insensitive)', async () => {
+    const user = userEvent.setup();
+    render(<WarehouseDetail warehouse={buildWarehouse()} />);
+
+    await user.type(screen.getByRole('searchbox', { name: /buscar/i }), 'alf');
+    expect(bodyRowNames()).toEqual(['Alfa']);
+  });
+
+  it('filters rows by the category select', async () => {
+    const user = userEvent.setup();
+    render(<WarehouseDetail warehouse={buildWarehouse()} />);
+    // fixture categories: Alfa/Beta -> cat-a, Zeta -> cat-b
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /categoría/i }), 'cat-b');
+    expect(bodyRowNames()).toEqual(['Zeta']);
+  });
+
+  it('offers each distinct warehouse category as a filter option', () => {
+    render(<WarehouseDetail warehouse={buildWarehouse()} />);
+
+    const select = screen.getByRole('combobox', { name: /categoría/i });
+    const optionValues = within(select)
+      .getAllByRole('option')
+      .map((o) => (o as HTMLOptionElement).value);
+    expect(optionValues).toContain('cat-a');
+    expect(optionValues).toContain('cat-b');
   });
 });

@@ -44,7 +44,8 @@ export function WarehouseTabs({ warehouses }: WarehouseTabsProps) {
         })}
       </div>
       <div className="mt-4">
-        <WarehouseDetail warehouse={active} />
+        {/* key on warehouseId remounts on tab switch → filters/sort reset per warehouse */}
+        <WarehouseDetail key={active.warehouseId} warehouse={active} />
       </div>
     </div>
   );

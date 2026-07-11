@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { InventorySortKey, SortDirection, WarehouseInventory } from '../../domain/inventory';
-import { sortInventoryRows } from '../../domain/inventory';
+import { filterInventoryRows, inventoryCategories, sortInventoryRows } from '../../domain/inventory';
 import { StockBadge } from './stock-badge';
 
 export interface WarehouseDetailProps {
@@ -21,18 +21,28 @@ const COLUMNS: { key: InventorySortKey; label: string }[] = [
 
 /**
  * Per-warehouse product detail table: Producto/Categoría/Unidades/Estado.
- * Column headers are sort buttons — clicking a column sorts by it (ascending
- * first, toggling to descending on repeat); the active header carries
- * `aria-sort`. Sorting is view-only (local `useState`, pure `sortInventoryRows`)
- * and never mutates the domain-provided `warehouse.rows`. Heading is the
- * warehouse NAME (never the word "Inventario") so `getAllByRole('heading')`
- * stays unambiguous alongside the page h1. Table sits in a fixed-height scroll
- * container so ~99-row tables don't produce an unbounded page.
+ *
+ * View-only controls (local `useState`, pure domain helpers — never mutate the
+ * domain-provided `warehouse.rows`):
+ * - Free-text search (by product name) + category select filter the rows.
+ * - Column headers are sort buttons; every header shows an arrow indicator
+ *   (`↕` when inactive, `▲`/`▼` on the active column), and the active header
+ *   carries `aria-sort`. Clicking a column sorts ascending, then toggles.
+ *
+ * Heading is the warehouse NAME (never the word "Inventario") so
+ * `getAllByRole('heading')` stays unambiguous alongside the page h1. Table sits
+ * in a fixed-height scroll container so ~99-row tables don't produce an
+ * unbounded page. Filters/sort are reset per warehouse by remounting (the
+ * parent keys this component on `warehouseId`).
  */
 export function WarehouseDetail({ warehouse }: WarehouseDetailProps) {
   const [sort, setSort] = useState<SortState | null>(null);
+  const [text, setText] = useState('');
+  const [categoryId, setCategoryId] = useState('');
 
-  const rows = sort ? sortInventoryRows(warehouse.rows, sort.key, sort.direction) : warehouse.rows;
+  const categories = inventoryCategories(warehouse.rows);
+  const filtered = filterInventoryRows(warehouse.rows, { text, categoryId });
+  const rows = sort ? sortInventoryRows(filtered, sort.key, sort.direction) : filtered;
 
   function toggleSort(key: InventorySortKey) {
     setSort((current) =>
@@ -45,6 +55,31 @@ export function WarehouseDetail({ warehouse }: WarehouseDetailProps) {
   return (
     <section>
       <h2 className="text-lg font-semibold text-text">{warehouse.warehouseName}</h2>
+
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <input
+          type="search"
+          aria-label="Buscar producto"
+          placeholder="Buscar producto…"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className="min-w-[200px] flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
+        />
+        <select
+          aria-label="Filtrar por categoría"
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
+        >
+          <option value="">Todas las categorías</option>
+          {categories.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="mt-2 max-h-96 overflow-y-auto rounded-lg border border-border">
         <table className="w-full text-left text-sm">
           <thead className="sticky top-0 bg-surface">
@@ -56,6 +91,7 @@ export function WarehouseDetail({ warehouse }: WarehouseDetailProps) {
                     ? 'ascending'
                     : 'descending'
                   : 'none';
+                const indicator = active ? (sort!.direction === 'asc' ? '▲' : '▼') : '↕';
                 return (
                   <th key={key} scope="col" aria-sort={ariaSort} className="px-3 py-2">
                     <button
@@ -64,8 +100,11 @@ export function WarehouseDetail({ warehouse }: WarehouseDetailProps) {
                       className="flex items-center gap-1 font-semibold text-text hover:text-accent"
                     >
                       <span>{label}</span>
-                      <span aria-hidden="true" className="text-xs text-accent">
-                        {active ? (sort!.direction === 'asc' ? '▲' : '▼') : ''}
+                      <span
+                        aria-hidden="true"
+                        className={`text-xs ${active ? 'text-accent' : 'text-text-muted'}`}
+                      >
+                        {indicator}
                       </span>
                     </button>
                   </th>
