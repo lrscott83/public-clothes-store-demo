@@ -63,12 +63,15 @@ export const RATE_SNAPSHOT_POOL: number[] = [660, 670, 680, 690];
 
 /**
  * Payment-method distribution: most sales are settled in USD, a meaningful
- * slice in MN (moneda nacional). MN orders always carry a rate snapshot so the
- * amount charged in local currency is known at the moment of sale.
+ * slice in MN (moneda nacional), and a smaller tail in ZELLE / EUR so the
+ * currency mix has more than two slices. Every non-USD order carries a rate
+ * snapshot so its MN-equivalent value is known at the moment of sale.
  */
 export const PAYMENT_METHOD_WEIGHTS: Array<{ method: string; weight: number }> = [
-  { method: 'USD', weight: 60 },
-  { method: 'MN', weight: 40 },
+  { method: 'USD', weight: 50 },
+  { method: 'MN', weight: 30 },
+  { method: 'ZELLE', weight: 12 },
+  { method: 'EUR', weight: 8 },
 ];
 
 /** State funnel weights (out of 100) by day-offset bucket — see design.md. */
@@ -111,6 +114,7 @@ export const CLIENT_NAME_POOL: string[] = [
 ];
 
 export const STORAGE_KEY = 'salesops-mvp:seed:v1';
-// Bumped to 3 when seed orders gained varied payment methods (USD/MN) + their
-// sale-time rate snapshots — forces a regenerate over stale all-USD v2 seeds.
-export const VERSION = 3;
+// Bumped to 4 when the payment-method mix gained ZELLE/EUR tails (USD/MN/ZELLE/
+// EUR) for a richer currency breakdown — forces a regenerate over v3 seeds that
+// only ever produced USD/MN orders.
+export const VERSION = 4;
