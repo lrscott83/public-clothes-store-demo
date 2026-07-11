@@ -23,28 +23,24 @@ describe('Inventario container', () => {
     expect(screen.getAllByText(/valor de costo/i).length).toBeGreaterThan(0);
   });
 
-  it('renders each of the 3 warehouse detail sections', () => {
+  it('renders one tab per warehouse, labeled with each warehouse name', () => {
     const state = loadSeedState();
     render(<Inventario />);
 
-    const headings = screen.getAllByRole('heading');
-    const headingNames = headings.map((h) => h.textContent);
+    const tabNames = screen.getAllByRole('tab').map((t) => t.textContent);
     for (const warehouse of state.warehouses) {
-      expect(headingNames).toContain(warehouse.name);
+      expect(tabNames).toContain(warehouse.name);
     }
   });
 
-  it('shows Agotado for a zero-qty product and Disponible for a stocked one', () => {
+  it('shows only the active warehouse detail, with stock status badges', () => {
     const state = loadSeedState();
     render(<Inventario />);
 
-    const hasZeroQty = state.inventory.some((entry) => entry.quantity === 0);
-    const hasPositiveQty = state.inventory.some((entry) => entry.quantity > 0);
-    expect(hasPositiveQty).toBe(true);
-    expect(screen.getAllByText(/disponible/i).length).toBeGreaterThan(0);
-    if (hasZeroQty) {
-      expect(screen.getAllByText(/agotado/i).length).toBeGreaterThan(0);
-    }
+    // Tabs render one warehouse detail at a time — exactly one product table.
+    expect(screen.getAllByRole('table')).toHaveLength(1);
+    // The active warehouse's rows render StockBadge status text.
+    expect(screen.getAllByText(/disponible|agotado/i).length).toBeGreaterThan(0);
   });
 
   it('formats money via formatMoney (Intl string), never manual "$"+toFixed', () => {
@@ -57,11 +53,12 @@ describe('Inventario container', () => {
     expect(moneyStrings.length).toBeGreaterThan(0);
   });
 
-  it('renders no mutation affordance (no form, no mutating button/control)', () => {
+  it('renders no mutation affordance (no form; only tab navigation, no mutating buttons)', () => {
     loadSeedState();
     const { container } = render(<Inventario />);
 
     expect(container.querySelector('form')).toBeNull();
+    // Warehouse tabs are view navigation (role="tab"), not data-mutating buttons.
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 });

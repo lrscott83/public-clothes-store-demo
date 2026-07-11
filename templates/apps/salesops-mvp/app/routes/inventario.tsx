@@ -3,7 +3,7 @@ import type { Route } from './+types/inventario';
 import { buildInventorySummary } from '../domain/inventory';
 import { loadSeedState } from '../store/seed-store';
 import { InventorySummary } from '../components/inventario/inventory-summary';
-import { WarehouseDetail } from '../components/inventario/warehouse-detail';
+import { WarehouseTabs } from '../components/inventario/warehouse-tabs';
 
 export function meta(_args: Route.MetaArgs) {
   return [{ title: 'Inventario — Sales Ops Cockpit' }];
@@ -22,10 +22,8 @@ export default function Inventario() {
     <main className="p-8">
       <h1 className="text-2xl font-bold text-text">Inventario</h1>
       <InventorySummary summary={summary} />
-      <div className="mt-8 space-y-8">
-        {summary.warehouses.map((warehouse) => (
-          <WarehouseDetail key={warehouse.warehouseId} warehouse={warehouse} />
-        ))}
+      <div className="mt-8">
+        <WarehouseTabs warehouses={summary.warehouses} />
       </div>
     </main>
   );
