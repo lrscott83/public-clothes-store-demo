@@ -51,7 +51,7 @@ export function BarChart({ bars, orientation = 'horizontal', formatValue = Strin
           const barLength = ratio * (usableWidth - 90);
           const y = PADDING + index * slot;
           return (
-            <g key={bar.label}>
+            <g key={`${bar.label}-${index}`}>
               <text x={0} y={y + thickness / 2} dy="0.32em" className="fill-text text-[9px]">
                 {bar.label}
               </text>
@@ -67,7 +67,7 @@ export function BarChart({ bars, orientation = 'horizontal', formatValue = Strin
         const x = PADDING + index * slot;
         const y = PADDING + (usableHeight - 30) - barHeight;
         return (
-          <g key={bar.label}>
+          <g key={`${bar.label}-${index}`}>
             <rect x={x} y={y} width={thickness} height={Math.max(0, barHeight)} className={color.fill} />
             <text x={x + thickness / 2} y={usableHeight - 14} textAnchor="middle" className="fill-text text-[9px]">
               {bar.label}

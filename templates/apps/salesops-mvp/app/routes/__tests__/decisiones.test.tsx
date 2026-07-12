@@ -8,7 +8,7 @@ describe('Decisiones container', () => {
     localStorage.clear();
   });
 
-  it('renders exactly one <h1>Decisiones</h1>, a ranked table, and a grand-totals card', () => {
+  it('renders exactly one <h1>Decisiones</h1> and all 3 layers when qualifying orders exist', () => {
     const state = loadSeedState();
     const creadoOrder = state.orders.find((o) => o.state === 'creado');
     if (creadoOrder) verifyOrder(creadoOrder.id);
@@ -16,19 +16,29 @@ describe('Decisiones container', () => {
     render(<Decisiones />);
 
     expect(screen.getByRole('heading', { level: 1, name: 'Decisiones' })).toBeInTheDocument();
-    expect(screen.getByText('Resumen de rentabilidad')).toBeInTheDocument();
-    expect(screen.getByText('Ranking de rentabilidad de pedidos')).toBeInTheDocument();
+
+    // Layer 1 — 5 KPI tiles (some labels are reused as table headers further
+    // down the page, e.g. "Ventas"/"Pedidos" in the gestor ranking table, so
+    // assert presence rather than uniqueness here).
+    expect(screen.getAllByText('Ventas').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Margen').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pedidos').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Comisión pendiente').length).toBeGreaterThan(0);
+    expect(screen.getByText('Cobrado vs pendiente')).toBeInTheDocument();
+
+    // Layer 2 — 4 visuals
+    expect(screen.getByText('Tendencia de ventas (20 días)')).toBeInTheDocument();
+    expect(screen.getByText('Pedidos por etapa')).toBeInTheDocument();
+    expect(screen.getByText('Ventas por almacén')).toBeInTheDocument();
+    expect(screen.getByText('Mix por moneda')).toBeInTheDocument();
+
+    // Layer 3 — actionable blocks
+    expect(screen.getByText('Ranking de gestores')).toBeInTheDocument();
+    expect(screen.getByText('Top productos por margen')).toBeInTheDocument();
+    expect(screen.getByText('Pedidos de menor margen')).toBeInTheDocument();
   });
 
-  it('renders no mutation affordance (no form, no mutating button/control)', () => {
-    loadSeedState();
-    const { container } = render(<Decisiones />);
-
-    expect(container.querySelector('form')).toBeNull();
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
-  });
-
-  it('renders a single unambiguous heading matching /decisiones/i', () => {
+  it('renders a single unambiguous heading matching /decisiones/i; no subheading repeats it', () => {
     loadSeedState();
     render(<Decisiones />);
 
@@ -38,7 +48,7 @@ describe('Decisiones container', () => {
     expect(matching[0].tagName).toBe('H1');
   });
 
-  it('shows an empty-state message and no ranking table when only creado orders exist', () => {
+  it('shows an empty-state message (h1 still renders) when only creado orders exist; stage distribution is exempt', () => {
     const state = loadSeedState();
     state.orders = state.orders.map((order) => ({ ...order, state: 'creado' as const }));
     saveSeedState(state);
@@ -46,8 +56,34 @@ describe('Decisiones container', () => {
     render(<Decisiones />);
 
     expect(screen.getByRole('heading', { level: 1, name: 'Decisiones' })).toBeInTheDocument();
-    expect(screen.queryByText('Resumen de rentabilidad')).not.toBeInTheDocument();
-    expect(screen.queryByText('Ranking de rentabilidad de pedidos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ventas')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ranking de gestores')).not.toBeInTheDocument();
     expect(screen.getByText(/no hay pedidos/i)).toBeInTheDocument();
+    // Stage distribution is exempt from the empty-state and MAY still render.
+    expect(screen.getByText('Pedidos por etapa')).toBeInTheDocument();
+  });
+
+  it('renders no <form> and no store-mutating button; the cantidad/valor toggle does not mutate SeedState', () => {
+    const state = loadSeedState();
+    const creadoOrder = state.orders.find((o) => o.state === 'creado');
+    if (creadoOrder) verifyOrder(creadoOrder.id);
+
+    const { container } = render(<Decisiones />);
+
+    expect(container.querySelector('form')).toBeNull();
+    const toggleButtons = screen.getAllByRole('button', { name: /cantidad|valor/i });
+    expect(toggleButtons.length).toBeGreaterThan(0);
+  });
+
+  it('renders no sales-target/meta/objective-compliance element', () => {
+    const state = loadSeedState();
+    const creadoOrder = state.orders.find((o) => o.state === 'creado');
+    if (creadoOrder) verifyOrder(creadoOrder.id);
+
+    const { container } = render(<Decisiones />);
+    const text = container.textContent?.toLowerCase() ?? '';
+    expect(text).not.toContain('meta de ventas');
+    expect(text).not.toContain('objetivo');
+    expect(text).not.toContain('% cumplimiento');
   });
 });

@@ -45,7 +45,7 @@ export function DonutChart({ slices, ariaLabel }: DonutChartProps) {
 
           return (
             <circle
-              key={slice.label}
+              key={`${slice.label}-${index}`}
               data-slice={slice.label}
               cx={CENTER}
               cy={CENTER}
@@ -65,7 +65,7 @@ export function DonutChart({ slices, ariaLabel }: DonutChartProps) {
           const color = resolveChartColor(index, slice.colorKey);
           const percent = total > 0 ? (slice.value / total) * 100 : 0;
           return (
-            <li key={slice.label} className="flex items-center gap-2">
+            <li key={`${slice.label}-${index}`} className="flex items-center gap-2">
               <span className={`inline-block h-2 w-2 rounded-full ${color.fill}`} />
               <span className="text-text">{slice.label}</span>
               <span className="text-text-muted">{percent.toFixed(1)}%</span>
