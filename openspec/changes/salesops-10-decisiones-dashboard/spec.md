@@ -20,7 +20,7 @@ below is new aggregation/display behavior layered on top of it.
 The `/decisiones` route MUST render a direct-render container (no `<Form>`,
 no loader, no `useNavigate`) that loads `SeedState` via `loadSeedState` on
 mount, computes every view model once via pure domain helpers, and renders,
-top to bottom: Layer 1 (5 KPI tiles), Layer 2 (4 visuals), Layer 3 (3
+top to bottom: Layer 1 (5 KPI tiles), Layer 2 (4 visuals), Layer 3 (4
 actionable blocks). It MUST render exactly one `<h1>` and no other heading
 MUST contain the word "decisiones".
 
@@ -31,7 +31,7 @@ MUST contain the word "decisiones".
 - THEN exactly one `<h1>` is rendered
 - AND the 5 KPI tiles of Layer 1 are rendered
 - AND the 4 visuals of Layer 2 are rendered
-- AND the 3 actionable blocks of Layer 3 are rendered
+- AND the 4 actionable blocks of Layer 3 are rendered
 
 #### Scenario: No other heading repeats "decisiones"
 

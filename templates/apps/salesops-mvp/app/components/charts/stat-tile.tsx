@@ -1,8 +1,18 @@
+/** Arrow direction, structurally identical to the domain `Trend` (kept local so this primitive imports nothing from `app/domain`). */
+export type StatTileTrend = 'up' | 'down' | 'flat';
+
 export interface StatTileProps {
   label: string;
   /** Already formatted (currency/MN/percent) — this component never formats numbers. */
   value: string;
-  /** Fractional change vs the prior period (e.g. `0.25` = +25%). `null`/`undefined` → no arrow, neutral "—". */
+  /**
+   * Arrow direction. When provided it drives the arrow (and color); this is the
+   * source of truth so an "up" trend still shows ▲ even when `delta` is `null`
+   * (the prior window was 0, so a percentage change is undefined). When omitted,
+   * direction falls back to the sign of `delta`.
+   */
+  trend?: StatTileTrend;
+  /** Fractional change vs the prior period (e.g. `0.25` = +25%). `null`/`undefined` → no percentage text. */
   delta?: number | null;
   /** Whether a rising value is "good" (green) or "bad" (red). Defaults to `true`. */
   positiveIsGood?: boolean;
@@ -17,22 +27,25 @@ export interface StatTileProps {
  * "Comisión pendiente" (where more owed is worse) still shows red when
  * rising, even though the arrow direction itself is unchanged.
  */
-export function StatTile({ label, value, delta, positiveIsGood = true, sublabel }: StatTileProps) {
+export function StatTile({ label, value, trend, delta, positiveIsGood = true, sublabel }: StatTileProps) {
   const hasDelta = delta !== null && delta !== undefined;
-  const isUp = hasDelta && delta > 0;
-  const isDown = hasDelta && delta < 0;
-  const isGoodDirection = isUp ? positiveIsGood : isDown ? !positiveIsGood : true;
-  const colorClass = !hasDelta || delta === 0 ? 'text-text-muted' : isGoodDirection ? 'text-success' : 'text-danger';
+  // Arrow direction: prefer the explicit trend, else derive it from the delta sign.
+  const direction: StatTileTrend = trend ?? (hasDelta ? (delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat') : 'flat');
+  const isUp = direction === 'up';
+  const isDown = direction === 'down';
+  const showArrow = isUp || isDown;
+  const isGoodDirection = isUp ? positiveIsGood : !positiveIsGood;
+  const colorClass = !showArrow ? 'text-text-muted' : isGoodDirection ? 'text-success' : 'text-danger';
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
       <p className="text-xs font-medium text-text-muted">{label}</p>
       <p className="mt-1 text-2xl font-bold text-text">{value}</p>
       <div className="mt-1 flex items-center gap-1 text-sm">
-        {hasDelta ? (
+        {showArrow ? (
           <>
-            <span className={colorClass}>{isUp ? '▲' : isDown ? '▼' : '—'}</span>
-            <span className={colorClass}>{Math.abs(delta * 100).toFixed(1)}%</span>
+            <span className={colorClass}>{isUp ? '▲' : '▼'}</span>
+            {hasDelta && <span className={colorClass}>{Math.abs(delta * 100).toFixed(1)}%</span>}
           </>
         ) : (
           <span className="text-text-muted">—</span>

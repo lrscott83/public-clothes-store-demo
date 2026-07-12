@@ -49,6 +49,30 @@ describe('StatTile', () => {
     expect(screen.queryByText('▼')).not.toBeInTheDocument();
   });
 
+  it('shows an up arrow (from trend) and no percentage when trend is up but delta is null (prior window was 0)', () => {
+    render(<StatTile label="Ventas" value="$500.00" trend="up" delta={null} positiveIsGood />);
+
+    const arrow = screen.getByText('▲');
+    expect(arrow).toBeInTheDocument();
+    expect(arrow.className).toContain('text-success');
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it('shows a down arrow (from trend) with no percentage when trend is down but delta is null', () => {
+    render(<StatTile label="Ventas" value="$0.00" trend="down" delta={null} positiveIsGood />);
+
+    const arrow = screen.getByText('▼');
+    expect(arrow).toBeInTheDocument();
+    expect(arrow.className).toContain('text-danger');
+  });
+
+  it('prefers the explicit trend for arrow direction while still showing the delta percentage', () => {
+    render(<StatTile label="Ventas" value="$500.00" trend="up" delta={0.25} positiveIsGood />);
+
+    expect(screen.getByText('▲')).toBeInTheDocument();
+    expect(screen.getByText('25.0%')).toBeInTheDocument();
+  });
+
   it('renders an optional sublabel when provided', () => {
     render(<StatTile label="Pedidos" value="12" sublabel="AOV $400.00" />);
 
