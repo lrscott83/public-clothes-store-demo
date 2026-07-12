@@ -1,0 +1,95 @@
+# Tasks: Pantalla 6 — Dashboard de Decisiones (salesops-10-decisiones-dashboard, Task 10)
+
+## Review Workload Forecast
+
+| Field | Value |
+|-------|-------|
+| Estimated changed lines | ~950-1150 (1 domain module w/ 9 helpers + tests, 4 chart primitives + tests, 9 section components + tests, 1 container rewrite + test) |
+| 400-line budget risk | High |
+| Chained PRs recommended | Yes |
+| Suggested split | PR 1 domain, PR 2 chart primitives, PR 3 section components + container |
+| Delivery strategy | ask-on-risk (pending orchestrator confirmation) |
+| Chain strategy | pending (ask user: stacked-to-main vs feature-branch-chain) |
+
+Decision needed before apply: Yes
+Chained PRs recommended: Yes
+Chain strategy: pending
+400-line budget risk: High
+
+### Suggested Work Units
+
+| Unit | Goal | Likely PR | Notes |
+|------|------|-----------|-------|
+| 1 | `buildDecisionesDashboard` + 9 sub-helpers + full unit-test suite (Phase 1) | PR 1 | No UI, no schema change; safe to land first; ~350-420 lines |
+| 2 | 4 SVG chart primitives + palette + render tests (Phase 2) | PR 2 | Depends on Unit 1's types only for `formatValue` shape, not domain types; ~300-350 lines |
+| 3 | 9 section components + container rewrite + regression (Phases 3-4) | PR 3 | Depends on Units 1-2; ~300-380 lines |
+
+If `feature-branch-chain`: PR 1 base = tracker/feature branch; PR 2 base = PR 1 branch; PR 3 base = PR 2 branch. If `stacked-to-main`: each PR targets `main` in order, merged before the next starts.
+
+## Phase 1: Domain builder — `app/domain/decisiones-dashboard.ts`
+
+- [x] 1.1 RED — create `app/domain/__tests__/decisiones-dashboard.test.ts`: `splitByPeriod` case — order 5 days before `generatedAt` → current window; order 15 days before → prior window; anchor is `state.generatedAt`, not wall clock. Run `pnpm test`, confirm failing (module missing).
+- [x] 1.2 RED (same file) — `buildKpiHeader` case: 2 qualifying orders (`totalUSD:500/300`, `commissionMN:3000/1000`, `usdToMn:40`, item cost `200/100`) → `Ventas:800`, `Margen:400`, `Pedidos:2`, `AOV:400`. Confirm failing.
+- [x] 1.3 RED (same file) — `buildKpiHeader` delta case: prior-window value `0`, current `500` → trend `up`, no `Infinity`/`NaN`; both windows `0` → trend `flat`; normal prior>0 → numeric delta. Confirm failing.
+- [x] 1.4 RED (same file) — `buildKpiHeader` "Comisión pendiente" case: one `verificado` unpaid (`commissionMN:1000`), one `entregado` unpaid (`commissionMN:2000`), one `comision_pagada` (`commissionMN:3000`) → pending total `3000` (paid excluded). Confirm failing.
+- [x] 1.5 RED (same file) — `buildSalesTrend` case: 20-day window, one day with zero qualifying orders → appears as `{count:0, valueUSD:0}`, not omitted; toggle-relevant series (`count` and `valueUSD`) both present per point. Confirm failing.
+- [x] 1.6 RED (same file) — `buildStageDistribution` case: orders only in `creado` and `entregado` → exactly 5 entries in fixed order `creado→verificado→transportando→entregado→comision_pagada`, zero-count states included, `creado` orders counted here (unlike other aggregations). Confirm failing.
+- [x] 1.7 RED (same file) — `buildWarehouseSales` case: 3 warehouses, qualifying orders for only 2 → all 3 appear, zero-sale warehouse shows `revenueUSD:0, count:0`. Confirm failing.
+- [x] 1.8 RED (same file) — `buildCurrencyMix` case: 10 orders (4 USD/3 MN/2 ZELLE/1 EUR) → 4 buckets with correct counts, `USD` share `40%`; unrecognized method (e.g. `CRYPTO`) → grouped into `otros`, no throw. Confirm failing.
+- [x] 1.9 RED (same file) — `buildGestorRanking` case: gestor `g1` one `verificado` unpaid order (`totalUSD:400, commissionMN:800`) → row `revenueUSD:400, aov:400, commissionEarnedMN:800, commissionPendingMN:800`; gestor with zero orders → row of all zeros, not omitted; rows sorted desc by `revenueUSD`. Confirm failing.
+- [x] 1.10 RED (same file) — `buildTopMarginProducts` case: product `p1` (`costUSD:10`) in two qualifying lines (`qty:2,price:25` and `qty:1,price:30`) → aggregate margin `50`; product with zero qualifying sales → excluded (not zero-padded, unlike warehouse/gestor). Confirm failing.
+- [x] 1.11 RED (same file) — `buildInventoryAlerts` case: `quantity:0` → `agotado`; `quantity:2` → `bajo`; `quantity:10` → excluded (normal); orphan `productId` → skipped without throw; grouped by `warehouseId`. Confirm failing.
+- [x] 1.12 RED (same file) — orphan `productId` in margin/cost aggregation (KPIs and top-products) contributes `0`, no throw, rest of order/other orders still aggregated. Confirm failing.
+- [x] 1.13 RED (same file) — live-rate regression: order's `exchangeRateSnapshot.usdToMn:40` frozen; mutating `state.exchangeRates.usdToMn` to `45` after the fact does not change that order's contribution to any KPI. Confirm failing.
+- [x] 1.14 RED (same file) — `hasData` case: `SeedState.orders` all `creado` → `buildDecisionesDashboard(state).hasData === false`; at least one `verificado`+ order → `hasData === true`. Confirm failing.
+- [x] 1.15 GREEN — implement `app/domain/decisiones-dashboard.ts`: export `DashboardView` + all sub-view types, `buildDecisionesDashboard(state: SeedState): DashboardView` composing the 9 sub-helpers (all individually exported for direct testing), reuse `buildProfitabilityRanking` (ascending tail) for `lowestMargin` and `buildInventorySummary` inside `buildInventoryAlerts`. Anchor = `state.generatedAt`/`ANCHOR_ISO`+`DAY_MS` from `app/seed/constants.ts`. Run `pnpm test`, confirm 1.1-1.14 passing.
+
+## Phase 2: SVG chart primitives — `app/components/charts/`
+
+- [ ] 2.1 RED — create `app/components/charts/palette.ts` consumer test inline in `stat-tile.test.tsx` setup only if needed; otherwise treat palette as a plain data module (no test required, but confirm it exports an ordered Tailwind class-pair array before 2.3).
+- [ ] 2.2 RED — create `app/components/charts/__tests__/stat-tile.test.tsx`: `<StatTile label value delta positiveIsGood/>` — label + value text present; `delta > 0` + `positiveIsGood:true` → up arrow `▲` + green class; `delta > 0` + `positiveIsGood:false` → up arrow + red class; `delta === null` → no arrow, "—" shown. Run `pnpm test`, confirm failing (module missing).
+- [ ] 2.3 GREEN — implement `app/components/charts/stat-tile.tsx` per design prop contract. Run `pnpm test`, confirm 2.2 passing.
+- [ ] 2.4 RED — create `app/components/charts/__tests__/bar-chart.test.tsx`: `<BarChart bars ariaLabel/>` — `querySelectorAll('rect').length === bars.length`; each bar label present via `getByText`; formatted values present when `formatValue` passed; `bars=[]` → svg shell renders, zero `rect`, no throw. Run `pnpm test`, confirm failing.
+- [ ] 2.5 GREEN — implement `app/components/charts/bar-chart.tsx` (horizontal/vertical orientation, generic, no domain import). Run `pnpm test`, confirm 2.4 passing.
+- [ ] 2.6 RED — create `app/components/charts/__tests__/area-trend.test.tsx`: LOCK the coordinate mechanism to a single `<polyline points="x1,y1 x2,y2 ...">` (no separate `<path d>` area fill) — assert `points` attribute splits into exactly `points.length` coordinate pairs; assert first/last pair reflects min/max scaling; `points=[]` → no `polyline`, no throw. Run `pnpm test`, confirm failing.
+- [ ] 2.7 GREEN — implement `app/components/charts/area-trend.tsx` using the locked `polyline` mechanism only. Run `pnpm test`, confirm 2.6 passing.
+- [ ] 2.8 RED — create `app/components/charts/__tests__/donut-chart.test.tsx`: LOCK the arc mechanism to one `<circle>` per slice using `stroke-dasharray`/`stroke-dashoffset` (no arc `<path d>` math) — assert `querySelectorAll('circle').length === slices.length`; legend labels via `getByText`; percent text sums to `100`; single slice → full-ring `circle` with `stroke-dasharray` covering full circumference; `slices=[]` → no `circle`, no throw. Run `pnpm test`, confirm failing.
+- [ ] 2.9 GREEN — implement `app/components/charts/donut-chart.tsx` using the locked `circle`+`stroke-dasharray` mechanism only. Run `pnpm test`, confirm 2.8 passing.
+- [ ] 2.10 VERIFY — confirm none of the 4 chart primitives import any `app/domain/*` type (design checklist item).
+
+## Phase 3: Section components — `app/components/decisiones/`
+
+- [ ] 3.1 RED — create `app/components/decisiones/__tests__/kpi-header.test.tsx`: `<KpiHeader kpis={KpiHeaderView}/>` renders exactly 5 `StatTile`s in fixed order Ventas/Margen/Pedidos+AOV/Comisión pendiente/Cobrado vs pendiente; USD figures match `formatMoney` regex; MN figure is plain `{v} MN` text, not `formatMoney`. Confirm failing.
+- [ ] 3.2 GREEN — implement `app/components/decisiones/kpi-header.tsx`. Confirm 3.1 passing.
+- [ ] 3.3 RED — create `app/components/decisiones/__tests__/sales-trend-section.test.tsx`: default renders "valor" (or documented default) series via `AreaTrend`; heading "Tendencia de ventas (20 días)" does not contain "decisiones"; clicking the "cantidad" toggle switches the rendered series without re-reading `SeedState` (assert via prop-only re-render, no new data fetch call). Confirm failing.
+- [ ] 3.4 GREEN — implement `app/components/decisiones/sales-trend-section.tsx` (`useState<'cantidad'|'valor'>`). Confirm 3.3 passing.
+- [ ] 3.5 RED — create `app/components/decisiones/__tests__/stage-distribution.test.tsx`: 5 bars render via `BarChart`, one per `OrderState`, zero-count states present; heading/subtitle contains no funnel/conversion language ("% de conversión", "tasa de abandono" absent), no "decisiones". Confirm failing.
+- [ ] 3.6 GREEN — implement `app/components/decisiones/stage-distribution.tsx`. Confirm 3.5 passing.
+- [ ] 3.7 RED — create `app/components/decisiones/__tests__/warehouse-sales.test.tsx`: one bar per warehouse via `BarChart`, zero-sale warehouse included with `$0.00`; heading has no "decisiones". Confirm failing.
+- [ ] 3.8 GREEN — implement `app/components/decisiones/warehouse-sales.tsx`. Confirm 3.7 passing.
+- [ ] 3.9 RED — create `app/components/decisiones/__tests__/currency-mix.test.tsx`: one slice per method via `DonutChart`, legend % via `getByText`, `otros` bucket rendered when present; heading has no "decisiones". Confirm failing.
+- [ ] 3.10 GREEN — implement `app/components/decisiones/currency-mix.tsx`. Confirm 3.9 passing.
+- [ ] 3.11 RED — create `app/components/decisiones/__tests__/gestor-ranking.test.tsx`: one row per gestor, `revenueUSD`/`aov` via `formatMoney`, `commissionEarnedMN`/`commissionPendingMN` as plain `{v} MN` text; zero-order gestor row present; heading has no "decisiones". Confirm failing.
+- [ ] 3.12 GREEN — implement `app/components/decisiones/gestor-ranking.tsx`. Confirm 3.11 passing.
+- [ ] 3.13 RED — create `app/components/decisiones/__tests__/top-margin-products.test.tsx`: one row/bar per ranked product, margin via `formatMoney`, sorted desc, unsold product absent; heading has no "decisiones". Confirm failing.
+- [ ] 3.14 GREEN — implement `app/components/decisiones/top-margin-products.tsx`. Confirm 3.13 passing.
+- [ ] 3.15 RED — create `app/components/decisiones/__tests__/inventory-alerts.test.tsx`: rows grouped by warehouse, `agotado`/`bajo` rows only (reuse `StockBadge`), normal-quantity entries absent; heading has no "decisiones". Confirm failing.
+- [ ] 3.16 GREEN — implement `app/components/decisiones/inventory-alerts.tsx`. Confirm 3.15 passing.
+- [ ] 3.17 RED — create `app/components/decisiones/__tests__/lowest-margin-orders.test.tsx`: rows render ascending by `marginUSD` (lowest first) from `ProfitabilityRow[]` input unchanged; no "pérdida"/"loss" text or styling even when `isLoss:true`; heading "Pedidos de menor margen" has no "decisiones". Confirm failing.
+- [ ] 3.18 GREEN — implement `app/components/decisiones/lowest-margin-orders.tsx` (may reuse `ProfitabilityTable` markup, reversed order, loss-tag removed). Confirm 3.17 passing.
+
+## Phase 4: Container rewrite + regression — `app/routes/decisiones.tsx`
+
+- [ ] 4.1 RED — update `app/routes/__tests__/decisiones.test.tsx`: `render(<Decisiones/>)` direct (no router stub) — exactly one `<h1>Decisiones</h1>`; when `verificado`+ orders exist, all 5 KPI tiles + 4 Layer-2 visuals + 3 Layer-3 blocks render. Confirm failing (still old `ProfitabilitySummary`/`ProfitabilityTable`-only render).
+- [ ] 4.2 RED (same file) — heading-uniqueness case: `getAllByRole('heading')` — only the `<h1>` matches `/decisiones/i`, no section subheading contains "decisiones". Confirm failing.
+- [ ] 4.3 RED (same file) — empty-state case: seed stubbed to only `creado` orders → single `<h1>` still renders, empty-state message shown instead of KPI header + sales/margin/ranking blocks; stage distribution MAY still render (exempted). Confirm failing.
+- [ ] 4.4 RED (same file) — no-mutation-affordance case: rendered output contains no `<form>` and no store-mutating button; cantidad/valor toggle button present but does not mutate `SeedState`. Confirm failing.
+- [ ] 4.5 RED (same file) — no-target case: rendered output contains no goal/objective/meta-compliance element (assert absence of target-related text/role). Confirm failing.
+- [ ] 4.6 GREEN — rewrite `app/routes/decisiones.tsx`: `useState(() => buildDecisionesDashboard(loadSeedState()))`, direct render, `<h1>Decisiones</h1>`, compose `KpiHeader`/`SalesTrendSection`/`StageDistribution`/`WarehouseSales`/`CurrencyMix`/`GestorRanking`/`TopMarginProducts`/`InventoryAlerts`/`LowestMarginOrders` when `view.hasData`, else empty-state message (stage distribution still shown per exemption); keep existing `meta()`. Run `pnpm test`, confirm 4.1-4.5 passing.
+- [ ] 4.7 VERIFY — `app/routes/__tests__/routes.test.tsx` still passes: shared `{ path: '/decisiones', Component: Decisiones, heading: /decisiones/i }` entry resolves to a single unambiguous heading match.
+
+## Verification
+
+- [ ] 5.1 Run full `pnpm test` (from `templates/apps/salesops-mvp`) — confirm all green, including all Phase 1-4 new suites and every prior salesops task's regression suite (seed-store, tablero, operador-*, tasas, inventario, finanzas).
+- [ ] 5.2 Run `pnpm --filter salesops-mvp typecheck` (or `pnpm typecheck` from the app dir) — confirm no type errors across new domain module, chart primitives, section components, and rewritten container.
+- [ ] 5.3 Manual checklist confirmation: no chart primitive imports `app/domain/*`; no seed/data-model change made; no new dependency added; locked constraints honored (no meta/target, transport out of scope, "menor margen" not "loss", ZELLE/EUR consumed not seeded).
