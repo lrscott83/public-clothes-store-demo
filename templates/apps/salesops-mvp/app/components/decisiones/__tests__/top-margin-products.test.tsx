@@ -28,4 +28,24 @@ describe('TopMarginProducts', () => {
     render(<TopMarginProducts topMargin={{ rows: [] }} />);
     expect(screen.queryByText('Camiseta')).not.toBeInTheDocument();
   });
+
+  it('caps the chart at the top 8 products even when the domain view has more', () => {
+    const rows = Array.from({ length: 15 }, (_, i) => ({
+      productId: `p${i}`,
+      name: `Producto ${i}`,
+      marginUSD: 100 - i,
+    }));
+    const { container } = render(<TopMarginProducts topMargin={{ rows }} />);
+    expect(container.querySelectorAll('rect')).toHaveLength(8);
+    // highest-margin product is kept, a beyond-top-8 product is dropped
+    expect(screen.getByText('Producto 0')).toBeInTheDocument();
+    expect(screen.queryByText('Producto 8')).not.toBeInTheDocument();
+  });
+
+  it('truncates a very long product name so it does not overrun the bar', () => {
+    const rows = [{ productId: 'p1', name: 'Kit 5.12KW: Inversor MUST 3KW + Batería Humsienk', marginUSD: 100 }];
+    render(<TopMarginProducts topMargin={{ rows }} />);
+    expect(screen.queryByText('Kit 5.12KW: Inversor MUST 3KW + Batería Humsienk')).not.toBeInTheDocument();
+    expect(screen.getByText(/^Kit 5\.12KW.*…$/)).toBeInTheDocument();
+  });
 });

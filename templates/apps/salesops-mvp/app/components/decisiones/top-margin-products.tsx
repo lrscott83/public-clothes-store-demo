@@ -8,13 +8,23 @@ export interface TopMarginProductsProps {
 
 const MONEY = { locale: 'en-US', currency: 'USD' } as const;
 
+/** How many products the ranking shows — it's a "top N", not the full catalog. */
+const TOP_N = 8;
+/** Keep labels short enough to sit in the chart's fixed label gutter without overrunning the bars. */
+const MAX_LABEL = 22;
+
+function truncate(name: string): string {
+  return name.length > MAX_LABEL ? `${name.slice(0, MAX_LABEL - 1).trimEnd()}…` : name;
+}
+
 /**
- * Layer 3b — "Top productos por margen": ranked by aggregate margin USD
- * (not revenue), sorted desc by the domain builder. Products with no
- * qualifying sales are already excluded upstream.
+ * Layer 3b — "Top productos por margen": the top {@link TOP_N} products ranked
+ * by aggregate margin USD (not revenue), sorted desc by the domain builder.
+ * Products with no qualifying sales are already excluded upstream. Long names
+ * are truncated at the leaf so they don't overrun the bars.
  */
 export function TopMarginProducts({ topMargin }: TopMarginProductsProps) {
-  const bars = topMargin.rows.map((row) => ({ label: row.name, value: row.marginUSD }));
+  const bars = topMargin.rows.slice(0, TOP_N).map((row) => ({ label: truncate(row.name), value: row.marginUSD }));
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
