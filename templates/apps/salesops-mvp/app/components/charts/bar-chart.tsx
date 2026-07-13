@@ -43,9 +43,7 @@ export function BarChart({ bars, orientation = 'horizontal', formatValue = Strin
       role="img"
       aria-label={ariaLabel}
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-      width="100%"
-      height="auto"
-      className="overflow-visible"
+      className="h-auto w-full overflow-visible"
     >
       {bars.map((bar, index) => {
         const color = resolveChartColor(index, bar.colorKey);

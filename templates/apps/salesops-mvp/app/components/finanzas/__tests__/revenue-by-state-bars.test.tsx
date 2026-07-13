@@ -19,7 +19,7 @@ describe('RevenueByStateBars', () => {
   it('renders one bar per state row, including zero-revenue states', () => {
     const { container } = render(<RevenueByStateBars revenueByState={buildView()} />);
 
-    expect(container.querySelectorAll('svg')).toHaveLength(1);
+    expect(container.querySelectorAll('svg[role="img"]')).toHaveLength(1);
     expect(container.querySelectorAll('rect')).toHaveLength(5);
     expect(screen.getByText('Verificado')).toBeInTheDocument();
     expect(screen.getByText('$200.00')).toBeInTheDocument();

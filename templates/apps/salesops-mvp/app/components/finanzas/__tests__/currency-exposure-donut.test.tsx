@@ -16,7 +16,7 @@ describe('CurrencyExposureDonut', () => {
   it('renders one donut slice per currency bucket with its label', () => {
     const { container } = render(<CurrencyExposureDonut currencyExposure={buildView()} />);
 
-    expect(container.querySelectorAll('svg')).toHaveLength(1);
+    expect(container.querySelectorAll('svg[role="img"]')).toHaveLength(1);
     expect(container.querySelectorAll('circle[data-slice]')).toHaveLength(2);
     expect(screen.getByText('USD')).toBeInTheDocument();
     expect(screen.getByText('MN')).toBeInTheDocument();

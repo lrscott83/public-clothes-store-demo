@@ -9,7 +9,7 @@ describe('CommissionLiabilityDonut', () => {
 
     const { container } = render(<CommissionLiabilityDonut commissionLiability={view} />);
 
-    expect(container.querySelectorAll('svg')).toHaveLength(1);
+    expect(container.querySelectorAll('svg[role="img"]')).toHaveLength(1);
     expect(container.querySelectorAll('circle[data-slice]')).toHaveLength(2);
     expect(screen.getByText('Pagada')).toBeInTheDocument();
     expect(screen.getByText('Pendiente')).toBeInTheDocument();

@@ -33,7 +33,7 @@ export function DonutChart({ slices, ariaLabel }: DonutChartProps) {
 
   return (
     <div>
-      <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${SIZE} ${SIZE}`} width="100%" height="auto">
+      <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${SIZE} ${SIZE}`} className="h-auto w-full">
         <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="none" strokeWidth={STROKE_WIDTH} className="stroke-border" />
         {slices.map((slice, index) => {
           const color = resolveChartColor(index, slice.colorKey);

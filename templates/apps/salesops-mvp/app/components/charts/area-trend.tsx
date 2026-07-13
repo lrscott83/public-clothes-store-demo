@@ -40,9 +40,7 @@ export function AreaTrend({ points, ariaLabel, formatValue = String }: AreaTrend
       role="img"
       aria-label={ariaLabel}
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-      width="100%"
-      height="auto"
-      className="overflow-visible"
+      className="h-auto w-full overflow-visible"
     >
       {coords.length > 0 && (
         <polyline points={coords.join(' ')} fill="none" className="stroke-primary" strokeWidth={2} />

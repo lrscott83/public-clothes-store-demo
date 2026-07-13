@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { HelpCircle } from 'lucide-react';
 
 export interface InfoPopoverProps {
   /** Short heading of the popup — also the accessible name of the help button (usually the card title). */
@@ -42,9 +43,9 @@ export function InfoPopover({ title, text }: InfoPopoverProps) {
         aria-label={`Qué significa: ${title}`}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex h-4 w-4 items-center justify-center rounded-full border border-border text-[10px] font-bold leading-none text-text-muted hover:bg-border hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="inline-flex rounded-full text-text-muted transition-colors hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
-        ?
+        <HelpCircle className="h-[18px] w-[18px]" aria-hidden="true" />
       </button>
       {open && (
         <div

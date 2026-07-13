@@ -16,7 +16,7 @@ describe('CashFlowTrendSection', () => {
   it('renders exactly one svg/polyline for the cobrado series by default', () => {
     const { container } = render(<CashFlowTrendSection trend={buildTrend()} />);
 
-    expect(container.querySelectorAll('svg')).toHaveLength(1);
+    expect(container.querySelectorAll('svg[role="img"]')).toHaveLength(1);
     expect(container.querySelectorAll('polyline')).toHaveLength(1);
     expect(screen.getByRole('img')).toHaveAttribute('aria-label', expect.stringMatching(/cobrado/i));
   });
@@ -27,7 +27,7 @@ describe('CashFlowTrendSection', () => {
 
     await user.click(screen.getByRole('button', { name: /pendiente/i }));
 
-    expect(container.querySelectorAll('svg')).toHaveLength(1);
+    expect(container.querySelectorAll('svg[role="img"]')).toHaveLength(1);
     expect(container.querySelectorAll('polyline')).toHaveLength(1);
     expect(screen.getByRole('img')).toHaveAttribute('aria-label', expect.stringMatching(/pendiente/i));
   });
