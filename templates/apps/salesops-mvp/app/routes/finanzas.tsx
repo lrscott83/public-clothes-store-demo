@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import type { Route } from './+types/finanzas';
-import { buildFinanceSummary } from '../domain/finanzas';
+import { buildFinanceDashboard } from '../domain/finanzas-dashboard';
 import { loadSeedState } from '../store/seed-store';
-import { CommissionSummary } from '../components/finanzas/commission-summary';
+import { FinanceKpiHeader } from '../components/finanzas/finance-kpi-header';
+import { CashFlowTrendSection } from '../components/finanzas/cash-flow-trend-section';
+import { CommissionLiabilityDonut } from '../components/finanzas/commission-liability-donut';
+import { RevenueByStateBars } from '../components/finanzas/revenue-by-state-bars';
+import { CurrencyExposureDonut } from '../components/finanzas/currency-exposure-donut';
+import { GestorCommissionTable } from '../components/finanzas/gestor-commission-table';
+import { WarehouseCashFlow } from '../components/finanzas/warehouse-cash-flow';
 import { StateBreakdownTable } from '../components/finanzas/state-breakdown-table';
 
 export function meta(_args: Route.MetaArgs) {
@@ -10,26 +16,55 @@ export function meta(_args: Route.MetaArgs) {
 }
 
 /**
- * Read-only commission & cash-flow container driven by local `useState` —
+ * Read-only 3-layer financial control panel driven by local `useState` —
  * direct render, no RR7 `<Form>`/action/loader, no `useNavigate` (sidesteps
  * the jsdom+undici `AbortSignal` gotcha), mirroring `decisiones.tsx`.
  * Computes its view model once from `loadSeedState()` via
- * `buildFinanceSummary`; no mutation affordance — marking a commission paid
- * lives only in `/operador-gestores`. The `<h1>` is the single word
- * "Finanzas"; "Comisiones y flujo de caja" renders as a non-heading `<p>`
- * subtitle so `routes.test.tsx`'s `getByRole('heading', { name: /finanzas/i
- * })` stays unambiguous.
+ * `buildFinanceDashboard`; no mutation affordance beyond the local
+ * cobrado/pendiente cash-flow toggle.
+ *
+ * Layer 1 (KPI header) and Layer 3's gestor/warehouse blocks render only
+ * when `view.hasData`; Layer 3's "Flujo por estado" is exempt from the
+ * empty-state because it counts every state including `creado`.
  */
 export default function Finanzas() {
-  const [view] = useState(() => buildFinanceSummary(loadSeedState()));
+  const [view] = useState(() => buildFinanceDashboard(loadSeedState()));
 
   return (
     <main className="p-8">
       <h1 className="text-2xl font-bold text-text">Finanzas</h1>
       <p className="mt-1 text-sm text-text-muted">Comisiones y flujo de caja</p>
-      <CommissionSummary kpis={view.kpis} />
+
+      {!view.hasData && (
+        <p className="mt-4 text-sm text-text-muted">
+          No hay pedidos verificados o posteriores todavía — el panel financiero aparecerá aquí una vez existan.
+        </p>
+      )}
+
+      {view.hasData && (
+        <div className="mt-6">
+          <FinanceKpiHeader kpis={view.kpis} />
+        </div>
+      )}
+
+      {view.hasData && (
+        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+          <CashFlowTrendSection trend={view.cashFlowTrend} />
+          <RevenueByStateBars revenueByState={view.revenueByState} />
+          <CommissionLiabilityDonut commissionLiability={view.commissionLiability} />
+          <CurrencyExposureDonut currencyExposure={view.currencyExposure} />
+        </div>
+      )}
+
+      {view.hasData && (
+        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+          <GestorCommissionTable gestorCommission={view.gestorCommission} />
+          <WarehouseCashFlow warehouseCashFlow={view.warehouseCashFlow} />
+        </div>
+      )}
+
       <div className="mt-8">
-        <StateBreakdownTable rows={view.rows} />
+        <StateBreakdownTable rows={view.stateBreakdown} />
       </div>
     </main>
   );

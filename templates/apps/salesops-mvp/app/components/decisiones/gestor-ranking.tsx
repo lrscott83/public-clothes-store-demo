@@ -1,5 +1,5 @@
 import { formatMoney } from '@store-mgmt/storefront/config';
-import { InfoPopover } from './info-popover';
+import { InfoPopover } from '../shared/info-popover';
 import { DECISIONES_HELP } from './help-content';
 import type { GestorRankingView } from '../../domain/decisiones-dashboard';
 

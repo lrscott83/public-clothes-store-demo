@@ -1,6 +1,8 @@
-import { DAY_MS } from '../seed/constants';
 import { buildProfitabilityRanking, type ProfitabilityRow } from './decisiones';
 import { buildInventorySummary } from './inventory';
+import { buildKpiTrend, splitByPeriod } from './period-trend';
+import type { KpiTrend, PeriodSplit, Trend } from './period-trend';
+import { DAY_MS } from '../seed/constants';
 import type { Order, OrderState, SeedState, SeededProduct } from './types';
 
 /**
@@ -12,67 +14,15 @@ import type { Order, OrderState, SeedState, SeededProduct } from './types';
  * NEVER `Date.now()` — see `splitByPeriod`. Every MN↔USD conversion uses the
  * order's OWN frozen `exchangeRateSnapshot.usdToMn`, never the live
  * `state.exchangeRates` (mirrors `buildProfitabilityRanking`).
+ *
+ * Generic time/ratio math (`Trend`/`KpiTrend`/`PeriodSplit`,
+ * `splitByPeriod`/`buildKpiTrend`/`computeTrend`/`computeDelta`) now lives in
+ * the neutral `period-trend.ts` module — re-exported here so existing
+ * importers and tests keep their import path.
  */
 
-// ---- shared trend/delta helpers -------------------------------------------------
-
-export type Trend = 'up' | 'down' | 'flat';
-
-export interface KpiTrend {
-  current: number;
-  prior: number;
-  /** (current - prior) / prior; `null` when prior is 0 (leaf renders "—"). */
-  delta: number | null;
-  trend: Trend;
-}
-
-function computeTrend(current: number, prior: number): Trend {
-  if (prior === 0) return current > 0 ? 'up' : 'flat';
-  if (current > prior) return 'up';
-  if (current < prior) return 'down';
-  return 'flat';
-}
-
-function computeDelta(current: number, prior: number): number | null {
-  if (prior === 0) return null;
-  return (current - prior) / prior;
-}
-
-function buildKpiTrend(current: number, prior: number): KpiTrend {
-  return { current, prior, delta: computeDelta(current, prior), trend: computeTrend(current, prior) };
-}
-
-// ---- period split -----------------------------------------------------------------
-
-export interface PeriodSplit {
-  current: Order[];
-  prior: Order[];
-}
-
-/**
- * Splits ALL orders (no state filter — callers filter as needed) into the
- * current 10-day window `[anchor-10d, anchor)` and the prior 10-day window
- * `[anchor-20d, anchor-10d)`, anchored to `state.generatedAt`. Orders outside
- * both windows (future-dated, or older than 20 days) are dropped from both
- * buckets.
- */
-export function splitByPeriod(state: SeedState): PeriodSplit {
-  const anchorMs = new Date(state.generatedAt).getTime();
-  const current: Order[] = [];
-  const prior: Order[] = [];
-
-  for (const order of state.orders) {
-    const createdMs = new Date(order.createdAt).getTime();
-    const diff = anchorMs - createdMs;
-    if (diff >= 0 && diff < 10 * DAY_MS) {
-      current.push(order);
-    } else if (diff >= 10 * DAY_MS && diff < 20 * DAY_MS) {
-      prior.push(order);
-    }
-  }
-
-  return { current, prior };
-}
+export type { Trend, KpiTrend, PeriodSplit };
+export { splitByPeriod };
 
 // ---- per-order cost/commission helpers (mirror buildProfitabilityRanking) --------
 

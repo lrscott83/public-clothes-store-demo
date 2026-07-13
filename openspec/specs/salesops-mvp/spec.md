@@ -1,8 +1,8 @@
-# Spec — salesops-mvp (Tasks 1–10)
+# Spec — salesops-mvp (Tasks 1–11)
 
 ## Purpose
 
-Define the testable contract for the `@store-mgmt/salesops-mvp` app: a workspace app that registers correctly, serves on a distinct port, resolves 7 placeholder routes with a sidebar, renders a product against a local catalog, and ships with a deterministic frozen domain model + seed generator powering all seven screens. Tasks 1–3 complete: app skeleton, local ProductCard, full seed/domain/localStorage implementation, and the 3-step "crear pedido" wizard (Carrito → Cliente → Almacén). Task 4 complete: Pantalla 2 (Operador de gestores verifica pedidos) — read-only kanban board with rate-freeze verification and commission-paid marking. Task 5 complete: Pantalla 3 (Operador de almacén) — warehouse selector, carrier assignment, delivery marking, and backward-compatible board extension. Task 6 complete: Pantalla 4 (Tasas de cambio) — exchange rate editor (USD→MN, Zelle, EUR) rendering as editable numeric fields, saved via a new pure store action `updateExchangeRates` that writes only `state.exchangeRates` and never touches `state.orders`, preserving the frozen-snapshot invariant. Task 10 complete: Pantalla 6 (Decisiones) — 3-layer visual decision dashboard with KPI header (5 tiles with 10-day trends), 4 visuals (sales trend, orders-by-stage distribution, sales-by-warehouse, currency/payment mix), and 3 actionable blocks (gestor ranking, top products by margin, inventory alerts + lowest-margin orders), all fed 100% by seeded data with no invented values, using custom inline SVG chart primitives and pure domain helpers with strict TDD test coverage. Task 9 complete: Pantalla 7 (Finanzas) — read-only commission and cash-flow summary screen aggregating commission paid vs. pending (native MN, no conversion) and per-order-state revenue/commission funnel, with zero domain/store schema changes. Task 7 (Inventario) remains out of scope.
+Define the testable contract for the `@store-mgmt/salesops-mvp` app: a workspace app that registers correctly, serves on a distinct port, resolves 7 placeholder routes with a sidebar, renders a product against a local catalog, and ships with a deterministic frozen domain model + seed generator powering all seven screens. Tasks 1–3 complete: app skeleton, local ProductCard, full seed/domain/localStorage implementation, and the 3-step "crear pedido" wizard (Carrito → Cliente → Almacén). Task 4 complete: Pantalla 2 (Operador de gestores verifica pedidos) — read-only kanban board with rate-freeze verification and commission-paid marking. Task 5 complete: Pantalla 3 (Operador de almacén) — warehouse selector, carrier assignment, delivery marking, and backward-compatible board extension. Task 6 complete: Pantalla 4 (Tasas de cambio) — exchange rate editor (USD→MN, Zelle, EUR) rendering as editable numeric fields, saved via a new pure store action `updateExchangeRates` that writes only `state.exchangeRates` and never touches `state.orders`, preserving the frozen-snapshot invariant. Task 10 complete: Pantalla 6 (Decisiones) — 3-layer visual decision dashboard with KPI header (5 tiles with 10-day trends), 4 visuals (sales trend, orders-by-stage distribution, sales-by-warehouse, currency/payment mix), and 3 actionable blocks (gestor ranking, top products by margin, inventory alerts + lowest-margin orders), all fed 100% by seeded data with no invented values, using custom inline SVG chart primitives and pure domain helpers with strict TDD test coverage. Task 11 complete: Pantalla 7 (Finanzas) — rebuilt into a 3-layer financial control panel answering "¿dónde está mi plata y hacia dónde se va?" with 5 KPI tiles (10-day period trends), 4 financial visuals (cash-collection trend with cobrado/pendiente toggle, commission liability donut, revenue by stage, currency/settlement mix), and 3 actionable blocks (commission cost & ROI per gestor, pending cash per warehouse, revenue aging by state). Maintains full architectural decoupling from decisiones (zero cross-dashboard domain imports); all metrics 100% seeded with frozen exchange-rate snapshots; read-only with no mutations; strict TDD throughout. Task 7 (Inventario) remains out of scope.
 
 ## Requirements
 
@@ -1146,145 +1146,146 @@ legitimately show a single non-empty bar.
 - THEN the single `<h1>` is still rendered
 - AND an empty-state message is shown instead of the KPI header and the sales/margin/ranking blocks
 
-### Requirement: Finanzas Route Renders the Commission & Cash-Flow Summary
+### Requirement: Finanzas Route Renders the Three-Layer Finance Dashboard
 
-The `/finanzas` route MUST replace the placeholder screen with a
-direct-render container (no `<Form>`, no loader, no `useNavigate`) that
-loads `SeedState` via `loadSeedState` on mount, computes the view model with
-`buildFinanceSummary`, and renders a KPI summary block plus a per-state
-breakdown table. It MUST render exactly one `<h1>` and no other heading MUST
-contain the substring "finanzas".
+The `/finanzas` route MUST render a direct-render container (no `<Form>`,
+loader, or `useNavigate`) loading `SeedState` via `loadSeedState`, computing
+view models via pure helpers (composing `buildFinanceSummary` unchanged),
+and rendering top to bottom: Layer 1 (5 KPI tiles), Layer 2 (4 visuals),
+Layer 3 (3 blocks). Exactly one `<h1>` MUST render; no other heading MUST
+contain "finanzas".
 
-#### Scenario: Route renders heading, KPI block, and breakdown table
+#### Scenario: All three layers render for qualifying orders
 
-- GIVEN `SeedState.orders` contains orders across multiple states
-- WHEN the app navigates to `/finanzas`
-- THEN exactly one `<h1>` is rendered
-- AND a commission KPI summary block is rendered
-- AND a per-state breakdown table is rendered
+- GIVEN `SeedState` has an order in state `verificado` or later
+- WHEN `/finanzas` renders
+- THEN exactly one `<h1>` renders, and all 5 Layer-1 tiles, 4 Layer-2
+  visuals, and 3 Layer-3 blocks render
 
-#### Scenario: No other heading repeats "finanzas"
+### Requirement: Empty State When No Qualifying Orders Exist
 
-- GIVEN `/finanzas` is rendered
-- WHEN all headings are inspected
-- THEN only the single `<h1>` matches `/finanzas/i`
-- AND no subheading text contains the substring "finanzas"
+With zero qualifying orders (`state !== 'creado'`), the route MUST still
+render one `<h1>` plus an empty-state message, MUST NOT fabricate
+non-zero-looking data for Layer 1/2 or the gestor/warehouse blocks. Layer
+3's "Flujo por estado" is exempt (counts every state including `creado`,
+and MAY show real zero rows).
 
-### Requirement: Commission KPIs Are Computed in Native MN
+#### Scenario: Zero qualifying orders shows a message, not fabricated data
 
-`buildFinanceSummary` MUST compute `commissionPaidMN` as the sum of
-`commissionMN` over orders in state `comision_pagada`; `commissionPendingMN`
-as the sum of `commissionMN` over orders in state `verificado`,
-`transportando`, or `entregado`; `commissionTotalMN` as their sum; and
-`pendingPaymentCount` as the count of orders in those three pending states.
-All four values MUST remain native MN (no USD conversion).
+- GIVEN `SeedState.orders` contains only `creado` orders
+- WHEN `/finanzas` renders
+- THEN the `<h1>` still renders, an empty-state message replaces Layer 1/2
+  and the gestor/warehouse blocks, and nothing throws
 
-#### Scenario: Paid, pending, and total KPIs are computed correctly
+### Requirement: Money Formatting for Finanzas
 
-- GIVEN one `comision_pagada` order with `commissionMN: 3000`, one
-  `verificado` order with `commissionMN: 1000`, and one `entregado` order
-  with `commissionMN: 2000`
-- WHEN `buildFinanceSummary` runs
-- THEN `commissionPaidMN` is `3000`
-- AND `commissionPendingMN` is `1000 + 2000 = 3000`
-- AND `commissionTotalMN` is `6000`
-- AND `pendingPaymentCount` is `2`
+Every USD figure across all layers MUST render via a formatter matching
+`^\$[\d,]+\.\d{2}$`. Every MN figure MUST render as plain `` `${value} MN` ``
+text (no thousands separators), never through the USD formatter, and MUST show
+`0 MN` (never `NaN`) when source orders are absent.
 
-#### Scenario: A `creado` order contributes to no commission KPI
+#### Scenario: MN never renders NaN
 
-- GIVEN a `creado` order with no frozen `commissionMN`
-- WHEN `buildFinanceSummary` runs
-- THEN that order contributes `0` to `commissionPaidMN`, `commissionPendingMN`, and `commissionTotalMN`
-- AND is not counted in `pendingPaymentCount`
-
-### Requirement: Per-State Breakdown Has Exactly Five Rows in Linear Order
-
-`buildFinanceSummary` MUST return exactly one row per `OrderState`, in the
-exhaustive linear order `creado → verificado → transportando → entregado →
-comision_pagada`, even when a state has zero orders. Each row MUST carry
-`count`, `revenueUSD` (sum of `totalUSD`), and `commissionMN` (sum of
-`commissionMN`, treated as `0` for `creado`).
-
-#### Scenario: All five states appear even with zero orders in some states
-
-- GIVEN `SeedState.orders` contains orders only in `creado` and `entregado`
-- WHEN `buildFinanceSummary` runs
-- THEN `rows` has exactly 5 entries, one per state in the fixed linear order
-- AND the `verificado`, `transportando`, and `comision_pagada` rows each show `count: 0`
-
-#### Scenario: A row's count, revenue, and commission sum correctly
-
-- GIVEN two `entregado` orders with `totalUSD` `100` and `150`, and
-  `commissionMN` `10` and `20`
-- WHEN `buildFinanceSummary` runs
-- THEN the `entregado` row has `count: 2`, `revenueUSD: 250`, `commissionMN: 30`
-
-#### Scenario: The `creado` row shows revenue but no commission
-
-- GIVEN a `creado` order with `totalUSD: 80` and no frozen `commissionMN`
-- WHEN `buildFinanceSummary` runs
-- THEN the `creado` row's `revenueUSD` includes `80`
-- AND the `creado` row's `commissionMN` is `0`, never `NaN` or `undefined`
-
-### Requirement: Money Formatting for Finanzas — USD via `formatMoney`, MN as Plain Text
-
-Every `revenueUSD` figure MUST render through `formatMoney`, matching
-`^\$[\d,]+\.\d{2}$`. Every `commissionMN` figure (KPIs and table column)
-MUST render as plain `{value} MN` text and MUST NOT be passed through
-`formatMoney`. The `creado` row's commission cell MUST render as `0 MN` or
-an empty/dash placeholder, never a USD-formatted value.
-
-#### Scenario: Revenue figures match the formatMoney pattern
-
-- GIVEN a rendered breakdown row
-- WHEN its revenue figure is inspected
-- THEN it matches the regex `^\$[\d,]+\.\d{2}$`
-
-#### Scenario: Commission figures render as plain MN text
-
-- GIVEN a rendered KPI card or table row showing commission
-- WHEN that figure is inspected
-- THEN it renders as plain `{value} MN` text, not in `formatMoney`'s USD format
-
-### Requirement: Empty State Still Renders All Five States With Zero Values
-
-When `SeedState.orders` is empty, the route MUST still render exactly one
-`<h1>`, KPI cards showing zero for all four values, and the breakdown table
-with all 5 states present and `count: 0` in every row.
-
-#### Scenario: No orders at all yields all-zero KPIs and a full zero table
-
-- GIVEN `SeedState.orders` is an empty array
-- WHEN the app navigates to `/finanzas`
-- THEN the single `<h1>` is rendered
-- AND all four KPI values are `0`
-- AND the breakdown table still shows all 5 states, each with `count: 0`
+- GIVEN only `creado` orders (undefined `totalMN`/`commissionMN`)
+- WHEN an MN tile renders
+- THEN it shows `0 MN`, never `NaN`
 
 ### Requirement: Finanzas Read-Only Screen With No Mutation Affordance
 
-The `/finanzas` screen MUST NOT expose any control that mutates `SeedState`:
-no `<form>`, no button that writes to the store, and specifically no
-"marcar comisión pagada" action (that mutation lives only in
-`/operador-gestores`).
+Across all three layers, `/finanzas` MUST expose no control mutating
+`SeedState`: no `<form>`, no store-mutating button, no "marcar comisión
+pagada" action. A local view-only toggle (e.g. cash-flow cobrado/pendiente)
+is permitted.
 
-#### Scenario: No form or mutating button is rendered
+#### Scenario: No form or mutating button renders
 
-- GIVEN `/finanzas` is rendered with any mix of order states
-- WHEN the rendered output is inspected
-- THEN it contains no `<form>` element and no button wired to a store-mutating action
-- AND no "marcar comisión pagada" control is present
+- GIVEN `/finanzas` renders with any mix of order states
+- WHEN inspected
+- THEN no `<form>` and no store-mutating button exist
 
-### Requirement: No Gross Revenue-USD KPI Card
+### Requirement: Layer 1 KPI Header Has Exactly Five Tiles With Period Trend
 
-The KPI summary block MUST NOT render a grand-total "Ingresos totales USD"
-card. Revenue USD MUST appear only disaggregated inside the per-state
-breakdown table.
+Layer 1 MUST render five tiles, each computed for the current 10-day
+window vs the prior 10-day window (anchored to `SeedState.generatedAt`,
+never the wall clock) with a trend indicator:
 
-#### Scenario: KPI block contains no gross revenue card
+| Tile | Formula |
+|---|---|
+| Ingresos facturados (USD) | `Σ totalUSD`, qualifying |
+| Ingresos liquidados (MN) | `Σ totalMN`, qualifying |
+| Cobrado vs pendiente (USD) | `Σ totalUSD`, `entregado`/`comision_pagada` vs `verificado`/`transportando` |
+| Comisión pendiente (MN) | `buildFinanceSummary.kpis.commissionPendingMN` |
+| Margen neto (USD) + % | `totalUSD − costoUSD − comisiónUSD`, aggregated |
 
-- GIVEN the KPI summary block is rendered
-- WHEN its cards are inspected
-- THEN none of them represents a summed total revenue USD figure across all states
+A `0`-prior / `>0`-current window MUST trend "up" (never `Infinity`).
+
+#### Scenario: Five tiles render with a safe trend
+
+- GIVEN qualifying orders in both windows, one tile with prior `0` /
+  current `> 0`
+- WHEN Layer 1 computes
+- THEN all 5 tiles render in order, and that tile shows "up", never
+  `Infinity`
+
+### Requirement: Layer 2 Renders Four Financial Visuals
+
+| Visual | Field(s) |
+|---|---|
+| Tendencia de cobros (20d, toggle cobrado/pendiente) | `totalUSD` by day, split cobrado/pendiente |
+| Comisión pagada vs pendiente (dona) | `commissionPaidMN` / `commissionPendingMN` |
+| Ingresos por estado (barras) | `FinanceStateRow.revenueUSD` per state |
+| Mix por moneda (dona) | `buildCurrencyExposure` revenue+percent per `payment.method` (hard-currency vs local-currency FX exposure) |
+
+Every day in the 20-day window MUST appear, including days at `0`.
+
+#### Scenario: A zero-activity day still appears
+
+- GIVEN one day in the 20-day window has no qualifying orders
+- WHEN the trend builds
+- THEN that day appears at `0`, not omitted
+
+#### Scenario: Toggling the trend does not touch SeedState
+
+- GIVEN the trend shows "cobrado"
+- WHEN toggled to "pendiente"
+- THEN the series switches without re-reading or mutating `SeedState`
+
+### Requirement: Layer 3 Renders Three Actionable Finance Blocks
+
+| Block | Field(s) |
+|---|---|
+| Comisión y ROI por gestor | `buildGestorRanking`; derived pagada = earned − pending; take-rate = commission ÷ revenue |
+| Cobros pendientes por almacén | `totalUSD` by `warehouseId`, cobrado/pendiente |
+| Flujo por estado | existing `StateBreakdownTable`, unchanged |
+
+A gestor/warehouse with zero qualifying orders MUST still appear at `0`,
+not be omitted.
+
+#### Scenario: Zero-order gestor and warehouse still appear
+
+- GIVEN a gestor and a warehouse with no qualifying orders
+- WHEN Layer 3 computes
+- THEN both appear with all values at `0`
+
+### Requirement: Finance Data Derives Only From Seeded Data and Each Order's Frozen Rate
+
+Every `/finanzas` figure MUST derive from `SeedState` alone. MN↔USD
+conversion MUST use each order's own frozen `exchangeRateSnapshot.usdToMn`,
+never live `state.exchangeRates`. Every MN aggregate MUST filter
+`state !== 'creado'` and coalesce `?? 0`.
+
+#### Scenario: A later live-rate edit does not change an already-computed figure
+
+- GIVEN a `verificado` order with `exchangeRateSnapshot.usdToMn: 40`
+- AND `state.exchangeRates.usdToMn` is later edited to `45`
+- WHEN the aggregation touching that order rebuilds
+- THEN it still uses `40`, not `45`
+
+#### Scenario: A creado order never produces NaN
+
+- GIVEN a `creado` order with undefined `totalMN`/`commissionMN`
+- WHEN any MN aggregate builds
+- THEN that order contributes `0`, never `NaN`
 
 ## Out of Scope (explicit non-requirements)
 

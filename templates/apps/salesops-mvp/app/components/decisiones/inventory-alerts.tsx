@@ -1,4 +1,4 @@
-import { InfoPopover } from './info-popover';
+import { InfoPopover } from '../shared/info-popover';
 import { DECISIONES_HELP } from './help-content';
 import type { InventoryAlertRow, InventoryAlertsView, StockAlertLevel } from '../../domain/decisiones-dashboard';
 

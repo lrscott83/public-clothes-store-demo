@@ -1,6 +1,6 @@
 import { formatMoney } from '@store-mgmt/storefront/config';
 import { BarChart } from '../charts/bar-chart';
-import { InfoPopover } from './info-popover';
+import { InfoPopover } from '../shared/info-popover';
 import { DECISIONES_HELP } from './help-content';
 import type { TopMarginView } from '../../domain/decisiones-dashboard';
 

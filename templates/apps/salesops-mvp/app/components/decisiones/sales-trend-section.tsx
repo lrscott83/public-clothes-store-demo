@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { formatMoney } from '@store-mgmt/storefront/config';
 import { AreaTrend } from '../charts/area-trend';
-import { InfoPopover } from './info-popover';
+import { InfoPopover } from '../shared/info-popover';
 import { DECISIONES_HELP } from './help-content';
 import type { SalesTrendView } from '../../domain/decisiones-dashboard';
 

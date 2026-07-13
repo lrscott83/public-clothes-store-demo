@@ -1,20 +1,40 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import Finanzas from '../finanzas';
-import { loadSeedState, saveSeedState } from '../../store/seed-store';
+import { loadSeedState, saveSeedState, verifyOrder } from '../../store/seed-store';
 
 describe('Finanzas container', () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  it('renders exactly one <h1>Finanzas</h1>, a KPI block, and a per-state breakdown table', () => {
-    loadSeedState();
+  it('renders exactly one <h1>Finanzas</h1> and all 3 layers when qualifying orders exist', () => {
+    const state = loadSeedState();
+    const creadoOrder = state.orders.find((o) => o.state === 'creado');
+    if (creadoOrder) verifyOrder(creadoOrder.id);
 
     render(<Finanzas />);
 
     expect(screen.getByRole('heading', { level: 1, name: 'Finanzas' })).toBeInTheDocument();
-    expect(screen.getByText('Resumen de comisiones')).toBeInTheDocument();
+
+    // Layer 1 — 5 KPI tiles (some labels are reused as table headers further
+    // down the page, e.g. "Comisión pendiente" in the gestor table, so
+    // assert presence rather than uniqueness here).
+    expect(screen.getByText('Ingresos facturados')).toBeInTheDocument();
+    expect(screen.getByText('Ingresos liquidados')).toBeInTheDocument();
+    expect(screen.getByText('Cobrado vs pendiente')).toBeInTheDocument();
+    expect(screen.getAllByText('Comisión pendiente').length).toBeGreaterThan(0);
+    expect(screen.getByText('Margen neto')).toBeInTheDocument();
+
+    // Layer 2 — 4 visuals
+    expect(screen.getByText(/cobros estimados por estado/i)).toBeInTheDocument();
+    expect(screen.getByText('Comisión pagada vs pendiente')).toBeInTheDocument();
+    expect(screen.getByText('Ingresos por estado')).toBeInTheDocument();
+    expect(screen.getByText('Mix por moneda')).toBeInTheDocument();
+
+    // Layer 3 — 3 actionable blocks
+    expect(screen.getByText('Comisión y ROI por gestor')).toBeInTheDocument();
+    expect(screen.getByText('Cobros pendientes por almacén')).toBeInTheDocument();
     expect(screen.getByText('Flujo por estado')).toBeInTheDocument();
   });
 
@@ -36,30 +56,30 @@ describe('Finanzas container', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('renders no mutation affordance (no form, no button, no "marcar comisión pagada")', () => {
-    loadSeedState();
+  it('renders no <form> and no mutation-affordance copy (a view-only toggle button is allowed)', () => {
+    const state = loadSeedState();
+    const creadoOrder = state.orders.find((o) => o.state === 'creado');
+    if (creadoOrder) verifyOrder(creadoOrder.id);
+
     const { container } = render(<Finanzas />);
 
     expect(container.querySelector('form')).toBeNull();
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
     expect(screen.queryByText(/marcar comisi[oó]n pagada/i)).not.toBeInTheDocument();
   });
 
-  it('with zero orders, still renders the single heading, all-zero KPIs, and all 5 states with count 0', () => {
+  it('with zero qualifying orders (only creado), shows the empty-state message instead of Layer 1/2 and the gestor/warehouse blocks; Flujo por estado still renders', () => {
     const state = loadSeedState();
-    state.orders = [];
+    state.orders = state.orders.map((order) => ({ ...order, state: 'creado' as const }));
     saveSeedState(state);
 
     render(<Finanzas />);
 
     expect(screen.getByRole('heading', { level: 1, name: 'Finanzas' })).toBeInTheDocument();
-
-    const table = screen.getByRole('table');
-    const bodyRows = table.querySelectorAll('tbody tr');
-    expect(bodyRows).toHaveLength(5);
-    for (const row of Array.from(bodyRows)) {
-      const pedidosCell = row.querySelectorAll('td')[1];
-      expect(pedidosCell.textContent).toBe('0');
-    }
+    expect(screen.queryByText('Ingresos facturados')).not.toBeInTheDocument();
+    expect(screen.queryByText('Comisión y ROI por gestor')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cobros pendientes por almacén')).not.toBeInTheDocument();
+    expect(screen.getByText(/no hay pedidos/i)).toBeInTheDocument();
+    // Flujo por estado (state-breakdown-table) still renders — it counts every state including creado.
+    expect(screen.getByText('Flujo por estado')).toBeInTheDocument();
   });
 });

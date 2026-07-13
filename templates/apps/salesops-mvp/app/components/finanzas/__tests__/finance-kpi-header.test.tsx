@@ -1,0 +1,46 @@
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { FinanceKpiHeader } from '../finance-kpi-header';
+import type { FinanceKpiHeaderView } from '../../../domain/finanzas-dashboard';
+
+function buildKpis(overrides: Partial<FinanceKpiHeaderView> = {}): FinanceKpiHeaderView {
+  return {
+    ingresosFacturadosUSD: { current: 800, prior: 400, delta: 1, trend: 'up' },
+    ingresosLiquidadosMN: { current: 32000, prior: 16000, delta: 1, trend: 'up' },
+    cobradoUSD: { current: 150, prior: 100, delta: 0.5, trend: 'up' },
+    pendienteUSD: { current: 275, prior: 200, delta: 0.375, trend: 'up' },
+    comisionPendienteMN: { current: 3000, prior: 1000, delta: 2, trend: 'up' },
+    margenNetoUSD: { current: 225, prior: 100, delta: 1.25, trend: 'up' },
+    margenPercent: 45,
+    ...overrides,
+  };
+}
+
+describe('FinanceKpiHeader', () => {
+  it('renders all 5 tiles with their formatted values', () => {
+    render(<FinanceKpiHeader kpis={buildKpis()} />);
+
+    expect(screen.getByText('Ingresos facturados')).toBeInTheDocument();
+    expect(screen.getByText('$800.00')).toBeInTheDocument();
+
+    expect(screen.getByText('Ingresos liquidados')).toBeInTheDocument();
+    expect(screen.getByText('32000 MN')).toBeInTheDocument();
+
+    expect(screen.getByText('Cobrado vs pendiente')).toBeInTheDocument();
+    expect(screen.getByText('$150.00')).toBeInTheDocument();
+    expect(screen.getByText('Pendiente $275.00')).toBeInTheDocument();
+
+    expect(screen.getByText('Comisión pendiente')).toBeInTheDocument();
+    expect(screen.getByText('3000 MN')).toBeInTheDocument();
+
+    expect(screen.getByText('Margen neto')).toBeInTheDocument();
+    expect(screen.getByText('$225.00')).toBeInTheDocument();
+    expect(screen.getByText('45.0%')).toBeInTheDocument();
+  });
+
+  it('renders an InfoPopover help button for each tile', () => {
+    render(<FinanceKpiHeader kpis={buildKpis()} />);
+
+    expect(screen.getAllByRole('button', { name: /qué significa/i }).length).toBe(5);
+  });
+});
