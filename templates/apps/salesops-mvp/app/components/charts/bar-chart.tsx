@@ -19,6 +19,10 @@ const WIDTH = 320;
 const HEIGHT = 200;
 const PADDING = 8;
 const BAR_GAP = 6;
+/** Horizontal orientation reserves this much track for the category label on the
+ *  left and the value label on the right, so neither clips at the svg edge. */
+const LABEL_LEFT = 90;
+const VALUE_LABEL_W = 54;
 
 /**
  * Generic bar chart — one `<rect>` + one label `<text>` (+ optional value
@@ -48,15 +52,15 @@ export function BarChart({ bars, orientation = 'horizontal', formatValue = Strin
         const ratio = max > 0 ? bar.value / max : 0;
 
         if (orientation === 'horizontal') {
-          const barLength = ratio * (usableWidth - 90);
+          const barLength = ratio * (usableWidth - LABEL_LEFT - VALUE_LABEL_W);
           const y = PADDING + index * slot;
           return (
             <g key={`${bar.label}-${index}`}>
               <text x={0} y={y + thickness / 2} dy="0.32em" className="fill-text text-[9px]">
                 {bar.label}
               </text>
-              <rect x={90} y={y} width={Math.max(0, barLength)} height={thickness} className={color.fill} />
-              <text x={94 + barLength} y={y + thickness / 2} dy="0.32em" className="fill-text text-[9px]">
+              <rect x={LABEL_LEFT} y={y} width={Math.max(0, barLength)} height={thickness} className={color.fill} />
+              <text x={LABEL_LEFT + 4 + barLength} y={y + thickness / 2} dy="0.32em" className="fill-text text-[9px]">
                 {formatValue(bar.value)}
               </text>
             </g>
