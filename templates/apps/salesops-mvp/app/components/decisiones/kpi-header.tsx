@@ -1,5 +1,7 @@
 import { formatMoney } from '@store-mgmt/storefront/config';
 import { StatTile } from '../charts/stat-tile';
+import { InfoPopover } from './info-popover';
+import { DECISIONES_HELP } from './help-content';
 import type { KpiHeaderView } from '../../domain/decisiones-dashboard';
 
 export interface KpiHeaderProps {
@@ -22,6 +24,7 @@ export function KpiHeader({ kpis }: KpiHeaderProps) {
         value={formatMoney(kpis.ventasUSD.current, MONEY)}
         trend={kpis.ventasUSD.trend}
         delta={kpis.ventasUSD.delta}
+        help={<InfoPopover {...DECISIONES_HELP.ventas} />}
       />
       <StatTile
         label="Margen"
@@ -29,6 +32,7 @@ export function KpiHeader({ kpis }: KpiHeaderProps) {
         trend={kpis.margenUSD.trend}
         delta={kpis.margenUSD.delta}
         sublabel={`${kpis.margenPercent.toFixed(1)}%`}
+        help={<InfoPopover {...DECISIONES_HELP.margen} />}
       />
       <StatTile
         label="Pedidos"
@@ -36,6 +40,7 @@ export function KpiHeader({ kpis }: KpiHeaderProps) {
         trend={kpis.pedidos.trend}
         delta={kpis.pedidos.delta}
         sublabel={`AOV ${formatMoney(kpis.aovUSD.current, MONEY)}`}
+        help={<InfoPopover {...DECISIONES_HELP.pedidos} />}
       />
       <StatTile
         label="Comisión pendiente"
@@ -43,6 +48,7 @@ export function KpiHeader({ kpis }: KpiHeaderProps) {
         trend={kpis.comisionPendienteMN.trend}
         delta={kpis.comisionPendienteMN.delta}
         positiveIsGood={false}
+        help={<InfoPopover {...DECISIONES_HELP.comisionPendiente} />}
       />
       <StatTile
         label="Cobrado vs pendiente"
@@ -50,6 +56,7 @@ export function KpiHeader({ kpis }: KpiHeaderProps) {
         trend={kpis.cobradoUSD.trend}
         delta={kpis.cobradoUSD.delta}
         sublabel={`Pendiente ${formatMoney(kpis.pendienteUSD.current, MONEY)}`}
+        help={<InfoPopover {...DECISIONES_HELP.cobradoPendiente} />}
       />
     </section>
   );

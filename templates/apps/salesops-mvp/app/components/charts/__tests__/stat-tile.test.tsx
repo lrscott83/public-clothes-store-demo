@@ -78,4 +78,10 @@ describe('StatTile', () => {
 
     expect(screen.getByText('AOV $400.00')).toBeInTheDocument();
   });
+
+  it('renders an optional help node next to the label', () => {
+    render(<StatTile label="Ventas" value="$800.00" help={<span>ayuda</span>} />);
+
+    expect(screen.getByText('ayuda')).toBeInTheDocument();
+  });
 });

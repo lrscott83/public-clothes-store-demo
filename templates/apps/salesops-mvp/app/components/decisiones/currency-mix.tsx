@@ -1,4 +1,6 @@
 import { DonutChart } from '../charts/donut-chart';
+import { InfoPopover } from './info-popover';
+import { DECISIONES_HELP } from './help-content';
 import type { CurrencyMixView } from '../../domain/decisiones-dashboard';
 
 export interface CurrencyMixProps {
@@ -15,7 +17,10 @@ export function CurrencyMix({ currencyMix }: CurrencyMixProps) {
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
-      <h2 className="text-lg font-semibold text-text">Mix por moneda</h2>
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-lg font-semibold text-text">Mix por moneda</h2>
+        <InfoPopover {...DECISIONES_HELP.mixPorMoneda} />
+      </div>
       <div className="mt-2">
         <DonutChart slices={slices} ariaLabel="Mix por moneda / método de pago" />
       </div>

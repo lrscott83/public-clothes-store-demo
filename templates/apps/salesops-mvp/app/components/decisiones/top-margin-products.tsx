@@ -1,5 +1,7 @@
 import { formatMoney } from '@store-mgmt/storefront/config';
 import { BarChart } from '../charts/bar-chart';
+import { InfoPopover } from './info-popover';
+import { DECISIONES_HELP } from './help-content';
 import type { TopMarginView } from '../../domain/decisiones-dashboard';
 
 export interface TopMarginProductsProps {
@@ -28,7 +30,10 @@ export function TopMarginProducts({ topMargin }: TopMarginProductsProps) {
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
-      <h2 className="text-lg font-semibold text-text">Top productos por margen</h2>
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-lg font-semibold text-text">Top productos por margen</h2>
+        <InfoPopover {...DECISIONES_HELP.topProductosMargen} />
+      </div>
       <div className="mt-2">
         <BarChart
           bars={bars}

@@ -1,4 +1,6 @@
 import { BarChart } from '../charts/bar-chart';
+import { InfoPopover } from './info-popover';
+import { DECISIONES_HELP } from './help-content';
 import type { StageDistributionView } from '../../domain/decisiones-dashboard';
 
 export interface StageDistributionProps {
@@ -15,7 +17,10 @@ export function StageDistribution({ stages }: StageDistributionProps) {
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
-      <h2 className="text-lg font-semibold text-text">Pedidos por etapa</h2>
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-lg font-semibold text-text">Pedidos por etapa</h2>
+        <InfoPopover {...DECISIONES_HELP.pedidosPorEtapa} />
+      </div>
       <p className="text-xs text-text-muted">Distribución actual de pedidos por estado (instantánea, no un embudo).</p>
       <div className="mt-2">
         <BarChart bars={bars} orientation="vertical" ariaLabel="Pedidos por etapa" />

@@ -1,4 +1,6 @@
 import { formatMoney } from '@store-mgmt/storefront/config';
+import { InfoPopover } from './info-popover';
+import { DECISIONES_HELP } from './help-content';
 import type { GestorRankingView } from '../../domain/decisiones-dashboard';
 
 export interface GestorRankingProps {
@@ -15,7 +17,10 @@ const MONEY = { locale: 'en-US', currency: 'USD' } as const;
 export function GestorRanking({ gestores }: GestorRankingProps) {
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
-      <h2 className="text-lg font-semibold text-text">Ranking de gestores</h2>
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-lg font-semibold text-text">Ranking de gestores</h2>
+        <InfoPopover {...DECISIONES_HELP.rankingGestores} />
+      </div>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>

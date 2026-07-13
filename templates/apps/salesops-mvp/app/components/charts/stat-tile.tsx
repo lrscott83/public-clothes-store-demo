@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 /** Arrow direction, structurally identical to the domain `Trend` (kept local so this primitive imports nothing from `app/domain`). */
 export type StatTileTrend = 'up' | 'down' | 'flat';
 
@@ -18,6 +20,8 @@ export interface StatTileProps {
   positiveIsGood?: boolean;
   /** Optional secondary line under the value (e.g. an AOV figure alongside a count). */
   sublabel?: string;
+  /** Optional affordance rendered next to the label (e.g. an `InfoPopover` help icon). */
+  help?: ReactNode;
 }
 
 /**
@@ -27,7 +31,7 @@ export interface StatTileProps {
  * "Comisión pendiente" (where more owed is worse) still shows red when
  * rising, even though the arrow direction itself is unchanged.
  */
-export function StatTile({ label, value, trend, delta, positiveIsGood = true, sublabel }: StatTileProps) {
+export function StatTile({ label, value, trend, delta, positiveIsGood = true, sublabel, help }: StatTileProps) {
   const hasDelta = delta !== null && delta !== undefined;
   // Arrow direction: prefer the explicit trend, else derive it from the delta sign.
   const direction: StatTileTrend = trend ?? (hasDelta ? (delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat') : 'flat');
@@ -39,7 +43,10 @@ export function StatTile({ label, value, trend, delta, positiveIsGood = true, su
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
-      <p className="text-xs font-medium text-text-muted">{label}</p>
+      <div className="flex items-center gap-1">
+        <p className="text-xs font-medium text-text-muted">{label}</p>
+        {help}
+      </div>
       <p className="mt-1 text-2xl font-bold text-text">{value}</p>
       <div className="mt-1 flex items-center gap-1 text-sm">
         {showArrow ? (

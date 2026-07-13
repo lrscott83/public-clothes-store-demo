@@ -1,4 +1,6 @@
 import { formatMoney } from '@store-mgmt/storefront/config';
+import { InfoPopover } from './info-popover';
+import { DECISIONES_HELP } from './help-content';
 import type { ProfitabilityRow } from '../../domain/decisiones';
 
 export interface LowestMarginOrdersProps {
@@ -17,7 +19,10 @@ const MONEY = { locale: 'en-US', currency: 'USD' } as const;
 export function LowestMarginOrders({ rows }: LowestMarginOrdersProps) {
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
-      <h2 className="text-lg font-semibold text-text">Pedidos de menor margen</h2>
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-lg font-semibold text-text">Pedidos de menor margen</h2>
+        <InfoPopover {...DECISIONES_HELP.pedidosMenorMargen} />
+      </div>
       <div className="mt-2 max-h-72 overflow-y-auto">
         <table className="w-full text-left text-sm">
           <thead className="sticky top-0 bg-surface">

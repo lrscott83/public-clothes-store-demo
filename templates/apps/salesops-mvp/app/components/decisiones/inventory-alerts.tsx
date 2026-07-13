@@ -1,3 +1,5 @@
+import { InfoPopover } from './info-popover';
+import { DECISIONES_HELP } from './help-content';
 import type { InventoryAlertRow, InventoryAlertsView, StockAlertLevel } from '../../domain/decisiones-dashboard';
 
 export interface InventoryAlertsProps {
@@ -36,7 +38,10 @@ function byUrgency(a: InventoryAlertRow, b: InventoryAlertRow): number {
 export function InventoryAlerts({ alerts }: InventoryAlertsProps) {
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
-      <h2 className="text-lg font-semibold text-text">Alertas de inventario</h2>
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-lg font-semibold text-text">Alertas de inventario</h2>
+        <InfoPopover {...DECISIONES_HELP.alertasInventario} />
+      </div>
       <div className="mt-2 flex flex-col gap-4">
         {alerts.groups.map((group) => {
           const sorted = [...group.rows].sort(byUrgency);
