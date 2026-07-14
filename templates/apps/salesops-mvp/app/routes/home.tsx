@@ -8,7 +8,7 @@ export function meta(_args: Route.MetaArgs) {
     {
       name: 'description',
       content:
-        'Tu cuadro de mando (dashboard): en 5 segundos ves cuánta plata entra, cuánto le debés a tus gestores y qué te queda limpio.',
+        'Tu cuadro de mando (dashboard): en 5 segundos ves cuánto dinero entra, cuánto le debés a tus gestores y qué te queda limpio.',
     },
   ];
 }

@@ -42,7 +42,7 @@ export const HERO = {
   headline: 'Tu negocio vive en tu cabeza y en el WhatsApp.',
   headlineAccent: 'Acá lo ves ordenado.',
   subhead:
-    'Un cuadro de mando que en 5 segundos te muestra cuánta plata entra, cuánto le debés a tus gestores y qué te queda limpio — con los datos que ya tenés.',
+    'Un cuadro de mando que en 5 segundos te muestra cuánto dinero entra, cuánto le debés a tus gestores y qué te queda limpio — con los datos que ya tenés.',
   primaryCta: { label: 'Empezá por Finanzas', path: '/finanzas' },
   secondaryCta: { label: 'o creá un pedido de prueba', path: '/pedidos/nuevo' },
 } as const;
@@ -51,7 +51,7 @@ export const TOUR: TourStep[] = [
   {
     n: '01',
     label: 'Finanzas',
-    question: '¿Dónde está tu plata?',
+    question: '¿Dónde está tu dinero?',
     summary:
       'Margen neto, la comisión que le debés a tus gestores, las ventas del periodo y tu exposición a la tasa.',
     path: '/finanzas',
@@ -61,7 +61,7 @@ export const TOUR: TourStep[] = [
     n: '02',
     label: 'Decisiones',
     question: '¿Y ahora qué hago?',
-    summary: 'Qué gestor rinde, qué producto deja margen y dónde se te va la plata.',
+    summary: 'Qué gestor rinde, qué producto deja margen y dónde se te va el dinero.',
     path: '/decisiones',
     icon: BarChart3,
   },
@@ -108,7 +108,7 @@ export const VIEWS: ViewSummary[] = [
   },
   {
     label: 'Decisiones',
-    summary: 'Qué gestor, producto o almacén te hace ganar o perder plata.',
+    summary: 'Qué gestor, producto o almacén te hace ganar o perder dinero.',
     path: '/decisiones',
     icon: BarChart3,
   },
