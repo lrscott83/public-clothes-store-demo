@@ -14,7 +14,8 @@ export default function ShellLayout() {
   return (
     <div className="flex h-screen w-full overflow-hidden">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">
+      {/* pt-14 clears the fixed mobile top bar; the desktop sidebar is in-flow. */}
+      <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
         <Outlet />
       </main>
     </div>
