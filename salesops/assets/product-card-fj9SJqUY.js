@@ -1,4 +1,4 @@
-import{j as e}from"./jsx-runtime-Cmm6gLNy.js";import{f as o}from"./catalog-7g_Trhma.js";import{S as m}from"./shopping-cart-DRQyq9Bm.js";import{c as i}from"./createLucideIcon-BvlEoDVK.js";/**
+import{j as e}from"./jsx-runtime-Cmm6gLNy.js";import{f as o}from"./catalog-BrM1Ohyj.js";import{S as m}from"./shopping-cart-DRQyq9Bm.js";import{c as i}from"./createLucideIcon-BvlEoDVK.js";/**
  * @license lucide-react v0.344.0 - ISC
  *
  * This source code is licensed under the ISC license.
