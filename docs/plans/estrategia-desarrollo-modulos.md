@@ -100,7 +100,7 @@ Falta persistencia real, auth, la app de gestores, y todo lo que un demo saltea.
 Entregá **Fase 1 rápido**: la pantalla que MÁS le duele al dueño, en producción,
 con sus datos reales. Eso prueba valor, desbloquea el pago, y recién ahí te
 comprometés con la cola larga (Fase 2). De-riesga para los dos: él ve resultados
-antes de poner toda la plata; vos cobrás por etapa antes de meter meses.
+antes de poner todo el dinero; vos cobrás por etapa antes de meter meses.
 
 Mapa contra las fases comerciales del [pitch](estrategia-pitch-mvp.md):
 

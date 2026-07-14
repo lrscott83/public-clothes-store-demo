@@ -8,7 +8,7 @@
 
 ## La mentalidad correcta (leé esto antes que nada)
 
-**No vendés "una app". Vendés que el dueño deje de perder plata que hoy no puede ver.**
+**No vendés "una app". Vendés que el dueño deje de perder dinero que hoy no puede ver.**
 No se levanta pensando "necesito software"; se levanta pensando "¿este mes gané o
 perdí?", "¿qué gestor me rinde?", "¿por qué me falta stock de lo que más se vende?".
 El producto responde eso. Ese es el negocio que estás vendiendo.
@@ -25,7 +25,7 @@ es su mayor miedo: sabe que al crecer, el cuaderno y el WhatsApp no le alcanzan.
 Sus dolores reales:
 
 - No sabe cuánto le queda **limpio** después de comisiones. Calcula ventas a ojo.
-- No tiene idea de **qué gestor / producto / almacén** le hace ganar plata.
+- No tiene idea de **qué gestor / producto / almacén** le hace ganar dinero.
 - Depende de **una persona** que publica ofertas y ordena todo por WhatsApp. Si esa
   persona falta, se cae.
 - La **tasa de cambio** le come margen y no lo mide.
@@ -37,7 +37,7 @@ y después mostrárselos resueltos.
 ## 2. La tesis (frase de ascensor)
 
 > "Hoy manejás el negocio de memoria y por WhatsApp. Te armé un **cuadro de mando (dashboard)**:
-> en 5 segundos ves cuánta plata entra, cuánto le debés a cada gestor, qué te queda
+> en 5 segundos ves cuánto dinero entra, cuánto le debés a cada gestor, qué te queda
 > limpio y qué decisión te conviene hoy. Con los datos que YA tenés."
 
 ## 3. La coreografía del demo — esto cierra o mata la venta
@@ -50,7 +50,7 @@ que siga SU dolor, en este orden:
    Dejá que titubee. Ahí lo enganchaste.
 2. **Pegale primero con FINANZAS.** El golpe emocional. KPIs que **nunca vio**:
    margen neto, comisión que le debés a gestores (pasivo), ventas del periodo, exposición en MN.
-   *"Esto es plata tuya. Hoy no la ves en ningún lado."* Callate y dejá que peguen.
+   *"Esto es dinero tuyo. Hoy no lo ves en ningún lado."* Callate y dejá que peguen.
 3. **Seguí con DECISIONES.** El "¿y qué hago?": qué gestor rinde, qué producto deja
    margen, alertas de inventario bajo. *"Esto te dice dónde poner la energía mañana."*
 4. **Probá que es REAL, no una foto.** Creá un pedido como gestor, movelo por sus
@@ -64,7 +64,7 @@ que siga SU dolor, en este orden:
 | Va a decir… | Le respondés… |
 |---|---|
 | "Es solo un demo / no es real" | "Por eso te hago crear un pedido real ahora — mirá cómo fluye. Falta conectarlo a tu base, no reinventarlo." |
-| "Con mi cuaderno/WhatsApp me arreglo" | "Hoy sí. ¿Y cuando tengas el doble de gestores? El cuaderno no escala, y no te dice dónde perdés plata." |
+| "Con mi cuaderno/WhatsApp me arreglo" | "Hoy sí. ¿Y cuando tengas el doble de gestores? El cuaderno no escala, y no te dice dónde perdés dinero." |
 | "¿Cuánto sale?" | "Depende de qué resolvemos primero. Arranquemos por lo que más te duele, con un paso chico y pagás por etapa." (nunca tires un número grande de entrada) |
 | "La tasa me cambia 3 veces al día" | "El sistema congela la tasa de CADA pedido al momento de la venta. Ya está resuelto en el demo." |
 | "Mis gestores no van a usar una app" | "Por eso el post-MVP incluye una app simple para ellos, igual de fácil que mandar el pedido por WhatsApp." |
@@ -82,7 +82,7 @@ El error que funde estas ventas: querer cerrar el proyecto completo de una.
 | **3 — Evolución** | Mantenimiento + features nuevos | Ingreso recurrente para vos |
 
 Clavá esto: **anclá el precio al valor, no a las horas.** "Cuánto te cuesta hoy no
-saber qué gestor te hace perder plata" pesa más que "son X horas de desarrollo".
+saber qué gestor te hace perder dinero" pesa más que "son X horas de desarrollo".
 
 ## 6. El cierre
 
@@ -107,7 +107,7 @@ demo deja de ser "una herramienta linda" y pasa a ser "MI negocio en la pantalla
 ## Los 4 errores que te matan la venta
 
 1. **Mostrar features en vez de resolver SU dolor.** Nadie compra "pantallas".
-2. **Hablar de tecnología** (React, base de datos, localStorage) en vez de plata.
+2. **Hablar de tecnología** (React, base de datos, localStorage) en vez de dinero.
 3. **Pedir todo el contrato de entrada.** Asusta. Vendé el primer paso.
 4. **Irte sin próximo paso concreto.** Sin fecha de seguimiento, la venta se enfría.
 

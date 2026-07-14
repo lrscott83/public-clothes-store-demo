@@ -31,7 +31,7 @@ patrón Shopify/Lightspeed) + flecha de tendencia:
 | Ventas (USD) | El número que hoy calcula a ojo | Σ `totalUSD` |
 | Margen (USD) + % | El número que **nunca vio** | `totalUSD − costo − comisión` |
 | Pedidos + ticket promedio | Volumen y calidad de venta | count + AOV |
-| Comisión pendiente (MN) | Plata que le debe a gestores | Σ `commissionMN` no pagada |
+| Comisión pendiente (MN) | Dinero que le debe a gestores | Σ `commissionMN` no pagada |
 | Cobrado vs pendiente | Salud de caja | estados entregado vs en tránsito |
 
 ### Capa 2 — La foto del negocio (4 visuales)
@@ -60,7 +60,7 @@ almacén. Todos los bloques de arriba son alimentables sin inventar datos.
 
 ## Matices honestos ⚠️ (ya resueltos en el diseño)
 
-1. **"Pedidos que pierden plata" quedaría vacío**: costo fijo en 60% → todo
+1. **"Pedidos que pierden dinero" quedaría vacío**: costo fijo en 60% → todo
    pedido tiene 40% de margen bruto y la comisión es chica; ninguno da negativo.
    → Se reemplaza por **"pedidos de menor margen"** (ranking ascendente).
 2. **El embudo es una distribución, no una conversión real** → se etiqueta
