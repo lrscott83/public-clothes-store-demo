@@ -12,7 +12,7 @@
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build",
     "build:pages": "node scripts/build-pages-site.mjs",
-    "deploy:pages": "npm run build:pages && gh-pages -d dist-pages"
+    "deploy:pages": "npm run build:pages && gh-pages -d dist-pages --dotfiles"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",

@@ -69,6 +69,10 @@ const outDir = join(rootDir, 'dist-pages');
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
+// Disable Jekyll on GitHub Pages so it serves the tree verbatim and never
+// strips files/dirs it considers "special" (e.g. leading-underscore names).
+writeFileSync(join(outDir, '.nojekyll'), '');
+
 for (const { folder, app, vertical } of TARGETS) {
   const appDir = join(appsDir, app);
   const clientDir = join(appDir, 'build', 'client');
