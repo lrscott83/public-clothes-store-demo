@@ -1,6 +1,7 @@
 import type { CatalogData, StoreProduct } from '@store-mgmt/storefront/catalog';
 import type { OrderItem, SeededProduct } from '../domain/types';
 import { deriveCommission } from './commission-map';
+import { resolveCatalogImage } from '../data/catalog';
 
 /**
  * Pure enrichment step: adds frozen `commissionMN` + `costUSD` to every
@@ -12,10 +13,12 @@ export function enrichProducts(catalog: Pick<CatalogData, 'products'>): SeededPr
     const { commissionMN } = deriveCommission(product.name, product.categoryId);
     return {
       ...product,
-      // catalog.json stores relative image paths (e.g. "products/...").
-      // The public/ folder mirrors them under /catalog/appliances/products/...
-      // so prepend the base path to get a server-absolute URL.
-      image: `/catalog/appliances/${product.image}`,
+      // catalog.json stores relative image paths (e.g. "products/..."); the
+      // public/ folder mirrors them under catalog/appliances/products/...
+      // Resolve through the app BASE_URL so images load under a non-root
+      // subpath (e.g. GitHub Pages project pages) instead of 404ing off the
+      // domain root with a hardcoded leading slash.
+      image: resolveCatalogImage(product.image),
       costUSD: Math.round(product.price * 0.6),
       commissionMN,
     };

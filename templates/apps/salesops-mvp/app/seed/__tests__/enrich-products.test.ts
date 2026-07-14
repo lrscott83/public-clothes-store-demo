@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import catalogData from '../../data/catalog.json';
 import type { CatalogData } from '@store-mgmt/storefront/catalog';
 import { enrichProducts } from '../enrich-products';
@@ -26,6 +26,26 @@ describe('enrichProducts', () => {
     for (const product of enriched) {
       expect(product.commissionMN).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('enrichProducts — image URLs respect the app base path', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('prefixes product image URLs with the app BASE_URL so they load under a subpath', () => {
+    // Simulate serving under a GitHub Pages project subpath.
+    vi.stubEnv('BASE_URL', '/public-clothes-store-demo/salesops/');
+
+    const [enriched] = enrichProducts({ products: [catalog.products[0]] });
+
+    // A hardcoded leading-slash "/catalog/..." path ignores the base and 404s
+    // off the domain root when the app is served from a subpath. The image must
+    // be resolved against BASE_URL.
+    expect(enriched.image).toBe(
+      `/public-clothes-store-demo/salesops/catalog/appliances/${catalog.products[0].image}`,
+    );
   });
 });
 
