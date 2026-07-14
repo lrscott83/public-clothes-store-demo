@@ -117,4 +117,8 @@ export const STORAGE_KEY = 'salesops-mvp:seed:v1';
 // Bumped to 4 when the payment-method mix gained ZELLE/EUR tails (USD/MN/ZELLE/
 // EUR) for a richer currency breakdown — forces a regenerate over v3 seeds that
 // only ever produced USD/MN orders.
-export const VERSION = 4;
+// Bumped to 5 when product image URLs moved from a hardcoded, domain-absolute
+// `/catalog/appliances/...` to a base-aware `resolveCatalogImage(...)` — forces
+// a regenerate over v4 seeds that persisted the old URLs (which 404 under the
+// GitHub Pages subpath).
+export const VERSION = 5;
