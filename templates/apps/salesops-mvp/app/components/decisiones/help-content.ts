@@ -27,10 +27,6 @@ export const DECISIONES_HELP = {
     title: 'Comisión pendiente',
     text: 'Lo que todavía les debés a tus gestores por sus ventas, en moneda nacional (MN). Es plata ya comprometida que va a salir: tenela presente antes de gastarla.',
   },
-  cobradoPendiente: {
-    title: 'Cobrado vs pendiente',
-    text: 'Cuánto ya entró a caja y cuánto te falta cobrar. Un pendiente alto significa ventas hechas pero dinero que aún no tenés en la mano: ahí se esconden los apretones de flujo.',
-  },
 
   // --- Layer 2 (visual sections) ---
   pedidosPorEtapa: {

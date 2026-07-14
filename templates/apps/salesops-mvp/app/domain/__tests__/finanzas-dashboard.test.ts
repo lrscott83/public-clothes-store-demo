@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildCashFlowTrend,
   buildCurrencyExposure,
   buildFinanceDashboard,
   buildFinanceKpiHeader,
   buildGestorCommissionCost,
-  buildWarehouseCashFlow,
+  buildRevenueTrend,
+  buildWarehouseRevenue,
 } from '../finanzas-dashboard';
 import type { Order, SeedState, SeededProduct } from '../types';
 
@@ -75,21 +75,6 @@ describe('buildFinanceKpiHeader', () => {
 
     expect(view.ingresosFacturadosUSD.current).toBe(800);
     expect(view.ingresosLiquidadosMN.current).toBe(32000);
-  });
-
-  it('splits cobrado (entregado/comision_pagada) vs pendiente (verificado/transportando) by USD', () => {
-    const orders = [
-      buildOrder({ id: 'order-entregado', state: 'entregado', totalUSD: 100, createdAt: daysBefore(1) }),
-      buildOrder({ id: 'order-pagada', state: 'comision_pagada', totalUSD: 50, createdAt: daysBefore(1) }),
-      buildOrder({ id: 'order-verificado', state: 'verificado', totalUSD: 200, createdAt: daysBefore(1) }),
-      buildOrder({ id: 'order-transportando', state: 'transportando', totalUSD: 75, createdAt: daysBefore(1) }),
-    ];
-    const state = buildState({ orders });
-
-    const view = buildFinanceKpiHeader(state);
-
-    expect(view.cobradoUSD.current).toBe(150);
-    expect(view.pendienteUSD.current).toBe(275);
   });
 
   it('comisionPendienteMN sums unpaid verificado/transportando/entregado commission, excluding paid orders', () => {
@@ -167,8 +152,8 @@ describe('buildFinanceKpiHeader', () => {
   });
 });
 
-describe('buildCashFlowTrend', () => {
-  it('zero-fills all 20 days, splitting cobrado vs pendiente by state, ordered oldest to newest', () => {
+describe('buildRevenueTrend', () => {
+  it('zero-fills all 20 days, summing totalUSD per day with no state split, ordered oldest to newest', () => {
     const orders: Order[] = [];
     for (let offset = 0; offset < 20; offset++) {
       if (offset === 5) continue; // intentionally empty day
@@ -183,34 +168,30 @@ describe('buildCashFlowTrend', () => {
     }
     const state = buildState({ orders });
 
-    const view = buildCashFlowTrend(state);
+    const view = buildRevenueTrend(state);
 
     expect(view.points).toHaveLength(20);
     expect(view.points[0].dayOffset).toBe(19);
     expect(view.points[19].dayOffset).toBe(0);
 
     const emptyDay = view.points.find((p) => p.dayOffset === 5)!;
-    expect(emptyDay.cobradoUSD).toBe(0);
-    expect(emptyDay.pendienteUSD).toBe(0);
+    expect(emptyDay.revenueUSD).toBe(0);
 
     const entregadoDay = view.points.find((p) => p.dayOffset === 0)!;
-    expect(entregadoDay.cobradoUSD).toBe(100);
-    expect(entregadoDay.pendienteUSD).toBe(0);
+    expect(entregadoDay.revenueUSD).toBe(100);
 
     const verificadoDay = view.points.find((p) => p.dayOffset === 1)!;
-    expect(verificadoDay.cobradoUSD).toBe(0);
-    expect(verificadoDay.pendienteUSD).toBe(100);
+    expect(verificadoDay.revenueUSD).toBe(100);
   });
 
   it('excludes creado orders from every bucket', () => {
     const orders = [buildOrder({ id: 'order-creado', state: 'creado', totalUSD: 999, createdAt: daysBefore(0) })];
     const state = buildState({ orders });
 
-    const view = buildCashFlowTrend(state);
+    const view = buildRevenueTrend(state);
 
     const day0 = view.points.find((p) => p.dayOffset === 0)!;
-    expect(day0.cobradoUSD).toBe(0);
-    expect(day0.pendienteUSD).toBe(0);
+    expect(day0.revenueUSD).toBe(0);
   });
 });
 
@@ -301,8 +282,8 @@ describe('buildGestorCommissionCost', () => {
   });
 });
 
-describe('buildWarehouseCashFlow', () => {
-  it('splits each warehouse into cobrado/pendiente USD, zero-order warehouse still appears at 0', () => {
+describe('buildWarehouseRevenue', () => {
+  it('sums totalUSD and counts qualifying orders per warehouse, zero-order warehouse still appears at 0', () => {
     const warehouses = [
       { id: 'wh-1', name: 'Almacén 1' },
       { id: 'wh-2', name: 'Almacén 2' },
@@ -313,18 +294,18 @@ describe('buildWarehouseCashFlow', () => {
     ];
     const state = buildState({ warehouses, orders });
 
-    const view = buildWarehouseCashFlow(state);
+    const view = buildWarehouseRevenue(state);
 
     const wh1 = view.rows.find((r) => r.warehouseId === 'wh-1')!;
-    expect(wh1.cobradoUSD).toBe(300);
-    expect(wh1.pendienteUSD).toBe(100);
+    expect(wh1.revenueUSD).toBe(400);
+    expect(wh1.count).toBe(2);
 
     const wh2 = view.rows.find((r) => r.warehouseId === 'wh-2')!;
-    expect(wh2.cobradoUSD).toBe(0);
-    expect(wh2.pendienteUSD).toBe(0);
+    expect(wh2.revenueUSD).toBe(0);
+    expect(wh2.count).toBe(0);
   });
 
-  it('sorts warehouses descending by total (cobrado + pendiente)', () => {
+  it('sorts warehouses descending by revenueUSD', () => {
     const warehouses = [
       { id: 'wh-low', name: 'Bajo' },
       { id: 'wh-high', name: 'Alto' },
@@ -335,7 +316,7 @@ describe('buildWarehouseCashFlow', () => {
     ];
     const state = buildState({ warehouses, orders });
 
-    const view = buildWarehouseCashFlow(state);
+    const view = buildWarehouseRevenue(state);
 
     expect(view.rows.map((r) => r.warehouseId)).toEqual(['wh-high', 'wh-low']);
   });
@@ -367,10 +348,10 @@ describe('buildFinanceDashboard', () => {
     expect(view.stateBreakdown).toHaveLength(5);
     expect(view.commissionLiability).toEqual({ paidMN: 0, pendingMN: 0 });
     expect(view.revenueByState.rows).toHaveLength(5);
-    expect(view.cashFlowTrend.points).toHaveLength(20);
+    expect(view.revenueTrend.points).toHaveLength(20);
     expect(view.currencyExposure.slices).toEqual([]);
     expect(view.gestorCommission.rows).toEqual([]);
-    expect(view.warehouseCashFlow.rows).toEqual([]);
+    expect(view.warehouseRevenue.rows).toEqual([]);
   });
 
   it("a later live-rate edit does not change an already-computed figure — uses the order's frozen exchangeRateSnapshot.usdToMn", () => {

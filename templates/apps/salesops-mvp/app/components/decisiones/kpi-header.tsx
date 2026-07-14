@@ -11,14 +11,14 @@ export interface KpiHeaderProps {
 const MONEY = { locale: 'en-US', currency: 'USD' } as const;
 
 /**
- * Layer 1 — exactly 5 `StatTile`s in the fixed order: Ventas, Margen,
+ * Layer 1 — exactly 4 `StatTile`s in the fixed order: Ventas, Margen,
  * Pedidos (+AOV sublabel), Comisión pendiente (MN plain text, never
- * `formatMoney`), Cobrado vs pendiente. Formats only at this leaf — the
- * domain builder hands back raw numbers + trend deltas.
+ * `formatMoney`). Formats only at this leaf — the domain builder hands back
+ * raw numbers + trend deltas.
  */
 export function KpiHeader({ kpis }: KpiHeaderProps) {
   return (
-    <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+    <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatTile
         label="Ventas"
         value={formatMoney(kpis.ventasUSD.current, MONEY)}
@@ -49,14 +49,6 @@ export function KpiHeader({ kpis }: KpiHeaderProps) {
         delta={kpis.comisionPendienteMN.delta}
         positiveIsGood={false}
         help={<InfoPopover {...DECISIONES_HELP.comisionPendiente} />}
-      />
-      <StatTile
-        label="Cobrado vs pendiente"
-        value={formatMoney(kpis.cobradoUSD.current, MONEY)}
-        trend={kpis.cobradoUSD.trend}
-        delta={kpis.cobradoUSD.delta}
-        sublabel={`Pendiente ${formatMoney(kpis.pendienteUSD.current, MONEY)}`}
-        help={<InfoPopover {...DECISIONES_HELP.cobradoPendiente} />}
       />
     </section>
   );

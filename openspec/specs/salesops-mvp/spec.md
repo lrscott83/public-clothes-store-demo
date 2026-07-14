@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the testable contract for the `@store-mgmt/salesops-mvp` app: a workspace app that registers correctly, serves on a distinct port, resolves 7 placeholder routes with a sidebar, renders a product against a local catalog, and ships with a deterministic frozen domain model + seed generator powering all seven screens. Tasks 1–3 complete: app skeleton, local ProductCard, full seed/domain/localStorage implementation, and the 3-step "crear pedido" wizard (Carrito → Cliente → Almacén). Task 4 complete: Pantalla 2 (Operador de gestores verifica pedidos) — read-only kanban board with rate-freeze verification and commission-paid marking. Task 5 complete: Pantalla 3 (Operador de almacén) — warehouse selector, carrier assignment, delivery marking, and backward-compatible board extension. Task 6 complete: Pantalla 4 (Tasas de cambio) — exchange rate editor (USD→MN, Zelle, EUR) rendering as editable numeric fields, saved via a new pure store action `updateExchangeRates` that writes only `state.exchangeRates` and never touches `state.orders`, preserving the frozen-snapshot invariant. Task 10 complete: Pantalla 6 (Decisiones) — 3-layer visual decision dashboard with KPI header (5 tiles with 10-day trends), 4 visuals (sales trend, orders-by-stage distribution, sales-by-warehouse, currency/payment mix), and 3 actionable blocks (gestor ranking, top products by margin, inventory alerts + lowest-margin orders), all fed 100% by seeded data with no invented values, using custom inline SVG chart primitives and pure domain helpers with strict TDD test coverage. Task 11 complete: Pantalla 7 (Finanzas) — rebuilt into a 3-layer financial control panel answering "¿dónde está mi plata y hacia dónde se va?" with 5 KPI tiles (10-day period trends), 4 financial visuals (cash-collection trend with cobrado/pendiente toggle, commission liability donut, revenue by stage, currency/settlement mix), and 3 actionable blocks (commission cost & ROI per gestor, pending cash per warehouse, revenue aging by state). Maintains full architectural decoupling from decisiones (zero cross-dashboard domain imports); all metrics 100% seeded with frozen exchange-rate snapshots; read-only with no mutations; strict TDD throughout. Task 7 (Inventario) remains out of scope.
+Define the testable contract for the `@store-mgmt/salesops-mvp` app: a workspace app that registers correctly, serves on a distinct port, resolves 7 placeholder routes with a sidebar, renders a product against a local catalog, and ships with a deterministic frozen domain model + seed generator powering all seven screens. Tasks 1–3 complete: app skeleton, local ProductCard, full seed/domain/localStorage implementation, and the 3-step "crear pedido" wizard (Carrito → Cliente → Almacén). Task 4 complete: Pantalla 2 (Operador de gestores verifica pedidos) — read-only kanban board with rate-freeze verification and commission-paid marking. Task 5 complete: Pantalla 3 (Operador de almacén) — warehouse selector, carrier assignment, delivery marking, and backward-compatible board extension. Task 6 complete: Pantalla 4 (Tasas de cambio) — exchange rate editor (USD→MN, Zelle, EUR) rendering as editable numeric fields, saved via a new pure store action `updateExchangeRates` that writes only `state.exchangeRates` and never touches `state.orders`, preserving the frozen-snapshot invariant. Task 10 complete: Pantalla 6 (Decisiones) — 3-layer visual decision dashboard with KPI header (4 tiles with 10-day trends), 4 visuals (sales trend, orders-by-stage distribution, sales-by-warehouse, currency/payment mix), and 3 actionable blocks (gestor ranking, top products by margin, inventory alerts + lowest-margin orders), all fed 100% by seeded data with no invented values, using custom inline SVG chart primitives and pure domain helpers with strict TDD test coverage. Task 11 complete: Pantalla 7 (Finanzas) — rebuilt into a 3-layer financial control panel answering "¿dónde está mi plata y hacia dónde se va?" with 4 KPI tiles (10-day period trends), 4 financial visuals (revenue-over-time trend, commission liability donut, revenue by stage, currency/settlement mix), and 3 actionable blocks (commission cost & ROI per gestor, revenue per warehouse, revenue aging by state). Maintains full architectural decoupling from decisiones (zero cross-dashboard domain imports); all metrics 100% seeded with frozen exchange-rate snapshots; read-only with no mutations; strict TDD throughout. Task 7 (Inventario) remains out of scope.
 
 ## Requirements
 
@@ -826,20 +826,19 @@ items and other orders are still processed.
 - THEN it does not throw
 - AND that item contributes `0` to cost/margin while the rest of the order's items and other orders are still aggregated
 
-### Requirement: KPI Header Has Exactly Five Tiles
+### Requirement: KPI Header Has Exactly Four Tiles
 
-Layer 1 MUST render exactly five KPI tiles, in this order: Ventas (USD),
-Margen (USD + %), Pedidos + ticket promedio (AOV), Comisión pendiente (MN),
-Cobrado vs pendiente. Each tile's underlying value MUST be computed only
-from orders with `state !== 'creado'`, except "Comisión pendiente (MN)" and
-"Cobrado vs pendiente", which use the pending/paid/in-transit state
-groupings defined below.
+Layer 1 MUST render exactly four KPI tiles, in this order: Ventas (USD),
+Margen (USD + %), Pedidos + ticket promedio (AOV), Comisión pendiente (MN).
+Each tile's underlying value MUST be computed only from orders with
+`state !== 'creado'`, except "Comisión pendiente (MN)", which uses the
+pending/paid/in-transit state groupings defined below.
 
-#### Scenario: Five tiles render in the fixed order
+#### Scenario: Four tiles render in the fixed order
 
 - GIVEN `SeedState` contains qualifying orders
 - WHEN `/decisiones` is rendered
-- THEN the KPI header shows exactly 5 tiles in the order: Ventas, Margen, Pedidos+AOV, Comisión pendiente, Cobrado vs pendiente
+- THEN the KPI header shows exactly 4 tiles in the order: Ventas, Margen, Pedidos+AOV, Comisión pendiente
 
 ### Requirement: KPI Formulas
 
@@ -853,8 +852,6 @@ Each KPI tile's value, computed over a given order set, MUST use:
 | Pedidos | `count` of qualifying orders |
 | Ticket promedio (AOV) | `revenueUSD / count`, or `0` when `count` is `0` |
 | Comisión pendiente (MN) | `Σ order.commissionMN` over orders where `state` is `verificado`, `transportando`, or `entregado` AND `commissionPaidAt` is not set (same "pending" definition as `buildFinanceSummary`) |
-| Cobrado (count/USD) | orders in state `entregado` or `comision_pagada` |
-| Pendiente/en tránsito (count/USD) | orders in state `verificado` or `transportando` |
 
 #### Scenario: Margin and AOV are computed from revenue, cost, and commission
 
@@ -1194,8 +1191,7 @@ text (no thousands separators), never through the USD formatter, and MUST show
 
 Across all three layers, `/finanzas` MUST expose no control mutating
 `SeedState`: no `<form>`, no store-mutating button, no "marcar comisión
-pagada" action. A local view-only toggle (e.g. cash-flow cobrado/pendiente)
-is permitted.
+pagada" action.
 
 #### Scenario: No form or mutating button renders
 
@@ -1203,9 +1199,9 @@ is permitted.
 - WHEN inspected
 - THEN no `<form>` and no store-mutating button exist
 
-### Requirement: Layer 1 KPI Header Has Exactly Five Tiles With Period Trend
+### Requirement: Layer 1 KPI Header Has Exactly Four Tiles With Period Trend
 
-Layer 1 MUST render five tiles, each computed for the current 10-day
+Layer 1 MUST render four tiles, each computed for the current 10-day
 window vs the prior 10-day window (anchored to `SeedState.generatedAt`,
 never the wall clock) with a trend indicator:
 
@@ -1213,25 +1209,24 @@ never the wall clock) with a trend indicator:
 |---|---|
 | Ingresos facturados (USD) | `Σ totalUSD`, qualifying |
 | Ingresos liquidados (MN) | `Σ totalMN`, qualifying |
-| Cobrado vs pendiente (USD) | `Σ totalUSD`, `entregado`/`comision_pagada` vs `verificado`/`transportando` |
 | Comisión pendiente (MN) | `buildFinanceSummary.kpis.commissionPendingMN` |
 | Margen neto (USD) + % | `totalUSD − costoUSD − comisiónUSD`, aggregated |
 
 A `0`-prior / `>0`-current window MUST trend "up" (never `Infinity`).
 
-#### Scenario: Five tiles render with a safe trend
+#### Scenario: Four tiles render with a safe trend
 
 - GIVEN qualifying orders in both windows, one tile with prior `0` /
   current `> 0`
 - WHEN Layer 1 computes
-- THEN all 5 tiles render in order, and that tile shows "up", never
+- THEN all 4 tiles render in order, and that tile shows "up", never
   `Infinity`
 
 ### Requirement: Layer 2 Renders Four Financial Visuals
 
 | Visual | Field(s) |
 |---|---|
-| Tendencia de cobros (20d, toggle cobrado/pendiente) | `totalUSD` by day, split cobrado/pendiente |
+| Tendencia de ventas (20d, single series) | `totalUSD` by day, qualifying, no split/toggle |
 | Comisión pagada vs pendiente (dona) | `commissionPaidMN` / `commissionPendingMN` |
 | Ingresos por estado (barras) | `FinanceStateRow.revenueUSD` per state |
 | Mix por moneda (dona) | `buildCurrencyExposure` revenue+percent per `payment.method` (hard-currency vs local-currency FX exposure) |
@@ -1244,18 +1239,18 @@ Every day in the 20-day window MUST appear, including days at `0`.
 - WHEN the trend builds
 - THEN that day appears at `0`, not omitted
 
-#### Scenario: Toggling the trend does not touch SeedState
+#### Scenario: Trend has no toggle and implies no pending collection
 
-- GIVEN the trend shows "cobrado"
-- WHEN toggled to "pendiente"
-- THEN the series switches without re-reading or mutating `SeedState`
+- GIVEN the revenue trend renders
+- WHEN inspected
+- THEN it shows one series only, no cobrado/pendiente control or label
 
 ### Requirement: Layer 3 Renders Three Actionable Finance Blocks
 
 | Block | Field(s) |
 |---|---|
 | Comisión y ROI por gestor | `buildGestorRanking`; derived pagada = earned − pending; take-rate = commission ÷ revenue |
-| Cobros pendientes por almacén | `totalUSD` by `warehouseId`, cobrado/pendiente |
+| Ventas por almacén | `Σ totalUSD` by `warehouseId`, qualifying, no split |
 | Flujo por estado | existing `StateBreakdownTable`, unchanged |
 
 A gestor/warehouse with zero qualifying orders MUST still appear at `0`,
@@ -1286,6 +1281,26 @@ never live `state.exchangeRates`. Every MN aggregate MUST filter
 - GIVEN a `creado` order with undefined `totalMN`/`commissionMN`
 - WHEN any MN aggregate builds
 - THEN that order contributes `0`, never `NaN`
+
+### Requirement: No Customer-Receivable Framing Anywhere In The App
+
+The system MUST NOT present any figure, chart, table, or copy implying a
+customer owes money or that revenue is partially uncollected. Every sale
+MUST be treated as fully collected. The only liability the app MAY present
+is the owner's commission payable to gestores (existing requirements,
+unchanged).
+
+#### Scenario: No screen renders receivable language
+
+- GIVEN `/finanzas` and `/decisiones` render, plus their help copy
+- WHEN all visible text is inspected
+- THEN no string implies "por cobrar", "falta cobrar", or a customer-owed amount
+
+#### Scenario: Commission liability still frames the owner as debtor
+
+- GIVEN `/finanzas` renders the commission KPI/donut and help copy
+- WHEN inspected
+- THEN copy frames commission as what the owner still owes gestores, never as money owed to the owner
 
 ## Out of Scope (explicit non-requirements)
 

@@ -3,12 +3,12 @@ import type { Route } from './+types/finanzas';
 import { buildFinanceDashboard } from '../domain/finanzas-dashboard';
 import { loadSeedState } from '../store/seed-store';
 import { FinanceKpiHeader } from '../components/finanzas/finance-kpi-header';
-import { CashFlowTrendSection } from '../components/finanzas/cash-flow-trend-section';
+import { RevenueTrendSection } from '../components/finanzas/revenue-trend-section';
 import { CommissionLiabilityDonut } from '../components/finanzas/commission-liability-donut';
 import { RevenueByStateBars } from '../components/finanzas/revenue-by-state-bars';
 import { CurrencyExposureDonut } from '../components/finanzas/currency-exposure-donut';
 import { GestorCommissionTable } from '../components/finanzas/gestor-commission-table';
-import { WarehouseCashFlow } from '../components/finanzas/warehouse-cash-flow';
+import { WarehouseRevenue } from '../components/finanzas/warehouse-revenue';
 import { StateBreakdownTable } from '../components/finanzas/state-breakdown-table';
 
 export function meta(_args: Route.MetaArgs) {
@@ -20,8 +20,7 @@ export function meta(_args: Route.MetaArgs) {
  * direct render, no RR7 `<Form>`/action/loader, no `useNavigate` (sidesteps
  * the jsdom+undici `AbortSignal` gotcha), mirroring `decisiones.tsx`.
  * Computes its view model once from `loadSeedState()` via
- * `buildFinanceDashboard`; no mutation affordance beyond the local
- * cobrado/pendiente cash-flow toggle.
+ * `buildFinanceDashboard`; exposes no mutation affordance at all.
  *
  * Layer 1 (KPI header) and Layer 3's gestor/warehouse blocks render only
  * when `view.hasData`; Layer 3's "Flujo por estado" is exempt from the
@@ -49,7 +48,7 @@ export default function Finanzas() {
 
       {view.hasData && (
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
-          <CashFlowTrendSection trend={view.cashFlowTrend} />
+          <RevenueTrendSection trend={view.revenueTrend} />
           <RevenueByStateBars revenueByState={view.revenueByState} />
           <CommissionLiabilityDonut commissionLiability={view.commissionLiability} />
           <CurrencyExposureDonut currencyExposure={view.currencyExposure} />
@@ -59,7 +58,7 @@ export default function Finanzas() {
       {view.hasData && (
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
           <GestorCommissionTable gestorCommission={view.gestorCommission} />
-          <WarehouseCashFlow warehouseCashFlow={view.warehouseCashFlow} />
+          <WarehouseRevenue warehouseRevenue={view.warehouseRevenue} />
         </div>
       )}
 

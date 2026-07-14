@@ -3,16 +3,14 @@
  * `/finanzas`. Same `HelpEntry` shape and warm Rioplatense voice as
  * `DECISIONES_HELP` — this extends an existing Spanish dashboard.
  *
- * Caveat-critical framings (non-negotiable, see design.md Decision 4):
- * - "Cobrado vs pendiente" is a STATE proxy, never a cash register — copy
- *   says "aprox./estimado", never "recibido".
+ * Caveat-critical framings (non-negotiable, see design.md §5 ADR):
+ * - Every sale is fully collected — there is no customer receivable, so no
+ *   copy anywhere frames revenue as "por cobrar" or partially uncollected.
  * - "Ingresos liquidados (MN)" frames revenue settled in the local,
  *   devaluing currency = FX exposure, not cash-in-hand.
- * - "Comisión pagada" is commission paid TO GESTORES (`commissionPaidAt`),
- *   a DIFFERENT event from client "cobrado" (order-state inferred) — never
- *   conflated.
- * - "Tendencia de cobros" is titled as an estimate; help repeats the proxy
- *   caveat.
+ * - "Comisión pagada" is commission paid TO GESTORES (`commissionPaidAt`) —
+ *   the only liability the app presents is the owner's debt to gestores,
+ *   never money owed BY a customer.
  * - No goal/target copy anywhere; no Gross/Net/Fees/refunds vocabulary.
  */
 export interface HelpEntry {
@@ -30,10 +28,6 @@ export const FINANZAS_HELP = {
     title: 'Ingresos liquidados (MN)',
     text: 'Lo mismo que facturaste, pero expresado en moneda nacional al tipo de cambio de cada venta. No es plata en caja: es tu exposición real a la devaluación de la MN.',
   },
-  cobradoPendiente: {
-    title: 'Cobrado vs pendiente',
-    text: 'Aproximación por estado del pedido (entregado / comisión pagada = cobrado; verificado / transportando = pendiente). No es un registro de caja real: es una estimación, no un extracto bancario.',
-  },
   comisionPendiente: {
     title: 'Comisión pendiente',
     text: 'Lo que todavía les debés a tus gestores por sus ventas, en moneda nacional (MN). Es plata ya comprometida que va a salir: tenela presente antes de gastarla.',
@@ -44,17 +38,17 @@ export const FINANZAS_HELP = {
   },
 
   // --- Layer 2 (visual sections) ---
-  tendenciaCobros: {
-    title: 'Cobros estimados por estado',
-    text: 'Cómo se movió, día a día en los últimos 20 días, el dinero estimado como cobrado y el que sigue pendiente. Es una aproximación por estado del pedido, no un movimiento de caja real.',
+  tendenciaVentas: {
+    title: 'Ventas por día',
+    text: 'Cómo se movió tu facturación, día a día, en los últimos 20 días. Cada venta acá ya está totalmente realizada — no hay plata pendiente de cobro, es facturación real.',
   },
   comisionPagadaPendiente: {
     title: 'Comisión pagada vs pendiente',
-    text: 'Cuánto ya le pagaste a tus gestores (comisión pagada, evento `commissionPaidAt`) contra cuánto todavía les debés. Ojo: esto es distinto de si el CLIENTE te pagó a vos — son dos eventos separados.',
+    text: 'Cuánto ya le pagaste a tus gestores (comisión pagada, evento `commissionPaidAt`) contra cuánto todavía les debés. Esta es la única deuda que maneja el panel — vos le debés a ellos, nunca al revés.',
   },
   ingresosPorEstado: {
     title: 'Ingresos por estado',
-    text: 'Cuánta facturación tenés parada en cada etapa del pedido. Si se amontona en una etapa temprana, ahí tenés plata que todavía no terminó de convertirse en cobro.',
+    text: 'Cuánta facturación tenés en cada etapa del pedido. Si se amontona en una etapa temprana, ahí tenés pedidos que todavía no avanzaron por el flujo operativo.',
   },
   mixPorMoneda: {
     title: 'Mix por moneda',
@@ -66,8 +60,8 @@ export const FINANZAS_HELP = {
     title: 'Comisión y ROI por gestor',
     text: 'Cuánto le generó cada gestor en ventas contra cuánto te costó en comisión: pagada, pendiente (la devengada es la suma de ambas), el take-rate (% de la venta que se va en comisión) y el ROI (cuánto facturás por cada peso de comisión).',
   },
-  cobrosPendientesAlmacen: {
-    title: 'Cobros pendientes por almacén',
-    text: 'Cuánta plata estimada sigue trabada en cada almacén, cobrada o pendiente. Un almacén con mucho pendiente es plata que todavía no terminó de entrar.',
+  ventasPorAlmacen: {
+    title: 'Ventas por almacén',
+    text: 'Cuánto vende cada almacén. Te muestra qué punto empuja el negocio y cuál está quedando dormido, para reforzar stock o atención donde de verdad rinde.',
   },
 } satisfies Record<string, HelpEntry>;

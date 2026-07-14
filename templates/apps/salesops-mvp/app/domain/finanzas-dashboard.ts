@@ -22,8 +22,6 @@ import type { Order, OrderState, SeedState, SeededProduct } from './types';
 // ---- private per-order helpers (finance owns its own copy — not imported from decisiones) --------
 
 const PENDING_COMMISSION_STATES: OrderState[] = ['verificado', 'transportando', 'entregado'];
-const COBRADO_STATES: OrderState[] = ['entregado', 'comision_pagada'];
-const PENDIENTE_STATES: OrderState[] = ['verificado', 'transportando'];
 
 function qualifying(orders: Order[]): Order[] {
   return orders.filter((order) => order.state !== 'creado');
@@ -70,8 +68,6 @@ function orderMarginUSD(order: Order, productById: Map<string, SeededProduct>): 
 export interface FinanceKpiHeaderView {
   ingresosFacturadosUSD: KpiTrend;
   ingresosLiquidadosMN: KpiTrend;
-  cobradoUSD: KpiTrend;
-  pendienteUSD: KpiTrend;
   comisionPendienteMN: KpiTrend;
   margenNetoUSD: KpiTrend;
   /** current-window margenNetoUSD / ingresosFacturadosUSD * 100, or 0 when revenue is 0. */
@@ -79,7 +75,7 @@ export interface FinanceKpiHeaderView {
 }
 
 /**
- * Builds the 5 windowed KPI tiles (current 10-day window vs prior 10-day
+ * Builds the 4 windowed KPI tiles (current 10-day window vs prior 10-day
  * window, anchored to `state.generatedAt`). "Comisión pendiente" mirrors
  * `buildFinanceSummary`'s own pending definition (unpaid AND in
  * verificado/transportando/entregado) applied within each window — it does
@@ -99,12 +95,6 @@ export function buildFinanceKpiHeader(state: SeedState): FinanceKpiHeaderView {
   const liquidadoCurrent = sumMN(currentQ);
   const liquidadoPrior = sumMN(priorQ);
 
-  const cobradoCurrent = sumUSD(current.filter((order) => COBRADO_STATES.includes(order.state)));
-  const cobradoPrior = sumUSD(prior.filter((order) => COBRADO_STATES.includes(order.state)));
-
-  const pendienteCurrent = sumUSD(current.filter((order) => PENDIENTE_STATES.includes(order.state)));
-  const pendientePrior = sumUSD(prior.filter((order) => PENDIENTE_STATES.includes(order.state)));
-
   const comisionCurrent = sumCommissionMN(current.filter(isCommissionPending));
   const comisionPrior = sumCommissionMN(prior.filter(isCommissionPending));
 
@@ -114,40 +104,38 @@ export function buildFinanceKpiHeader(state: SeedState): FinanceKpiHeaderView {
   return {
     ingresosFacturadosUSD: buildKpiTrend(facturadoCurrent, facturadoPrior),
     ingresosLiquidadosMN: buildKpiTrend(liquidadoCurrent, liquidadoPrior),
-    cobradoUSD: buildKpiTrend(cobradoCurrent, cobradoPrior),
-    pendienteUSD: buildKpiTrend(pendienteCurrent, pendientePrior),
     comisionPendienteMN: buildKpiTrend(comisionCurrent, comisionPrior),
     margenNetoUSD: buildKpiTrend(margenCurrent, margenPrior),
     margenPercent: facturadoCurrent > 0 ? (margenCurrent / facturadoCurrent) * 100 : 0,
   };
 }
 
-// ---- cash-flow trend (Layer 2a) -----------------------------------------------------
+// ---- revenue trend (Layer 2a) -------------------------------------------------------
 
-export interface CashFlowTrendPoint {
+export interface RevenueTrendPoint {
   /** 0 = the anchor day (newest), 19 = oldest day in the 20-day window. */
   dayOffset: number;
-  cobradoUSD: number;
-  pendienteUSD: number;
+  revenueUSD: number;
 }
 
-export interface CashFlowTrendView {
+export interface RevenueTrendView {
   /** Ordered oldest -> newest (dayOffset 19 .. 0). */
-  points: CashFlowTrendPoint[];
+  points: RevenueTrendPoint[];
 }
 
 /**
  * Buckets qualifying orders (`state !== 'creado'`) by calendar day over the
- * 20-day window ending at `state.generatedAt`, split into cobrado (state
- * proxy) vs pendiente (state proxy) USD. Every day appears — including days
- * with zero qualifying orders, at `{cobradoUSD:0, pendienteUSD:0}` — never
- * omitted. Mirrors `buildSalesTrend`'s bucketing shape.
+ * 20-day window ending at `state.generatedAt`, summing `totalUSD` per day —
+ * a single unsplit revenue series (every qualifying order IS realized
+ * revenue; there is no separate cobrado/pendiente subset). Every day
+ * appears — including days with zero qualifying orders, at `{revenueUSD:0}`
+ * — never omitted. Mirrors `buildSalesTrend`'s bucketing shape.
  */
-export function buildCashFlowTrend(state: SeedState): CashFlowTrendView {
+export function buildRevenueTrend(state: SeedState): RevenueTrendView {
   const anchorMs = new Date(state.generatedAt).getTime();
-  const buckets = new Map<number, { cobradoUSD: number; pendienteUSD: number }>();
+  const buckets = new Map<number, { revenueUSD: number }>();
   for (let offset = 0; offset < 20; offset++) {
-    buckets.set(offset, { cobradoUSD: 0, pendienteUSD: 0 });
+    buckets.set(offset, { revenueUSD: 0 });
   }
 
   for (const order of state.orders) {
@@ -158,17 +146,13 @@ export function buildCashFlowTrend(state: SeedState): CashFlowTrendView {
     const offset = Math.floor(diff / DAY_MS);
     const bucket = buckets.get(offset);
     if (!bucket) continue; // outside the 20-day window
-    if (COBRADO_STATES.includes(order.state)) {
-      bucket.cobradoUSD += order.totalUSD;
-    } else if (PENDIENTE_STATES.includes(order.state)) {
-      bucket.pendienteUSD += order.totalUSD;
-    }
+    bucket.revenueUSD += order.totalUSD;
   }
 
-  const points: CashFlowTrendPoint[] = [];
+  const points: RevenueTrendPoint[] = [];
   for (let offset = 19; offset >= 0; offset--) {
     const bucket = buckets.get(offset)!;
-    points.push({ dayOffset: offset, cobradoUSD: bucket.cobradoUSD, pendienteUSD: bucket.pendienteUSD });
+    points.push({ dayOffset: offset, revenueUSD: bucket.revenueUSD });
   }
 
   return { points };
@@ -282,35 +266,38 @@ export function buildGestorCommissionCost(state: SeedState): GestorCommissionCos
   return { rows };
 }
 
-// ---- warehouse cash flow (Layer 3b) -------------------------------------------------
+// ---- warehouse revenue (Layer 3b) ---------------------------------------------------
 
-export interface WarehouseCashFlowRow {
+export interface WarehouseRevenueRow {
   warehouseId: string;
   warehouseName: string;
-  cobradoUSD: number;
-  pendienteUSD: number;
+  revenueUSD: number;
+  /** # qualifying orders — gives the table a second column. */
+  count: number;
 }
 
-export interface WarehouseCashFlowView {
-  rows: WarehouseCashFlowRow[];
+export interface WarehouseRevenueView {
+  rows: WarehouseRevenueRow[];
 }
 
 /**
  * One row per `state.warehouses` entry (all-time qualifying orders) — the
- * financial angle on warehouse sales: uncollected cash trapped per
- * warehouse (cobrado/pendiente), not sales volume. A warehouse with zero
- * qualifying orders still appears at 0, never omitted. Sorted desc by
- * (cobradoUSD + pendienteUSD).
+ * financial angle on warehouse sales: revenue and order count per
+ * warehouse. A warehouse with zero qualifying orders still appears at 0,
+ * never omitted. Sorted desc by revenueUSD.
  */
-export function buildWarehouseCashFlow(state: SeedState): WarehouseCashFlowView {
+export function buildWarehouseRevenue(state: SeedState): WarehouseRevenueView {
   const qualifyingOrders = qualifying(state.orders);
   const rows = state.warehouses.map((warehouse) => {
     const orders = qualifyingOrders.filter((order) => order.warehouseId === warehouse.id);
-    const cobradoUSD = sumUSD(orders.filter((order) => COBRADO_STATES.includes(order.state)));
-    const pendienteUSD = sumUSD(orders.filter((order) => PENDIENTE_STATES.includes(order.state)));
-    return { warehouseId: warehouse.id, warehouseName: warehouse.name, cobradoUSD, pendienteUSD };
+    return {
+      warehouseId: warehouse.id,
+      warehouseName: warehouse.name,
+      revenueUSD: sumUSD(orders),
+      count: orders.length,
+    };
   });
-  rows.sort((a, b) => b.cobradoUSD + b.pendienteUSD - (a.cobradoUSD + a.pendienteUSD));
+  rows.sort((a, b) => b.revenueUSD - a.revenueUSD);
   return { rows };
 }
 
@@ -328,12 +315,12 @@ export interface RevenueByStateView {
 export interface FinanceDashboardView {
   hasData: boolean;
   kpis: FinanceKpiHeaderView;
-  cashFlowTrend: CashFlowTrendView;
+  revenueTrend: RevenueTrendView;
   commissionLiability: CommissionLiabilityView;
   revenueByState: RevenueByStateView;
   currencyExposure: CurrencyExposureView;
   gestorCommission: GestorCommissionCostView;
-  warehouseCashFlow: WarehouseCashFlowView;
+  warehouseRevenue: WarehouseRevenueView;
   /** Reuses `buildFinanceSummary`'s rows unchanged (Layer 3c drill-down). */
   stateBreakdown: FinanceStateRow[];
 }
@@ -352,7 +339,7 @@ export function buildFinanceDashboard(state: SeedState): FinanceDashboardView {
   return {
     hasData,
     kpis: buildFinanceKpiHeader(state),
-    cashFlowTrend: buildCashFlowTrend(state),
+    revenueTrend: buildRevenueTrend(state),
     commissionLiability: {
       paidMN: summary.kpis.commissionPaidMN,
       pendingMN: summary.kpis.commissionPendingMN,
@@ -360,7 +347,7 @@ export function buildFinanceDashboard(state: SeedState): FinanceDashboardView {
     revenueByState: { rows: summary.rows },
     currencyExposure: buildCurrencyExposure(state),
     gestorCommission: buildGestorCommissionCost(state),
-    warehouseCashFlow: buildWarehouseCashFlow(state),
+    warehouseRevenue: buildWarehouseRevenue(state),
     stateBreakdown: summary.rows,
   };
 }

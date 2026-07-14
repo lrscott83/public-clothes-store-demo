@@ -15,15 +15,13 @@ const KPIS: KpiHeaderView = {
   pedidos: trend(2, 1),
   aovUSD: trend(400, 400),
   comisionPendienteMN: trend(3000, 1000),
-  cobradoUSD: trend(500, 500),
-  pendienteUSD: trend(300, 300),
 };
 
 describe('KpiHeader', () => {
-  it('renders exactly 5 StatTiles in the fixed order', () => {
+  it('renders exactly 4 StatTiles in the fixed order', () => {
     const { container } = render(<KpiHeader kpis={KPIS} />);
     const labels = [...container.querySelectorAll('p.text-xs')].map((el) => el.textContent);
-    expect(labels).toEqual(['Ventas', 'Margen', 'Pedidos', 'Comisión pendiente', 'Cobrado vs pendiente']);
+    expect(labels).toEqual(['Ventas', 'Margen', 'Pedidos', 'Comisión pendiente']);
   });
 
   it('renders USD figures via formatMoney and the commission figure as plain MN text', () => {

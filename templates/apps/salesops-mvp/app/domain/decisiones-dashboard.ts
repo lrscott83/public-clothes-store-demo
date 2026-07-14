@@ -56,14 +56,10 @@ export interface KpiHeaderView {
   pedidos: KpiTrend;
   aovUSD: KpiTrend;
   comisionPendienteMN: KpiTrend;
-  cobradoUSD: KpiTrend;
-  pendienteUSD: KpiTrend;
 }
 
 /** Same "pending" definition as `buildFinanceSummary`: unpaid AND in verificado/transportando/entregado. */
 const PENDING_COMMISSION_STATES: OrderState[] = ['verificado', 'transportando', 'entregado'];
-const COBRADO_STATES: OrderState[] = ['entregado', 'comision_pagada'];
-const PENDIENTE_STATES: OrderState[] = ['verificado', 'transportando'];
 
 function isCommissionPending(order: Order): boolean {
   return order.commissionPaidAt == null && PENDING_COMMISSION_STATES.includes(order.state);
@@ -82,11 +78,11 @@ function sumCommissionMN(orders: Order[]): number {
 }
 
 /**
- * Builds all 5 KPI tiles, each with a current-window value and a
+ * Builds all 4 KPI tiles, each with a current-window value and a
  * prior-window value (10 days vs prior 10 days, anchored to
  * `state.generatedAt`). Ventas/Margen/Pedidos/AOV use only orders with
- * `state !== 'creado'`; Comisión pendiente / Cobrado / Pendiente use their
- * own state-based groupings within each window (mirrors `buildFinanceSummary`).
+ * `state !== 'creado'`; Comisión pendiente uses its own state-based
+ * grouping within each window (mirrors `buildFinanceSummary`).
  */
 export function buildKpiHeader(state: SeedState): KpiHeaderView {
   const productById = new Map(state.products.map((product) => [product.id, product]));
@@ -110,12 +106,6 @@ export function buildKpiHeader(state: SeedState): KpiHeaderView {
   const comisionCurrent = sumCommissionMN(current.filter(isCommissionPending));
   const comisionPrior = sumCommissionMN(prior.filter(isCommissionPending));
 
-  const cobradoCurrent = sumUSD(current.filter((order) => COBRADO_STATES.includes(order.state)));
-  const cobradoPrior = sumUSD(prior.filter((order) => COBRADO_STATES.includes(order.state)));
-
-  const pendienteCurrent = sumUSD(current.filter((order) => PENDIENTE_STATES.includes(order.state)));
-  const pendientePrior = sumUSD(prior.filter((order) => PENDIENTE_STATES.includes(order.state)));
-
   return {
     ventasUSD: buildKpiTrend(ventasCurrent, ventasPrior),
     margenUSD: buildKpiTrend(margenCurrent, margenPrior),
@@ -123,8 +113,6 @@ export function buildKpiHeader(state: SeedState): KpiHeaderView {
     pedidos: buildKpiTrend(pedidosCurrent, pedidosPrior),
     aovUSD: buildKpiTrend(aovCurrent, aovPrior),
     comisionPendienteMN: buildKpiTrend(comisionCurrent, comisionPrior),
-    cobradoUSD: buildKpiTrend(cobradoCurrent, cobradoPrior),
-    pendienteUSD: buildKpiTrend(pendienteCurrent, pendientePrior),
   };
 }
 

@@ -24,7 +24,6 @@ describe('Decisiones container', () => {
     expect(screen.getAllByText('Margen').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Pedidos').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Comisión pendiente').length).toBeGreaterThan(0);
-    expect(screen.getByText('Cobrado vs pendiente')).toBeInTheDocument();
 
     // Layer 2 — 4 visuals
     expect(screen.getByText('Tendencia de ventas (20 días)')).toBeInTheDocument();
