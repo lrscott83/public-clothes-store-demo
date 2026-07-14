@@ -12,7 +12,7 @@ import Decisiones from '../decisiones';
 import Finanzas from '../finanzas';
 
 const ROUTES = [
-  { path: '/', Component: Home, heading: /bienvenid/i },
+  { path: '/', Component: Home, heading: /vive en tu cabeza y en el WhatsApp/i },
   { path: '/pedidos/nuevo', Component: PedidosNuevo, heading: /nuevo pedido/i },
   { path: '/operador-gestores', Component: OperadorGestores, heading: /operador de gestores/i },
   { path: '/operador-almacen', Component: OperadorAlmacen, heading: /operador de almacén/i },
