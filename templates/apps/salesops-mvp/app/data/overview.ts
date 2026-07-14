@@ -67,11 +67,12 @@ export const TOUR: TourStep[] = [
   },
   {
     n: '03',
-    label: 'Crear un pedido',
-    question: 'Probá que es real.',
-    summary: 'Cargá un pedido como gestor y miralo caer en los tableros al instante.',
-    path: '/pedidos/nuevo',
-    icon: ShoppingCart,
+    label: 'Inventario',
+    question: '¿Cuánto tenés invertido?',
+    summary:
+      'El valor de costo de tu stock: cuánto dinero tenés parado en mercadería, por almacén.',
+    path: '/inventario',
+    icon: Package,
   },
 ];
 
