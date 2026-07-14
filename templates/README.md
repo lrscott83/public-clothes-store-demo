@@ -136,7 +136,16 @@ Edit the config block at the top of `scripts/build-pages-site.mjs`:
 
 - **Storefront `demo` vertical is not published** — only `clothes` and
   `appliances` are in `TARGETS`. Add it there if you want it online.
-- **Cockpit fonts fall back on Pages** — `salesops-mvp` references
-  `/fonts/inter/*` with domain-absolute URLs and ships no `fonts/` dir, so on
-  Pages it renders with system fonts. The storefronts bundle their own fonts and
-  are unaffected.
+
+## Assets and the base path
+
+Anything served under a Pages subpath must be resolved against the app base, or
+it 404s off the domain root. Two rules keep this correct:
+
+- **Fonts / CSS assets**: reference them with a **relative** `url()` (e.g.
+  `url('./fonts/inter/inter-400.woff2')` in `packages/web-common/styles.css`) so
+  Vite fingerprints them into `assets/` and rewrites the URL with the base. Never
+  a leading-slash `url('/fonts/...')`.
+- **Catalog images**: resolve through `resolveCatalogImage()`
+  (`salesops-mvp/app/data/catalog.ts`), which prefixes `import.meta.env.BASE_URL`.
+  Never hardcode a leading-slash `/catalog/...` path.
