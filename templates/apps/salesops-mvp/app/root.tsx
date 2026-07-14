@@ -1,8 +1,16 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
 import type { Route } from './+types/root';
+import { faviconHref } from './store/favicon';
 
 import '@store-mgmt/web-common/styles.css';
 import './app.css';
+
+// Declaring an icon link makes the browser use it instead of auto-requesting
+// `/favicon.ico` (which has no route and logs a 404). Matches the appliances
+// storefront's favicon — see app/store/favicon.ts.
+export const links: Route.LinksFunction = () => [
+  { rel: 'icon', type: 'image/svg+xml', href: faviconHref },
+];
 
 // Document-level shell. Unlike static-store, this internal admin app has no
 // vertical/theme/favicon machinery — it always renders the same document for
