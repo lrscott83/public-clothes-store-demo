@@ -26,11 +26,11 @@ export const FINANZAS_HELP = {
   },
   ingresosLiquidados: {
     title: 'Ingresos liquidados (MN)',
-    text: 'Lo mismo que facturaste, pero expresado en moneda nacional al tipo de cambio de cada venta. No es plata en caja: es tu exposición real a la devaluación de la MN.',
+    text: 'Lo mismo que facturaste, pero expresado en moneda nacional al tipo de cambio de cada venta. No es dinero en caja: es tu exposición real a la devaluación de la MN.',
   },
   comisionPendiente: {
     title: 'Comisión pendiente',
-    text: 'Lo que todavía les debés a tus gestores por sus ventas, en moneda nacional (MN). Es plata ya comprometida que va a salir: tenela presente antes de gastarla.',
+    text: 'Lo que todavía les debés a tus gestores por sus ventas, en moneda nacional (MN). Es dinero ya comprometido que va a salir: tenelo presente antes de gastarlo.',
   },
   margenNeto: {
     title: 'Margen neto',
@@ -40,7 +40,7 @@ export const FINANZAS_HELP = {
   // --- Layer 2 (visual sections) ---
   tendenciaVentas: {
     title: 'Ventas por día',
-    text: 'Cómo se movió tu facturación, día a día, en los últimos 20 días. Cada venta acá ya está totalmente realizada — no hay plata pendiente de cobro, es facturación real.',
+    text: 'Cómo se movió tu facturación, día a día, en los últimos 20 días. Cada venta acá ya está totalmente realizada — no hay dinero pendiente de cobro, es facturación real.',
   },
   comisionPagadaPendiente: {
     title: 'Comisión pagada vs pendiente',

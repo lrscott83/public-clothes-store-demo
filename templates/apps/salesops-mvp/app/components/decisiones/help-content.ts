@@ -17,7 +17,7 @@ export const DECISIONES_HELP = {
   },
   margen: {
     title: 'Margen',
-    text: 'Lo que te queda después de pagar el costo de la mercadería. El porcentaje muestra cuánto de cada venta es ganancia real. Vender mucho con margen bajo llena de trabajo, no de plata.',
+    text: 'Lo que te queda después de pagar el costo de la mercadería. El porcentaje muestra cuánto de cada venta es ganancia real. Vender mucho con margen bajo llena de trabajo, no de dinero.',
   },
   pedidos: {
     title: 'Pedidos',
@@ -25,13 +25,13 @@ export const DECISIONES_HELP = {
   },
   comisionPendiente: {
     title: 'Comisión pendiente',
-    text: 'Lo que todavía les debés a tus gestores por sus ventas, en moneda nacional (MN). Es plata ya comprometida que va a salir: tenela presente antes de gastarla.',
+    text: 'Lo que todavía les debés a tus gestores por sus ventas, en moneda nacional (MN). Es dinero ya comprometido que va a salir: tenelo presente antes de gastarlo.',
   },
 
   // --- Layer 2 (visual sections) ---
   pedidosPorEtapa: {
     title: 'Pedidos por etapa',
-    text: 'Dónde están parados hoy tus pedidos: creados, verificados, en camino, entregados. Si se amontonan en una etapa, ahí tenés un cuello de botella que te frena la plata.',
+    text: 'Dónde están parados hoy tus pedidos: creados, verificados, en camino, entregados. Si se amontonan en una etapa, ahí tenés un cuello de botella que te frena el dinero.',
   },
   tendenciaVentas: {
     title: 'Tendencia de ventas',
