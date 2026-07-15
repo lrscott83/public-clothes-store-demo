@@ -1,8 +1,13 @@
 # Diseño — Dashboard de Decisiones (gancho para la propuesta)
 
+> ⚠️ **SUPERADO (2026-07-15).** Este diseño (ángulo mixto ventas/margen) fue
+> reemplazado por el rediseño operativo:
+> [dashboard-decisiones-operativo-design.md](dashboard-decisiones-operativo-design.md).
+> Se conserva como referencia histórica.
+
 - **Fecha:** 2026-07-11
 - **Pantalla:** `/decisiones` (Pantalla 6 del cockpit `salesops-mvp`)
-- **Estado:** Diseño propuesto — pendiente de construir la maqueta
+- **Estado:** ❌ Superado por el rediseño operativo (ver banner arriba)
 - **Propósito:** Convertir la actual `/decisiones` (hoy solo un ranking de
   rentabilidad en tabla) en un dashboard visual que sirva de **gancho** para la
   propuesta comercial, y que además sea útil para operar.

@@ -122,5 +122,5 @@ demo deja de ser "una herramienta linda" y pasa a ser "MI negocio en la pantalla
 
 - [mvp-sales-ops-cockpit.md](mvp-sales-ops-cockpit.md) — alcance del MVP y roadmap post-MVP.
 - [reference/01-business-context.md](reference/01-business-context.md) — el negocio y sus dolores.
-- [dashboard-decisiones-design.md](dashboard-decisiones-design.md) — el dashboard de Decisiones.
+- [dashboard-decisiones-operativo-design.md](dashboard-decisiones-operativo-design.md) — el dashboard de Decisiones (rediseño operativo, vigente).
 - [competitor-dashboards-research.md](competitor-dashboards-research.md) — cómo se posicionan los productos reales.

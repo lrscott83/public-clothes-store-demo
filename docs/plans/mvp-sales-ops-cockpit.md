@@ -118,13 +118,16 @@ solo aplican a los que se verifiquen de ahí en adelante.
 - **Valor de costo del inventario** (requiere un costo por producto en los datos sembrados).
 
 ### Pantalla 6 — Dashboard de decisiones
-De un vistazo, lo que hoy no tiene para decidir:
-- Ventas de los últimos 20 días (tendencia).
-- Top productos vendidos.
-- Ranking de gestores (ventas + comisiones).
-- Ventas por almacén.
-- Pedidos por etapa (embudo).
-- Alertas de inventario bajo / agotado.
+Rediseñado como **tablero operativo** (ver
+[dashboard-decisiones-operativo-design.md](dashboard-decisiones-operativo-design.md)).
+De un vistazo, lo que le importa a la operación del día:
+- **Pulso inmediato:** pedidos activos por estado y almacén, transportistas
+  (disponibles vs. transportando) y comisiones más atrasadas por pagar.
+- **Accionable:** stock crítico por almacén y pedidos demorados / trabados.
+- **Comportamiento (7d / 30d):** entra vs. sale, ciclo promedio, pedidos por día
+  y pedidos completados por día.
+- **Análisis (del diseño actual):** ventas por almacén, mix por moneda, ranking
+  de gestores, top productos por margen y pedidos de menor margen.
 
 ### Pantalla 7 — Finanzas
 - Ingresos en USD y convertidos a MN.
