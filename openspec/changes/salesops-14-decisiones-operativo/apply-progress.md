@@ -297,4 +297,59 @@ One test-writing mistake (not a design/implementation issue): the first draft of
 - Current work unit: Unit 5 (Capa 3b, PR5 per tasks.md's Suggested Work Units table)
 - Boundary: starts from the committed Batch 4 tree on `salesops-mvp`; ends with `buildPedidosPorDia`/`PedidosPorDia` and `buildCompletadosPorDia`/`CompletadosPorDia` implemented, tested, and typechecked — no consumers wired yet (route recomposition is Phase 4/PR7, not touched this batch)
 - Estimated review budget impact: ~300 changed lines in modified files (git diff --stat) + ~333 lines across 4 new files (2 components, 2 component test files) ≈ 633 total — above the tasks.md PR5 estimate (~400) and the 400-line guard budget, but within the `size:exception` explicitly authorized by the orchestrator for this batch (see delivery context above)
+- Commit: `d0845cd`, on the current branch, not pushed
+
+---
+
+## Batch 6 (this batch) — Phase 4: Análisis windowing (PR6)
+
+**Mode**: Strict TDD (RED → GREEN, verified per task)
+**Delivery**: Single PR, `size:exception`, on current branch `salesops-mvp`, committed, not pushed.
+**Scope**: ONLY tasks 4.1–4.2 — the gestor-ranking `[7d/30d/General]` period-selector prop contract. Per tasks.md, PR6's "Análisis windowing" for `buildWarehouseSales`/`buildCurrencyMix` requires **zero code change**: both builders are already window-agnostic pure functions over whatever `SeedState` they're given (confirmed in `design.md`'s "Análisis windowing" decision row — "reused unchanged, the filter is applied by the SeedState passed in"). The actual `windowedState(state, days)` call-site wiring for all 3 Análisis blocks is owned by the route recomposition (task 4.4, PR7) — explicitly out of scope this batch, not touched. Route/KPI/sales-trend/stage-distribution deletion (PR8) also not touched.
+
+### Completed Tasks
+
+- [x] 4.1 RED: updated `gestor-ranking.test.tsx` — added `period`/`onPeriodChange` props to all existing renders (required-prop compile fix) plus 2 new tests: selector renders `[7d/30d/General]` with correct `aria-pressed`, and each option's click calls `onPeriodChange` with `7`/`30`/`'general'`
+- [x] 4.2 GREEN: modified `components/decisiones/gestor-ranking.tsx` — added `GestorRankingPeriod = WindowDays | 'general'` type, `period`/`onPeriodChange` props, and a 3-button selector (same visual pattern as `period-filter.tsx`, extended with a third "General" option) in the card header
+
+### TDD Cycle Evidence
+
+| Task | RED (test written, confirmed failing) | GREEN (implementation, confirmed passing) | REFACTOR |
+|------|------|------|------|
+| 4.1/4.2 `GestorRanking` period selector | Added 2 tests to `gestor-ranking.test.tsx` (selector renders with correct `aria-pressed` per option; click calls `onPeriodChange` with `7`/`30`/`'general'`) and passed `period`/`onPeriodChange` to the 2 pre-existing render calls (required by the new prop contract); ran `vitest run app/components/decisiones/__tests__/gestor-ranking.test.tsx` — 2 failed (`getByText('7d')` not found — selector doesn't exist yet), 2 pre-existing passed | Implemented the `period`/`onPeriodChange` props + 3-button selector in `gestor-ranking.tsx`, reusing `WindowDays` from `decisiones-dashboard.ts`; re-ran — 4/4 passed | None needed — additive to the component; the domain layer (`buildWarehouseSales`/`buildCurrencyMix`/`buildGestorRanking`) needed zero change, confirming design's "reused unchanged" decision |
+
+### Files Changed (Batch 6)
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `templates/apps/salesops-mvp/app/components/decisiones/gestor-ranking.tsx` | Modified | Added `GestorRankingPeriod` type + `period`/`onPeriodChange` required props + `[7d/30d/General]` selector UI in the card header (view-only, caller owns state and pre-filtering) |
+| `templates/apps/salesops-mvp/app/components/decisiones/__tests__/gestor-ranking.test.tsx` | Modified | Passed `period`/`onPeriodChange` to existing render calls; added 2 tests for the new selector |
+| `templates/apps/salesops-mvp/app/routes/decisiones.tsx` | Modified (minimal compile-fix only) | The current (soon-to-be-replaced-in-PR7) route's `<GestorRanking gestores={view.gestores} />` call site needed the two new required props to keep `tsc` green. Passed `period="general"` (matches this route's current unwindowed, all-time `buildDecisionesDashboard` behavior) and a no-op `onPeriodChange={() => {}}` — inert until PR7's recomposition wires real `windowedState`-driven state. This is a 1-line prop addition, not a recomposition: no layout, composition, or behavior change. |
+| `openspec/changes/salesops-14-decisiones-operativo/tasks.md` | Modified | Checked off tasks 4.1–4.2 |
+
+### Deviations from Design
+
+None on the interface contract (`GestorRankingPeriod`/selector shape matches spec's `[7d/30d/General]` requirement exactly; caller pre-filters, component itself does no aggregation). One necessary, explicitly-scoped-out-of-PR6 compile fix: `routes/decisiones.tsx`'s existing `GestorRanking` call site required the two new props to typecheck, patched with inert defaults (`period="general"`, no-op `onPeriodChange`) rather than deferred, since a batch cannot end with a broken build. No route layout/composition/behavior changed — real windowedState wiring for this call site is still task 4.4 (PR7), untouched otherwise.
+
+### Issues Found
+
+None.
+
+### Full Suite / Typecheck Confirmation (Batch 6)
+
+- `vitest run` (full suite, all 78 files): **547/547 passed**
+- `react-router typegen && tsc`: **exit 0, no errors**
+
+### Remaining Tasks (next batches)
+
+- [ ] Task 4.3–4.4: Route recomposition (`decisiones.tsx` + `decisiones.test.tsx`) — PR7
+- [ ] Tasks 4.5–4.7: Cleanup (delete KPI header/sales-trend/stage-distribution + tests, trim domain module, update help-content) — PR8
+- [ ] Tasks 4.8–4.10: Final full-suite/typecheck gate + dangling-reference grep — PR8
+
+### Workload / PR Boundary (Batch 6)
+
+- Mode: single PR, `size:exception` (explicitly authorized by the orchestrator for this batch)
+- Current work unit: Unit 6 (Análisis windowing, PR6 per tasks.md's Suggested Work Units table)
+- Boundary: starts from the committed Batch 5 tree on `salesops-mvp`; ends with the `GestorRanking` `[7d/30d/General]` selector prop contract implemented, tested, and typechecked. `buildWarehouseSales`/`buildCurrencyMix` untouched (correctly — they need no code change per design). No `windowedState` call-site wiring into the route — that's task 4.4/PR7, not touched this batch, per explicit orchestrator scoping instruction ("If tasks.md scopes PR6 as domain/helper-level wiring, keep it to that").
+- Estimated review budget impact: 4 files changed (1 component, 1 component test file, 1 route 1-line compile fix, tasks.md) — well within the tasks.md PR6 estimate (~120 lines)
 - Commit: pending (this batch), on the current branch, not pushed

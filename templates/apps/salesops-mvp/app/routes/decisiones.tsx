@@ -60,7 +60,8 @@ export default function Decisiones() {
 
       {view.hasData && (
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
-          <GestorRanking gestores={view.gestores} />
+          {/* period/onPeriodChange are inert here — real windowedState wiring lands with the route recomposition (PR7) */}
+          <GestorRanking gestores={view.gestores} period="general" onPeriodChange={() => {}} />
           <InventoryAlerts alerts={view.inventoryAlerts} />
         </div>
       )}
