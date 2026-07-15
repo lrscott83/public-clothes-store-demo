@@ -483,7 +483,7 @@ None.
 - Current work unit: Unit 8 (Cleanup, PR8 per tasks.md's Suggested Work Units table) — the LAST unit
 - Boundary: starts from the committed Batch 7 tree (`e8d6d54`) on `salesops-mvp`; ends with the old KPI/sales-trend/stage-distribution layer fully removed, `decisiones-dashboard.ts`/`decisiones-dashboard.test.ts`/`help-content.ts` trimmed to only what the new cockpit uses, full suite green, typecheck clean, dangling-reference grep zero
 - Estimated review budget impact: 10 files changed, 7 net insertions / 696 deletions (`git diff --stat`) — a large deletion-only diff; well within reviewer budget since it is subtractive (no new logic to review, mechanically verifiable via the grep + test count delta)
-- Commit: pending (this batch — see below), on the current branch, not pushed
+- Commit: `d888a4a`, on the current branch, not pushed
 
 ### Change Status: COMPLETE
 
