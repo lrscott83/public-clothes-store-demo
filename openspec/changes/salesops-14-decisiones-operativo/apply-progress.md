@@ -407,4 +407,84 @@ One test-writing mistake (not a design/implementation issue): the first draft of
 - Current work unit: Unit 7 (Route recomposition, PR7 per tasks.md's Suggested Work Units table)
 - Boundary: starts from the committed Batch 6 tree (`4416af9`) on `salesops-mvp`; ends with `routes/decisiones.tsx` fully recomposed into the 3-layer + Análisis cockpit, `routes/__tests__/decisiones.test.tsx` rewritten to match, full suite green, typecheck clean. The old `kpi-header.tsx`/`sales-trend-section.tsx`/`stage-distribution.tsx` component files and their domain builders (`buildKpiHeader`, `buildSalesTrend`, `buildStageDistribution`, `buildDecisionesDashboard`) are UNTOUCHED on disk — they are simply no longer imported by the route. Their removal is explicitly PR8/Batch 8, not this batch.
 - Estimated review budget impact: 3 files changed (1 route full rewrite ~150 lines, 1 route test full rewrite ~165 lines, tasks.md) — within the tasks.md PR7 estimate (~250 lines)
-- Commit: pending (this batch), on the current branch, not pushed
+- Commit: `e8d6d54`, on the current branch, not pushed
+
+---
+
+## Batch 8 (this batch, FINAL) — Phase 4: Cleanup (PR8)
+
+**Mode**: Strict TDD — deletion discipline: removed code + its tests together in the same edit, then proved nothing else broke via the full suite + typecheck (that IS the RED→GREEN cycle for a pure removal — there is no new production behavior to RED/GREEN individually).
+**Delivery**: Single PR, `size:exception`, on current branch `salesops-mvp`, committed, not pushed.
+**Scope**: ONLY tasks 4.5–4.10 — delete the old `kpi-header.tsx`/`sales-trend-section.tsx`/`stage-distribution.tsx` components + their tests, remove the now-dead `buildKpiHeader`/`buildSalesTrend`/`buildStageDistribution`/`buildDecisionesDashboard` builders and unused margin helpers from `decisiones-dashboard.ts`, trim the domain test file, update `help-content.ts`, and run the final full-suite/typecheck/dangling-reference gate. This is the LAST batch of `salesops-14-decisiones-operativo` — all 8 PR units (Foundation through Cleanup) are now complete.
+
+### Completed Tasks
+
+- [x] 4.5 Deleted `components/decisiones/kpi-header.tsx`, `sales-trend-section.tsx`, `stage-distribution.tsx` and their `__tests__` files.
+- [x] 4.6 Removed `buildKpiHeader`/`KpiHeaderView`, `buildSalesTrend`/`SalesTrendView`/`SalesTrendPoint`, `buildStageDistribution`/`StageDistributionView`/`StageDistributionRow`/`STAGE_ORDER`, the old `buildDecisionesDashboard`/`DashboardView` orchestrator, and the margin-only helpers `orderCostUSD`/`orderCommissionUSD`/`orderMarginUSD` from `decisiones-dashboard.ts`; trimmed the corresponding `describe` blocks (`buildKpiHeader`, `buildSalesTrend`, `buildStageDistribution`, `orphan productId in margin/cost aggregation`, `live-rate regression`, `buildDecisionesDashboard`) from `decisiones-dashboard.test.ts`.
+- [x] 4.7 Updated `components/decisiones/help-content.ts` — removed the `ventas`/`margen`/`pedidos`/`comisionPendiente`/`pedidosPorEtapa`/`tendenciaVentas` entries (the 8 new operational-block entries — `pedidosActivos`, `transportistas`, `comisionesPorPagar`, `pedidosDemorados`, `entraVsSale`, `cicloPromedio`, `pedidosPorDia`, `completadosPorDia` — were already added incrementally in batches 2–5, confirmed present and untouched).
+- [x] 4.8 Full test run (`vitest run` from `templates/apps/salesops-mvp/`) — **531/531 passed, 75 test files** (down from 78 files / 551 tests in Batch 7, exactly the 3 deleted test files and their tests removed, zero collateral loss).
+- [x] 4.9 Typecheck (`react-router typegen && tsc` from `templates/apps/salesops-mvp/`) — **exit 0, no errors**.
+- [x] 4.10 Dangling-reference grep across `templates/apps/salesops-mvp/` for `KpiHeaderView`, `buildKpiHeader`, `SalesTrendView`, `buildSalesTrend`, `SalesTrendPoint`, `StageDistributionView`, `buildStageDistribution`, `StageDistributionRow`, `DashboardView`, `buildDecisionesDashboard`, and the 3 deleted filenames — **ZERO consumers**. (Two harmless string matches remain and are NOT dangling references: `FinanceKpiHeader`/`finance-kpi-header.tsx` in the unrelated Finanzas domain, whose name only substring-matches the grep pattern `kpi-header`; and the route test's own description string `'renders no KPI header, sales-trend, stage-distribution, margin, or AOV block anywhere'`, which asserts their absence by design.)
+
+### Safety Verification (before deleting each symbol)
+
+Grepped every symbol's usage across the whole app BEFORE deleting, per the orchestrator's explicit safety instruction:
+
+| Symbol | Other consumers found? | Action |
+|---|---|---|
+| `buildKpiHeader`/`KpiHeaderView` | None outside `kpi-header.tsx`(+test) and the file's own `buildDecisionesDashboard` | Deleted |
+| `buildSalesTrend`/`SalesTrendView`/`SalesTrendPoint` | None outside `sales-trend-section.tsx`(+test) and `buildDecisionesDashboard`; `finanzas-dashboard.ts` had only a stale DOC COMMENT mentioning the name (`buildRevenueTrend`'s docstring said "Mirrors `buildSalesTrend`'s bucketing shape") — no import, no runtime reference | Deleted the builder; reworded the stale comment in `finanzas-dashboard.ts` to remove the dangling name mention (2-line comment-only change, zero behavior change, confirmed by `finanzas-dashboard.test.ts`'s 27 tests still passing unmodified) |
+| `buildStageDistribution`/`StageDistributionView`/`StageDistributionRow`/`STAGE_ORDER` | None outside `stage-distribution.tsx`(+test) and `buildDecisionesDashboard` | Deleted |
+| `buildDecisionesDashboard`/`DashboardView` | None — route recomposition (PR7/Batch 7) already stopped calling it; only this file's own now-deleted orchestrator referenced it | Deleted |
+| `orderCostUSD`/`orderCommissionUSD`/`orderMarginUSD` | Only used inside `buildKpiHeader` in THIS file; `finanzas-dashboard.ts` has its OWN separate copies of same-named private functions (not imported from `decisiones-dashboard.ts` — verified via grep, each file defines its own) | Deleted from `decisiones-dashboard.ts` only; `finanzas-dashboard.ts`'s copies are untouched (different file, different closure, margin now lives there per `salesops-13`) |
+| `PENDING_COMMISSION_STATES`, `isCommissionPending`, `qualifying`, `sumUSD`, `sumCommissionMN` | Still used by `buildComisionesPorPagar`, `buildPedidosDemorados`(indirectly via `stageEnteredAt`—no, directly not used there, but `qualifying`/`sumUSD` used by `buildWarehouseSales`/`buildCurrencyMix`/`buildGestorRanking`, `isCommissionPending`/`sumCommissionMN` used by `buildComisionesPorPagar`/`buildGestorRanking`) | **KEPT** — moved out of the deleted "KPI header" section into a new `// ---- shared order helpers ----` section, zero behavior change |
+| `STAGE_LABELS` | Used by `buildActiveOrdersByStateAndWarehouse`, `buildPedidosDemorados`, and (previously) `buildStageDistribution` | **KEPT** — moved into a new `// ---- stage labels (shared) ----` section; only `STAGE_ORDER` (used exclusively by `buildStageDistribution`) was deleted |
+| `KpiTrend`/`Trend`/`PeriodSplit` type re-exports, `splitByPeriod` value re-export | `decisiones-dashboard.test.ts`'s own `describe('splitByPeriod', ...)` block imports `splitByPeriod` from `../decisiones-dashboard` (the re-export path, not `period-trend.ts` directly) — explicitly out of this batch's scope (task 4.6 only names `buildKpiHeader`/`buildSalesTrend`/`buildStageDistribution` + margin helpers) | **KEPT untouched** — only removed the now-unused `buildKpiTrend` VALUE import (was only called inside the deleted `buildKpiHeader`) |
+| `/finanzas` route and all other routes | N/A — no file under `app/routes/finanzas.tsx`, `app/components/finanzas/**`, or any route other than `decisiones.tsx`/its test was touched this batch | Confirmed via `git diff --stat`: only `decisiones-dashboard.ts`, `decisiones-dashboard.test.ts`, `finanzas-dashboard.ts` (2-line comment fix), `help-content.ts` (decisiones one), and the 6 deleted files changed |
+
+### Files Changed (Batch 8)
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `templates/apps/salesops-mvp/app/components/decisiones/kpi-header.tsx` | Deleted | Old Layer-1 KPI tile component, superseded by the route's direct Capa 1–3 + Análisis composition |
+| `templates/apps/salesops-mvp/app/components/decisiones/__tests__/kpi-header.test.tsx` | Deleted | Its tests |
+| `templates/apps/salesops-mvp/app/components/decisiones/sales-trend-section.tsx` | Deleted | Old Layer-2a sales trend chart, superseded by Capa 3's `PedidosPorDia`/`CompletadosPorDia` |
+| `templates/apps/salesops-mvp/app/components/decisiones/__tests__/sales-trend-section.test.tsx` | Deleted | Its tests |
+| `templates/apps/salesops-mvp/app/components/decisiones/stage-distribution.tsx` | Deleted | Old Layer-2b stage snapshot, superseded by Capa 1.1's `ActiveOrdersChart` |
+| `templates/apps/salesops-mvp/app/components/decisiones/__tests__/stage-distribution.test.tsx` | Deleted | Its tests |
+| `templates/apps/salesops-mvp/app/domain/decisiones-dashboard.ts` | Modified | Removed `orderCostUSD`/`orderCommissionUSD`/`orderMarginUSD`, `KpiHeaderView`/`buildKpiHeader`, `SalesTrendPoint`/`SalesTrendView`/`buildSalesTrend`, `StageDistributionRow`/`StageDistributionView`/`STAGE_ORDER`/`buildStageDistribution`, `DashboardView`/`buildDecisionesDashboard`; removed the now-unused `buildKpiTrend` value import and the unused `SeededProduct` type import; kept `PENDING_COMMISSION_STATES`/`isCommissionPending`/`qualifying`/`sumUSD`/`sumCommissionMN` (regrouped under `// ---- shared order helpers ----`) and `STAGE_LABELS` (regrouped under `// ---- stage labels (shared) ----`) since both are still consumed by later builders; 898 → 714 lines |
+| `templates/apps/salesops-mvp/app/domain/__tests__/decisiones-dashboard.test.ts` | Modified | Removed the now-dead imports (`buildDecisionesDashboard`, `buildKpiHeader`, `buildSalesTrend`, `buildStageDistribution`) and the `describe` blocks: `buildKpiHeader` (5 tests), `buildSalesTrend` (2 tests), `buildStageDistribution` (1 test), `orphan productId in margin/cost aggregation` (1 test), `live-rate regression` (1 test), `buildDecisionesDashboard` (3 tests) — 13 tests removed total; 1062 → ~811 lines |
+| `templates/apps/salesops-mvp/app/components/decisiones/help-content.ts` | Modified | Removed the `ventas`/`margen`/`pedidos`/`comisionPendiente`/`pedidosPorEtapa`/`tendenciaVentas` entries (6 entries, dead now that their components are gone); `ventasPorAlmacen` and all 8 new-block entries (added in prior batches) untouched |
+| `templates/apps/salesops-mvp/app/domain/finanzas-dashboard.ts` | Modified (comment-only) | Reworded `buildRevenueTrend`'s docstring to remove a stale mention of the just-deleted `buildSalesTrend` name; zero behavior change (confirmed: `finanzas-dashboard.test.ts`'s 27 tests unchanged and passing) |
+| `openspec/changes/salesops-14-decisiones-operativo/tasks.md` | Modified | Checked off tasks 4.5–4.10 — **all 55 tasks in the change are now `[x]`** |
+
+### Deviations from Design
+
+None. This batch is pure subtraction of already-superseded code, per design.md's explicit instruction that the old KPI/trend/stage-distribution layer is fully replaced by the Capa 1/2/3/Análisis cockpit (PR7). One minor housekeeping addition beyond the task list's literal wording: reworded 2 stale doc-comment mentions of the deleted `buildSalesTrend` name (one in `decisiones-dashboard.ts` itself, one in `finanzas-dashboard.ts`) — neither was a functional reference, but leaving a dead-code NAME in a docstring after deletion would be sloppy and could confuse a future reader running the same dangling-reference grep pattern.
+
+### Issues Found
+
+None.
+
+### Full Suite / Typecheck Confirmation (Batch 8, FINAL)
+
+- `vitest run` (full suite, all 75 files): **531/531 passed**
+- `react-router typegen && tsc`: **exit 0, no errors**
+- Dangling-reference grep (task 4.10): **zero consumers** of `KpiHeaderView`, `buildKpiHeader`, `SalesTrendView`, `buildSalesTrend`, `SalesTrendPoint`, `StageDistributionView`, `buildStageDistribution`, `StageDistributionRow`, `DashboardView`, `buildDecisionesDashboard`, or the 3 deleted filenames anywhere in `templates/apps/salesops-mvp/`
+- `/finanzas` and every other route: **untouched** (confirmed via `git diff --stat` — only Decisiones-scoped files + a 2-line unrelated comment fix in `finanzas-dashboard.ts` changed; `finanzas-dashboard.test.ts`'s 27 tests pass unmodified)
+
+### Remaining Tasks
+
+**None.** All 55 tasks (Phase 0 through Phase 4, tasks 0.1–4.10) across all 8 PR units are complete. `salesops-14-decisiones-operativo` is fully implemented.
+
+### Workload / PR Boundary (Batch 8, FINAL)
+
+- Mode: single PR, `size:exception` (explicitly authorized by the orchestrator for this batch)
+- Current work unit: Unit 8 (Cleanup, PR8 per tasks.md's Suggested Work Units table) — the LAST unit
+- Boundary: starts from the committed Batch 7 tree (`e8d6d54`) on `salesops-mvp`; ends with the old KPI/sales-trend/stage-distribution layer fully removed, `decisiones-dashboard.ts`/`decisiones-dashboard.test.ts`/`help-content.ts` trimmed to only what the new cockpit uses, full suite green, typecheck clean, dangling-reference grep zero
+- Estimated review budget impact: 10 files changed, 7 net insertions / 696 deletions (`git diff --stat`) — a large deletion-only diff; well within reviewer budget since it is subtractive (no new logic to review, mechanically verifiable via the grep + test count delta)
+- Commit: pending (this batch — see below), on the current branch, not pushed
+
+### Change Status: COMPLETE
+
+All 8 planned PR units (Foundation, Capa 1.1+1.2, Capa 1.3+Capa 2, Capa 3a, Capa 3b, Análisis windowing, Route recomposition, Cleanup) are implemented, tested, and typechecked. `salesops-14-decisiones-operativo` is ready for `sdd-verify`.

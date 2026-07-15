@@ -139,7 +139,7 @@ export interface RevenueTrendView {
  * a single unsplit revenue series (every qualifying order IS realized
  * revenue; there is no separate cobrado/pendiente subset). Every day
  * appears — including days with zero qualifying orders, at `{revenueUSD:0}`
- * — never omitted. Mirrors `buildSalesTrend`'s bucketing shape.
+ * — never omitted. Same zero-padded bucketing shape used across the app's other per-day/per-period builders.
  */
 export function buildRevenueTrend(state: SeedState): RevenueTrendView {
   const anchorMs = new Date(state.generatedAt).getTime();

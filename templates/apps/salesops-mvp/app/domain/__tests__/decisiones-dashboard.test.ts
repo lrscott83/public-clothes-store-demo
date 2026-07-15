@@ -7,15 +7,11 @@ import {
   buildComisionesPorPagar,
   buildCompletadosPorDia,
   buildCurrencyMix,
-  buildDecisionesDashboard,
   buildEntraVsSale,
   buildGestorRanking,
   buildInventoryAlerts,
-  buildKpiHeader,
   buildPedidosDemorados,
   buildPedidosPorDia,
-  buildSalesTrend,
-  buildStageDistribution,
   buildTransportistaCapacity,
   buildWarehouseSales,
   splitByPeriod,
@@ -103,170 +99,6 @@ describe('splitByPeriod', () => {
     const { current } = splitByPeriod(state);
 
     expect(current.map((o) => o.id)).toEqual(['order-old']);
-  });
-});
-
-describe('buildKpiHeader', () => {
-  it('computes Ventas, Margen, and Pedidos from revenue, cost, and commission', () => {
-    const products = [buildProduct({ id: 'p-1', costUSD: 4 })];
-    const orders = [
-      buildOrder({
-        id: 'order-1',
-        totalUSD: 500,
-        commissionMN: 3000,
-        exchangeRateSnapshot: { usdToMn: 40 },
-        items: [{ productId: 'p-1', quantity: 50, priceUSD: 10, commissionMN: 5 }],
-        createdAt: daysBefore(2),
-      }),
-      buildOrder({
-        id: 'order-2',
-        totalUSD: 300,
-        commissionMN: 1000,
-        exchangeRateSnapshot: { usdToMn: 40 },
-        items: [{ productId: 'p-1', quantity: 25, priceUSD: 10, commissionMN: 5 }],
-        createdAt: daysBefore(3),
-      }),
-    ];
-    const state = buildState({ products, orders });
-
-    const view = buildKpiHeader(state);
-
-    expect(view.ventasUSD.current).toBe(800);
-    expect(view.margenUSD.current).toBe(400); // (500-200-75) + (300-100-25)
-    expect(view.pedidos.current).toBe(2);
-  });
-
-  it('yields an "up" trend with no Infinity/NaN when the prior window is 0', () => {
-    const orders = [buildOrder({ id: 'order-1', totalUSD: 500, createdAt: daysBefore(2) })];
-    const state = buildState({ orders });
-
-    const view = buildKpiHeader(state);
-
-    expect(view.ventasUSD.prior).toBe(0);
-    expect(view.ventasUSD.current).toBe(500);
-    expect(view.ventasUSD.trend).toBe('up');
-    expect(view.ventasUSD.delta).not.toBe(Infinity);
-    expect(Number.isNaN(view.ventasUSD.delta)).toBe(false);
-  });
-
-  it('yields a "flat" trend when both windows are 0', () => {
-    const state = buildState({ orders: [] });
-
-    const view = buildKpiHeader(state);
-
-    expect(view.ventasUSD.current).toBe(0);
-    expect(view.ventasUSD.prior).toBe(0);
-    expect(view.ventasUSD.trend).toBe('flat');
-    expect(view.ventasUSD.delta).toBeNull();
-  });
-
-  it('computes a numeric delta when the prior window is > 0', () => {
-    const orders = [
-      buildOrder({ id: 'order-current', totalUSD: 200, createdAt: daysBefore(2) }),
-      buildOrder({ id: 'order-prior', totalUSD: 100, createdAt: daysBefore(12) }),
-    ];
-    const state = buildState({ orders });
-
-    const view = buildKpiHeader(state);
-
-    expect(view.ventasUSD.current).toBe(200);
-    expect(view.ventasUSD.prior).toBe(100);
-    expect(view.ventasUSD.delta).toBe(1); // (200-100)/100
-    expect(view.ventasUSD.trend).toBe('up');
-  });
-
-  it('Comisión pendiente sums unpaid verificado/transportando/entregado orders, excluding paid ones', () => {
-    const orders = [
-      buildOrder({
-        id: 'order-verificado',
-        state: 'verificado',
-        commissionMN: 1000,
-        commissionPaidAt: undefined,
-        createdAt: daysBefore(1),
-      }),
-      buildOrder({
-        id: 'order-entregado',
-        state: 'entregado',
-        commissionMN: 2000,
-        commissionPaidAt: undefined,
-        createdAt: daysBefore(2),
-      }),
-      buildOrder({
-        id: 'order-paid',
-        state: 'comision_pagada',
-        commissionMN: 3000,
-        createdAt: daysBefore(3),
-      }),
-    ];
-    const state = buildState({ orders });
-
-    const view = buildKpiHeader(state);
-
-    expect(view.comisionPendienteMN.current).toBe(3000);
-  });
-});
-
-describe('buildSalesTrend', () => {
-  it('includes a day with zero qualifying orders as a zero point, not omitted', () => {
-    const orders: Order[] = [];
-    for (let offset = 0; offset < 20; offset++) {
-      if (offset === 7) continue; // day 7 intentionally has no orders
-      orders.push(
-        buildOrder({
-          id: `order-${offset}`,
-          totalUSD: 100,
-          createdAt: daysBefore(offset),
-        }),
-      );
-    }
-    const state = buildState({ orders });
-
-    const view = buildSalesTrend(state);
-
-    expect(view.points).toHaveLength(20);
-    const zeroDay = view.points.find((p) => p.dayOffset === 7)!;
-    expect(zeroDay.count).toBe(0);
-    expect(zeroDay.valueUSD).toBe(0);
-    const populatedDay = view.points.find((p) => p.dayOffset === 0)!;
-    expect(populatedDay.count).toBe(1);
-    expect(populatedDay.valueUSD).toBe(100);
-  });
-
-  it('excludes creado orders from the trend', () => {
-    const orders = [buildOrder({ id: 'order-creado', state: 'creado', totalUSD: 999, createdAt: daysBefore(0) })];
-    const state = buildState({ orders });
-
-    const view = buildSalesTrend(state);
-
-    const day0 = view.points.find((p) => p.dayOffset === 0)!;
-    expect(day0.count).toBe(0);
-    expect(day0.valueUSD).toBe(0);
-  });
-});
-
-describe('buildStageDistribution', () => {
-  it('returns exactly 5 entries in fixed order, counting creado too, zero-count states included', () => {
-    const orders = [
-      buildOrder({ id: 'order-creado', state: 'creado' }),
-      buildOrder({ id: 'order-entregado', state: 'entregado' }),
-    ];
-    const state = buildState({ orders });
-
-    const view = buildStageDistribution(state);
-
-    expect(view.rows).toHaveLength(5);
-    expect(view.rows.map((r) => r.state)).toEqual([
-      'creado',
-      'verificado',
-      'transportando',
-      'entregado',
-      'comision_pagada',
-    ]);
-    expect(view.rows.find((r) => r.state === 'creado')!.count).toBe(1);
-    expect(view.rows.find((r) => r.state === 'entregado')!.count).toBe(1);
-    expect(view.rows.find((r) => r.state === 'verificado')!.count).toBe(0);
-    expect(view.rows.find((r) => r.state === 'transportando')!.count).toBe(0);
-    expect(view.rows.find((r) => r.state === 'comision_pagada')!.count).toBe(0);
   });
 });
 
@@ -408,56 +240,6 @@ describe('buildInventoryAlerts', () => {
     const group = view.groups.find((g) => g.warehouseId === 'wh-1')!;
     expect(group.rows).toHaveLength(1);
     expect(group.rows[0].productId).toBe('p-1');
-  });
-});
-
-describe('orphan productId in margin/cost aggregation', () => {
-  it('contributes 0 to KPI margin without throwing, while the rest of the order and other orders still aggregate', () => {
-    const products = [buildProduct({ id: 'p-1', costUSD: 4 })];
-    const orders = [
-      buildOrder({
-        id: 'order-1',
-        totalUSD: 500,
-        commissionMN: 0,
-        items: [
-          { productId: 'p-1', quantity: 10, priceUSD: 10, commissionMN: 0 },
-          { productId: 'orphan-id', quantity: 99, priceUSD: 10, commissionMN: 0 },
-        ],
-        createdAt: daysBefore(1),
-      }),
-    ];
-    const state = buildState({ products, orders });
-
-    expect(() => buildKpiHeader(state)).not.toThrow();
-    const view = buildKpiHeader(state);
-    // cost only counts p-1: 10 * 4 = 40; margin = 500 - 40 - 0 = 460
-    expect(view.margenUSD.current).toBe(460);
-  });
-
-});
-
-describe('live-rate regression', () => {
-  it("a later live-rate edit does not change an order's already-computed KPI contribution", () => {
-    const products = [buildProduct({ id: 'p-1', costUSD: 4 })];
-    const orders = [
-      buildOrder({
-        id: 'order-1',
-        totalUSD: 500,
-        commissionMN: 3000,
-        exchangeRateSnapshot: { usdToMn: 40 },
-        items: [{ productId: 'p-1', quantity: 10, priceUSD: 10, commissionMN: 0 }],
-        createdAt: daysBefore(1),
-      }),
-    ];
-    const state = buildState({ products, orders, exchangeRates: { usdToMn: 40, zelle: 1, eur: 1 } });
-
-    const before = buildKpiHeader(state);
-    expect(before.margenUSD.current).toBe(385); // 500 - 40 - 75
-
-    state.exchangeRates.usdToMn = 45;
-
-    const after = buildKpiHeader(state);
-    expect(after.margenUSD.current).toBe(385);
   });
 });
 
@@ -1025,38 +807,5 @@ describe('buildCompletadosPorDia', () => {
     const view = buildCompletadosPorDia(state, 7);
 
     expect(view.avgCountPerDay).toBeCloseTo(1 / 7);
-  });
-});
-
-describe('buildDecisionesDashboard', () => {
-  it('hasData is false when all orders are creado', () => {
-    const state = buildState({ orders: [buildOrder({ id: 'order-1', state: 'creado' })] });
-
-    const view = buildDecisionesDashboard(state);
-
-    expect(view.hasData).toBe(false);
-  });
-
-  it('hasData is true when at least one order is verificado or later', () => {
-    const state = buildState({ orders: [buildOrder({ id: 'order-1', state: 'verificado' })] });
-
-    const view = buildDecisionesDashboard(state);
-
-    expect(view.hasData).toBe(true);
-  });
-
-  it('composes all sub-view models into a single DashboardView without throwing on an empty seed', () => {
-    const state = buildState();
-
-    expect(() => buildDecisionesDashboard(state)).not.toThrow();
-    const view = buildDecisionesDashboard(state);
-
-    expect(view.kpis).toBeDefined();
-    expect(view.salesTrend.points).toHaveLength(20);
-    expect(view.stages.rows).toHaveLength(5);
-    expect(view.warehouses.rows).toEqual([]);
-    expect(view.currencyMix.buckets).toEqual([]);
-    expect(view.gestores.rows).toEqual([]);
-    expect(view.inventoryAlerts.groups).toEqual([]);
   });
 });

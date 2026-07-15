@@ -48,33 +48,7 @@ export const DECISIONES_HELP = {
     text: 'Cuántos pedidos entregás cada día, y qué porcentaje de lo que entró en el período ya salió (tasa de completado). Una tasa baja te dice que estás acumulando trabajo sin cerrar.',
   },
 
-  // --- KPI header (Layer 1) ---
-  ventas: {
-    title: 'Ventas',
-    text: 'Cuánto facturaste en dólares en los últimos 10 días. La flecha compara contra los 10 días previos: verde subís, rojo bajás. Es tu pulso más rápido para saber si el negocio acelera o se enfría.',
-  },
-  margen: {
-    title: 'Margen',
-    text: 'Lo que te queda después de pagar el costo de la mercadería. El porcentaje muestra cuánto de cada venta es ganancia real. Vender mucho con margen bajo llena de trabajo, no de dinero.',
-  },
-  pedidos: {
-    title: 'Pedidos',
-    text: 'Cuántos pedidos cerraste en los últimos 10 días. La flecha compara contra los 10 días previos: es tu pulso de volumen, cuánto se mueve el negocio.',
-  },
-  comisionPendiente: {
-    title: 'Comisión pendiente',
-    text: 'Lo que todavía les debés a tus gestores por sus ventas, en moneda nacional (MN). Es dinero ya comprometido que va a salir: tenelo presente antes de gastarlo.',
-  },
-
   // --- Layer 2 (visual sections) ---
-  pedidosPorEtapa: {
-    title: 'Pedidos por etapa',
-    text: 'Dónde están parados hoy tus pedidos: creados, verificados, en camino, entregados. Si se amontonan en una etapa, ahí tenés un cuello de botella que te frena el dinero.',
-  },
-  tendenciaVentas: {
-    title: 'Tendencia de ventas',
-    text: 'Cómo se movieron tus ventas día a día en los últimos 20 días. Cambiá entre "Valor" (dólares) y "Cantidad" (pedidos) para ver si crecés en facturación, en volumen, o en ninguno.',
-  },
   ventasPorAlmacen: {
     title: 'Ventas por almacén',
     text: 'Cuánto vende cada almacén. Te muestra qué punto empuja el negocio y cuál está quedando dormido, para reforzar stock o atención donde de verdad rinde.',

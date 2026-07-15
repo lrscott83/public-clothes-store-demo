@@ -1,13 +1,13 @@
 import { buildInventorySummary } from './inventory';
-import { buildKpiTrend, computeDelta, splitByPeriod } from './period-trend';
+import { computeDelta, splitByPeriod } from './period-trend';
 import type { KpiTrend, PeriodSplit, Trend } from './period-trend';
 import { DAY_MS } from '../seed/constants';
-import type { Order, OrderState, SeedState, SeededProduct } from './types';
+import type { Order, OrderState, SeedState } from './types';
 
 /**
  * Domain view-model builder for the `/decisiones` dashboard. Pure — numbers
  * only, no formatting, no I/O. Every helper below is independently exported
- * for isolated unit testing and composed by `buildDecisionesDashboard`.
+ * for isolated unit testing and composed directly by `routes/decisiones.tsx`.
  *
  * Period windows anchor to `state.generatedAt` (the frozen seed timestamp),
  * NEVER `Date.now()` — see `splitByPeriod`. Every MN↔USD conversion uses the
@@ -61,38 +61,7 @@ export function windowedState(state: SeedState, days: number): SeedState {
   return { ...state, orders };
 }
 
-// ---- per-order cost/commission helpers --------
-
-function orderCostUSD(order: Order, productById: Map<string, SeededProduct>): number {
-  let cost = 0;
-  for (const item of order.items) {
-    const product = productById.get(item.productId);
-    if (!product) continue; // orphan skip — no matching product
-    cost += item.quantity * product.costUSD;
-  }
-  return cost;
-}
-
-function orderCommissionUSD(order: Order): number {
-  const usdToMn = order.exchangeRateSnapshot?.usdToMn ?? 0;
-  const commissionMN = order.commissionMN ?? 0;
-  return usdToMn > 0 ? commissionMN / usdToMn : 0;
-}
-
-function orderMarginUSD(order: Order, productById: Map<string, SeededProduct>): number {
-  return order.totalUSD - orderCostUSD(order, productById) - orderCommissionUSD(order);
-}
-
-// ---- KPI header (Layer 1) ----------------------------------------------------------
-
-export interface KpiHeaderView {
-  ventasUSD: KpiTrend;
-  margenUSD: KpiTrend;
-  /** current-window marginUSD / revenueUSD * 100, or 0 when revenue is 0. */
-  margenPercent: number;
-  pedidos: KpiTrend;
-  comisionPendienteMN: KpiTrend;
-}
+// ---- shared order helpers --------------------------------------------------------------
 
 /** Same "pending" definition as `buildFinanceSummary`: unpaid AND in verificado/transportando/entregado. */
 const PENDING_COMMISSION_STATES: OrderState[] = ['verificado', 'transportando', 'entregado'];
@@ -113,99 +82,7 @@ function sumCommissionMN(orders: Order[]): number {
   return orders.reduce((sum, order) => sum + (order.commissionMN ?? 0), 0);
 }
 
-/**
- * Builds all 4 KPI tiles, each with a current-window value and a
- * prior-window value (10 days vs prior 10 days, anchored to
- * `state.generatedAt`). Ventas/Margen/Pedidos use only orders with
- * `state !== 'creado'`; Comisión pendiente uses its own state-based
- * grouping within each window (mirrors `buildFinanceSummary`).
- */
-export function buildKpiHeader(state: SeedState): KpiHeaderView {
-  const productById = new Map(state.products.map((product) => [product.id, product]));
-  const { current, prior } = splitByPeriod(state);
-
-  const currentQ = qualifying(current);
-  const priorQ = qualifying(prior);
-
-  const ventasCurrent = sumUSD(currentQ);
-  const ventasPrior = sumUSD(priorQ);
-
-  const margenCurrent = currentQ.reduce((sum, order) => sum + orderMarginUSD(order, productById), 0);
-  const margenPrior = priorQ.reduce((sum, order) => sum + orderMarginUSD(order, productById), 0);
-
-  const pedidosCurrent = currentQ.length;
-  const pedidosPrior = priorQ.length;
-
-  const comisionCurrent = sumCommissionMN(current.filter(isCommissionPending));
-  const comisionPrior = sumCommissionMN(prior.filter(isCommissionPending));
-
-  return {
-    ventasUSD: buildKpiTrend(ventasCurrent, ventasPrior),
-    margenUSD: buildKpiTrend(margenCurrent, margenPrior),
-    margenPercent: ventasCurrent > 0 ? (margenCurrent / ventasCurrent) * 100 : 0,
-    pedidos: buildKpiTrend(pedidosCurrent, pedidosPrior),
-    comisionPendienteMN: buildKpiTrend(comisionCurrent, comisionPrior),
-  };
-}
-
-// ---- sales trend (Layer 2a) ---------------------------------------------------------
-
-export interface SalesTrendPoint {
-  /** 0 = the anchor day (newest), 19 = oldest day in the 20-day window. */
-  dayOffset: number;
-  count: number;
-  valueUSD: number;
-}
-
-export interface SalesTrendView {
-  /** Ordered oldest -> newest (dayOffset 19 .. 0). */
-  points: SalesTrendPoint[];
-}
-
-/**
- * Buckets qualifying orders (`state !== 'creado'`) by calendar day over the
- * 20-day window ending at `state.generatedAt`. Every day appears — including
- * days with zero qualifying orders, at `{count:0, valueUSD:0}` — never omitted.
- */
-export function buildSalesTrend(state: SeedState): SalesTrendView {
-  const anchorMs = new Date(state.generatedAt).getTime();
-  const buckets = new Map<number, { count: number; valueUSD: number }>();
-  for (let offset = 0; offset < 20; offset++) {
-    buckets.set(offset, { count: 0, valueUSD: 0 });
-  }
-
-  for (const order of state.orders) {
-    if (order.state === 'creado') continue;
-    const createdMs = new Date(order.createdAt).getTime();
-    const diff = anchorMs - createdMs;
-    if (diff < 0) continue;
-    const offset = Math.floor(diff / DAY_MS);
-    const bucket = buckets.get(offset);
-    if (!bucket) continue; // outside the 20-day window
-    bucket.count += 1;
-    bucket.valueUSD += order.totalUSD;
-  }
-
-  const points: SalesTrendPoint[] = [];
-  for (let offset = 19; offset >= 0; offset--) {
-    const bucket = buckets.get(offset)!;
-    points.push({ dayOffset: offset, count: bucket.count, valueUSD: bucket.valueUSD });
-  }
-
-  return { points };
-}
-
-// ---- stage distribution (Layer 2b) --------------------------------------------------
-
-export interface StageDistributionRow {
-  state: OrderState;
-  label: string;
-  count: number;
-}
-
-export interface StageDistributionView {
-  rows: StageDistributionRow[];
-}
+// ---- stage labels (shared) -----------------------------------------------------------
 
 const STAGE_LABELS: Record<OrderState, string> = {
   creado: 'Creado',
@@ -214,22 +91,6 @@ const STAGE_LABELS: Record<OrderState, string> = {
   entregado: 'Entregado',
   comision_pagada: 'Comisión pagada',
 };
-
-const STAGE_ORDER: OrderState[] = ['creado', 'verificado', 'transportando', 'entregado', 'comision_pagada'];
-
-/**
- * Snapshot distribution — NOT a conversion funnel. Counts EVERY order
- * (including `creado`, unlike every other aggregation here) into exactly one
- * row per `OrderState`, fixed linear order, zero-count states included.
- */
-export function buildStageDistribution(state: SeedState): StageDistributionView {
-  const rows = STAGE_ORDER.map((stageState) => ({
-    state: stageState,
-    label: STAGE_LABELS[stageState],
-    count: state.orders.filter((order) => order.state === stageState).length,
-  }));
-  return { rows };
-}
 
 // ---- warehouse sales (Layer 2c) -----------------------------------------------------
 
@@ -716,7 +577,7 @@ export interface PerDayPoint {
 }
 
 interface PerDayBucketResult {
-  /** Ordered oldest -> newest (dayOffset windowDays-1 .. 0) — mirrors SalesTrendView. */
+  /** Ordered oldest -> newest (dayOffset windowDays-1 .. 0). */
   points: PerDayPoint[];
   totalCount: number;
   totalValueUSD: number;
@@ -861,38 +722,5 @@ export function buildCompletadosPorDia(state: SeedState, windowDays: number): Co
     avgValuePerDay,
     countDeltaPercent: computeDelta(avgCountPerDay, priorAvgCountPerDay),
     tasaCompletado,
-  };
-}
-
-// ---- orchestrator ----------------------------------------------------------------------
-
-export interface DashboardView {
-  hasData: boolean;
-  kpis: KpiHeaderView;
-  salesTrend: SalesTrendView;
-  stages: StageDistributionView;
-  warehouses: WarehouseSalesView;
-  currencyMix: CurrencyMixView;
-  gestores: GestorRankingView;
-  inventoryAlerts: InventoryAlertsView;
-}
-
-/**
- * Composes every sub-helper above into a single typed view model.
- * `hasData` is `false` only when every order is `creado` (or the seed is
- * empty) — the container renders the empty-state instead of the 3 layers.
- */
-export function buildDecisionesDashboard(state: SeedState): DashboardView {
-  const hasData = state.orders.some((order) => order.state !== 'creado');
-
-  return {
-    hasData,
-    kpis: buildKpiHeader(state),
-    salesTrend: buildSalesTrend(state),
-    stages: buildStageDistribution(state),
-    warehouses: buildWarehouseSales(state),
-    currencyMix: buildCurrencyMix(state),
-    gestores: buildGestorRanking(state),
-    inventoryAlerts: buildInventoryAlerts(state),
   };
 }

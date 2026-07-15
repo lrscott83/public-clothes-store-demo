@@ -90,9 +90,9 @@ Chain strategy: pending
 - [x] 4.2 GREEN: modify `components/decisiones/gestor-ranking.tsx` to add the period selector.
 - [x] 4.3 RED: rewrite `routes/__tests__/decisiones.test.tsx` — assert 3 Capa-1 cards, Capa 2, Capa 3 (4 blocks + filter), Análisis (exactly 3 blocks), 1 `<h1>`, no KPI/margin/AOV blocks; toggle 7d↔30d recomputes Capa 3 only.
 - [x] 4.4 GREEN: recompose `routes/decisiones.tsx` — `useState(seed)` + `useState<WindowDays>(7)` + `useMemo` over the individual pure builders; render Capa 1/2/3 + Análisis; read-only.
-- [ ] 4.5 Delete `components/decisiones/kpi-header.tsx`, `sales-trend-section.tsx`, `stage-distribution.tsx` + their `__tests__` files.
-- [ ] 4.6 Remove `buildKpiHeader`/`KpiHeaderView`, `buildSalesTrend`/`SalesTrendView`, `buildStageDistribution`/`StageDistributionView`, unused margin helpers from `decisiones-dashboard.ts`; trim `decisiones-dashboard.test.ts` accordingly.
-- [ ] 4.7 Update `components/decisiones/help-content.ts` — remove KPI/trend/stage-distribution entries, add entries for the 8 new operational blocks.
-- [ ] 4.8 Full test run (`vitest run` from `templates/apps/salesops-mvp/`) — all GREEN.
-- [ ] 4.9 Typecheck (`react-router typegen && tsc` from `templates/apps/salesops-mvp/`) — exit 0.
-- [ ] 4.10 Grep repo for dangling references to removed exports (`KpiHeaderView`, `buildSalesTrend`, `StageDistributionView`, `stage-distribution`) — confirm zero consumers.
+- [x] 4.5 Delete `components/decisiones/kpi-header.tsx`, `sales-trend-section.tsx`, `stage-distribution.tsx` + their `__tests__` files.
+- [x] 4.6 Remove `buildKpiHeader`/`KpiHeaderView`, `buildSalesTrend`/`SalesTrendView`, `buildStageDistribution`/`StageDistributionView`, unused margin helpers from `decisiones-dashboard.ts`; trim `decisiones-dashboard.test.ts` accordingly.
+- [x] 4.7 Update `components/decisiones/help-content.ts` — remove KPI/trend/stage-distribution entries (8 new operational-block entries were already added incrementally in PR2–PR5).
+- [x] 4.8 Full test run (`vitest run` from `templates/apps/salesops-mvp/`) — all GREEN.
+- [x] 4.9 Typecheck (`react-router typegen && tsc` from `templates/apps/salesops-mvp/`) — exit 0.
+- [x] 4.10 Grep repo for dangling references to removed exports (`KpiHeaderView`, `buildSalesTrend`, `StageDistributionView`, `stage-distribution`) — confirm zero consumers.
