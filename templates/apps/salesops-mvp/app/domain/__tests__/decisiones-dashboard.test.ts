@@ -5,6 +5,7 @@ import {
   buildActiveOrdersByStateAndWarehouse,
   buildCicloPromedio,
   buildComisionesPorPagar,
+  buildCompletadosPorDia,
   buildCurrencyMix,
   buildDecisionesDashboard,
   buildEntraVsSale,
@@ -12,6 +13,7 @@ import {
   buildInventoryAlerts,
   buildKpiHeader,
   buildPedidosDemorados,
+  buildPedidosPorDia,
   buildSalesTrend,
   buildStageDistribution,
   buildTransportistaCapacity,
@@ -900,6 +902,129 @@ describe('buildCicloPromedio', () => {
     expect(Number.isFinite(view.deltaDays)).toBe(true);
     expect(view.priorAvgDays).toBe(0);
     expect(view.deltaDays).toBe(0);
+  });
+});
+
+describe('buildPedidosPorDia', () => {
+  it('zero-pads days with no orders created', () => {
+    const state = buildState({ orders: [buildOrder({ id: 'o1', createdAt: daysBefore(1) })] });
+
+    const view = buildPedidosPorDia(state, 7);
+
+    expect(view.points).toHaveLength(7);
+    expect(view.points.find((p) => p.dayOffset === 3)).toEqual({ dayOffset: 3, count: 0, valueUSD: 0 });
+  });
+
+  it('buckets orders by createdAt and computes avgCountPerDay/avgValuePerDay across the full window', () => {
+    const orders = [
+      buildOrder({ id: 'o1', createdAt: daysBefore(1), totalUSD: 100 }),
+      buildOrder({ id: 'o2', createdAt: daysBefore(1), totalUSD: 50 }),
+      buildOrder({ id: 'o3', createdAt: daysBefore(5), totalUSD: 200 }),
+    ];
+    const state = buildState({ orders });
+
+    const view = buildPedidosPorDia(state, 7);
+
+    expect(view.points.find((p) => p.dayOffset === 1)).toEqual({ dayOffset: 1, count: 2, valueUSD: 150 });
+    expect(view.avgCountPerDay).toBeCloseTo(3 / 7);
+    expect(view.avgValuePerDay).toBeCloseTo(350 / 7);
+  });
+
+  it('computes countDeltaPercent/valueDeltaPercent against the immediately preceding window of equal length', () => {
+    const current = [1, 2].map((n) => buildOrder({ id: `c${n}`, createdAt: daysBefore(n), totalUSD: 100 }));
+    const prior = [buildOrder({ id: 'p1', createdAt: daysBefore(9), totalUSD: 40 })];
+    const state = buildState({ orders: [...current, ...prior] });
+
+    const view = buildPedidosPorDia(state, 7);
+
+    expect(view.countDeltaPercent).toBeCloseTo(1); // (2/7 - 1/7) / (1/7) = 1
+    expect(view.valueDeltaPercent).toBeCloseTo(4); // (200/7 - 40/7) / (40/7) = 4
+  });
+
+  it('yields a null (never NaN/Infinity) delta when the prior window has zero orders, 0-prior → "up" guard', () => {
+    const state = buildState({ orders: [buildOrder({ id: 'o1', createdAt: daysBefore(1) })] });
+
+    const view = buildPedidosPorDia(state, 7);
+
+    expect(view.countDeltaPercent).toBeNull();
+    expect(view.valueDeltaPercent).toBeNull();
+    expect(Number.isFinite(view.avgCountPerDay)).toBe(true);
+    expect(view.avgCountPerDay).toBeGreaterThan(0);
+  });
+
+  it('anchors the window to generatedAt, not the wall-clock date', () => {
+    const oldGeneratedAt = '2020-01-10T12:00:00.000Z';
+    const createdAt = new Date(new Date(oldGeneratedAt).getTime() - 3 * DAY_MS).toISOString();
+    const state = buildState({ generatedAt: oldGeneratedAt, orders: [buildOrder({ id: 'o1', createdAt })] });
+
+    const view = buildPedidosPorDia(state, 7);
+
+    expect(view.avgCountPerDay).toBeCloseTo(1 / 7);
+  });
+});
+
+describe('buildCompletadosPorDia', () => {
+  it('zero-pads days with no orders delivered', () => {
+    const state = buildState({
+      orders: [buildOrder({ id: 'o1', state: 'entregado', createdAt: daysBefore(5), deliveredAt: daysBefore(1) })],
+    });
+
+    const view = buildCompletadosPorDia(state, 7);
+
+    expect(view.points).toHaveLength(7);
+    expect(view.points.find((p) => p.dayOffset === 3)).toEqual({ dayOffset: 3, count: 0, valueUSD: 0 });
+  });
+
+  it('buckets orders by deliveredAt and computes avgCountPerDay/avgValuePerDay across the full window', () => {
+    const orders = [
+      buildOrder({ id: 'o1', state: 'entregado', createdAt: daysBefore(3), deliveredAt: daysBefore(1), totalUSD: 100 }),
+      buildOrder({ id: 'o2', state: 'entregado', createdAt: daysBefore(3), deliveredAt: daysBefore(1), totalUSD: 50 }),
+      buildOrder({ id: 'o3', state: 'entregado', createdAt: daysBefore(7), deliveredAt: daysBefore(5), totalUSD: 200 }),
+    ];
+    const state = buildState({ orders });
+
+    const view = buildCompletadosPorDia(state, 7);
+
+    expect(view.points.find((p) => p.dayOffset === 1)).toEqual({ dayOffset: 1, count: 2, valueUSD: 150 });
+    expect(view.avgCountPerDay).toBeCloseTo(3 / 7);
+    expect(view.avgValuePerDay).toBeCloseTo(350 / 7);
+  });
+
+  it('computes tasaCompletado as entregados en ventana / creados en ventana (locked denominator)', () => {
+    const delivered = [1, 2, 3, 4, 5, 6].map((n) =>
+      buildOrder({ id: `d${n}`, state: 'entregado', createdAt: daysBefore(n), deliveredAt: daysBefore(n) }),
+    );
+    const stillOpen = [
+      buildOrder({ id: 'o1', state: 'creado', createdAt: daysBefore(1) }),
+      buildOrder({ id: 'o2', state: 'verificado', createdAt: daysBefore(2) }),
+    ];
+    const state = buildState({ orders: [...delivered, ...stillOpen] });
+
+    const view = buildCompletadosPorDia(state, 7);
+
+    expect(view.tasaCompletado).toBeCloseTo(6 / 8);
+  });
+
+  it('yields a safe 0 tasaCompletado (never NaN/Infinity) when zero orders were created in the window', () => {
+    const state = buildState({ orders: [] });
+
+    const view = buildCompletadosPorDia(state, 7);
+
+    expect(view.tasaCompletado).toBe(0);
+    expect(Number.isFinite(view.tasaCompletado)).toBe(true);
+  });
+
+  it('anchors the window to generatedAt, not the wall-clock date', () => {
+    const oldGeneratedAt = '2020-01-10T12:00:00.000Z';
+    const deliveredAt = new Date(new Date(oldGeneratedAt).getTime() - 3 * DAY_MS).toISOString();
+    const state = buildState({
+      generatedAt: oldGeneratedAt,
+      orders: [buildOrder({ id: 'o1', state: 'entregado', createdAt: deliveredAt, deliveredAt })],
+    });
+
+    const view = buildCompletadosPorDia(state, 7);
+
+    expect(view.avgCountPerDay).toBeCloseTo(1 / 7);
   });
 });
 

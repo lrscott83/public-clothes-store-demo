@@ -1,5 +1,5 @@
 import { buildInventorySummary } from './inventory';
-import { buildKpiTrend, splitByPeriod } from './period-trend';
+import { buildKpiTrend, computeDelta, splitByPeriod } from './period-trend';
 import type { KpiTrend, PeriodSplit, Trend } from './period-trend';
 import { DAY_MS } from '../seed/constants';
 import type { Order, OrderState, SeedState, SeededProduct } from './types';
@@ -704,6 +704,164 @@ export function buildCicloPromedio(state: SeedState, windowDays: number): CicloP
   const deltaDays = priorCycles.length > 0 ? currentAvgDays - priorAvgDays : 0;
 
   return { windowDays, currentAvgDays, priorAvgDays, deltaDays, count };
+}
+
+// ---- Capa 3: per-day point buckets (shared by pedidos/día + completados/día) ----------------
+
+export interface PerDayPoint {
+  /** 0 = the anchor day (newest), `windowDays - 1` = oldest day in the window. */
+  dayOffset: number;
+  count: number;
+  valueUSD: number;
+}
+
+interface PerDayBucketResult {
+  /** Ordered oldest -> newest (dayOffset windowDays-1 .. 0) — mirrors SalesTrendView. */
+  points: PerDayPoint[];
+  totalCount: number;
+  totalValueUSD: number;
+  priorTotalCount: number;
+  priorTotalValueUSD: number;
+}
+
+/**
+ * Zero-pads every day in `[anchor-Nd, anchor)` into a bucket (never omits a
+ * day with no matching orders), grouping by whichever timestamp
+ * `pickTimestamp` returns (undefined = order excluded from both windows).
+ * Also accumulates the prior `[anchor-2Nd, anchor-Nd)` window's totals for
+ * the caller's Δ% math — one pass over `state.orders`.
+ */
+function buildPerDayBuckets(
+  state: SeedState,
+  windowDays: number,
+  pickTimestamp: (order: Order) => string | undefined,
+): PerDayBucketResult {
+  const anchorMs = new Date(state.generatedAt).getTime();
+  const buckets = new Map<number, { count: number; valueUSD: number }>();
+  for (let offset = 0; offset < windowDays; offset++) {
+    buckets.set(offset, { count: 0, valueUSD: 0 });
+  }
+
+  let priorTotalCount = 0;
+  let priorTotalValueUSD = 0;
+
+  for (const order of state.orders) {
+    const timestamp = pickTimestamp(order);
+    if (!timestamp) continue;
+    const ms = new Date(timestamp).getTime();
+    const diff = anchorMs - ms;
+
+    if (diff >= 0 && diff < windowDays * DAY_MS) {
+      const offset = Math.floor(diff / DAY_MS);
+      const bucket = buckets.get(offset)!;
+      bucket.count += 1;
+      bucket.valueUSD += order.totalUSD;
+    } else if (diff >= windowDays * DAY_MS && diff < 2 * windowDays * DAY_MS) {
+      priorTotalCount += 1;
+      priorTotalValueUSD += order.totalUSD;
+    }
+  }
+
+  const points: PerDayPoint[] = [];
+  let totalCount = 0;
+  let totalValueUSD = 0;
+  for (let offset = windowDays - 1; offset >= 0; offset--) {
+    const bucket = buckets.get(offset)!;
+    points.push({ dayOffset: offset, count: bucket.count, valueUSD: bucket.valueUSD });
+    totalCount += bucket.count;
+    totalValueUSD += bucket.valueUSD;
+  }
+
+  return { points, totalCount, totalValueUSD, priorTotalCount, priorTotalValueUSD };
+}
+
+// ---- Capa 3: pedidos por día -----------------------------------------------------------
+
+export interface PedidosPorDiaView {
+  windowDays: number;
+  points: PerDayPoint[];
+  avgCountPerDay: number;
+  avgValuePerDay: number;
+  /** null when the prior window's average is 0 — the leaf renders a safe "up"/flat guard instead of Infinity. */
+  countDeltaPercent: number | null;
+  valueDeltaPercent: number | null;
+}
+
+/**
+ * Capa 3 — "Pedidos por día": one zero-padded point per calendar day in
+ * `[anchor-Nd, anchor)`, grouped by `createdAt`. `avgCountPerDay`/
+ * `avgValuePerDay` divide by `windowDays` (every day counts, including zero
+ * days). Deltas reuse `computeDelta` — `null` (never NaN/Infinity) when the
+ * prior window's average is 0.
+ */
+export function buildPedidosPorDia(state: SeedState, windowDays: number): PedidosPorDiaView {
+  const { points, totalCount, totalValueUSD, priorTotalCount, priorTotalValueUSD } = buildPerDayBuckets(
+    state,
+    windowDays,
+    (order) => order.createdAt,
+  );
+
+  const avgCountPerDay = totalCount / windowDays;
+  const avgValuePerDay = totalValueUSD / windowDays;
+  const priorAvgCountPerDay = priorTotalCount / windowDays;
+  const priorAvgValuePerDay = priorTotalValueUSD / windowDays;
+
+  return {
+    windowDays,
+    points,
+    avgCountPerDay,
+    avgValuePerDay,
+    countDeltaPercent: computeDelta(avgCountPerDay, priorAvgCountPerDay),
+    valueDeltaPercent: computeDelta(avgValuePerDay, priorAvgValuePerDay),
+  };
+}
+
+// ---- Capa 3: completados por día -------------------------------------------------------
+
+export interface CompletadosPorDiaView {
+  windowDays: number;
+  points: PerDayPoint[];
+  avgCountPerDay: number;
+  avgValuePerDay: number;
+  /** null when the prior window's average is 0 — same guard as PedidosPorDiaView. */
+  countDeltaPercent: number | null;
+  /** entregadosEnVentana / creadosEnVentana, guarded to 0 when creadosEnVentana is 0. LOCKED denominator: the window's entry cohort (createdAt), same as buildEntraVsSale. */
+  tasaCompletado: number;
+}
+
+/**
+ * Capa 3 — "Completados por día": one zero-padded point per calendar day in
+ * `[anchor-Nd, anchor)`, grouped by `deliveredAt` (same shape as
+ * `buildPedidosPorDia`). `tasaCompletado` = orders delivered in the window
+ * divided by orders CREATED in the window (the window's entry cohort, not a
+ * throughput ratio) — DECIDED in design.md, guarded to 0 when the
+ * denominator is 0.
+ */
+export function buildCompletadosPorDia(state: SeedState, windowDays: number): CompletadosPorDiaView {
+  const anchorMs = new Date(state.generatedAt).getTime();
+  const { points, totalCount, totalValueUSD, priorTotalCount } = buildPerDayBuckets(
+    state,
+    windowDays,
+    (order) => order.deliveredAt,
+  );
+
+  const avgCountPerDay = totalCount / windowDays;
+  const avgValuePerDay = totalValueUSD / windowDays;
+  const priorAvgCountPerDay = priorTotalCount / windowDays;
+
+  const creadosEnVentana = state.orders.filter((order) =>
+    inCurrentWindow(new Date(order.createdAt).getTime(), anchorMs, windowDays),
+  ).length;
+  const tasaCompletado = creadosEnVentana > 0 ? totalCount / creadosEnVentana : 0;
+
+  return {
+    windowDays,
+    points,
+    avgCountPerDay,
+    avgValuePerDay,
+    countDeltaPercent: computeDelta(avgCountPerDay, priorAvgCountPerDay),
+    tasaCompletado,
+  };
 }
 
 // ---- orchestrator ----------------------------------------------------------------------

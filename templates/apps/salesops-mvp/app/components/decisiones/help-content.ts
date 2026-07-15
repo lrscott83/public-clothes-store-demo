@@ -39,6 +39,14 @@ export const DECISIONES_HELP = {
     title: 'Ciclo promedio',
     text: 'Cuántos días tarda en promedio un pedido desde que se crea hasta que se entrega. La flecha compara contra el período anterior: si sube, tus entregas se están volviendo más lentas.',
   },
+  pedidosPorDia: {
+    title: 'Pedidos por día',
+    text: 'Cuántos pedidos entran cada día del período elegido. Cambiá entre "Nº pedidos" y "Valor de venta" para ver si crecés en volumen, en facturación, o en ninguno de los dos.',
+  },
+  completadosPorDia: {
+    title: 'Completados por día',
+    text: 'Cuántos pedidos entregás cada día, y qué porcentaje de lo que entró en el período ya salió (tasa de completado). Una tasa baja te dice que estás acumulando trabajo sin cerrar.',
+  },
 
   // --- KPI header (Layer 1) ---
   ventas: {

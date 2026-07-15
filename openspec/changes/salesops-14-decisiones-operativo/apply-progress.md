@@ -232,3 +232,69 @@ None.
 - Current work unit: Unit 4 (Capa 3a, PR4 per tasks.md's Suggested Work Units table)
 - Boundary: starts from the committed Batch 3 tree on `salesops-mvp`; ends with `buildEntraVsSale`/`EntraVsSale`, `buildCicloPromedio`/`CicloPromedio`, and `period-filter.tsx` implemented, tested, and typechecked — no consumers wired yet (route recomposition is Phase 4/PR7, not touched this batch; Capa 3b's `pedidos-por-dia`/`completados-por-dia` share the `PerDayPoint`/toggle pattern and are PR5, not touched this batch)
 - Estimated review budget impact: ~10 files changed (1 domain module, 1 domain test file, 3 new leaf components, 3 new component test files, help-content, tasks.md) — within the tasks.md PR4 estimate (~350 lines)
+
+---
+
+## Batch 5 (this batch) — Phase 3: Capa 3b (PR5)
+
+**Mode**: Strict TDD (RED → GREEN, verified per task)
+**Delivery**: Single PR, `size:exception`, on current branch `salesops-mvp`, committed, not pushed.
+**Scope**: ONLY Capa 3b — `buildPedidosPorDia` + `PedidosPorDia`, `buildCompletadosPorDia` + `CompletadosPorDia`. Análisis and route recomposition (PR6/PR7/PR8) are explicitly out of scope for this batch — not implemented, not wired.
+
+### Completed Tasks
+
+- [x] 3.11 RED: test `buildPedidosPorDia` — zero-padded days, avg + `Δ%`, 0-prior → "up" guard
+- [x] 3.12 GREEN: implement `buildPedidosPorDia`
+- [x] 3.13 RED: test `PedidosPorDia` component — Nº/valor toggle (local state)
+- [x] 3.14 GREEN: create `components/decisiones/pedidos-por-dia.tsx`
+- [x] 3.15 RED: test `buildCompletadosPorDia` — zero-padded days, `tasaCompletado = entregadosEnVentana / creadosEnVentana` (÷0→0)
+- [x] 3.16 GREEN: implement `buildCompletadosPorDia`
+- [x] 3.17 RED: test `CompletadosPorDia` component
+- [x] 3.18 GREEN: create `components/decisiones/completados-por-dia.tsx`
+
+### TDD Cycle Evidence
+
+| Task | RED (test written, confirmed failing) | GREEN (implementation, confirmed passing) | REFACTOR |
+|------|------|------|------|
+| 3.11/3.12 `buildPedidosPorDia` | Added 5 tests to `decisiones-dashboard.test.ts` (zero-pad, bucket+avg, Δ% vs prior window, 0-prior null-guard, generatedAt anchor); ran `vitest run app/domain/__tests__/decisiones-dashboard.test.ts` — 10 failed (`is not a function`, includes 5 tests for the next task in the same run) | Implemented `buildPedidosPorDia` on top of a new shared private helper `buildPerDayBuckets(state, windowDays, pickTimestamp)` (one-pass zero-padded day bucketing + prior-window totals, reused by both Capa 3b builders); `countDeltaPercent`/`valueDeltaPercent` computed via `computeDelta` (imported from `period-trend.ts`) — returns `null` (never NaN/Infinity) when the prior average is 0, matching design's locked `number \| null` type; re-ran — 61/61 passed | None needed |
+| 3.15/3.16 `buildCompletadosPorDia` | Added 5 tests (zero-pad by `deliveredAt`, bucket+avg, `tasaCompletado` = 6/8 per design's worked example, 0-creados safe-0 guard, generatedAt anchor); ran — 5 failed (`is not a function`) | Implemented `buildCompletadosPorDia` reusing `buildPerDayBuckets` (keyed on `deliveredAt`) and the existing `inCurrentWindow` helper for `creadosEnVentana` (same window-membership check as `buildEntraVsSale`); `tasaCompletado = creadosEnVentana > 0 ? totalCount / creadosEnVentana : 0` — LOCKED denominator = window's entry cohort (`createdAt` in window), per design.md's owner-confirmed decision; re-ran — 61/61 passed | None needed |
+| 3.13/3.14 `PedidosPorDia` | Created `pedidos-por-dia.test.tsx` (7 tests: default Nº avg, toggle to Valor formatted via `formatMoney`, up/down delta arrows, null-delta "▲ nuevo" guard when current avg > 0, null-delta flat guard when current avg is 0, no "decisiones" in heading); ran — failed with module-resolution error | Created `pedidos-por-dia.tsx` — mirrors `sales-trend-section.tsx`'s local `useState<Series>` toggle + `AreaTrend` reuse; delta arrow logic follows `CicloPromedio`'s up/down/flat pattern but adds the `deltaPercent === null` branch (renders "▲ nuevo" when the current-period average is positive, flat "—" otherwise) — this satisfies the spec's "0-prior avg + current > 0 must show up, never Infinity%" requirement at the presentation layer, since the domain type is `number \| null` (not a `Trend` enum); re-ran — 7/7 passed | None needed |
+| 3.17/3.18 `CompletadosPorDia` | Created `completados-por-dia.test.tsx` (7 tests: tasa de completado percentage, safe 0% tasa, default Nº avg, toggle to Valor, up delta on Nº series, null-delta "nuevo" guard, no "decisiones" in heading); ran — failed with module-resolution error | Created `completados-por-dia.tsx` — same toggle/delta pattern as `PedidosPorDia`, plus an always-visible "Tasa de completado" figure (independent of the Nº/Valor toggle, since `tasaCompletado` arrives pre-computed and is not itself a per-day series); the Δ% line only renders on the Nº series (`CompletadosPorDiaView` has no `valueDeltaPercent` field by design — locked type); first test draft used `/0%/` which ambiguously matched "50%" (from the default `countDeltaPercent: 0.5` fixture) — fixed the TEST (not the component) to a `/\b0%/` word-boundary regex plus an explicit `countDeltaPercent: null` override in that one fixture; re-ran — 7/7 passed | Test-only fix, no component change |
+
+### Files Changed (Batch 5)
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `templates/apps/salesops-mvp/app/domain/decisiones-dashboard.ts` | Modified | Added `computeDelta` to the `period-trend.ts` import; added private `PerDayBucketResult`/`buildPerDayBuckets` shared helper, `PerDayPoint`/`PedidosPorDiaView`/`buildPedidosPorDia`, `CompletadosPorDiaView`/`buildCompletadosPorDia` — new section between `buildCicloPromedio` and the orchestrator. No existing export modified, orchestrator untouched (route wiring is PR7). |
+| `templates/apps/salesops-mvp/app/domain/__tests__/decisiones-dashboard.test.ts` | Modified | Added `buildPedidosPorDia`/`buildCompletadosPorDia` to the import list; added `describe('buildPedidosPorDia', ...)` (5 tests) and `describe('buildCompletadosPorDia', ...)` (5 tests) |
+| `templates/apps/salesops-mvp/app/components/decisiones/pedidos-por-dia.tsx` | Created | Capa 3b leaf — Nº pedidos/Valor de venta toggle + avg/día + Δ% guard + `AreaTrend` |
+| `templates/apps/salesops-mvp/app/components/decisiones/__tests__/pedidos-por-dia.test.tsx` | Created | 7 tests |
+| `templates/apps/salesops-mvp/app/components/decisiones/completados-por-dia.tsx` | Created | Capa 3b leaf — same toggle pattern + always-visible tasa de completado + Δ% guard (Nº series only) + `AreaTrend` |
+| `templates/apps/salesops-mvp/app/components/decisiones/__tests__/completados-por-dia.test.tsx` | Created | 7 tests |
+| `templates/apps/salesops-mvp/app/components/decisiones/help-content.ts` | Modified | Added `DECISIONES_HELP.pedidosPorDia` and `DECISIONES_HELP.completadosPorDia` entries — additive, old KPI/trend entries untouched (removal is Phase 4 task 4.7) |
+| `openspec/changes/salesops-14-decisiones-operativo/tasks.md` | Modified | Checked off tasks 3.11–3.18 |
+
+### Deviations from Design
+
+None — implementation matches design.md's Capa 3b interface contracts exactly (`PerDayPoint`, `PedidosPorDiaView`/`buildPedidosPorDia`, `CompletadosPorDiaView`/`buildCompletadosPorDia`, field names and semantics; `tasaCompletado` denominator = window's entry cohort, locked). One implementation detail not pre-specified by design: `buildPerDayBuckets` is a new private (non-exported) helper factoring the zero-padded-bucket + prior-window-totals logic shared by both builders — design's interface list only specifies the two public builder signatures, so this is an internal DRY refactor, not a contract change. Also: the spec's "0-prior avg + current > 0 must show 'up', never Infinity%" requirement is satisfied at the LEAF/presentation layer (both new components render a "▲ nuevo" guard when `countDeltaPercent`/`valueDeltaPercent` is `null` and the current average is positive), since design's locked domain type is `number \| null` (not a `Trend` enum field) — the domain builders themselves only guarantee "never NaN/Infinity" (via `computeDelta`'s `null`-on-zero-prior guard), consistent with `PedidosPorDiaView`/`CompletadosPorDiaView`'s exact shape in design.md.
+
+### Issues Found
+
+One test-writing mistake (not a design/implementation issue): the first draft of `CompletadosPorDia`'s "safe 0% tasa" test used the regex `/0%/`, which ambiguously matched both the headline "0%" and the delta line's "50%" (both contain the substring "0%") under the default fixture's `countDeltaPercent: 0.5`. Fixed by scoping the fixture override (`countDeltaPercent: null`, which renders "nuevo" instead of a percent) and using a `/\b0%/` word-boundary regex. No production code was affected.
+
+### Full Suite / Typecheck Confirmation (Batch 5)
+
+- `vitest run` (full suite, all 80 files): **545/545 passed**
+- `react-router typegen && tsc`: **exit 0, no errors**
+
+### Remaining Tasks (next batches)
+
+- [ ] Phase 4: Análisis + Route Recomposition + Cleanup (tasks 4.1–4.10) — PR6/PR7/PR8
+
+### Workload / PR Boundary (Batch 5)
+
+- Mode: single PR, `size:exception` (explicitly authorized by the orchestrator for this batch)
+- Current work unit: Unit 5 (Capa 3b, PR5 per tasks.md's Suggested Work Units table)
+- Boundary: starts from the committed Batch 4 tree on `salesops-mvp`; ends with `buildPedidosPorDia`/`PedidosPorDia` and `buildCompletadosPorDia`/`CompletadosPorDia` implemented, tested, and typechecked — no consumers wired yet (route recomposition is Phase 4/PR7, not touched this batch)
+- Estimated review budget impact: ~300 changed lines in modified files (git diff --stat) + ~333 lines across 4 new files (2 components, 2 component test files) ≈ 633 total — above the tasks.md PR5 estimate (~400) and the 400-line guard budget, but within the `size:exception` explicitly authorized by the orchestrator for this batch (see delivery context above)
+- Commit: pending (this batch), on the current branch, not pushed

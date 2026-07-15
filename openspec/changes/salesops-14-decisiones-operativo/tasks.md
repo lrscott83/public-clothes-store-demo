@@ -75,14 +75,14 @@ Chain strategy: pending
 - [x] 3.8 GREEN: implement `buildCicloPromedio`.
 - [x] 3.9 RED: test `CicloPromedio` component.
 - [x] 3.10 GREEN: create `components/decisiones/ciclo-promedio.tsx`.
-- [ ] 3.11 RED: test `buildPedidosPorDia` — zero-padded days, avg + `Δ%`, 0-prior → "up" guard (spec: Pedidos por Día).
-- [ ] 3.12 GREEN: implement `buildPedidosPorDia`.
-- [ ] 3.13 RED: test `PedidosPorDia` component — Nº/valor toggle (local state).
-- [ ] 3.14 GREEN: create `components/decisiones/pedidos-por-dia.tsx`.
-- [ ] 3.15 RED: test `buildCompletadosPorDia` — zero-padded days, `tasaCompletado = entregadosEnVentana / creadosEnVentana` (÷0→0) (spec: Completados por Día).
-- [ ] 3.16 GREEN: implement `buildCompletadosPorDia`.
-- [ ] 3.17 RED: test `CompletadosPorDia` component.
-- [ ] 3.18 GREEN: create `components/decisiones/completados-por-dia.tsx`.
+- [x] 3.11 RED: test `buildPedidosPorDia` — zero-padded days, avg + `Δ%`, 0-prior → "up" guard (spec: Pedidos por Día).
+- [x] 3.12 GREEN: implement `buildPedidosPorDia`.
+- [x] 3.13 RED: test `PedidosPorDia` component — Nº/valor toggle (local state).
+- [x] 3.14 GREEN: create `components/decisiones/pedidos-por-dia.tsx`.
+- [x] 3.15 RED: test `buildCompletadosPorDia` — zero-padded days, `tasaCompletado = entregadosEnVentana / creadosEnVentana` (÷0→0) (spec: Completados por Día).
+- [x] 3.16 GREEN: implement `buildCompletadosPorDia`.
+- [x] 3.17 RED: test `CompletadosPorDia` component.
+- [x] 3.18 GREEN: create `components/decisiones/completados-por-dia.tsx`.
 
 ## Phase 4: Análisis + Route Recomposition + Cleanup (PR6 + PR7 + PR8)
 
