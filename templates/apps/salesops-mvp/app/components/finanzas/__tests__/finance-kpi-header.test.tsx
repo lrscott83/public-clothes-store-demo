@@ -41,4 +41,13 @@ describe('FinanceKpiHeader', () => {
 
     expect(screen.getAllByRole('button', { name: /qué significa/i }).length).toBe(5);
   });
+
+  // On desktop the 5 KPIs must sit in a single row — a 4-column grid orphaned
+  // the 5th tile onto a second row. Desktop breakpoint fits all 5 across.
+  it('lays the 5 tiles out in a single row on desktop (5-column grid)', () => {
+    const { container } = render(<FinanceKpiHeader kpis={buildKpis()} />);
+
+    const section = container.querySelector('section');
+    expect(section?.className).toContain('lg:grid-cols-5');
+  });
 });

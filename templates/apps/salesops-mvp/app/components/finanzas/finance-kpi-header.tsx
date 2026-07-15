@@ -19,7 +19,7 @@ const MONEY = { locale: 'en-US', currency: 'USD' } as const;
  */
 export function FinanceKpiHeader({ kpis }: FinanceKpiHeaderProps) {
   return (
-    <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
       <StatTile
         label="Ingresos facturados"
         value={formatMoney(kpis.ingresosFacturadosUSD.current, MONEY)}
