@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the testable contract for the `@store-mgmt/salesops-mvp` app: a workspace app that registers correctly, serves on a distinct port, resolves 7 placeholder routes with a sidebar, renders a product against a local catalog, and ships with a deterministic frozen domain model + seed generator powering all seven screens. Tasks 1–3 complete: app skeleton, local ProductCard, full seed/domain/localStorage implementation, and the 3-step "crear pedido" wizard (Carrito → Cliente → Almacén). Task 4 complete: Pantalla 2 (Operador de gestores verifica pedidos) — read-only kanban board with rate-freeze verification and commission-paid marking. Task 5 complete: Pantalla 3 (Operador de almacén) — warehouse selector, carrier assignment, delivery marking, and backward-compatible board extension. Task 6 complete: Pantalla 4 (Tasas de cambio) — exchange rate editor (USD→MN, Zelle, EUR) rendering as editable numeric fields, saved via a new pure store action `updateExchangeRates` that writes only `state.exchangeRates` and never touches `state.orders`, preserving the frozen-snapshot invariant. Task 10 complete: Pantalla 6 (Decisiones) — 3-layer visual decision dashboard with KPI header (4 tiles with 10-day trends), 4 visuals (sales trend, orders-by-stage distribution, sales-by-warehouse, currency/payment mix), and 2 actionable blocks (gestor ranking and inventory alerts), all fed 100% by seeded data with no invented values, using custom inline SVG chart primitives and pure domain helpers with strict TDD test coverage. Task 11 complete: Pantalla 7 (Finanzas) — rebuilt into a 3-layer financial control panel answering "¿dónde está mi dinero y hacia dónde se va?" with 5 KPI tiles (10-day period trends including AOV), 4 financial visuals (revenue-over-time trend, commission liability donut, revenue by stage, currency/settlement mix), and 3 actionable blocks (commission cost & ROI per gestor, revenue per warehouse, revenue aging by state). Maintains full architectural decoupling from decisiones (zero cross-dashboard domain imports); all metrics 100% seeded with frozen exchange-rate snapshots; read-only with no mutations; strict TDD throughout. Task 13 complete: Move profitability reads (top products by margin, lowest-margin orders, and AOV) from Decisiones to Finanzas, where they belong logically and operationally. `/decisiones` now focuses purely on commercial operations; `/finanzas` becomes the unified source of profitability truth. Task 7 (Inventario) remains out of scope.
+Define the testable contract for the `@store-mgmt/salesops-mvp` app: a workspace app that registers correctly, serves on a distinct port, resolves 7 placeholder routes with a sidebar, renders a product against a local catalog, and ships with a deterministic frozen domain model + seed generator powering all seven screens. Tasks 1–3 complete: app skeleton, local ProductCard, full seed/domain/localStorage implementation, and the 3-step "crear pedido" wizard (Carrito → Cliente → Almacén). Task 4 complete: Pantalla 2 (Operador de gestores verifica pedidos) — read-only kanban board with rate-freeze verification and commission-paid marking. Task 5 complete: Pantalla 3 (Operador de almacén) — warehouse selector, carrier assignment, delivery marking, and backward-compatible board extension. Task 6 complete: Pantalla 4 (Tasas de cambio) — exchange rate editor (USD→MN, Zelle, EUR) rendering as editable numeric fields, saved via a new pure store action `updateExchangeRates` that writes only `state.exchangeRates` and never touches `state.orders`, preserving the frozen-snapshot invariant. Task 10 complete: Pantalla 6 (Decisiones) — 3-layer visual decision dashboard with KPI header (4 tiles with 10-day trends), 4 visuals (sales trend, orders-by-stage distribution, sales-by-warehouse, currency/payment mix), and 2 actionable blocks (gestor ranking and inventory alerts), all fed 100% by seeded data with no invented values, using custom inline SVG chart primitives and pure domain helpers with strict TDD test coverage. Task 11 complete: Pantalla 7 (Finanzas) — rebuilt into a 3-layer financial control panel answering "¿dónde está mi dinero y hacia dónde se va?" with 5 KPI tiles (10-day period trends including AOV), 4 financial visuals (revenue-over-time trend, commission liability donut, revenue by stage, currency/settlement mix), and 3 actionable blocks (commission cost & ROI per gestor, revenue per warehouse, revenue aging by state). Maintains full architectural decoupling from decisiones (zero cross-dashboard domain imports); all metrics 100% seeded with frozen exchange-rate snapshots; read-only with no mutations; strict TDD throughout. Task 13 complete: Move profitability reads (top products by margin, lowest-margin orders, and AOV) from Decisiones to Finanzas, where they belong logically and operationally. `/decisiones` now focuses purely on commercial operations; `/finanzas` becomes the unified source of profitability truth. Task 14 complete: Redesign Decisiones as an operational cockpit with 3 layers (pulso inmediato, qué atiendo YA, comportamiento en el tiempo with [7d/30d] filter) plus Análisis section (3 blocks: Ventas por almacén, Mix por moneda, Ranking de gestores), removing the KPI header and margin/AOV blocks. Task 7 (Inventario) remains out of scope.
 
 ## Requirements
 
@@ -781,19 +781,40 @@ totals.
 The `/decisiones` route MUST render a direct-render container (no `<Form>`,
 no loader, no `useNavigate`) that loads `SeedState` via `loadSeedState` on
 mount, computes every view model once via pure domain helpers, and renders,
-top to bottom: Layer 1 (4 KPI tiles), Layer 2 (4 visuals), Layer 3 (2
-actionable blocks: gestor ranking and inventory alerts). It MUST render exactly one `<h1>` and no other heading
-MUST contain the word "decisiones".
+top to bottom: **Capa 1 — Pulso inmediato** (3 cards: pedidos activos por
+estado y almacén, transportistas, comisiones por pagar), **Capa 2 — Qué
+atiendo YA** (stock crítico por almacén, pedidos demorados/trabados), **Capa
+3 — Comportamiento en el tiempo** under a single `[7d/30d]` filter (entra vs.
+sale, ciclo promedio, pedidos por día, pedidos completados por día), and an
+**Análisis** section containing exactly three blocks: Ventas por almacén,
+Mix por moneda, Ranking de gestores. It MUST render exactly one `<h1>` and no
+other heading MUST contain the word "decisiones". No KPI header, no sales
+margin figure, and no AOV/ticket-promedio figure renders anywhere on the
+route.
+(Previously: Layer 1 was a 4-tile KPI header, Layer 2 held 4 analytical
+visuals including a fixed-20-day sales trend and a full-state distribution
+chart, Layer 3 held gestor ranking + inventory alerts only.)
 
-#### Scenario: Route renders all three layers when qualifying orders exist
+#### Scenario: Route renders the 3 operational layers plus Análisis
 
-- GIVEN `SeedState` contains at least one order in state `verificado` or later
+- GIVEN `SeedState` contains orders across multiple states and warehouses
 - WHEN the app navigates to `/decisiones`
-- THEN exactly one `<h1>` is rendered
-- AND the 4 KPI tiles of Layer 1 are rendered
-- AND the 4 visuals of Layer 2 are rendered
-- AND Layer 3 renders gestor ranking and inventory alerts, with no
-  top-productos-por-margen or pedidos-de-menor-margen block
+- THEN exactly one `<h1>` renders
+- AND Capa 1 renders its 3 cards (pedidos activos por estado y almacén,
+  transportistas, comisiones por pagar)
+- AND Capa 2 renders stock crítico and pedidos demorados/trabados
+- AND Capa 3 renders entra-vs-sale, ciclo promedio, pedidos por día, and
+  pedidos completados por día, all under one `[7d/30d]` filter
+- AND the Análisis section renders exactly 3 blocks: Ventas por almacén, Mix
+  por moneda, Ranking de gestores
+
+#### Scenario: No KPI header, margin, or AOV figure renders
+
+- GIVEN `/decisiones` is fully rendered
+- WHEN the rendered output is inspected
+- THEN no top-of-page KPI-tile header exists
+- AND no "Top productos por margen", "Pedidos de menor margen", or
+  AOV/"ticket promedio" element renders anywhere on the page
 
 #### Scenario: No other heading repeats "decisiones"
 
@@ -806,208 +827,429 @@ MUST contain the word "decisiones".
 
 Every figure on `/decisiones` MUST be computed from `SeedState` alone — no
 invented values, no live network/API data. Any conversion between MN and USD
-MUST use the specific order's own frozen `exchangeRateSnapshot.usdToMn` (or,
-for the currency mix, the order's own frozen payment/rate context), never
-`SeedState.exchangeRates` (the live rates). An order item whose `productId`
-has no matching entry in `SeedState.products` MUST contribute `0` to any
-cost/margin aggregation without throwing, while the rest of that order's
-items and other orders are still processed.
+MUST use the specific order's own frozen `exchangeRateSnapshot.usdToMn`,
+never `SeedState.exchangeRates` (the live rates). Every period-anchored
+computation (the `[7d/30d]` filter, "días de atraso", "ciclo promedio", "age
+in stage") MUST anchor to `SeedState.generatedAt`, never `Date.now()`. An
+inventory entry or order reference whose `productId`/`transportistaId` has
+no matching seed entry MUST be skipped or contribute a zero/neutral value
+without throwing.
+(Previously: this requirement's scenarios were scoped to margin/cost
+aggregation, which no longer exists on `/decisiones` — margin and cost reads
+moved to Finanzas in `salesops-13`.)
 
-#### Scenario: A later live-rate edit does not change an already-computed KPI
+#### Scenario: A later live-rate edit does not change an already-computed figure
 
-- GIVEN a `verificado` order with `exchangeRateSnapshot.usdToMn: 40` and `commissionMN: 3000`
+- GIVEN a `verificado` order with `exchangeRateSnapshot.usdToMn: 40`
 - AND `SeedState.exchangeRates.usdToMn` is later edited to `45`
-- WHEN any `/decisiones` aggregation touching that order is rebuilt
-- THEN the order's contribution to `commissionUSD`/`marginUSD` still uses `40`, not `45`
+- WHEN any `/decisiones` computation touching that order rebuilds
+- THEN it still uses `40`, not `45`
 
-#### Scenario: Orphan product reference contributes zero without throwing
+#### Scenario: Period-anchored computations use generatedAt, not the wall clock
 
-- GIVEN an order item's `productId` does not exist in `SeedState.products`
-- WHEN any margin, cost, or top-products aggregation runs
-- THEN it does not throw
-- AND that item contributes `0` to cost/margin while the rest of the order's items and other orders are still aggregated
+- GIVEN `SeedState.generatedAt` is a fixed timestamp
+- WHEN any `[7d/30d]`-filtered figure, "días de atraso", "ciclo promedio", or
+  "pedido demorado" age is computed
+- THEN the computation anchors to `SeedState.generatedAt`
+- AND the result does not depend on the actual current date the test runs on
 
-### Requirement: KPI Header Has Exactly Four Tiles (Decisiones)
+### Requirement: Capa 1.1 — Pedidos Activos por Estado y Almacén
 
-Layer 1 MUST render exactly four KPI tiles, in this order: Ventas (USD),
-Margen (USD + %), Pedidos (count), Comisión pendiente (MN).
-Each tile's underlying value MUST be computed only from orders with
-`state !== 'creado'`, except "Comisión pendiente (MN)", which uses the
-pending/paid/in-transit state groupings defined below.
-(Previously: third tile was "Pedidos + ticket promedio (AOV)"; AOV now lives in Finanzas Layer 1 as a separate 5th tile.)
+Capa 1's first card MUST render a bar chart over exactly the **3
+non-completed states** — `creado`, `verificado`, `transportando`, in that
+order — excluding `entregado` and `comision_pagada`. For each state it MUST
+show the count of orders per warehouse, using a **fixed color per
+warehouse** independent of data values or ordering: Pinar = verde,
+Consolación = azul, Herradura = amarillo. A `(state, warehouse)` pair with
+zero orders MUST still appear at `0`, not be omitted.
 
-#### Scenario: Four tiles render in the fixed order
+#### Scenario: Only the 3 non-completed states appear
 
-- GIVEN `SeedState` contains qualifying orders
-- WHEN `/decisiones` is rendered
-- THEN the KPI header shows exactly 4 tiles in the order: Ventas, Margen, Pedidos, Comisión pendiente
-- AND no AOV/"ticket promedio" figure renders in the KPI header
+- GIVEN `SeedState.orders` includes orders in all 5 states
+- WHEN Capa 1.1 builds
+- THEN exactly 3 states appear — `creado`, `verificado`, `transportando` —
+  in that order
+- AND no `entregado` or `comision_pagada` bar renders
 
-### Requirement: KPI Formulas (Decisiones)
+#### Scenario: Warehouse colors are fixed regardless of data
 
-Each KPI tile's value, computed over a given order set, MUST use:
+- GIVEN any distribution of order counts across the 3 warehouses
+- WHEN Capa 1.1 renders
+- THEN Pinar's bars are always the "verde" color, Consolación's always
+  "azul", Herradura's always "amarillo"
 
-| KPI | Formula |
-|-----|---------|
-| Ventas (USD) | `Σ order.totalUSD` |
-| Margen (USD) | `Σ (order.totalUSD − orderCostUSD − orderCommissionUSD)`, using the same per-order cost/commission formula previously exposed by `buildProfitabilityRanking` |
-| Margen (%) | `marginUSD / revenueUSD × 100`, or `0` when `revenueUSD` is `0` |
-| Pedidos | `count` of qualifying orders |
-| Comisión pendiente (MN) | `Σ order.commissionMN` over orders where `state` is `verificado`, `transportando`, or `entregado` AND `commissionPaidAt` is not set (same "pending" definition as `buildFinanceSummary`) |
+#### Scenario: A zero-count state/warehouse pair still appears
 
-(Previously: table included a "Ticket promedio (AOV)" row; removed — AOV is now Finanzas-only.)
+- GIVEN warehouse Herradura has zero orders in state `transportando`
+- WHEN Capa 1.1 builds
+- THEN the `(transportando, Herradura)` pair appears with count `0`, not
+  omitted
 
-#### Scenario: Margin and Pedidos are computed from revenue, cost, and commission
+### Requirement: Capa 1.2 — Transportista Capacity and "Sin Chofer"
 
-- GIVEN two qualifying orders: one with `totalUSD: 500`, `commissionMN: 3000`, `exchangeRateSnapshot.usdToMn: 40`, item cost `200`; another with `totalUSD: 300`, `commissionMN: 1000`, `exchangeRateSnapshot.usdToMn: 40`, item cost `100`
-- WHEN the KPI values are computed
-- THEN `Ventas (USD)` is `800`
-- AND `Margen (USD)` is `(500 − 200 − 75) + (300 − 100 − 25) = 225 + 175 = 400`
-- AND `Pedidos` is `2`
+Capa 1's second card MUST classify every `SeedState.transportista` as
+**ocupado** (has at least one order with `transportistaId` matching AND
+`state === 'transportando'`) or **disponible** (otherwise). It MUST also
+compute a separate **"Sin chofer"** count: the number of orders in state
+`verificado` whose `transportistaId` is unset. "Sin chofer" is a count of
+orders, not transportistas, and is reported independently of the
+ocupado/disponible split.
 
-#### Scenario: Comisión pendiente excludes paid and creado orders
+#### Scenario: A transportista with an active transportando order is ocupado
 
-- GIVEN one `verificado` order with `commissionMN: 1000` and no `commissionPaidAt`, one `entregado` order with `commissionMN: 2000` and no `commissionPaidAt`, and one `comision_pagada` order with `commissionMN: 3000`
-- WHEN `Comisión pendiente (MN)` is computed
+- GIVEN a transportista assigned via `transportistaId` to an order in state
+  `transportando`
+- WHEN Capa 1.2 builds
+- THEN that transportista is classified `ocupado`
+
+#### Scenario: A transportista with no transportando order is disponible
+
+- GIVEN a transportista with zero orders in state `transportando`
+- WHEN Capa 1.2 builds
+- THEN that transportista is classified `disponible`
+
+#### Scenario: Sin chofer counts unassigned verificado orders
+
+- GIVEN 2 orders in state `verificado` with no `transportistaId` set, and 1
+  order in state `verificado` with a `transportistaId` set
+- WHEN Capa 1.2 builds
+- THEN "Sin chofer" is `2`
+
+### Requirement: Capa 1.3 — Comisiones por Pagar (Total y Más Atrasadas)
+
+Capa 1's third card MUST compute a total pending commission figure as
+`Σ order.commissionMN` over orders where `state` is `verificado`,
+`transportando`, or `entregado` AND `commissionPaidAt` is not set. It MUST
+also render a "más atrasadas" list with **at most one row per gestor**
+(no repeats): each row's **días de atraso** is the number of days between
+that gestor's most-overdue unpaid `entregado` order's `deliveredAt` and
+`SeedState.generatedAt` (never `Date.now()`); the row's **valor de esa
+comisión** is that specific order's `commissionMN`; the row's **total
+pendiente del gestor** is `Σ commissionMN` over that gestor's own orders in
+`verificado`/`transportando`/`entregado` with no `commissionPaidAt`. Only
+`entregado` orders with no `commissionPaidAt` count toward "días de atraso"
+(commission becomes payable on delivery). A gestor with zero overdue
+unpaid-`entregado` orders MUST NOT appear in the "más atrasadas" list. Rows
+MUST be sorted by días de atraso descending.
+
+#### Scenario: Total pending sums MN across pending states, excluding paid and creado
+
+- GIVEN one `verificado` order with `commissionMN: 1000` and no
+  `commissionPaidAt`, one `entregado` order with `commissionMN: 2000` and no
+  `commissionPaidAt`, and one `comision_pagada` order with `commissionMN:
+  3000`
+- WHEN the total pending figure is computed
 - THEN it is `1000 + 2000 = 3000` (the paid order is excluded)
 
-### Requirement: Every KPI Tile Shows a 10-Day vs Prior-10-Day Trend
+#### Scenario: Días de atraso is measured from deliveredAt, anchored to generatedAt
 
-Every KPI tile MUST be computed twice: once over orders whose `createdAt`
-falls within the current window `(generatedAt − 10 days, generatedAt]`, and
-once over orders whose `createdAt` falls within the prior window
-`(generatedAt − 20 days, generatedAt − 10 days]`, where `generatedAt` is
-`SeedState.generatedAt` — never the wall-clock date. Each tile MUST display
-the current-window value and a trend indicator (up / down / flat) derived
-from comparing the current-window value to the prior-window value. When the
-prior-window value is `0` and the current-window value is greater than `0`,
-the trend MUST be "up" (never a divide-by-zero/`Infinity` percentage). When
-both windows are `0`, the trend MUST be "flat".
+- GIVEN an `entregado` order with `deliveredAt` 9 days before
+  `SeedState.generatedAt` and no `commissionPaidAt`
+- WHEN the días de atraso for that gestor's row is computed
+- THEN it is `9`
+- AND the computation does not depend on the actual current date the test
+  runs on
 
-#### Scenario: Trend windows use generatedAt, not the wall clock
+#### Scenario: A gestor appears at most once, representing their most overdue order
 
-- GIVEN `SeedState.generatedAt` is `2026-07-10T12:00:00.000Z`
-- AND an order with `createdAt` 5 days before `generatedAt`
-- AND an order with `createdAt` 15 days before `generatedAt`
-- WHEN the KPI trend windows are computed
-- THEN the first order falls in the current 10-day window
-- AND the second order falls in the prior 10-day window
-- AND this result does not depend on the actual current date the test runs on
+- GIVEN gestor `g1` has two unpaid `entregado` orders with `deliveredAt` 3
+  and 9 days before `generatedAt` respectively
+- WHEN the "más atrasadas" list builds
+- THEN exactly one row for `g1` appears, using the 9-day order's data
 
-#### Scenario: Zero orders in the prior window yields an "up" trend, not a crash
+#### Scenario: A gestor with no overdue unpaid entregado orders is excluded from the list
 
-- GIVEN a KPI's prior-window value is `0`
-- AND its current-window value is `500`
-- WHEN the trend is computed
-- THEN the trend indicator is "up"
-- AND no `Infinity` or `NaN` value is rendered
+- GIVEN a gestor whose only pending-commission orders are in state
+  `verificado` or `transportando` (not yet `entregado`)
+- WHEN the "más atrasadas" list builds
+- THEN that gestor does not appear in the list
 
-### Requirement: Sales Trend Visual Spans the Last 20 Days With a Cantidad/Valor Toggle
+### Requirement: Capa 2 — Pedidos Demorados / Trabados
 
-Layer 2's sales-trend visual MUST aggregate qualifying orders
-(`state !== 'creado'`) by calendar day over the 20-day seed window ending at
-`generatedAt`, producing one data point per day (including days with zero
-qualifying orders, at value `0`). The visual MUST support toggling between
-two series without re-fetching or mutating `SeedState`: "cantidad" (count of
-qualifying orders per day) and "valor" (`Σ order.totalUSD` per day).
+Capa 2 MUST flag an order as **demorado** when it is in one of the 3
+non-completed states (`creado`, `verificado`, `transportando`) and its age
+in that current stage — measured from the timestamp it entered that stage
+(`createdAt` for `creado`, `verificado`Time for `verificado`,
+`transportingAt` for `transportando`) to `SeedState.generatedAt` — exceeds
+**the configured per-stage threshold** for that stage. `entregado` and
+`comision_pagada` orders MUST NOT be evaluated for this flag. The threshold
+values themselves are defined by `sdd-design`, not by this requirement.
 
-#### Scenario: A day with zero qualifying orders still appears as a zero point
+#### Scenario: An order older than its stage's configured threshold is flagged demorado
 
-- GIVEN the 20-day window contains one day with no `verificado`-or-later orders
-- WHEN the trend series is built
+- GIVEN an order in state `verificado` whose age since `verifiedAt` exceeds
+  the configured threshold for the `verificado` stage
+- WHEN Capa 2's demorado check runs
+- THEN that order is flagged as demorado
+
+#### Scenario: An order within its stage's configured threshold is not flagged
+
+- GIVEN an order in state `transportando` whose age since `transportingAt`
+  is below the configured threshold for the `transportando` stage
+- WHEN Capa 2's demorado check runs
+- THEN that order is not flagged as demorado
+
+#### Scenario: Completed orders are never evaluated
+
+- GIVEN an order in state `entregado` or `comision_pagada`, however old
+- WHEN Capa 2's demorado check runs
+- THEN that order is never flagged as demorado
+
+#### Scenario: Age anchors to generatedAt, not the wall clock
+
+- GIVEN `SeedState.generatedAt` is a fixed timestamp
+- WHEN any order's stage age is computed for the demorado check
+- THEN the computation uses `SeedState.generatedAt`
+- AND the result does not depend on the actual current date the test runs on
+
+### Requirement: Capa 3 — `[7d/30d]` Period Filter Anchored to generatedAt
+
+Capa 3 MUST expose a single period selector, `[7d/30d]`, shared across all 4
+of its blocks (entra-vs-sale, ciclo promedio, pedidos por día, pedidos
+completados por día). Each period window is `(generatedAt − N days,
+generatedAt]` where `N` is `7` or `30`, using `SeedState.generatedAt` —
+never `Date.now()`. Switching the selector MUST recompute all 4 Capa 3
+blocks together, without re-reading or mutating `SeedState`.
+
+#### Scenario: Switching the filter recomputes all 4 blocks together
+
+- GIVEN Capa 3 is showing the `7d` period
+- WHEN the user switches the filter to `30d`
+- THEN entra-vs-sale, ciclo promedio, pedidos por día, and pedidos
+  completados por día all recompute over the `30d` window
+- AND `SeedState` is not read again or mutated by the switch
+
+#### Scenario: The window anchors to generatedAt
+
+- GIVEN `SeedState.generatedAt` is a fixed timestamp
+- WHEN the `7d` window is computed
+- THEN it is `(generatedAt − 7 days, generatedAt]`
+- AND the result does not depend on the actual current date the test runs on
+
+### Requirement: Capa 3 — Entra vs. Sale (Período)
+
+Within the selected `[7d/30d]` period, this block MUST show **creados** —
+count of orders whose `createdAt` falls in the window — and **entregados** —
+count of orders whose `deliveredAt` falls in the window. When creados
+exceeds entregados, the block MUST surface a backlog signal (más entra de lo
+que sale).
+
+#### Scenario: Creados and entregados are counted independently within the window
+
+- GIVEN, within the selected `7d` window, 5 orders have `createdAt` in the
+  window and 3 orders have `deliveredAt` in the window
+- WHEN the block builds
+- THEN creados is `5` and entregados is `3`
+
+#### Scenario: A backlog signal appears when creados exceeds entregados
+
+- GIVEN creados is `5` and entregados is `3` in the selected period
+- WHEN the block renders
+- THEN a backlog indicator is shown
+
+### Requirement: Capa 3 — Ciclo Promedio (Creado → Entregado)
+
+Within the selected `[7d/30d]` period, this block MUST compute the average
+number of days between `createdAt` and `deliveredAt` across orders whose
+`deliveredAt` falls in the window, and MUST show a delta against the same
+average computed over the immediately preceding period of equal length
+(also anchored to `generatedAt`). Orders with no `deliveredAt` MUST NOT
+contribute to either window's average. When the prior window has zero
+qualifying orders, the delta MUST be a safe "flat"/neutral indicator, never
+`NaN` or `Infinity`.
+
+#### Scenario: Average cycle only includes orders delivered within the window
+
+- GIVEN, within the selected `7d` window, 2 orders delivered with cycle
+  times `3` and `5` days, and 1 order in state `transportando` (no
+  `deliveredAt`)
+- WHEN the block builds
+- THEN the average is `(3 + 5) / 2 = 4`
+- AND the `transportando` order does not contribute
+
+#### Scenario: Zero orders delivered in the prior window yields a safe delta
+
+- GIVEN the prior period has zero orders with `deliveredAt` in that window
+- WHEN the delta is computed
+- THEN the indicator is a safe "flat"/neutral value, never `NaN` or
+  `Infinity`
+
+### Requirement: Capa 3 — Pedidos por Día With a Nº/Valor Toggle
+
+Within the selected `[7d/30d]` period, this block MUST produce one data
+point per calendar day (including days with zero orders, at value `0`),
+grouping orders by `createdAt`. It MUST support toggling between two series
+without re-fetching or mutating `SeedState`: "Nº pedidos" (count of orders
+created that day) and "Valor de venta" (`Σ order.totalUSD` for orders
+created that day). It MUST also show the average per day for the period and
+a `Δ%` versus the same average in the immediately preceding period of equal
+length, guarded against divide-by-zero (prior average `0` with current `> 0`
+MUST show "up", never `Infinity`).
+
+#### Scenario: A day with zero orders still appears as a zero point
+
+- GIVEN the selected `7d` window contains one day with no orders created
+- WHEN the series builds
 - THEN that day appears in the series with value `0`, not omitted
 
-#### Scenario: Toggling between cantidad and valor changes the series without touching SeedState
+#### Scenario: Toggling between Nº and Valor changes the series without touching SeedState
 
-- GIVEN the trend visual is showing the "valor" series
-- WHEN the user toggles to "cantidad"
+- GIVEN the block is showing "Valor de venta"
+- WHEN the user toggles to "Nº pedidos"
 - THEN the rendered series switches to per-day order counts
 - AND `SeedState` is not read again or mutated by the toggle
 
-### Requirement: Pedidos por Etapa Is a Distribution Snapshot, Not a Conversion Funnel
+#### Scenario: Zero prior-period average yields a safe "up" delta
 
-Layer 2's "Pedidos por etapa" visual MUST count **every** order in
-`SeedState.orders` (including `state: 'creado'`) grouped into exactly one
-row per `OrderState`, in the fixed linear order
-`creado → verificado → transportando → entregado → comision_pagada`, even
-when a state has zero orders. The visual and any accompanying copy MUST NOT
-use conversion/funnel language (e.g. "% de conversión", "tasa de abandono");
-it MUST be labeled as a snapshot distribution of where orders currently sit.
+- GIVEN the prior period's average per day is `0` and the current period's
+  is `> 0`
+- WHEN `Δ%` is computed
+- THEN the indicator is "up", never `Infinity` or `NaN`
 
-#### Scenario: All five states appear even with zero orders in some states
+### Requirement: Capa 3 — Pedidos Completados por Día With Tasa de Completado
 
-- GIVEN `SeedState.orders` contains orders only in `creado` and `entregado`
-- WHEN the stage distribution is built
-- THEN it has exactly 5 entries, one per state in the fixed linear order
-- AND the `verificado`, `transportando`, and `comision_pagada` entries each show `count: 0`
+Within the selected `[7d/30d]` period, this block MUST produce one data
+point per calendar day (including days with zero completions, at value
+`0`), grouping orders by `deliveredAt`, with the same Nº/Valor toggle
+semantics as "Pedidos por día" (Nº = count of orders delivered that day,
+Valor = `Σ order.totalUSD` for orders delivered that day). It MUST also show
+**tasa de completado** = entregados en el período (count of orders with
+`deliveredAt` in the window) divided by total del período (count of orders
+with `createdAt` in the window, same denominator as "entra vs. sale"),
+guarded to `0` (never `NaN`/`Infinity`) when the denominator is `0`.
+
+#### Scenario: A day with zero completions still appears as a zero point
+
+- GIVEN the selected `30d` window contains one day with no orders delivered
+- WHEN the series builds
+- THEN that day appears in the series with value `0`, not omitted
+
+#### Scenario: Tasa de completado divides entregados by total del período
+
+- GIVEN, within the selected period, `8` orders were created and `6` were
+  delivered
+- WHEN tasa de completado is computed
+- THEN it is `6 / 8 = 75%`
+
+#### Scenario: Zero orders created in the period yields a safe tasa de completado
+
+- GIVEN zero orders have `createdAt` in the selected period
+- WHEN tasa de completado is computed
+- THEN it is `0`, never `NaN` or `Infinity`
 
 ### Requirement: Ventas por Almacén Aggregates Revenue by Warehouse
 
-Layer 2's "Ventas por almacén" visual MUST group qualifying orders
-(`state !== 'creado'`) by `order.warehouseId`, producing one bar per
-`SeedState.warehouse` (in `state.warehouses` order) with `revenueUSD`
-(`Σ order.totalUSD`) and `count`. A warehouse with zero qualifying orders
-MUST still appear with `revenueUSD: 0` and `count: 0`, not be omitted.
+Análisis's "Ventas por almacén" block MUST group qualifying orders
+(`state !== 'creado'`) whose `createdAt` falls within the selected
+`[7d/30d]` period (anchored to `SeedState.generatedAt`) by
+`order.warehouseId`, producing one bar per `SeedState.warehouse` (in
+`state.warehouses` order) with `revenueUSD` (`Σ order.totalUSD`) and
+`count`. A warehouse with zero qualifying orders in the selected period MUST
+still appear with `revenueUSD: 0` and `count: 0`, not be omitted. The
+underlying aggregation formula is unchanged; only the qualifying order set is
+now pre-filtered by the selected period before aggregation.
+(Previously: no period filter — aggregated over all qualifying orders
+regardless of date.)
 
-#### Scenario: Every seeded warehouse appears, including one with zero sales
+#### Scenario: Every seeded warehouse appears, including one with zero sales in the selected period
 
-- GIVEN `SeedState.warehouses` has 3 warehouses and qualifying orders exist for only 2 of them
-- WHEN the by-warehouse aggregation is built
+- GIVEN `SeedState.warehouses` has 3 warehouses and, within the selected
+  `7d` window, qualifying orders exist for only 2 of them
+- WHEN the by-warehouse aggregation is built for `7d`
 - THEN all 3 warehouses appear
-- AND the warehouse with no qualifying orders shows `revenueUSD: 0` and `count: 0`
+- AND the warehouse with no qualifying orders in that window shows
+  `revenueUSD: 0` and `count: 0`
+
+#### Scenario: Switching the period filter changes the aggregation without touching SeedState
+
+- GIVEN the block is showing the `7d` period
+- WHEN the user switches the filter to `30d`
+- THEN the rendered bars recompute over the `30d` qualifying order set
+- AND `SeedState` is not read again or mutated by the switch
 
 ### Requirement: Mix por Moneda Aggregates Orders by Payment Method
 
-Layer 2's "Mix por moneda / método de pago" visual MUST group qualifying
-orders (`state !== 'creado'`) by `order.payment.method`, producing one
-bucket per distinct method present in the data (at minimum USD, MN, ZELLE,
-EUR when present) with `count` and `revenueUSD` (`Σ order.totalUSD`), plus
-each bucket's percentage share of the total qualifying order count. A
+Análisis's "Mix por moneda / método de pago" block MUST group qualifying
+orders (`state !== 'creado'`) whose `createdAt` falls within the selected
+`[7d/30d]` period (anchored to `SeedState.generatedAt`) by
+`order.payment.method`, producing one bucket per distinct method present in
+that period's data (at minimum USD, MN, ZELLE, EUR when present) with
+`count` and `revenueUSD` (`Σ order.totalUSD`), plus each bucket's percentage
+share of the total qualifying order count for that period. A
 `payment.method` value that does not match any known bucket MUST be grouped
 into an explicit "otros" bucket rather than thrown away or crashing the
-aggregation.
+aggregation. The underlying aggregation formula is unchanged; only the
+qualifying order set is now pre-filtered by the selected period.
+(Previously: no period filter — aggregated over all qualifying orders
+regardless of date.)
 
-#### Scenario: Four seeded payment methods produce four buckets with correct shares
+#### Scenario: Four seeded payment methods produce four buckets with correct shares within the selected period
 
-- GIVEN 10 qualifying orders: 4 `USD`, 3 `MN`, 2 `ZELLE`, 1 `EUR`
-- WHEN the currency mix is built
+- GIVEN, within the selected `30d` window, 10 qualifying orders: 4 `USD`, 3
+  `MN`, 2 `ZELLE`, 1 `EUR`
+- WHEN the currency mix is built for `30d`
 - THEN there are 4 buckets with `count` `4`, `3`, `2`, `1` respectively
 - AND the `USD` bucket's share is `40%`
 
 #### Scenario: An unrecognized payment method does not crash the aggregation
 
-- GIVEN a qualifying order with `payment.method: 'CRYPTO'` (not one of the known buckets)
+- GIVEN a qualifying order within the selected period with
+  `payment.method: 'CRYPTO'` (not one of the known buckets)
 - WHEN the currency mix is built
 - THEN that order is counted in an "otros" bucket
 - AND the aggregation does not throw
 
 ### Requirement: Ranking de Gestores Computes Sales, AOV, and Commission Earned/Pending
 
-Layer 3's gestor ranking MUST produce one row per `SeedState.gestores`
-entry, computed from that gestor's qualifying orders (`state !== 'creado'`
-AND `order.gestorId` matches), with: `revenueUSD` (`Σ totalUSD`), `count`,
-`aov` (`revenueUSD / count`, or `0` when `count` is `0`), `commissionEarnedMN`
-(`Σ commissionMN` across all qualifying orders for that gestor — commission
-is frozen/earned at verification regardless of payment status), and
-`commissionPendingMN` (`Σ commissionMN` restricted to orders where `state`
-is `verificado`, `transportando`, or `entregado` AND `commissionPaidAt` is
-not set — same pending definition as `buildFinanceSummary`). Rows MUST be
-sorted by `revenueUSD` descending. A gestor with zero qualifying orders MUST
-still appear with all values at `0`, not be omitted.
+`buildGestorRanking` MUST produce one row per `SeedState.gestores` entry,
+computed from that gestor's qualifying orders (`state !== 'creado'` AND
+`order.gestorId` matches) within the order set it is given, with:
+`revenueUSD` (`Σ totalUSD`), `count`, `aov` (`revenueUSD / count`, or `0`
+when `count` is `0`), `commissionEarnedMN` (`Σ commissionMN` across all
+qualifying orders in the set), and `commissionPendingMN` (`Σ commissionMN`
+restricted to orders where `state` is `verificado`, `transportando`, or
+`entregado` AND `commissionPaidAt` is not set). Rows MUST be sorted by
+`revenueUSD` descending. A gestor with zero qualifying orders in the set
+MUST still appear with all values at `0`, not be omitted. The aggregation
+formula itself is unchanged.
 
-#### Scenario: A gestor's row aggregates only their own orders
+Análisis's "Ranking de gestores" block on `/decisiones` MUST offer a period
+selector `[7d/30d/General]` (General = unfiltered, matching prior behavior);
+the caller MUST pre-filter the qualifying order set by `createdAt` falling
+within the selected period (anchored to `SeedState.generatedAt`) — or pass
+the full qualifying order set for General — before calling
+`buildGestorRanking`. Finanzas' own invocation of `buildGestorRanking`
+continues over its own unfiltered qualifying order set and is unaffected by
+this change (out of scope here).
+(Previously: Decisiones' gestor ranking had no period selector — always
+equivalent to today's "General".)
 
-- GIVEN gestor `g1` has one `verificado` order with `totalUSD: 400`, `commissionMN: 800`, no `commissionPaidAt`
-- AND gestor `g2` has one `comision_pagada` order with `totalUSD: 600`, `commissionMN: 1200`
-- WHEN the gestor ranking is built
-- THEN `g1`'s row shows `revenueUSD: 400`, `count: 1`, `aov: 400`, `commissionEarnedMN: 800`, `commissionPendingMN: 800`
-- AND `g2`'s row shows `revenueUSD: 600`, `commissionEarnedMN: 1200`, `commissionPendingMN: 0`
+#### Scenario: A gestor's row aggregates only their own orders within the selected period
 
-#### Scenario: A gestor with no qualifying orders still appears with zero values
+- GIVEN, within the selected `7d` window, gestor `g1` has one `verificado`
+  order with `totalUSD: 400`, `commissionMN: 800`, no `commissionPaidAt`
+- AND gestor `g2` has one `comision_pagada` order with `totalUSD: 600`,
+  `commissionMN: 1200` in that same window
+- WHEN the gestor ranking is built for `7d`
+- THEN `g1`'s row shows `revenueUSD: 400`, `count: 1`, `aov: 400`,
+  `commissionEarnedMN: 800`, `commissionPendingMN: 800`
+- AND `g2`'s row shows `revenueUSD: 600`, `commissionEarnedMN: 1200`,
+  `commissionPendingMN: 0`
 
-- GIVEN a gestor in `SeedState.gestores` with no orders assigned
-- WHEN the gestor ranking is built
-- THEN that gestor's row appears with `revenueUSD: 0`, `count: 0`, `aov: 0`, `commissionEarnedMN: 0`, `commissionPendingMN: 0`
+#### Scenario: General matches the unfiltered aggregation
+
+- GIVEN a full set of qualifying orders across dates
+- WHEN the gestor ranking is built with the period selector set to
+  `General`
+- THEN every qualifying order contributes, regardless of `createdAt`
+
+#### Scenario: A gestor with no qualifying orders in the selected period still appears with zero values
+
+- GIVEN a gestor in `SeedState.gestores` with no orders `createdAt` falling
+  in the selected period
+- WHEN the gestor ranking is built for that period
+- THEN that gestor's row appears with `revenueUSD: 0`, `count: 0`, `aov: 0`,
+  `commissionEarnedMN: 0`, `commissionPendingMN: 0`
 
 ### Requirement: Alertas de Inventario Flags Low and Out-of-Stock Products per Warehouse
 
@@ -1084,20 +1326,41 @@ rows, totals) MUST render through `formatMoney`, matching
 
 ### Requirement: Empty State When No Verificado-or-Later Orders Exist
 
-When zero orders qualify (only `creado` orders exist in `SeedState.orders`),
-the route MUST still render exactly one `<h1>` plus a clear empty-state
-message, and MUST NOT render fabricated zero-value KPI tiles, visuals, or
-actionable blocks in place of real data. The "Pedidos por etapa" distribution
-is exempt from this empty state — it MAY still render because it counts
-`creado` orders too (see the stage-distribution requirement below) and can
-legitimately show a single non-empty bar.
+When `SeedState.orders` contains no order in state `verificado` or later,
+Capa 1.3 (Comisiones por pagar), Capa 3 (all 4 blocks), and the Análisis
+section MUST render an empty-state message instead of fabricated zero-value
+figures. Capa 1.1 (Pedidos activos por estado y almacén) is exempt from this
+empty state because it counts `creado` orders too and can legitimately show
+real (non-fabricated) bars. Capa 1.2 (Transportistas) and Capa 2's stock
+crítico are also exempt because they derive from `SeedState.transportistas`
+and `SeedState.inventory`, not from verificado-or-later orders. The route
+MUST still render exactly one `<h1>` in every case.
+(Previously: exemption applied only to the "Pedidos por etapa" distribution
+chart, which no longer exists on `/decisiones`.)
 
-#### Scenario: Zero qualifying orders shows an empty-state message
+#### Scenario: Zero verificado-or-later orders shows an empty-state message on the affected blocks
 
 - GIVEN `SeedState.orders` contains only orders in state `creado`
 - WHEN the app navigates to `/decisiones`
 - THEN the single `<h1>` is still rendered
-- AND an empty-state message is shown instead of the KPI header and the sales/margin/ranking blocks
+- AND Capa 1.1 (pedidos activos por estado y almacén) still renders real
+  `creado`-order bars, not an empty-state message
+- AND Capa 1.3, Capa 3, and the Análisis section each render an empty-state
+  message instead of fabricated figures
+
+### Requirement: No Margin or AOV Block Renders on Decisiones
+
+`/decisiones` MUST NOT render "Top productos por margen", "Pedidos de menor
+margen", or any AOV/"ticket promedio" tile or block, in any layer or in the
+Análisis section. These reads are Finanzas-exclusive per `salesops-13`
+(archived 2026-07-15).
+
+#### Scenario: No banned block renders anywhere on the page
+
+- GIVEN `/decisiones` is fully rendered with any mix of order states
+- WHEN the rendered output is inspected for block/tile titles
+- THEN none of "Top productos por margen", "Pedidos de menor margen", or an
+  AOV/"ticket promedio" figure is present
 
 ### Requirement: Finanzas Route Renders the Three-Layer Finance Dashboard
 
