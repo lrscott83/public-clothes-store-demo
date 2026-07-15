@@ -65,16 +65,16 @@ Chain strategy: pending
 
 ## Phase 3: Capa 3 — Comportamiento en el Tiempo (PR4 + PR5)
 
-- [ ] 3.1 RED: test `PeriodFilter` component — `[7d/30d]` toggle, calls `onChange`.
-- [ ] 3.2 GREEN: create `components/decisiones/period-filter.tsx`.
-- [ ] 3.3 RED: test `buildEntraVsSale` — creados/entregados counts in window, backlog signal (spec: Entra vs. Sale).
-- [ ] 3.4 GREEN: implement `buildEntraVsSale`.
-- [ ] 3.5 RED: test `EntraVsSale` component.
-- [ ] 3.6 GREEN: create `components/decisiones/entra-vs-sale.tsx`.
-- [ ] 3.7 RED: test `buildCicloPromedio` — avg cycle days, Δ vs prior window, ÷0-safe (spec: Ciclo Promedio).
-- [ ] 3.8 GREEN: implement `buildCicloPromedio`.
-- [ ] 3.9 RED: test `CicloPromedio` component.
-- [ ] 3.10 GREEN: create `components/decisiones/ciclo-promedio.tsx`.
+- [x] 3.1 RED: test `PeriodFilter` component — `[7d/30d]` toggle, calls `onChange`.
+- [x] 3.2 GREEN: create `components/decisiones/period-filter.tsx`.
+- [x] 3.3 RED: test `buildEntraVsSale` — creados/entregados counts in window, backlog signal (spec: Entra vs. Sale).
+- [x] 3.4 GREEN: implement `buildEntraVsSale`.
+- [x] 3.5 RED: test `EntraVsSale` component.
+- [x] 3.6 GREEN: create `components/decisiones/entra-vs-sale.tsx`.
+- [x] 3.7 RED: test `buildCicloPromedio` — avg cycle days, Δ vs prior window, ÷0-safe (spec: Ciclo Promedio).
+- [x] 3.8 GREEN: implement `buildCicloPromedio`.
+- [x] 3.9 RED: test `CicloPromedio` component.
+- [x] 3.10 GREEN: create `components/decisiones/ciclo-promedio.tsx`.
 - [ ] 3.11 RED: test `buildPedidosPorDia` — zero-padded days, avg + `Δ%`, 0-prior → "up" guard (spec: Pedidos por Día).
 - [ ] 3.12 GREEN: implement `buildPedidosPorDia`.
 - [ ] 3.13 RED: test `PedidosPorDia` component — Nº/valor toggle (local state).

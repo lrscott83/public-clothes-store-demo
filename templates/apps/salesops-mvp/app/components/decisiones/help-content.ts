@@ -30,6 +30,16 @@ export const DECISIONES_HELP = {
     text: 'Pedidos parados más tiempo del normal en su etapa actual (creado, verificado o en camino). Cada uno es una entrega frenada: revisalos hoy antes de que se conviertan en un reclamo.',
   },
 
+  // --- Capa 3 — Comportamiento en el tiempo ---
+  entraVsSale: {
+    title: 'Entra vs. sale',
+    text: 'Cuántos pedidos entraron (se crearon) contra cuántos salieron (se entregaron) en el período elegido. Si entra más de lo que sale, se te está acumulando trabajo pendiente.',
+  },
+  cicloPromedio: {
+    title: 'Ciclo promedio',
+    text: 'Cuántos días tarda en promedio un pedido desde que se crea hasta que se entrega. La flecha compara contra el período anterior: si sube, tus entregas se están volviendo más lentas.',
+  },
+
   // --- KPI header (Layer 1) ---
   ventas: {
     title: 'Ventas',

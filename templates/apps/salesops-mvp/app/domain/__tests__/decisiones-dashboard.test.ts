@@ -3,9 +3,11 @@ import {
   ACTIVE_STATES,
   STAGE_DELAY_THRESHOLD_DAYS,
   buildActiveOrdersByStateAndWarehouse,
+  buildCicloPromedio,
   buildComisionesPorPagar,
   buildCurrencyMix,
   buildDecisionesDashboard,
+  buildEntraVsSale,
   buildGestorRanking,
   buildInventoryAlerts,
   buildKpiHeader,
@@ -798,6 +800,106 @@ describe('buildPedidosDemorados', () => {
     const view = buildPedidosDemorados(state);
 
     expect(view.rows.map((r) => r.orderId)).toEqual(['o2', 'o1']);
+  });
+});
+
+describe('buildEntraVsSale', () => {
+  it('counts creados and entregados independently within the window', () => {
+    const created = [1, 2, 3, 4, 5].map((n) =>
+      buildOrder({ id: `c${n}`, state: 'verificado', createdAt: daysBefore(n) }),
+    );
+    const delivered = [1, 2, 3].map((n) =>
+      buildOrder({
+        id: `d${n}`,
+        state: 'entregado',
+        createdAt: daysBefore(20),
+        deliveredAt: daysBefore(n),
+      }),
+    );
+    const state = buildState({ orders: [...created, ...delivered] });
+
+    const view = buildEntraVsSale(state, 7);
+
+    expect(view.creados).toBe(5);
+    expect(view.entregados).toBe(3);
+  });
+
+  it('surfaces a backlog signal (positive backlogDelta) when creados exceeds entregados', () => {
+    const created = [1, 2, 3, 4, 5].map((n) =>
+      buildOrder({ id: `c${n}`, state: 'verificado', createdAt: daysBefore(n) }),
+    );
+    const delivered = [1, 2, 3].map((n) =>
+      buildOrder({
+        id: `d${n}`,
+        state: 'entregado',
+        createdAt: daysBefore(20),
+        deliveredAt: daysBefore(n),
+      }),
+    );
+    const state = buildState({ orders: [...created, ...delivered] });
+
+    const view = buildEntraVsSale(state, 7);
+
+    expect(view.backlogDelta).toBe(2);
+    expect(view.backlogDelta).toBeGreaterThan(0);
+  });
+
+  it('anchors the window to generatedAt, not the wall-clock date', () => {
+    const oldGeneratedAt = '2020-01-10T12:00:00.000Z';
+    const createdAt = new Date(new Date(oldGeneratedAt).getTime() - 3 * DAY_MS).toISOString();
+    const state = buildState({
+      generatedAt: oldGeneratedAt,
+      orders: [buildOrder({ id: 'o1', createdAt })],
+    });
+
+    const view = buildEntraVsSale(state, 7);
+
+    expect(view.creados).toBe(1);
+  });
+});
+
+describe('buildCicloPromedio', () => {
+  it('averages cycle days only across orders delivered within the window', () => {
+    const orders = [
+      buildOrder({ id: 'o1', state: 'entregado', createdAt: daysBefore(5), deliveredAt: daysBefore(2) }), // 3 days
+      buildOrder({ id: 'o2', state: 'entregado', createdAt: daysBefore(6), deliveredAt: daysBefore(1) }), // 5 days
+      buildOrder({ id: 'o3', state: 'transportando', createdAt: daysBefore(3), deliveredAt: undefined }),
+    ];
+    const state = buildState({ orders });
+
+    const view = buildCicloPromedio(state, 7);
+
+    expect(view.currentAvgDays).toBe(4);
+    expect(view.count).toBe(2);
+  });
+
+  it('computes deltaDays against the immediately preceding window of equal length', () => {
+    const orders = [
+      buildOrder({ id: 'o1', state: 'entregado', createdAt: daysBefore(5), deliveredAt: daysBefore(2) }), // 3 days
+      buildOrder({ id: 'o2', state: 'entregado', createdAt: daysBefore(6), deliveredAt: daysBefore(1) }), // 5 days
+      // prior window [7,14): one order, cycle = 6 days
+      buildOrder({ id: 'o3', state: 'entregado', createdAt: daysBefore(16), deliveredAt: daysBefore(10) }),
+    ];
+    const state = buildState({ orders });
+
+    const view = buildCicloPromedio(state, 7);
+
+    expect(view.currentAvgDays).toBe(4);
+    expect(view.priorAvgDays).toBe(6);
+    expect(view.deltaDays).toBe(-2);
+  });
+
+  it('yields a safe (never NaN/Infinity) delta when the prior window has zero delivered orders', () => {
+    const orders = [
+      buildOrder({ id: 'o1', state: 'entregado', createdAt: daysBefore(5), deliveredAt: daysBefore(2) }),
+    ];
+    const state = buildState({ orders });
+
+    const view = buildCicloPromedio(state, 7);
+
+    expect(Number.isFinite(view.deltaDays)).toBe(true);
+    expect(view.priorAvgDays).toBe(0);
+    expect(view.deltaDays).toBe(0);
   });
 });
 

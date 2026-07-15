@@ -149,7 +149,7 @@ None.
 - `vitest run` (full suite, all 73 files): **503/503 passed**
 - `react-router typegen && tsc`: **exit 0, no errors**
 
-### Remaining Tasks (next batches)
+### Remaining Tasks (after Batch 3)
 
 - [ ] Phase 3: Capa 3 — Comportamiento en el Tiempo (tasks 3.1–3.18) — PR4/PR5
 - [ ] Phase 4: Análisis + Route Recomposition + Cleanup (tasks 4.1–4.10) — PR6/PR7/PR8
@@ -161,3 +161,74 @@ None.
 - Boundary: starts from the committed Batch 2 tree on `salesops-mvp`; ends with `buildComisionesPorPagar`/`ComisionesPorPagar` and `buildPedidosDemorados`/`PedidosDemorados` implemented, tested, and typechecked, plus confirmation that `buildInventoryAlerts`/`InventoryAlerts` need no change — no consumers wired yet (route recomposition is Phase 4/PR7, not touched this batch)
 - Estimated review budget impact: 499 changed lines (8 files: 1 domain module, 1 domain test file, 2 new leaf components, 2 new component test files, help-content, tasks.md) — above the tasks.md PR3 estimate (~380) and the 400-line guard budget, but within the `size:exception` explicitly authorized by the orchestrator for this batch (see delivery context above)
 - Commit: `3fd7f1b`, on the current branch, not pushed
+
+---
+
+## Batch 4 (this batch) — Phase 3: Capa 3a (PR4)
+
+**Mode**: Strict TDD (RED → GREEN, verified per task)
+**Delivery**: Single PR, `size:exception`, on current branch `salesops-mvp`, committed, not pushed.
+**Scope**: ONLY Capa 3a — `buildEntraVsSale` + `EntraVsSale`, `buildCicloPromedio` + `CicloPromedio`, and the shared `period-filter.tsx` `[7d/30d]` toggle. Capa 3b (pedidos/día, completados/día — PR5), Análisis, and route recomposition (PR7) are explicitly out of scope for this batch — not implemented, not wired.
+
+### Completed Tasks
+
+- [x] 3.1 RED: test `PeriodFilter` component — `[7d/30d]` toggle, calls `onChange`
+- [x] 3.2 GREEN: create `components/decisiones/period-filter.tsx`
+- [x] 3.3 RED: test `buildEntraVsSale` — creados/entregados counts in window, backlog signal
+- [x] 3.4 GREEN: implement `buildEntraVsSale`
+- [x] 3.5 RED: test `EntraVsSale` component
+- [x] 3.6 GREEN: create `components/decisiones/entra-vs-sale.tsx`
+- [x] 3.7 RED: test `buildCicloPromedio` — avg cycle days, Δ vs prior window, ÷0-safe
+- [x] 3.8 GREEN: implement `buildCicloPromedio`
+- [x] 3.9 RED: test `CicloPromedio` component
+- [x] 3.10 GREEN: create `components/decisiones/ciclo-promedio.tsx`
+
+### TDD Cycle Evidence
+
+| Task | RED (test written, confirmed failing) | GREEN (implementation, confirmed passing) | REFACTOR |
+|------|------|------|------|
+| 3.3/3.4 `buildEntraVsSale` | Added 3 tests to `decisiones-dashboard.test.ts` (independent creados/entregados counts within the window, backlog signal when creados > entregados, anchored to `generatedAt`); ran `vitest run app/domain/__tests__/decisiones-dashboard.test.ts` — 6 failed (`is not a function`, includes 3 tests for the next task in the same run) | Implemented `buildEntraVsSale` reusing the same `[anchor-Nd, anchor)` window math as `splitByPeriodDays` (new private `inCurrentWindow`/`inPriorWindow` helpers, module-local, DRY within the file); re-ran — 51/51 passed | None needed |
+| 3.7/3.8 `buildCicloPromedio` | Added 3 tests (avg cycle only counts delivered-in-window orders + excludes no-`deliveredAt` orders, `deltaDays` vs prior window of equal length, zero-prior-window safe delta — asserts `Number.isFinite` and exact `0`); ran — 3 failed (`is not a function`) | Implemented `buildCicloPromedio`; `deltaDays` is forced to `0` (not merely "technically finite") when the prior window has zero delivered orders, per design's "safe flat/neutral, never NaN/Infinity" requirement and the orchestrator's "mirroring existing KPI-trend pattern" guidance — mirrors `computeDelta`'s prior-is-zero guard from `period-trend.ts` but returns `0` (numeric, matches `deltaDays: number` in design's locked interface) instead of `null`; re-ran — 51/51 passed | None needed |
+| 3.1/3.2 `PeriodFilter` | Created `period-filter.test.tsx` (4 tests: both options render, click 30d/7d calls `onChange` with the right value, `aria-pressed` reflects current value); ran — failed with module-resolution error | Created `period-filter.tsx` — controlled component (`value`/`onChange` props, no local `useState`), since `windowDays` is owned by the route per design (`useState<WindowDays>(7)`), shared across all 4 Capa 3 blocks; styled like the existing `Valor`/`Cantidad` toggle in `sales-trend-section.tsx`; re-ran — 4/4 passed | None needed |
+| 3.5/3.6 `EntraVsSale` | Created `entra-vs-sale.test.tsx` (4 tests: renders both counts, shows backlog signal when `backlogDelta > 0`, hides it otherwise, no "decisiones" in heading); ran — failed with module-resolution error | Created `entra-vs-sale.tsx`; re-ran — 4/4 passed | None needed |
+| 3.9/3.10 `CicloPromedio` | Created `ciclo-promedio.test.tsx` (4 tests: renders current avg, shows down-trend arrow for negative `deltaDays`, shows flat/no-arrow for `deltaDays: 0`, no "decisiones" in heading); ran — failed with module-resolution error | Created `ciclo-promedio.tsx` — does NOT reuse `StatTile` (its `delta` prop expects a fractional/percentage change; `CicloPromedioView.deltaDays` is an absolute day count, a different unit) — self-contained layout with its own up/down/flat arrow logic (`isUp`/`isDown` derived from `deltaDays` sign; rising cycle time is "bad" so the arrow color flips: up=red/danger, down=green/success); re-ran — 4/4 passed | None needed |
+
+### Files Changed (Batch 4)
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `templates/apps/salesops-mvp/app/domain/decisiones-dashboard.ts` | Modified | Added private `inCurrentWindow`/`inPriorWindow` window helpers, `EntraVsSaleView`/`buildEntraVsSale`, `CicloPromedioView`/`buildCicloPromedio` — new section between `buildPedidosDemorados` and the orchestrator. No existing export modified, orchestrator untouched (route wiring is PR7). |
+| `templates/apps/salesops-mvp/app/domain/__tests__/decisiones-dashboard.test.ts` | Modified | Added `describe('buildEntraVsSale', ...)` (3 tests) and `describe('buildCicloPromedio', ...)` (3 tests) |
+| `templates/apps/salesops-mvp/app/components/decisiones/period-filter.tsx` | Created | Capa 3 shared leaf — controlled `[7d/30d]` toggle (`value`/`onChange`), no local state |
+| `templates/apps/salesops-mvp/app/components/decisiones/__tests__/period-filter.test.tsx` | Created | 4 tests |
+| `templates/apps/salesops-mvp/app/components/decisiones/entra-vs-sale.tsx` | Created | Capa 3a leaf — creados/entregados side by side + backlog signal text |
+| `templates/apps/salesops-mvp/app/components/decisiones/__tests__/entra-vs-sale.test.tsx` | Created | 4 tests |
+| `templates/apps/salesops-mvp/app/components/decisiones/ciclo-promedio.tsx` | Created | Capa 3a leaf — current avg cycle days + trend arrow vs. prior window |
+| `templates/apps/salesops-mvp/app/components/decisiones/__tests__/ciclo-promedio.test.tsx` | Created | 4 tests |
+| `templates/apps/salesops-mvp/app/components/decisiones/help-content.ts` | Modified | Added `DECISIONES_HELP.entraVsSale` and `DECISIONES_HELP.cicloPromedio` entries — additive, old KPI/trend entries untouched (removal is Phase 4 task 4.7) |
+| `openspec/changes/salesops-14-decisiones-operativo/tasks.md` | Modified | Checked off tasks 3.1–3.10 |
+
+### Deviations from Design
+
+None — implementation matches design.md's Capa 3a interface contracts exactly (`EntraVsSaleView`/`buildEntraVsSale`, `CicloPromedioView`/`buildCicloPromedio`, field names and semantics). One design ambiguity resolved: design's `CicloPromedioView.deltaDays` is typed `number` (not `number | null`) unlike `KpiTrend.delta` (`number | null`) in `period-trend.ts` — this batch interprets the "safe flat/neutral" requirement as `deltaDays = 0` when the prior window has zero delivered orders (rather than leaking `currentAvgDays - 0` as a misleading delta against an empty baseline), consistent with the orchestrator's explicit "mirroring existing KPI-trend pattern" instruction for this batch.
+
+### Issues Found
+
+None.
+
+### Full Suite / Typecheck Confirmation (Batch 4)
+
+- `vitest run` (full suite, all 76 files): **521/521 passed**
+- `react-router typegen && tsc`: **exit 0, no errors**
+
+### Remaining Tasks (next batches)
+
+- [ ] Phase 3: Capa 3b — Pedidos por Día + Completados por Día (tasks 3.11–3.18) — PR5
+- [ ] Phase 4: Análisis + Route Recomposition + Cleanup (tasks 4.1–4.10) — PR6/PR7/PR8
+
+### Workload / PR Boundary (Batch 4)
+
+- Mode: single PR, `size:exception` (explicitly authorized by the orchestrator for this batch)
+- Current work unit: Unit 4 (Capa 3a, PR4 per tasks.md's Suggested Work Units table)
+- Boundary: starts from the committed Batch 3 tree on `salesops-mvp`; ends with `buildEntraVsSale`/`EntraVsSale`, `buildCicloPromedio`/`CicloPromedio`, and `period-filter.tsx` implemented, tested, and typechecked — no consumers wired yet (route recomposition is Phase 4/PR7, not touched this batch; Capa 3b's `pedidos-por-dia`/`completados-por-dia` share the `PerDayPoint`/toggle pattern and are PR5, not touched this batch)
+- Estimated review budget impact: ~10 files changed (1 domain module, 1 domain test file, 3 new leaf components, 3 new component test files, help-content, tasks.md) — within the tasks.md PR4 estimate (~350 lines)

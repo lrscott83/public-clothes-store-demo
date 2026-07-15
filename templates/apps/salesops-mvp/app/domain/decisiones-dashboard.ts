@@ -614,6 +614,98 @@ export function buildPedidosDemorados(state: SeedState): PedidosDemoradosView {
   return { rows };
 }
 
+// ---- Capa 3 window helpers -------------------------------------------------------------
+
+/** `true` when `ms` falls in the current `[anchor-Nd, anchor)` window — mirrors `splitByPeriodDays`. */
+function inCurrentWindow(ms: number, anchorMs: number, days: number): boolean {
+  const diff = anchorMs - ms;
+  return diff >= 0 && diff < days * DAY_MS;
+}
+
+/** `true` when `ms` falls in the immediately preceding `[anchor-2Nd, anchor-Nd)` window. */
+function inPriorWindow(ms: number, anchorMs: number, days: number): boolean {
+  const diff = anchorMs - ms;
+  return diff >= days * DAY_MS && diff < 2 * days * DAY_MS;
+}
+
+// ---- Capa 3: entra vs. sale --------------------------------------------------------------
+
+export interface EntraVsSaleView {
+  windowDays: number;
+  creados: number;
+  entregados: number;
+  /** creados - entregados; positive means backlog is growing. */
+  backlogDelta: number;
+}
+
+/**
+ * Capa 3 — "Entra vs. sale": within `[anchor-Nd, anchor)`, `creados` counts
+ * orders by `createdAt` and `entregados` counts orders by `deliveredAt` —
+ * two independent counts over the SAME window, not a funnel. When creados
+ * exceeds entregados the caller renders a backlog signal.
+ */
+export function buildEntraVsSale(state: SeedState, windowDays: number): EntraVsSaleView {
+  const anchorMs = new Date(state.generatedAt).getTime();
+
+  const creados = state.orders.filter((order) =>
+    inCurrentWindow(new Date(order.createdAt).getTime(), anchorMs, windowDays),
+  ).length;
+
+  const entregados = state.orders.filter(
+    (order) => order.deliveredAt && inCurrentWindow(new Date(order.deliveredAt).getTime(), anchorMs, windowDays),
+  ).length;
+
+  return { windowDays, creados, entregados, backlogDelta: creados - entregados };
+}
+
+// ---- Capa 3: ciclo promedio (creado -> entregado) -----------------------------------------
+
+export interface CicloPromedioView {
+  windowDays: number;
+  currentAvgDays: number;
+  priorAvgDays: number;
+  /** currentAvgDays - priorAvgDays; forced to 0 (safe/flat) when the prior window has zero delivered orders. */
+  deltaDays: number;
+  /** Number of orders contributing to currentAvgDays. */
+  count: number;
+}
+
+/**
+ * Capa 3 — "Ciclo promedio (creado → entregado)": average of
+ * `(deliveredAt - createdAt)` in days across orders whose `deliveredAt`
+ * falls in the current `[anchor-Nd, anchor)` window, plus the same average
+ * over the immediately preceding window of equal length. Orders with no
+ * `deliveredAt` never contribute to either average. When the prior window
+ * has zero delivered orders, `deltaDays` is forced to 0 (safe/flat) instead
+ * of leaking a misleading delta against an empty baseline.
+ */
+export function buildCicloPromedio(state: SeedState, windowDays: number): CicloPromedioView {
+  const anchorMs = new Date(state.generatedAt).getTime();
+
+  const currentCycles: number[] = [];
+  const priorCycles: number[] = [];
+
+  for (const order of state.orders) {
+    if (!order.deliveredAt) continue;
+    const deliveredMs = new Date(order.deliveredAt).getTime();
+    const cycleDays = (deliveredMs - new Date(order.createdAt).getTime()) / DAY_MS;
+
+    if (inCurrentWindow(deliveredMs, anchorMs, windowDays)) {
+      currentCycles.push(cycleDays);
+    } else if (inPriorWindow(deliveredMs, anchorMs, windowDays)) {
+      priorCycles.push(cycleDays);
+    }
+  }
+
+  const count = currentCycles.length;
+  const currentAvgDays = count > 0 ? currentCycles.reduce((sum, days) => sum + days, 0) / count : 0;
+  const priorAvgDays =
+    priorCycles.length > 0 ? priorCycles.reduce((sum, days) => sum + days, 0) / priorCycles.length : 0;
+  const deltaDays = priorCycles.length > 0 ? currentAvgDays - priorAvgDays : 0;
+
+  return { windowDays, currentAvgDays, priorAvgDays, deltaDays, count };
+}
+
 // ---- orchestrator ----------------------------------------------------------------------
 
 export interface DashboardView {
