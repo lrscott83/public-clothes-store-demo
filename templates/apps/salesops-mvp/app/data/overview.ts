@@ -61,7 +61,8 @@ export const TOUR: TourStep[] = [
     n: '02',
     label: 'Decisiones',
     question: '¿Y ahora qué hago?',
-    summary: 'Qué gestor rinde, qué producto deja margen y dónde se te va el dinero.',
+    summary:
+      'Qué pasa HOY: pedidos activos por estado y almacén, transportistas libres, comisiones atrasadas y qué entregas están frenadas.',
     path: '/decisiones',
     icon: BarChart3,
   },
@@ -109,7 +110,8 @@ export const VIEWS: ViewSummary[] = [
   },
   {
     label: 'Decisiones',
-    summary: 'Qué gestor, producto o almacén te hace ganar o perder dinero.',
+    summary:
+      'El pulso del día: pedidos activos, cuellos de botella y qué atender ya — más cómo venís en la semana.',
     path: '/decisiones',
     icon: BarChart3,
   },

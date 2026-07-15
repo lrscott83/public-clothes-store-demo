@@ -12,11 +12,11 @@
 ## Separación de responsabilidades: Decisiones vs Finanzas
 
 La regla de fondo sigue siendo: **lo operativo manda en Decisiones, el dinero
-vive en Finanzas.** En esta primera iteración, sin embargo, Decisiones arranca
-como **un dashboard completo** que conserva los bloques de análisis del diseño
-actual (gestores, margen, moneda, ventas por almacén) en una sección claramente
-separada al final. Es un punto de partida: la separación total con Finanzas se
-completa en una iteración posterior.
+vive en Finanzas.** Decisiones conserva del diseño actual una sección de análisis
+al final, pero **solo la parte operativa**: ventas por almacén, mix por moneda y
+ranking de gestores. El **análisis de margen** (top productos por margen y pedidos
+de menor margen) **se movió a Finanzas** junto con el resto de las lecturas de
+rentabilidad (salesops-13), así que ya no aparece en Decisiones.
 
 ## El diseño: una sola pantalla, 3 capas + análisis
 
@@ -66,18 +66,20 @@ siempre el día actual.
 - **Ventas por almacén** — filtro `[ 7d / 30d ]`.
 - **Mix por moneda** — filtro `[ 7d / 30d ]`.
 - **Ranking de gestores** — filtro `[ 7d / 30d / General ]`.
-- **Top productos por margen** — filtro `[ 7d / 30d / General ]`.
-- **Pedidos de menor margen** — filtro `[ 7d / 30d / General ]`.
+
+> El análisis de margen (**Top productos por margen** y **Pedidos de menor
+> margen**) ya **no vive en Decisiones**: se movió a Finanzas con el resto de la
+> rentabilidad (salesops-13).
 
 ## Maqueta (ASCII)
 
 ```
 ╔═ DECISIONES · Operación ═══════════════════════════════════════════════════════╗
-║                                                                                ║
-║  CAPA 1 — Pulso inmediato (3 cards · en mobile 1 por fila)                     ║
+║                                                                               ║
+║  CAPA 1 — Pulso inmediato (3 cards · en mobile 1 por fila)                    ║
 ║  ┌────────────────────────────────┐ ┌──────────────┐ ┌──────────────────────┐ ║
 ║  │ 1.1 Pedidos activos por estado │ │ 1.2          │ │ 1.3 Comisiones por   │ ║
-║  │     y almacén                  │ │ Transportistas│ │     pagar            │ ║
+║  │     y almacén                  │ │ Transportistas│ │     pagar            │║
 ║  │  ■Pinar ■Consol. ■Herradura   │ │              │ │  Total: 215.000 MN   │ ║
 ║  │  12┤                          │ │  Disponibles │ │                      │ ║
 ║  │    │ █                        │ │      3       │ │  Más atrasadas:      │ ║
@@ -91,38 +93,36 @@ siempre el día actual.
 ║  │                               │ │              │ │ Dayana H. hace 5d    │ ║
 ║  │                               │ │              │ │   esta 10.000·tot 30k│ ║
 ║  └────────────────────────────────┘ └──────────────┘ └──────────────────────┘ ║
-║                                                                                ║
-║  CAPA 2 — ¿Qué atiendo YA? (lo accionable)                                     ║
-║  ┌───────────────────────────────────┐ ┌─────────────────────────────────────┐ ║
-║  │ ⚠ Stock crítico por almacén       │ │ ⏱ Pedidos demorados / trabados      │ ║
+║                                                                               ║
+║  CAPA 2 — ¿Qué atiendo YA? (lo accionable)                                    ║
+║  ┌───────────────────────────────────┐ ┌─────────────────────────────────────┐║
+║  │ ⚠ Stock crítico por almacén       │ │ ⏱ Pedidos demorados / trabados      │║
 ║  │ Pinar  · Smart TV 43"   0 Agotado │ │ #1043 Verificado hace 4 días  🔴    │ ║
 ║  │ Pinar  · Exhibidor 20P  1 Bajo    │ │ #1027 Transportando hace 3 d  🟠    │ ║
-║  │ Consol.· Freidora Aire  1 Bajo    │ │ #1051 Creado sin verificar 2d       │ ║
-║  │ +15 más                           │ │ (estancados en una etapa)           │ ║
-║  └───────────────────────────────────┘ └─────────────────────────────────────┘ ║
-║                                                                                ║
+║  │ Consol.· Freidora Aire  1 Bajo    │ │ #1051 Creado sin verificar 2d       │║
+║  │ +15 más                           │ │ (estancados en una etapa)           │║
+║  └───────────────────────────────────┘ └─────────────────────────────────────┘║
+║                                                                               ║
 ║  CAPA 3 — Comportamiento en el tiempo         [ Últimos 7 días ▾ ] (7d / 30d) ║
 ║  ┌───────────────────────────────┐  ┌──────────────────────────────────────┐  ║
 ║  │ Entra vs. sale (período)      │  │ Ciclo promedio                       │  ║
 ║  │   Creados 63 → Entregados 52  │  │   Creado → entregado                 │  ║
 ║  │   ▲ acumulás backlog (+11)    │  │      4.3 días   ▲ +0.5 vs previo     │  ║
 ║  └───────────────────────────────┘  └──────────────────────────────────────┘  ║
-║  ┌───────────────────────────────────┐ ┌─────────────────────────────────────┐ ║
-║  │ 3.1 Pedidos por día               │ │ 3.2 Pedidos completados por día     │ ║
-║  │     [ Nº pedidos ⇄ Valor venta ]  │ │     [ Nº pedidos ⇄ Valor venta ]    │ ║
-║  │              ▁▂▅▃▆█▄               │ │                ▁▃▄▂▅▆█             │ ║
+║  ┌───────────────────────────────────┐ ┌─────────────────────────────────────┐║
+║  │ 3.1 Pedidos por día               │ │ 3.2 Pedidos completados por día     │║
+║  │     [ Nº pedidos ⇄ Valor venta ]  │ │     [ Nº pedidos ⇄ Valor venta ]    │║
+║  │              ▁▂▅▃▆█▄               │ │                ▁▃▄▂▅▆█             │║
 ║  │  Prom/día: 9    ▲ +12% vs previo  │ │  Prom/día: 7   Tasa compl. 78%     │ ║
-║  └───────────────────────────────────┘ └─────────────────────────────────────┘ ║
-║                                                                                ║
-║  ── Análisis (se mantiene del actual) ──────────────────────────────────────  ║
+║  └───────────────────────────────────┘ └─────────────────────────────────────┘║
+║                                                                               ║
+║  ── Análisis (solo operativo — el margen vive en Finanzas) ────────────────── ║
 ║  ┌─────────────────────┐ ┌─────────────────────┐                              ║
 ║  │ Ventas por almacén  │ │ Mix por moneda      │   [ 7d / 30d ]               ║
 ║  └─────────────────────┘ └─────────────────────┘                              ║
-║  ┌─────────────────────┐ ┌─────────────────────┐                              ║
-║  │ Ranking de gestores │ │ Top productos margen│   [ 7d / 30d / General ]     ║
-║  └─────────────────────┘ └─────────────────────┘                              ║
-║  ┌───────────────────────────────────────────────┐                            ║
-║  │ Pedidos de menor margen                        │  [ 7d / 30d / General ]   ║
+║  ┌─────────────────────┐                                                      ║
+║  │ Ranking de gestores │   [ 7d / 30d / General ]                             ║
+║  └─────────────────────┘                                                      ║
 ║  └───────────────────────────────────────────────┘                            ║
 ╚════════════════════════════════════════════════════════════════════════════════╝
 ```

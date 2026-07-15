@@ -51,8 +51,9 @@ que siga SU dolor, en este orden:
 2. **Pegale primero con FINANZAS.** El golpe emocional. KPIs que **nunca vio**:
    margen neto, comisión que le debés a gestores (pasivo), ventas del periodo, exposición en MN.
    *"Esto es dinero tuyo. Hoy no lo ves en ningún lado."* Callate y dejá que peguen.
-3. **Seguí con DECISIONES.** El "¿y qué hago?": qué gestor rinde, qué producto deja
-   margen, alertas de inventario bajo. *"Esto te dice dónde poner la energía mañana."*
+3. **Seguí con DECISIONES.** El "¿y qué hago?": qué pasa HOY en la operación —
+   pedidos activos por estado, transportistas libres, comisiones atrasadas, stock
+   crítico y entregas frenadas. *"Esto te dice qué atender ahora mismo."*
 4. **Probá que es REAL, no una foto.** Creá un pedido como gestor, movelo por sus
    estados, mostrá cómo cae en los dashboards. *"No es una imagen bonita — es tu
    operación entera, viva."* Este paso destruye la objeción "es solo un demo".

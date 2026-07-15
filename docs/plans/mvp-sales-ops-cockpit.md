@@ -126,8 +126,8 @@ De un vistazo, lo que le importa a la operación del día:
 - **Accionable:** stock crítico por almacén y pedidos demorados / trabados.
 - **Comportamiento (7d / 30d):** entra vs. sale, ciclo promedio, pedidos por día
   y pedidos completados por día.
-- **Análisis (del diseño actual):** ventas por almacén, mix por moneda, ranking
-  de gestores, top productos por margen y pedidos de menor margen.
+- **Análisis:** ventas por almacén, mix por moneda y ranking de gestores. (El
+  análisis de margen —top productos y pedidos de menor margen— vive en Finanzas.)
 
 ### Pantalla 7 — Finanzas
 - Ingresos en USD y convertidos a MN.
@@ -191,7 +191,7 @@ regenera los datos.
 5. **Pantalla 3 (Operador de almacén)** — tablero filtrado; Asignar transportista y Entregado/Pagado.
 6. **Pantalla 4 (Tasas)** — edición de tasas actuales (sin recálculo retroactivo).
 7. **Pantalla 5 (Inventario)** — resumen general + detalle por almacén + valor de costo.
-8. **Pantalla 6 (Decisiones)** — gráficos y KPIs sobre los datos sembrados.
+8. **Pantalla 6 (Decisiones)** — tablero operativo (pulso del día, accionables y comportamiento 7d/30d) sobre los datos sembrados.
 9. **Pantalla 7 (Finanzas)** — gráficos y KPIs financieros.
 10. **Pulido** — datos de demo realistas, textos y detalles visuales que "vendan" al dueño.
 

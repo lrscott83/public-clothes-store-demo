@@ -54,8 +54,8 @@ del recorrido sugerido (Finanzas, Decisiones, Inventario).
 `[FOTO: Decisiones]`
 
 > 2️⃣ *¿Y ahora qué hago?*
-> Qué gestor te rinde, qué producto te deja margen y dónde se te está yendo el
-> dinero. Deja de ser corazonada.
+> Qué pasa HOY en tu operación: pedidos activos por estado, transportistas libres,
+> comisiones atrasadas y qué entregas están frenadas. Deja de ser corazonada.
 
 ### Bloque 5 — Inventario
 
