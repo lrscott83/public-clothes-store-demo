@@ -80,4 +80,42 @@ describe('ActiveOrdersChart', () => {
       'decisiones',
     );
   });
+
+  // Regression: with the count label sharing the bar's fixed-height flex column,
+  // flexbox shrank the tallest bars to make room for the label, so counts 5 and 6
+  // rendered at nearly the same height. The bar must never be flex-shrunk, and the
+  // label must float above it (absolutely positioned) instead of eating its height.
+  it('never flex-shrinks a bar to fit its count label', () => {
+    const { container } = render(<ActiveOrdersChart activeOrders={ACTIVE_ORDERS} />);
+
+    const bars = container.querySelectorAll<HTMLElement>('[data-warehouse]');
+    bars.forEach((bar) => {
+      expect(bar.className).toContain('shrink-0');
+      const label = bar.querySelector('span');
+      expect(label?.className).toContain('absolute');
+    });
+  });
+
+  it('maps a higher count to a strictly taller bar', () => {
+    const scaled: ActiveOrdersView = {
+      groups: [
+        {
+          state: 'verificado',
+          label: 'Verificado',
+          total: 15,
+          cells: [
+            { warehouseId: 'wh-1', warehouseName: 'Pinar del Río', count: 6 },
+            { warehouseId: 'wh-2', warehouseName: 'Consolación del Sur', count: 4 },
+            { warehouseId: 'wh-3', warehouseName: 'Herradura', count: 5 },
+          ],
+        },
+      ],
+    };
+    const { container } = render(<ActiveOrdersChart activeOrders={scaled} />);
+    const barHeight = (id: string) =>
+      parseInt(container.querySelector<HTMLElement>(`[data-warehouse="${id}"]`)!.style.height, 10);
+
+    expect(barHeight('wh-1')).toBeGreaterThan(barHeight('wh-3')); // count 6 > count 5
+    expect(barHeight('wh-3')).toBeGreaterThan(barHeight('wh-2')); // count 5 > count 4
+  });
 });

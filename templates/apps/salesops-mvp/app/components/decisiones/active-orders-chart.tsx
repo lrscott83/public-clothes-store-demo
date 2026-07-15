@@ -7,8 +7,10 @@ export interface ActiveOrdersChartProps {
   activeOrders: ActiveOrdersView;
 }
 
-/** Max pixel height for the tallest bar in a group; every other bar scales relative to it. */
+/** Max pixel height for the tallest bar; every other bar scales relative to it. */
 const MAX_BAR_HEIGHT = 96;
+/** Vertical room reserved above the tallest bar for its count label, which floats on top. */
+const LABEL_ROOM = 18;
 
 /**
  * Capa 1.1 — "Pedidos activos por estado y almacén": a grouped bar chart,
@@ -35,18 +37,23 @@ export function ActiveOrdersChart({ activeOrders }: ActiveOrdersChartProps) {
       >
         {activeOrders.groups.map((group) => (
           <div key={group.state} className="flex flex-col items-center gap-1">
-            <div className="flex items-end gap-1.5" style={{ height: MAX_BAR_HEIGHT }}>
+            <div className="flex items-end gap-1.5" style={{ height: MAX_BAR_HEIGHT + LABEL_ROOM }}>
               {group.cells.map((cell) => {
                 const height = Math.max(2, Math.round((cell.count / max) * MAX_BAR_HEIGHT));
+                // The bar carries its own height and never flex-shrinks; the count
+                // label floats above it (absolutely positioned) so it can't steal
+                // the bar's vertical budget and flatten the tallest bars together.
                 return (
-                  <div key={cell.warehouseId} className="flex h-full flex-col items-center justify-end">
-                    <span className="text-[10px] text-text-muted">{cell.count}</span>
-                    <div
-                      data-warehouse={cell.warehouseId}
-                      title={cell.warehouseName}
-                      style={{ height, backgroundColor: WAREHOUSE_COLORS[cell.warehouseId] }}
-                      className="w-4 rounded-t"
-                    />
+                  <div
+                    key={cell.warehouseId}
+                    data-warehouse={cell.warehouseId}
+                    title={cell.warehouseName}
+                    style={{ height, backgroundColor: WAREHOUSE_COLORS[cell.warehouseId] }}
+                    className="relative w-4 shrink-0 rounded-t"
+                  >
+                    <span className="absolute inset-x-0 -top-4 text-center text-[10px] text-text-muted">
+                      {cell.count}
+                    </span>
                   </div>
                 );
               })}
