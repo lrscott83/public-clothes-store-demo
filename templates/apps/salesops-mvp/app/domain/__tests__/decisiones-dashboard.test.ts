@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACTIVE_STATES,
   STAGE_DELAY_THRESHOLD_DAYS,
+  buildActiveOrdersByStateAndWarehouse,
   buildCurrencyMix,
   buildDecisionesDashboard,
   buildGestorRanking,
@@ -9,6 +10,7 @@ import {
   buildKpiHeader,
   buildSalesTrend,
   buildStageDistribution,
+  buildTransportistaCapacity,
   buildWarehouseSales,
   splitByPeriod,
   windowedState,
@@ -501,6 +503,100 @@ describe('windowedState', () => {
     expect(windowed.warehouses).toBe(state.warehouses);
     expect(windowed.gestores).toBe(state.gestores);
     expect(windowed.generatedAt).toBe(state.generatedAt);
+  });
+});
+
+describe('buildActiveOrdersByStateAndWarehouse', () => {
+  it('returns exactly the 3 non-completed states, in order, excluding entregado/comision_pagada', () => {
+    const warehouses = [{ id: 'wh-1', name: 'Almacén 1' }];
+    const orders = [
+      buildOrder({ id: 'o1', state: 'creado', warehouseId: 'wh-1' }),
+      buildOrder({ id: 'o2', state: 'entregado', warehouseId: 'wh-1' }),
+      buildOrder({ id: 'o3', state: 'comision_pagada', warehouseId: 'wh-1' }),
+    ];
+    const state = buildState({ warehouses, orders });
+
+    const view = buildActiveOrdersByStateAndWarehouse(state);
+
+    expect(view.groups.map((g) => g.state)).toEqual(['creado', 'verificado', 'transportando']);
+  });
+
+  it('zero-pads a (state, warehouse) pair with no matching orders, not omitted', () => {
+    const warehouses = [
+      { id: 'wh-1', name: 'Almacén 1' },
+      { id: 'wh-2', name: 'Almacén 2' },
+    ];
+    const orders = [buildOrder({ id: 'o1', state: 'creado', warehouseId: 'wh-1' })];
+    const state = buildState({ warehouses, orders });
+
+    const view = buildActiveOrdersByStateAndWarehouse(state);
+
+    const creadoGroup = view.groups.find((g) => g.state === 'creado')!;
+    expect(creadoGroup.cells.find((c) => c.warehouseId === 'wh-2')!.count).toBe(0);
+    const transportandoGroup = view.groups.find((g) => g.state === 'transportando')!;
+    expect(transportandoGroup.cells.every((c) => c.count === 0)).toBe(true);
+    expect(transportandoGroup.total).toBe(0);
+  });
+
+  it('sums per-warehouse counts into the group total', () => {
+    const warehouses = [
+      { id: 'wh-1', name: 'Almacén 1' },
+      { id: 'wh-2', name: 'Almacén 2' },
+    ];
+    const orders = [
+      buildOrder({ id: 'o1', state: 'verificado', warehouseId: 'wh-1' }),
+      buildOrder({ id: 'o2', state: 'verificado', warehouseId: 'wh-2' }),
+      buildOrder({ id: 'o3', state: 'verificado', warehouseId: 'wh-2' }),
+    ];
+    const state = buildState({ warehouses, orders });
+
+    const view = buildActiveOrdersByStateAndWarehouse(state);
+
+    const verificadoGroup = view.groups.find((g) => g.state === 'verificado')!;
+    expect(verificadoGroup.total).toBe(3);
+    expect(verificadoGroup.cells.find((c) => c.warehouseId === 'wh-1')!.count).toBe(1);
+    expect(verificadoGroup.cells.find((c) => c.warehouseId === 'wh-2')!.count).toBe(2);
+  });
+});
+
+describe('buildTransportistaCapacity', () => {
+  it('classifies a transportista with an active transportando order as ocupado', () => {
+    const transportistas = [{ id: 't1', name: 'Transportista Uno' }];
+    const orders = [buildOrder({ id: 'o1', state: 'transportando', transportistaId: 't1' })];
+    const state = buildState({ transportistas, orders });
+
+    const view = buildTransportistaCapacity(state);
+
+    const row = view.rows.find((r) => r.transportistaId === 't1')!;
+    expect(row.ocupado).toBe(true);
+    expect(row.ordersTransportando).toBe(1);
+    expect(view.transportando).toBe(1);
+    expect(view.disponibles).toBe(0);
+  });
+
+  it('classifies a transportista with zero transportando orders as disponible', () => {
+    const transportistas = [{ id: 't1', name: 'Transportista Uno' }];
+    const state = buildState({ transportistas, orders: [] });
+
+    const view = buildTransportistaCapacity(state);
+
+    const row = view.rows.find((r) => r.transportistaId === 't1')!;
+    expect(row.ocupado).toBe(false);
+    expect(view.disponibles).toBe(1);
+    expect(view.transportando).toBe(0);
+  });
+
+  it('counts "Sin chofer" as verificado orders with no transportistaId, independent of ocupado/disponible', () => {
+    const orders = [
+      buildOrder({ id: 'o1', state: 'verificado', transportistaId: undefined }),
+      buildOrder({ id: 'o2', state: 'verificado', transportistaId: undefined }),
+      buildOrder({ id: 'o3', state: 'verificado', transportistaId: 't1' }),
+    ];
+    const state = buildState({ transportistas: [], orders });
+
+    const view = buildTransportistaCapacity(state);
+
+    expect(view.sinChofer).toBe(2);
   });
 });
 

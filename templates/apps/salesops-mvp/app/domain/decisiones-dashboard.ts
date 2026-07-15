@@ -409,6 +409,88 @@ export function buildInventoryAlerts(state: SeedState): InventoryAlertsView {
   return { groups };
 }
 
+// ---- Capa 1.1: activos por estado y almacén --------------------------------------------
+
+export interface ActiveOrdersCell {
+  warehouseId: string;
+  warehouseName: string;
+  count: number;
+}
+
+export interface ActiveOrdersStateGroup {
+  state: OrderState;
+  label: string;
+  cells: ActiveOrdersCell[];
+  total: number;
+}
+
+export interface ActiveOrdersView {
+  groups: ActiveOrdersStateGroup[];
+}
+
+/**
+ * Capa 1.1 — "Pedidos activos por estado y almacén": exactly the 3
+ * non-completed states (`ACTIVE_STATES`, fixed order), each split into one
+ * cell per `state.warehouses` entry (zero-padded — a state/warehouse pair
+ * with no matching orders still appears at `count:0`, never omitted).
+ */
+export function buildActiveOrdersByStateAndWarehouse(state: SeedState): ActiveOrdersView {
+  const groups: ActiveOrdersStateGroup[] = ACTIVE_STATES.map((orderState) => {
+    const cells: ActiveOrdersCell[] = state.warehouses.map((warehouse) => ({
+      warehouseId: warehouse.id,
+      warehouseName: warehouse.name,
+      count: state.orders.filter((order) => order.state === orderState && order.warehouseId === warehouse.id).length,
+    }));
+    const total = cells.reduce((sum, cell) => sum + cell.count, 0);
+    return { state: orderState, label: STAGE_LABELS[orderState], cells, total };
+  });
+
+  return { groups };
+}
+
+// ---- Capa 1.2: transportistas ------------------------------------------------------------
+
+export interface TransportistaCapacityRow {
+  transportistaId: string;
+  name: string;
+  ocupado: boolean;
+  ordersTransportando: number;
+}
+
+export interface TransportistaCapacityView {
+  rows: TransportistaCapacityRow[];
+  disponibles: number;
+  transportando: number;
+  sinChofer: number;
+}
+
+/**
+ * Capa 1.2 — transportista capacity: `ocupado` = has at least one order in
+ * `transportando` assigned via `transportistaId`; `disponible` otherwise.
+ * "Sin chofer" is a separate count of `verificado` orders with no
+ * `transportistaId` set — reported independently of the ocupado/disponible
+ * split (it counts orders, not transportistas).
+ */
+export function buildTransportistaCapacity(state: SeedState): TransportistaCapacityView {
+  const rows: TransportistaCapacityRow[] = state.transportistas.map((transportista) => {
+    const ordersTransportando = state.orders.filter(
+      (order) => order.state === 'transportando' && order.transportistaId === transportista.id,
+    ).length;
+    return {
+      transportistaId: transportista.id,
+      name: transportista.name,
+      ocupado: ordersTransportando > 0,
+      ordersTransportando,
+    };
+  });
+
+  const disponibles = rows.filter((row) => !row.ocupado).length;
+  const transportando = rows.filter((row) => row.ocupado).length;
+  const sinChofer = state.orders.filter((order) => order.state === 'verificado' && !order.transportistaId).length;
+
+  return { rows, disponibles, transportando, sinChofer };
+}
+
 // ---- orchestrator ----------------------------------------------------------------------
 
 export interface DashboardView {

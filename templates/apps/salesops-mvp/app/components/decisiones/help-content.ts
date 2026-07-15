@@ -10,6 +10,16 @@ export interface HelpEntry {
 }
 
 export const DECISIONES_HELP = {
+  // --- Capa 1 — Pulso inmediato ---
+  pedidosActivos: {
+    title: 'Pedidos activos por estado y almacén',
+    text: 'Cuántos pedidos tenés en curso ahora mismo (creados, verificados, en camino), por almacén. Si se amontonan en una etapa o un almacén, ahí tenés un cuello de botella que atender hoy.',
+  },
+  transportistas: {
+    title: 'Transportistas',
+    text: 'Quién está repartiendo ahora y quién tenés libre. "Sin chofer" cuenta pedidos ya verificados que todavía no tienen quién los lleve: son entregas frenadas por falta de asignación.',
+  },
+
   // --- KPI header (Layer 1) ---
   ventas: {
     title: 'Ventas',

@@ -42,14 +42,14 @@ Chain strategy: pending
 
 ## Phase 1: Capa 1 — Pulso Inmediato (PR2 + PR3)
 
-- [ ] 1.1 RED: test `buildActiveOrdersByStateAndWarehouse` — exactly 3 states in order, zero-padded `(state, warehouse)` pairs (spec: Capa 1.1).
-- [ ] 1.2 GREEN: implement `buildActiveOrdersByStateAndWarehouse` in `decisiones-dashboard.ts`.
-- [ ] 1.3 RED: test `ActiveOrdersChart` component — grouped bars, fixed `WAREHOUSE_COLORS`.
-- [ ] 1.4 GREEN: create `components/decisiones/active-orders-chart.tsx`.
-- [ ] 1.5 RED: test `buildTransportistaCapacity` — ocupado/disponible, "Sin chofer" count (spec: Capa 1.2).
-- [ ] 1.6 GREEN: implement `buildTransportistaCapacity`.
-- [ ] 1.7 RED: test `TransportistaCapacity` component.
-- [ ] 1.8 GREEN: create `components/decisiones/transportista-capacity.tsx`.
+- [x] 1.1 RED: test `buildActiveOrdersByStateAndWarehouse` — exactly 3 states in order, zero-padded `(state, warehouse)` pairs (spec: Capa 1.1).
+- [x] 1.2 GREEN: implement `buildActiveOrdersByStateAndWarehouse` in `decisiones-dashboard.ts`.
+- [x] 1.3 RED: test `ActiveOrdersChart` component — grouped bars, fixed `WAREHOUSE_COLORS`.
+- [x] 1.4 GREEN: create `components/decisiones/active-orders-chart.tsx`.
+- [x] 1.5 RED: test `buildTransportistaCapacity` — ocupado/disponible, "Sin chofer" count (spec: Capa 1.2).
+- [x] 1.6 GREEN: implement `buildTransportistaCapacity`.
+- [x] 1.7 RED: test `TransportistaCapacity` component.
+- [x] 1.8 GREEN: create `components/decisiones/transportista-capacity.tsx`.
 - [ ] 1.9 RED: test `buildComisionesPorPagar` — total pending sum, one row per gestor (most overdue), sort desc `diasAtraso` (spec: Capa 1.3).
 - [ ] 1.10 GREEN: implement `buildComisionesPorPagar`.
 - [ ] 1.11 RED: test `ComisionesPorPagar` component.
