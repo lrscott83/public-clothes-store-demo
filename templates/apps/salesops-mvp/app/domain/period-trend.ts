@@ -42,12 +42,12 @@ export interface PeriodSplit {
 
 /**
  * Splits ALL orders (no state filter — callers filter as needed) into the
- * current 10-day window `[anchor-10d, anchor)` and the prior 10-day window
- * `[anchor-20d, anchor-10d)`, anchored to `state.generatedAt`. Orders outside
- * both windows (future-dated, or older than 20 days) are dropped from both
- * buckets.
+ * current `days`-day window `[anchor-Nd, anchor)` and the prior `days`-day
+ * window `[anchor-2Nd, anchor-Nd)`, anchored to `state.generatedAt`. Orders
+ * outside both windows (future-dated, or older than `2 * days`) are dropped
+ * from both buckets.
  */
-export function splitByPeriod(state: SeedState): PeriodSplit {
+export function splitByPeriodDays(state: SeedState, days: number): PeriodSplit {
   const anchorMs = new Date(state.generatedAt).getTime();
   const current: Order[] = [];
   const prior: Order[] = [];
@@ -55,12 +55,22 @@ export function splitByPeriod(state: SeedState): PeriodSplit {
   for (const order of state.orders) {
     const createdMs = new Date(order.createdAt).getTime();
     const diff = anchorMs - createdMs;
-    if (diff >= 0 && diff < 10 * DAY_MS) {
+    if (diff >= 0 && diff < days * DAY_MS) {
       current.push(order);
-    } else if (diff >= 10 * DAY_MS && diff < 20 * DAY_MS) {
+    } else if (diff >= days * DAY_MS && diff < 2 * days * DAY_MS) {
       prior.push(order);
     }
   }
 
   return { current, prior };
+}
+
+/**
+ * The 10-day dual-window split used by `finanzas-dashboard.ts` (and
+ * historically by `decisiones-dashboard.ts`). Delegates to
+ * `splitByPeriodDays(state, 10)` — behavior is byte-identical to before this
+ * helper existed.
+ */
+export function splitByPeriod(state: SeedState): PeriodSplit {
+  return splitByPeriodDays(state, 10);
 }

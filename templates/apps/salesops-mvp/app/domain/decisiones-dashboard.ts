@@ -23,6 +23,44 @@ import type { Order, OrderState, SeedState, SeededProduct } from './types';
 export type { Trend, KpiTrend, PeriodSplit };
 export { splitByPeriod };
 
+// ---- operational window (Capa 3 + Análisis) ---------------------------------------
+
+/** The `[7d/30d]` filter shared by Capa 3 and the Análisis section. */
+export type WindowDays = 7 | 30;
+
+/** The 3 non-completed states — used everywhere "activo"/"en curso" is meant. */
+export const ACTIVE_STATES: OrderState[] = ['creado', 'verificado', 'transportando'];
+
+export type DelayStage = 'creado' | 'verificado' | 'transportando';
+
+/**
+ * Owner-confirmed per-stage "demorado" thresholds (see design.md). One place
+ * to tune — Capa 2's `buildPedidosDemorados` reads this constant.
+ */
+export const STAGE_DELAY_THRESHOLD_DAYS: Record<DelayStage, number> = {
+  creado: 2,
+  verificado: 3,
+  transportando: 2,
+};
+
+/**
+ * Shallow-clones `state` with `orders` replaced by only those whose
+ * `createdAt` falls in `[anchor-Nd, anchor)`, anchored to `state.generatedAt`
+ * (never mutated). Every other field is passed through by reference — this
+ * lets window-agnostic builders (`buildWarehouseSales`, `buildCurrencyMix`,
+ * `buildGestorRanking`) be reused unchanged for the windowed Análisis section.
+ */
+export function windowedState(state: SeedState, days: number): SeedState {
+  const anchorMs = new Date(state.generatedAt).getTime();
+  const orders = state.orders.filter((order) => {
+    const createdMs = new Date(order.createdAt).getTime();
+    const diff = anchorMs - createdMs;
+    return diff >= 0 && diff < days * DAY_MS;
+  });
+
+  return { ...state, orders };
+}
+
 // ---- per-order cost/commission helpers --------
 
 function orderCostUSD(order: Order, productById: Map<string, SeededProduct>): number {

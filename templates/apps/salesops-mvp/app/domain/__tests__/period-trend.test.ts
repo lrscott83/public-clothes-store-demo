@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildKpiTrend, computeDelta, computeTrend, splitByPeriod } from '../period-trend';
+import { buildKpiTrend, computeDelta, computeTrend, splitByPeriod, splitByPeriodDays } from '../period-trend';
 import type { Order, SeedState } from '../types';
 
 const GENERATED_AT = '2026-07-10T12:00:00.000Z';
@@ -77,6 +77,56 @@ describe('splitByPeriod', () => {
 
     expect(current).toEqual([]);
     expect(prior).toEqual([]);
+  });
+});
+
+describe('splitByPeriodDays', () => {
+  it('buckets an order into current for [anchor-Nd, anchor) and prior for [anchor-2Nd, anchor-Nd), for days=7', () => {
+    const orders = [
+      buildOrder({ id: 'order-current', createdAt: daysBefore(3) }),
+      buildOrder({ id: 'order-prior', createdAt: daysBefore(10) }),
+    ];
+    const state = buildState({ orders });
+
+    const { current, prior } = splitByPeriodDays(state, 7);
+
+    expect(current.map((o) => o.id)).toEqual(['order-current']);
+    expect(prior.map((o) => o.id)).toEqual(['order-prior']);
+  });
+
+  it('drops an order older than the 2N-day window from both buckets, for days=30', () => {
+    const state = buildState({
+      orders: [buildOrder({ id: 'order-ancient', createdAt: daysBefore(90) })],
+    });
+
+    const { current, prior } = splitByPeriodDays(state, 30);
+
+    expect(current).toEqual([]);
+    expect(prior).toEqual([]);
+  });
+
+  it('is anchored to state.generatedAt, not the wall-clock date', () => {
+    const oldGeneratedAt = '2020-01-10T12:00:00.000Z';
+    const createdAt = new Date(new Date(oldGeneratedAt).getTime() - 3 * DAY_MS).toISOString();
+    const state = buildState({
+      generatedAt: oldGeneratedAt,
+      orders: [buildOrder({ id: 'order-old', createdAt })],
+    });
+
+    const { current } = splitByPeriodDays(state, 7);
+
+    expect(current.map((o) => o.id)).toEqual(['order-old']);
+  });
+
+  it('matches splitByPeriod when days=10 (finanzas behavior unchanged)', () => {
+    const orders = [
+      buildOrder({ id: 'order-current', createdAt: daysBefore(5) }),
+      buildOrder({ id: 'order-prior', createdAt: daysBefore(15) }),
+      buildOrder({ id: 'order-ancient', createdAt: daysBefore(30) }),
+    ];
+    const state = buildState({ orders });
+
+    expect(splitByPeriodDays(state, 10)).toEqual(splitByPeriod(state));
   });
 });
 

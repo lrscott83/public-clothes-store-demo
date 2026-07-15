@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACTIVE_STATES,
+  STAGE_DELAY_THRESHOLD_DAYS,
   buildCurrencyMix,
   buildDecisionesDashboard,
   buildGestorRanking,
@@ -9,6 +11,7 @@ import {
   buildStageDistribution,
   buildWarehouseSales,
   splitByPeriod,
+  windowedState,
 } from '../decisiones-dashboard';
 import type { InventoryEntry, Order, SeedState, SeededProduct } from '../types';
 
@@ -447,6 +450,57 @@ describe('live-rate regression', () => {
 
     const after = buildKpiHeader(state);
     expect(after.margenUSD.current).toBe(385);
+  });
+});
+
+describe('ACTIVE_STATES', () => {
+  it('is exactly the 3 non-completed states, in order', () => {
+    expect(ACTIVE_STATES).toEqual(['creado', 'verificado', 'transportando']);
+  });
+});
+
+describe('STAGE_DELAY_THRESHOLD_DAYS', () => {
+  it('holds the owner-confirmed per-stage thresholds', () => {
+    expect(STAGE_DELAY_THRESHOLD_DAYS).toEqual({ creado: 2, verificado: 3, transportando: 2 });
+  });
+});
+
+describe('windowedState', () => {
+  it('filters orders to [anchor-Nd, anchor), anchored to state.generatedAt', () => {
+    const orders = [
+      buildOrder({ id: 'order-in', createdAt: daysBefore(3) }),
+      buildOrder({ id: 'order-out-old', createdAt: daysBefore(10) }),
+      buildOrder({ id: 'order-out-future', createdAt: daysBefore(-1) }),
+    ];
+    const state = buildState({ orders });
+
+    const windowed = windowedState(state, 7);
+
+    expect(windowed.orders.map((o) => o.id)).toEqual(['order-in']);
+  });
+
+  it('is a shallow clone — does not mutate the original state or its orders array', () => {
+    const orders = [buildOrder({ id: 'order-1', createdAt: daysBefore(3) })];
+    const state = buildState({ orders });
+    const originalOrdersRef = state.orders;
+
+    const windowed = windowedState(state, 7);
+
+    expect(windowed).not.toBe(state);
+    expect(state.orders).toBe(originalOrdersRef);
+    expect(state.orders).toHaveLength(1);
+  });
+
+  it('preserves every other SeedState field unchanged', () => {
+    const warehouses = [{ id: 'wh-1', name: 'Almacén 1' }];
+    const gestores = [{ id: 'g1', name: 'Gestor Uno' }];
+    const state = buildState({ warehouses, gestores, orders: [buildOrder({ createdAt: daysBefore(3) })] });
+
+    const windowed = windowedState(state, 30);
+
+    expect(windowed.warehouses).toBe(state.warehouses);
+    expect(windowed.gestores).toBe(state.gestores);
+    expect(windowed.generatedAt).toBe(state.generatedAt);
   });
 });
 
