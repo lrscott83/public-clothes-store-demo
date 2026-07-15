@@ -8,9 +8,7 @@ import { StageDistribution } from '../components/decisiones/stage-distribution';
 import { WarehouseSales } from '../components/decisiones/warehouse-sales';
 import { CurrencyMix } from '../components/decisiones/currency-mix';
 import { GestorRanking } from '../components/decisiones/gestor-ranking';
-import { TopMarginProducts } from '../components/decisiones/top-margin-products';
 import { InventoryAlerts } from '../components/decisiones/inventory-alerts';
-import { LowestMarginOrders } from '../components/decisiones/lowest-margin-orders';
 
 export function meta(_args: Route.MetaArgs) {
   return [{ title: 'Decisiones — Sales Ops Cockpit' }];
@@ -63,9 +61,7 @@ export default function Decisiones() {
       {view.hasData && (
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
           <GestorRanking gestores={view.gestores} />
-          <TopMarginProducts topMargin={view.topMargin} />
           <InventoryAlerts alerts={view.inventoryAlerts} />
-          <LowestMarginOrders rows={view.lowestMargin} />
         </div>
       )}
     </main>

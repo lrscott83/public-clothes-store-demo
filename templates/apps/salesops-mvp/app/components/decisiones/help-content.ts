@@ -21,7 +21,7 @@ export const DECISIONES_HELP = {
   },
   pedidos: {
     title: 'Pedidos',
-    text: 'Cuántos pedidos hiciste y el ticket promedio (AOV): lo que gasta un cliente por compra. Subir el ticket suele ser más fácil y rentable que salir a buscar clientes nuevos.',
+    text: 'Cuántos pedidos cerraste en los últimos 10 días. La flecha compara contra los 10 días previos: es tu pulso de volumen, cuánto se mueve el negocio.',
   },
   comisionPendiente: {
     title: 'Comisión pendiente',
@@ -51,16 +51,8 @@ export const DECISIONES_HELP = {
     title: 'Ranking de gestores',
     text: 'Tu equipo de ventas ordenado por facturación: ventas, pedidos, ticket promedio y comisiones. De un vistazo ves quién empuja y quién necesita una mano.',
   },
-  topProductosMargen: {
-    title: 'Top productos por margen',
-    text: 'Los productos que más ganancia te dejan, no los que más se venden. Estos son los que conviene empujar, tener siempre en stock y poner adelante.',
-  },
   alertasInventario: {
     title: 'Alertas de inventario',
     text: 'Productos bajos o agotados por almacén, los más urgentes primero. Cada faltante es una venta que se te escapa: esta lista te dice qué reponer ya.',
-  },
-  pedidosMenorMargen: {
-    title: 'Pedidos de menor margen',
-    text: 'Las ventas que menos ganancia te dejaron. Revisalas para detectar descuentos de más, costos altos o precios que quedaron viejos.',
   },
 } satisfies Record<string, HelpEntry>;

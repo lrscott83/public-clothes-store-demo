@@ -13,7 +13,6 @@ const KPIS: KpiHeaderView = {
   margenUSD: trend(400, 200),
   margenPercent: 50,
   pedidos: trend(2, 1),
-  aovUSD: trend(400, 400),
   comisionPendienteMN: trend(3000, 1000),
 };
 
@@ -31,9 +30,8 @@ describe('KpiHeader', () => {
     expect(screen.queryByText('$3,000.00')).not.toBeInTheDocument();
   });
 
-  it('shows the margin percent as a sublabel and AOV alongside Pedidos', () => {
+  it('shows the margin percent as a sublabel', () => {
     render(<KpiHeader kpis={KPIS} />);
     expect(screen.getByText(/50\.0%/)).toBeInTheDocument();
-    expect(screen.getAllByText(/\$400\.00/).length).toBeGreaterThan(0);
   });
 });

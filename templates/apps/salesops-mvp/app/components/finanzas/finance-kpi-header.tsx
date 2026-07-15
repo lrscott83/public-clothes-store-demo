@@ -11,11 +11,11 @@ export interface FinanceKpiHeaderProps {
 const MONEY = { locale: 'en-US', currency: 'USD' } as const;
 
 /**
- * Layer 1 — exactly 4 `StatTile`s in the fixed order: Ingresos facturados
+ * Layer 1 — exactly 5 `StatTile`s in the fixed order: Ingresos facturados
  * (USD), Ingresos liquidados (MN plain text, never `formatMoney`), Comisión
- * pendiente (MN), Margen neto (USD + % sublabel). `comisionPendienteMN`
- * uses `positiveIsGood={false}` — more owed is worse, even though the
- * arrow direction itself is unchanged.
+ * pendiente (MN), Margen neto (USD + % sublabel), Ticket promedio (AOV,
+ * USD — appended last). `comisionPendienteMN` uses `positiveIsGood={false}`
+ * — more owed is worse, even though the arrow direction itself is unchanged.
  */
 export function FinanceKpiHeader({ kpis }: FinanceKpiHeaderProps) {
   return (
@@ -49,6 +49,13 @@ export function FinanceKpiHeader({ kpis }: FinanceKpiHeaderProps) {
         delta={kpis.margenNetoUSD.delta}
         sublabel={`${kpis.margenPercent.toFixed(1)}%`}
         help={<InfoPopover {...FINANZAS_HELP.margenNeto} />}
+      />
+      <StatTile
+        label="Ticket promedio"
+        value={formatMoney(kpis.aovUSD.current, MONEY)}
+        trend={kpis.aovUSD.trend}
+        delta={kpis.aovUSD.delta}
+        help={<InfoPopover {...FINANZAS_HELP.ticketPromedio} />}
       />
     </section>
   );

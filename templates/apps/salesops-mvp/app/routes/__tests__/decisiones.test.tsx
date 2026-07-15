@@ -33,8 +33,8 @@ describe('Decisiones container', () => {
 
     // Layer 3 — actionable blocks
     expect(screen.getByText('Ranking de gestores')).toBeInTheDocument();
-    expect(screen.getByText('Top productos por margen')).toBeInTheDocument();
-    expect(screen.getByText('Pedidos de menor margen')).toBeInTheDocument();
+    expect(screen.queryByText('Top productos por margen')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pedidos de menor margen')).not.toBeInTheDocument();
   });
 
   it('renders a single unambiguous heading matching /decisiones/i; no subheading repeats it', () => {

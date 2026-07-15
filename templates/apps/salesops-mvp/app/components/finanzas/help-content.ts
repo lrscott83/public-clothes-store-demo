@@ -36,6 +36,10 @@ export const FINANZAS_HELP = {
     title: 'Margen neto',
     text: 'Lo que te queda después de restar el costo de la mercadería y la comisión del gestor a lo facturado. El porcentaje muestra cuánto de cada venta es ganancia real, últimos 10 días.',
   },
+  ticketPromedio: {
+    title: 'Ticket promedio',
+    text: 'Cuánto dinero gasta en promedio un cliente por compra en los últimos 10 días. La flecha compara contra los 10 días previos. Subir el ticket suele rendir más que salir a buscar clientes nuevos.',
+  },
 
   // --- Layer 2 (visual sections) ---
   tendenciaVentas: {
@@ -63,5 +67,13 @@ export const FINANZAS_HELP = {
   ventasPorAlmacen: {
     title: 'Ventas por almacén',
     text: 'Cuánto vende cada almacén. Te muestra qué punto empuja el negocio y cuál está quedando dormido, para reforzar stock o atención donde de verdad rinde.',
+  },
+  topProductosMargen: {
+    title: 'Top productos por margen',
+    text: 'Los productos que más dinero te dejan, no los que más se venden. Son los que conviene empujar, tener siempre en stock y poner adelante.',
+  },
+  pedidosMenorMargen: {
+    title: 'Pedidos de menor margen',
+    text: 'Las ventas que menos dinero te dejaron. Revisalas para detectar descuentos de más, costos altos o precios que quedaron viejos.',
   },
 } satisfies Record<string, HelpEntry>;

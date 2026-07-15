@@ -31,10 +31,13 @@ describe('Finanzas container', () => {
     expect(screen.getByText('Ingresos por estado')).toBeInTheDocument();
     expect(screen.getByText('Mix por moneda')).toBeInTheDocument();
 
-    // Layer 3 — 3 actionable blocks
+    // Layer 3 — actionable blocks
     expect(screen.getByText('Comisión y ROI por gestor')).toBeInTheDocument();
     expect(screen.getByText('Ventas por almacén')).toBeInTheDocument();
     expect(screen.getByText('Flujo por estado')).toBeInTheDocument();
+    expect(screen.getByText('Top productos por margen')).toBeInTheDocument();
+    expect(screen.getByText('Pedidos de menor margen')).toBeInTheDocument();
+    expect(screen.getByText('Ticket promedio')).toBeInTheDocument();
   });
 
   it('renders a single unambiguous heading matching /finanzas/i, with the descriptor as a <p>, not a heading', () => {
@@ -77,6 +80,8 @@ describe('Finanzas container', () => {
     expect(screen.queryByText('Ingresos facturados')).not.toBeInTheDocument();
     expect(screen.queryByText('Comisión y ROI por gestor')).not.toBeInTheDocument();
     expect(screen.queryByText('Ventas por almacén')).not.toBeInTheDocument();
+    expect(screen.queryByText('Top productos por margen')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pedidos de menor margen')).not.toBeInTheDocument();
     expect(screen.getByText(/no hay pedidos/i)).toBeInTheDocument();
     // Flujo por estado (state-breakdown-table) still renders — it counts every state including creado.
     expect(screen.getByText('Flujo por estado')).toBeInTheDocument();

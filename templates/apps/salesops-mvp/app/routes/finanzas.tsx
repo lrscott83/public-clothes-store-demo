@@ -10,6 +10,8 @@ import { CurrencyExposureDonut } from '../components/finanzas/currency-exposure-
 import { GestorCommissionTable } from '../components/finanzas/gestor-commission-table';
 import { WarehouseRevenue } from '../components/finanzas/warehouse-revenue';
 import { StateBreakdownTable } from '../components/finanzas/state-breakdown-table';
+import { ProductMarginBars } from '../components/finanzas/product-margin-bars';
+import { LowMarginOrders } from '../components/finanzas/low-margin-orders';
 
 export function meta(_args: Route.MetaArgs) {
   return [{ title: 'Finanzas — Sales Ops Cockpit' }];
@@ -59,6 +61,8 @@ export default function Finanzas() {
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
           <GestorCommissionTable gestorCommission={view.gestorCommission} />
           <WarehouseRevenue warehouseRevenue={view.warehouseRevenue} />
+          <ProductMarginBars productMargin={view.productMargin} />
+          <LowMarginOrders lowMarginOrders={view.lowMarginOrders} />
         </div>
       )}
 

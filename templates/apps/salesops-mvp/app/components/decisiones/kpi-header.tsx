@@ -12,9 +12,9 @@ const MONEY = { locale: 'en-US', currency: 'USD' } as const;
 
 /**
  * Layer 1 — exactly 4 `StatTile`s in the fixed order: Ventas, Margen,
- * Pedidos (+AOV sublabel), Comisión pendiente (MN plain text, never
- * `formatMoney`). Formats only at this leaf — the domain builder hands back
- * raw numbers + trend deltas.
+ * Pedidos, Comisión pendiente (MN plain text, never `formatMoney`). Formats
+ * only at this leaf — the domain builder hands back raw numbers + trend
+ * deltas.
  */
 export function KpiHeader({ kpis }: KpiHeaderProps) {
   return (
@@ -39,7 +39,6 @@ export function KpiHeader({ kpis }: KpiHeaderProps) {
         value={String(kpis.pedidos.current)}
         trend={kpis.pedidos.trend}
         delta={kpis.pedidos.delta}
-        sublabel={`AOV ${formatMoney(kpis.aovUSD.current, MONEY)}`}
         help={<InfoPopover {...DECISIONES_HELP.pedidos} />}
       />
       <StatTile

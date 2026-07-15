@@ -10,12 +10,13 @@ function buildKpis(overrides: Partial<FinanceKpiHeaderView> = {}): FinanceKpiHea
     comisionPendienteMN: { current: 3000, prior: 1000, delta: 2, trend: 'up' },
     margenNetoUSD: { current: 225, prior: 100, delta: 1.25, trend: 'up' },
     margenPercent: 45,
+    aovUSD: { current: 400, prior: 400, delta: 0, trend: 'flat' },
     ...overrides,
   };
 }
 
 describe('FinanceKpiHeader', () => {
-  it('renders all 4 tiles with their formatted values', () => {
+  it('renders all 5 tiles with their formatted values, Ticket promedio last', () => {
     render(<FinanceKpiHeader kpis={buildKpis()} />);
 
     expect(screen.getByText('Ingresos facturados')).toBeInTheDocument();
@@ -30,11 +31,14 @@ describe('FinanceKpiHeader', () => {
     expect(screen.getByText('Margen neto')).toBeInTheDocument();
     expect(screen.getByText('$225.00')).toBeInTheDocument();
     expect(screen.getByText('45.0%')).toBeInTheDocument();
+
+    expect(screen.getByText('Ticket promedio')).toBeInTheDocument();
+    expect(screen.getByText('$400.00')).toBeInTheDocument();
   });
 
   it('renders an InfoPopover help button for each tile', () => {
     render(<FinanceKpiHeader kpis={buildKpis()} />);
 
-    expect(screen.getAllByRole('button', { name: /qué significa/i }).length).toBe(4);
+    expect(screen.getAllByRole('button', { name: /qué significa/i }).length).toBe(5);
   });
 });

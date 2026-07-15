@@ -1,4 +1,3 @@
-import { buildProfitabilityRanking, type ProfitabilityRow } from './decisiones';
 import { buildInventorySummary } from './inventory';
 import { buildKpiTrend, splitByPeriod } from './period-trend';
 import type { KpiTrend, PeriodSplit, Trend } from './period-trend';
@@ -13,7 +12,7 @@ import type { Order, OrderState, SeedState, SeededProduct } from './types';
  * Period windows anchor to `state.generatedAt` (the frozen seed timestamp),
  * NEVER `Date.now()` — see `splitByPeriod`. Every MN↔USD conversion uses the
  * order's OWN frozen `exchangeRateSnapshot.usdToMn`, never the live
- * `state.exchangeRates` (mirrors `buildProfitabilityRanking`).
+ * `state.exchangeRates`.
  *
  * Generic time/ratio math (`Trend`/`KpiTrend`/`PeriodSplit`,
  * `splitByPeriod`/`buildKpiTrend`/`computeTrend`/`computeDelta`) now lives in
@@ -24,7 +23,7 @@ import type { Order, OrderState, SeedState, SeededProduct } from './types';
 export type { Trend, KpiTrend, PeriodSplit };
 export { splitByPeriod };
 
-// ---- per-order cost/commission helpers (mirror buildProfitabilityRanking) --------
+// ---- per-order cost/commission helpers --------
 
 function orderCostUSD(order: Order, productById: Map<string, SeededProduct>): number {
   let cost = 0;
@@ -54,7 +53,6 @@ export interface KpiHeaderView {
   /** current-window marginUSD / revenueUSD * 100, or 0 when revenue is 0. */
   margenPercent: number;
   pedidos: KpiTrend;
-  aovUSD: KpiTrend;
   comisionPendienteMN: KpiTrend;
 }
 
@@ -80,7 +78,7 @@ function sumCommissionMN(orders: Order[]): number {
 /**
  * Builds all 4 KPI tiles, each with a current-window value and a
  * prior-window value (10 days vs prior 10 days, anchored to
- * `state.generatedAt`). Ventas/Margen/Pedidos/AOV use only orders with
+ * `state.generatedAt`). Ventas/Margen/Pedidos use only orders with
  * `state !== 'creado'`; Comisión pendiente uses its own state-based
  * grouping within each window (mirrors `buildFinanceSummary`).
  */
@@ -100,9 +98,6 @@ export function buildKpiHeader(state: SeedState): KpiHeaderView {
   const pedidosCurrent = currentQ.length;
   const pedidosPrior = priorQ.length;
 
-  const aovCurrent = pedidosCurrent > 0 ? ventasCurrent / pedidosCurrent : 0;
-  const aovPrior = pedidosPrior > 0 ? ventasPrior / pedidosPrior : 0;
-
   const comisionCurrent = sumCommissionMN(current.filter(isCommissionPending));
   const comisionPrior = sumCommissionMN(prior.filter(isCommissionPending));
 
@@ -111,7 +106,6 @@ export function buildKpiHeader(state: SeedState): KpiHeaderView {
     margenUSD: buildKpiTrend(margenCurrent, margenPrior),
     margenPercent: ventasCurrent > 0 ? (margenCurrent / ventasCurrent) * 100 : 0,
     pedidos: buildKpiTrend(pedidosCurrent, pedidosPrior),
-    aovUSD: buildKpiTrend(aovCurrent, aovPrior),
     comisionPendienteMN: buildKpiTrend(comisionCurrent, comisionPrior),
   };
 }
@@ -323,50 +317,7 @@ export function buildGestorRanking(state: SeedState): GestorRankingView {
   return { rows };
 }
 
-// ---- top margin products (Layer 3b) ---------------------------------------------------
-
-export interface TopMarginRow {
-  productId: string;
-  name: string;
-  marginUSD: number;
-}
-
-export interface TopMarginView {
-  rows: TopMarginRow[];
-}
-
-/**
- * Ranks products by aggregate margin (`Σ qty * (priceUSD - costUSD)`) across
- * all qualifying order lines — NOT revenue, and with NO per-line commission
- * allocation (commission is an order/gestor-level figure, not decomposable
- * per item). A product with no qualifying sales does not appear (unlike the
- * warehouse/gestor rankings). Orphan `productId` lines contribute 0, never throw.
- */
-export function buildTopMarginProducts(state: SeedState): TopMarginView {
-  const productById = new Map(state.products.map((product) => [product.id, product]));
-  const qualifyingOrders = qualifying(state.orders);
-  const marginByProduct = new Map<string, number>();
-
-  for (const order of qualifyingOrders) {
-    for (const item of order.items) {
-      const product = productById.get(item.productId);
-      if (!product) continue; // orphan skip — no matching product
-      const margin = item.quantity * (item.priceUSD - product.costUSD);
-      marginByProduct.set(item.productId, (marginByProduct.get(item.productId) ?? 0) + margin);
-    }
-  }
-
-  const rows: TopMarginRow[] = [...marginByProduct.entries()].map(([productId, marginUSD]) => ({
-    productId,
-    name: productById.get(productId)!.name,
-    marginUSD,
-  }));
-  rows.sort((a, b) => b.marginUSD - a.marginUSD);
-
-  return { rows };
-}
-
-// ---- inventory alerts (Layer 3c-i) ------------------------------------------------------
+// ---- inventory alerts (Layer 3b) ------------------------------------------------------
 
 export type StockAlertLevel = 'agotado' | 'bajo';
 
@@ -430,10 +381,7 @@ export interface DashboardView {
   warehouses: WarehouseSalesView;
   currencyMix: CurrencyMixView;
   gestores: GestorRankingView;
-  topMargin: TopMarginView;
   inventoryAlerts: InventoryAlertsView;
-  /** Reuses `buildProfitabilityRanking`'s rows unchanged, re-sorted ascending (lowest margin first). */
-  lowestMargin: ProfitabilityRow[];
 }
 
 /**
@@ -443,10 +391,6 @@ export interface DashboardView {
  */
 export function buildDecisionesDashboard(state: SeedState): DashboardView {
   const hasData = state.orders.some((order) => order.state !== 'creado');
-  const ranking = buildProfitabilityRanking(state);
-  const lowestMargin = [...ranking.rows].sort(
-    (a, b) => a.marginUSD - b.marginUSD || a.orderId.localeCompare(b.orderId),
-  );
 
   return {
     hasData,
@@ -456,8 +400,6 @@ export function buildDecisionesDashboard(state: SeedState): DashboardView {
     warehouses: buildWarehouseSales(state),
     currencyMix: buildCurrencyMix(state),
     gestores: buildGestorRanking(state),
-    topMargin: buildTopMarginProducts(state),
     inventoryAlerts: buildInventoryAlerts(state),
-    lowestMargin,
   };
 }

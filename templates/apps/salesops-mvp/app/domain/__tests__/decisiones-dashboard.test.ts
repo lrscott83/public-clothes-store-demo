@@ -7,7 +7,6 @@ import {
   buildKpiHeader,
   buildSalesTrend,
   buildStageDistribution,
-  buildTopMarginProducts,
   buildWarehouseSales,
   splitByPeriod,
 } from '../decisiones-dashboard';
@@ -97,7 +96,7 @@ describe('splitByPeriod', () => {
 });
 
 describe('buildKpiHeader', () => {
-  it('computes Ventas, Margen, Pedidos, and AOV from revenue, cost, and commission', () => {
+  it('computes Ventas, Margen, and Pedidos from revenue, cost, and commission', () => {
     const products = [buildProduct({ id: 'p-1', costUSD: 4 })];
     const orders = [
       buildOrder({
@@ -124,7 +123,6 @@ describe('buildKpiHeader', () => {
     expect(view.ventasUSD.current).toBe(800);
     expect(view.margenUSD.current).toBe(400); // (500-200-75) + (300-100-25)
     expect(view.pedidos.current).toBe(2);
-    expect(view.aovUSD.current).toBe(400);
   });
 
   it('yields an "up" trend with no Infinity/NaN when the prior window is 0', () => {
@@ -360,32 +358,6 @@ describe('buildGestorRanking', () => {
   });
 });
 
-describe('buildTopMarginProducts', () => {
-  it("sums a product's aggregate margin across all its qualifying order lines", () => {
-    const products = [buildProduct({ id: 'p1', costUSD: 10 })];
-    const orders = [
-      buildOrder({ id: 'order-1', items: [{ productId: 'p1', quantity: 2, priceUSD: 25, commissionMN: 0 }] }),
-      buildOrder({ id: 'order-2', items: [{ productId: 'p1', quantity: 1, priceUSD: 30, commissionMN: 0 }] }),
-    ];
-    const state = buildState({ products, orders });
-
-    const view = buildTopMarginProducts(state);
-
-    const row = view.rows.find((r) => r.productId === 'p1')!;
-    expect(row.marginUSD).toBe(50);
-  });
-
-  it('excludes a product with zero qualifying sales, rather than zero-padding it', () => {
-    const products = [buildProduct({ id: 'p1', costUSD: 10 }), buildProduct({ id: 'p2', costUSD: 5 })];
-    const orders = [buildOrder({ id: 'order-1', items: [{ productId: 'p1', quantity: 1, priceUSD: 20, commissionMN: 0 }] })];
-    const state = buildState({ products, orders });
-
-    const view = buildTopMarginProducts(state);
-
-    expect(view.rows.find((r) => r.productId === 'p2')).toBeUndefined();
-  });
-});
-
 describe('buildInventoryAlerts', () => {
   it('classifies quantity:0 as agotado, quantity:2 as bajo, quantity:10 excluded (normal)', () => {
     const products = [
@@ -451,24 +423,6 @@ describe('orphan productId in margin/cost aggregation', () => {
     expect(view.margenUSD.current).toBe(460);
   });
 
-  it('contributes 0 to top-margin-products aggregation for an orphan line without throwing', () => {
-    const products = [buildProduct({ id: 'p-1', costUSD: 4 })];
-    const orders = [
-      buildOrder({
-        id: 'order-1',
-        items: [
-          { productId: 'p-1', quantity: 2, priceUSD: 10, commissionMN: 0 },
-          { productId: 'orphan-id', quantity: 5, priceUSD: 10, commissionMN: 0 },
-        ],
-      }),
-    ];
-    const state = buildState({ products, orders });
-
-    expect(() => buildTopMarginProducts(state)).not.toThrow();
-    const view = buildTopMarginProducts(state);
-    const row = view.rows.find((r) => r.productId === 'p-1')!;
-    expect(row.marginUSD).toBe(12); // 2 * (10 - 4)
-  });
 });
 
 describe('live-rate regression', () => {
@@ -525,22 +479,6 @@ describe('buildDecisionesDashboard', () => {
     expect(view.warehouses.rows).toEqual([]);
     expect(view.currencyMix.buckets).toEqual([]);
     expect(view.gestores.rows).toEqual([]);
-    expect(view.topMargin.rows).toEqual([]);
     expect(view.inventoryAlerts.groups).toEqual([]);
-    expect(view.lowestMargin).toEqual([]);
-  });
-
-  it('lowestMargin reuses buildProfitabilityRanking rows in ascending marginUSD order', () => {
-    const products = [buildProduct({ id: 'p-1', costUSD: 0 })];
-    const orders = [
-      buildOrder({ id: 'order-a', totalUSD: 300, commissionMN: 0, items: [] }),
-      buildOrder({ id: 'order-b', totalUSD: 100, commissionMN: 0, items: [] }),
-      buildOrder({ id: 'order-c', totalUSD: 50, commissionMN: 0, items: [] }),
-    ];
-    const state = buildState({ products, orders });
-
-    const view = buildDecisionesDashboard(state);
-
-    expect(view.lowestMargin.map((r) => r.marginUSD)).toEqual([50, 100, 300]);
   });
 });

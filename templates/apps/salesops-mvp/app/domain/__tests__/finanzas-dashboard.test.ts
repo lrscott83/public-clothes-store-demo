@@ -4,6 +4,8 @@ import {
   buildFinanceDashboard,
   buildFinanceKpiHeader,
   buildGestorCommissionCost,
+  buildLowMarginOrders,
+  buildProductMargin,
   buildRevenueTrend,
   buildWarehouseRevenue,
 } from '../finanzas-dashboard';
@@ -149,6 +151,165 @@ describe('buildFinanceKpiHeader', () => {
 
     expect(Number.isNaN(view.ingresosLiquidadosMN.current)).toBe(false);
     expect(view.ingresosLiquidadosMN.current).toBe(0);
+  });
+
+  it('aovUSD.current equals ingresosFacturadosUSD / pedidosCount for the current window', () => {
+    const orders = [
+      buildOrder({ id: 'order-1', totalUSD: 500, createdAt: daysBefore(2) }),
+      buildOrder({ id: 'order-2', totalUSD: 300, createdAt: daysBefore(3) }),
+    ];
+    const state = buildState({ orders });
+
+    const view = buildFinanceKpiHeader(state);
+
+    // facturado current = 800, pedidos current = 2
+    expect(view.aovUSD.current).toBe(400);
+  });
+
+  it('aovUSD.current is 0 (never NaN/Infinity) when the current window has 0 qualifying orders', () => {
+    const state = buildState({ orders: [] });
+
+    const view = buildFinanceKpiHeader(state);
+
+    expect(view.aovUSD.current).toBe(0);
+    expect(Number.isFinite(view.aovUSD.current)).toBe(true);
+  });
+
+  it('aovUSD trends "up" (never Infinity) when the prior window has 0 qualifying orders', () => {
+    const orders = [buildOrder({ id: 'order-1', totalUSD: 500, createdAt: daysBefore(2) })];
+    const state = buildState({ orders });
+
+    const view = buildFinanceKpiHeader(state);
+
+    expect(view.aovUSD.prior).toBe(0);
+    expect(view.aovUSD.trend).toBe('up');
+    expect(view.aovUSD.delta).not.toBe(Infinity);
+  });
+});
+
+describe('buildProductMargin', () => {
+  it("sums a product's aggregate margin across all its qualifying order lines, sorted desc", () => {
+    const products = [buildProduct({ id: 'p1', costUSD: 10 }), buildProduct({ id: 'p2', costUSD: 5 })];
+    const orders = [
+      buildOrder({ id: 'order-1', items: [{ productId: 'p1', quantity: 2, priceUSD: 25, commissionMN: 0 }] }),
+      buildOrder({ id: 'order-2', items: [{ productId: 'p1', quantity: 1, priceUSD: 30, commissionMN: 0 }] }),
+      buildOrder({ id: 'order-3', items: [{ productId: 'p2', quantity: 1, priceUSD: 10, commissionMN: 0 }] }),
+    ];
+    const state = buildState({ products, orders });
+
+    const view = buildProductMargin(state);
+
+    // p1: 2*(25-10) + 1*(30-10) = 30 + 20 = 50; p2: 1*(10-5) = 5
+    expect(view.rows.map((r) => r.productId)).toEqual(['p1', 'p2']);
+    expect(view.rows[0].marginUSD).toBe(50);
+    expect(view.rows[1].marginUSD).toBe(5);
+  });
+
+  it('excludes a product with zero qualifying sales, rather than zero-padding it', () => {
+    const products = [buildProduct({ id: 'p1', costUSD: 10 }), buildProduct({ id: 'p2', costUSD: 5 })];
+    const orders = [
+      buildOrder({ id: 'order-1', items: [{ productId: 'p1', quantity: 1, priceUSD: 20, commissionMN: 0 }] }),
+    ];
+    const state = buildState({ products, orders });
+
+    const view = buildProductMargin(state);
+
+    expect(view.rows.find((r) => r.productId === 'p2')).toBeUndefined();
+  });
+
+  it('skips an orphan productId line, contributing 0 without throwing', () => {
+    const products = [buildProduct({ id: 'p1', costUSD: 10 })];
+    const orders = [
+      buildOrder({
+        id: 'order-1',
+        items: [
+          { productId: 'p1', quantity: 2, priceUSD: 25, commissionMN: 0 },
+          { productId: 'orphan-id', quantity: 99, priceUSD: 10, commissionMN: 0 },
+        ],
+      }),
+    ];
+    const state = buildState({ products, orders });
+
+    expect(() => buildProductMargin(state)).not.toThrow();
+    const view = buildProductMargin(state);
+    const row = view.rows.find((r) => r.productId === 'p1')!;
+    expect(row.marginUSD).toBe(30); // 2 * (25 - 10)
+  });
+});
+
+describe('buildLowMarginOrders', () => {
+  it('sorts ascending by marginUSD, populating clientName/revenueUSD/marginUSD, no marginPercent/isLoss', () => {
+    const products = [buildProduct({ id: 'p-1', costUSD: 0 })];
+    const orders = [
+      buildOrder({ id: 'order-a', totalUSD: 300, commissionMN: 0, items: [] }),
+      buildOrder({ id: 'order-b', totalUSD: 100, commissionMN: 0, items: [] }),
+      buildOrder({ id: 'order-c', totalUSD: 50, commissionMN: 0, items: [] }),
+    ];
+    const state = buildState({ products, orders });
+
+    const view = buildLowMarginOrders(state);
+
+    expect(view.rows.map((r) => r.marginUSD)).toEqual([50, 100, 300]);
+    expect(view.rows[0].clientName).toBe('Cliente 1');
+    expect(view.rows[0].revenueUSD).toBe(50);
+    expect(view.rows[0]).not.toHaveProperty('marginPercent');
+    expect(view.rows[0]).not.toHaveProperty('isLoss');
+  });
+
+  it('tie-breaks equal-margin rows by orderId.localeCompare', () => {
+    const products = [buildProduct({ id: 'p-1', costUSD: 0 })];
+    const orders = [
+      buildOrder({ id: 'order-z', totalUSD: 100, commissionMN: 0, exchangeRateSnapshot: { usdToMn: 40 }, items: [] }),
+      buildOrder({ id: 'order-a', totalUSD: 100, commissionMN: 0, exchangeRateSnapshot: { usdToMn: 40 }, items: [] }),
+    ];
+    const state = buildState({ products, orders });
+
+    const view = buildLowMarginOrders(state);
+
+    expect(view.rows.map((r) => r.orderId)).toEqual(['order-a', 'order-z']);
+  });
+
+  it('skips an orphan productId, contributing 0 to cost without throwing', () => {
+    const products = [buildProduct({ id: 'p-1', costUSD: 4 })];
+    const orders = [
+      buildOrder({
+        id: 'order-1',
+        totalUSD: 500,
+        commissionMN: 0,
+        items: [
+          { productId: 'p-1', quantity: 10, priceUSD: 10, commissionMN: 0 },
+          { productId: 'orphan-id', quantity: 99, priceUSD: 10, commissionMN: 0 },
+        ],
+      }),
+    ];
+    const state = buildState({ products, orders });
+
+    expect(() => buildLowMarginOrders(state)).not.toThrow();
+    const view = buildLowMarginOrders(state);
+    // cost only counts p-1: 10 * 4 = 40; margin = 500 - 40 - 0 = 460
+    expect(view.rows[0].marginUSD).toBe(460);
+  });
+
+  it("uses each order's frozen exchangeRateSnapshot.usdToMn — a later state.exchangeRates edit does not change marginUSD", () => {
+    const products = [buildProduct({ id: 'p-1', costUSD: 4 })];
+    const orders = [
+      buildOrder({
+        id: 'order-1',
+        totalUSD: 500,
+        commissionMN: 3000,
+        exchangeRateSnapshot: { usdToMn: 40 },
+        items: [{ productId: 'p-1', quantity: 10, priceUSD: 10, commissionMN: 0 }],
+      }),
+    ];
+    const state = buildState({ products, orders, exchangeRates: { usdToMn: 40, zelle: 1, eur: 1 } });
+
+    const before = buildLowMarginOrders(state);
+    expect(before.rows[0].marginUSD).toBe(385); // 500 - 40 - 75
+
+    state.exchangeRates.usdToMn = 45;
+
+    const after = buildLowMarginOrders(state);
+    expect(after.rows[0].marginUSD).toBe(385);
   });
 });
 
@@ -352,6 +513,8 @@ describe('buildFinanceDashboard', () => {
     expect(view.currencyExposure.slices).toEqual([]);
     expect(view.gestorCommission.rows).toEqual([]);
     expect(view.warehouseRevenue.rows).toEqual([]);
+    expect(view.productMargin.rows).toEqual([]);
+    expect(view.lowMarginOrders.rows).toEqual([]);
   });
 
   it("a later live-rate edit does not change an already-computed figure — uses the order's frozen exchangeRateSnapshot.usdToMn", () => {

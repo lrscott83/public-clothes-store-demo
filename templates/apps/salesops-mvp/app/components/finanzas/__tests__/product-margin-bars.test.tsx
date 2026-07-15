@@ -1,32 +1,32 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { TopMarginProducts } from '../top-margin-products';
-import type { TopMarginView } from '../../../domain/decisiones-dashboard';
+import { ProductMarginBars } from '../product-margin-bars';
+import type { ProductMarginView } from '../../../domain/finanzas-dashboard';
 
-const TOP_MARGIN: TopMarginView = {
+const PRODUCT_MARGIN: ProductMarginView = {
   rows: [
     { productId: 'p1', name: 'Camiseta', marginUSD: 50 },
     { productId: 'p2', name: 'Pantalón', marginUSD: 20 },
   ],
 };
 
-describe('TopMarginProducts', () => {
+describe('ProductMarginBars', () => {
   it('renders one bar per ranked product with margin via formatMoney, sorted desc', () => {
-    const { container } = render(<TopMarginProducts topMargin={TOP_MARGIN} />);
+    const { container } = render(<ProductMarginBars productMargin={PRODUCT_MARGIN} />);
     expect(container.querySelectorAll('rect')).toHaveLength(2);
     expect(screen.getByText('Camiseta')).toBeInTheDocument();
     expect(screen.getByText('Pantalón')).toBeInTheDocument();
     expect(screen.getByText('$50.00')).toBeInTheDocument();
   });
 
-  it('has no "decisiones" in the heading', () => {
-    render(<TopMarginProducts topMargin={TOP_MARGIN} />);
-    expect(screen.getByText('Top productos por margen').textContent?.toLowerCase()).not.toContain('decisiones');
+  it('has no "finanzas" in the heading', () => {
+    render(<ProductMarginBars productMargin={PRODUCT_MARGIN} />);
+    expect(screen.getByText('Top productos por margen').textContent?.toLowerCase()).not.toContain('finanzas');
   });
 
-  it('does not render an unsold product (absent from the domain view already)', () => {
-    render(<TopMarginProducts topMargin={{ rows: [] }} />);
-    expect(screen.queryByText('Camiseta')).not.toBeInTheDocument();
+  it('renders nothing for an empty view', () => {
+    const { container } = render(<ProductMarginBars productMargin={{ rows: [] }} />);
+    expect(container.querySelectorAll('rect')).toHaveLength(0);
   });
 
   it('caps the chart at the top 8 products even when the domain view has more', () => {
@@ -35,17 +35,21 @@ describe('TopMarginProducts', () => {
       name: `Producto ${i}`,
       marginUSD: 100 - i,
     }));
-    const { container } = render(<TopMarginProducts topMargin={{ rows }} />);
+    const { container } = render(<ProductMarginBars productMargin={{ rows }} />);
     expect(container.querySelectorAll('rect')).toHaveLength(8);
-    // highest-margin product is kept, a beyond-top-8 product is dropped
     expect(screen.getByText('Producto 0')).toBeInTheDocument();
     expect(screen.queryByText('Producto 8')).not.toBeInTheDocument();
   });
 
   it('truncates a very long product name so it does not overrun the bar', () => {
     const rows = [{ productId: 'p1', name: 'Kit 5.12KW: Inversor MUST 3KW + Batería Humsienk', marginUSD: 100 }];
-    render(<TopMarginProducts topMargin={{ rows }} />);
+    render(<ProductMarginBars productMargin={{ rows }} />);
     expect(screen.queryByText('Kit 5.12KW: Inversor MUST 3KW + Batería Humsienk')).not.toBeInTheDocument();
     expect(screen.getByText(/^Kit 5\.12KW.*…$/)).toBeInTheDocument();
+  });
+
+  it('renders a help affordance', () => {
+    render(<ProductMarginBars productMargin={PRODUCT_MARGIN} />);
+    expect(screen.getByRole('button', { name: /qué significa/i })).toBeInTheDocument();
   });
 });

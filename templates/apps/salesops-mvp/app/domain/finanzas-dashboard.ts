@@ -72,15 +72,19 @@ export interface FinanceKpiHeaderView {
   margenNetoUSD: KpiTrend;
   /** current-window margenNetoUSD / ingresosFacturadosUSD * 100, or 0 when revenue is 0. */
   margenPercent: number;
+  /** Appended last — see 5th-tile ordering. ingresosFacturadosUSD / pedidosCount, guarded on count, not revenue. */
+  aovUSD: KpiTrend;
 }
 
 /**
- * Builds the 4 windowed KPI tiles (current 10-day window vs prior 10-day
+ * Builds the 5 windowed KPI tiles (current 10-day window vs prior 10-day
  * window, anchored to `state.generatedAt`). "Comisión pendiente" mirrors
  * `buildFinanceSummary`'s own pending definition (unpaid AND in
  * verificado/transportando/entregado) applied within each window — it does
  * NOT read the all-time `buildFinanceSummary(state).kpis.commissionPendingMN`
- * directly, since that figure isn't split by period.
+ * directly, since that figure isn't split by period. `aovUSD` (Ticket
+ * promedio) is appended last, count-guarded on `pedidosCurrent`/`pedidosPrior`
+ * (private locals — Finance surfaces no "Pedidos" tile of its own).
  */
 export function buildFinanceKpiHeader(state: SeedState): FinanceKpiHeaderView {
   const productById = new Map(state.products.map((product) => [product.id, product]));
@@ -101,12 +105,18 @@ export function buildFinanceKpiHeader(state: SeedState): FinanceKpiHeaderView {
   const margenCurrent = currentQ.reduce((sum, order) => sum + orderMarginUSD(order, productById), 0);
   const margenPrior = priorQ.reduce((sum, order) => sum + orderMarginUSD(order, productById), 0);
 
+  const pedidosCurrent = currentQ.length;
+  const pedidosPrior = priorQ.length;
+  const aovCurrent = pedidosCurrent > 0 ? facturadoCurrent / pedidosCurrent : 0;
+  const aovPrior = pedidosPrior > 0 ? facturadoPrior / pedidosPrior : 0;
+
   return {
     ingresosFacturadosUSD: buildKpiTrend(facturadoCurrent, facturadoPrior),
     ingresosLiquidadosMN: buildKpiTrend(liquidadoCurrent, liquidadoPrior),
     comisionPendienteMN: buildKpiTrend(comisionCurrent, comisionPrior),
     margenNetoUSD: buildKpiTrend(margenCurrent, margenPrior),
     margenPercent: facturadoCurrent > 0 ? (margenCurrent / facturadoCurrent) * 100 : 0,
+    aovUSD: buildKpiTrend(aovCurrent, aovPrior),
   };
 }
 
@@ -301,6 +311,83 @@ export function buildWarehouseRevenue(state: SeedState): WarehouseRevenueView {
   return { rows };
 }
 
+// ---- product margin (Layer 3c) ------------------------------------------------------
+
+export interface ProductMarginRow {
+  productId: string;
+  name: string;
+  marginUSD: number;
+}
+
+export interface ProductMarginView {
+  rows: ProductMarginRow[];
+}
+
+/**
+ * Ranks products by aggregate margin (`Σ qty * (priceUSD - costUSD)`) across
+ * all qualifying order lines — NOT revenue, and with NO per-line commission
+ * allocation (commission is an order/gestor-level figure, not decomposable
+ * per item). A product with no qualifying sales does not appear (not
+ * zero-padded). Orphan `productId` lines contribute 0, never throw.
+ * Finance-owned mirror of the deleted `buildTopMarginProducts`.
+ */
+export function buildProductMargin(state: SeedState): ProductMarginView {
+  const productById = new Map(state.products.map((product) => [product.id, product]));
+  const qualifyingOrders = qualifying(state.orders);
+  const marginByProduct = new Map<string, number>();
+
+  for (const order of qualifyingOrders) {
+    for (const item of order.items) {
+      const product = productById.get(item.productId);
+      if (!product) continue; // orphan skip — no matching product
+      const margin = item.quantity * (item.priceUSD - product.costUSD);
+      marginByProduct.set(item.productId, (marginByProduct.get(item.productId) ?? 0) + margin);
+    }
+  }
+
+  const rows: ProductMarginRow[] = [...marginByProduct.entries()].map(([productId, marginUSD]) => ({
+    productId,
+    name: productById.get(productId)!.name,
+    marginUSD,
+  }));
+  rows.sort((a, b) => b.marginUSD - a.marginUSD); // desc, highest margin first
+
+  return { rows };
+}
+
+// ---- low margin orders (Layer 3d) ---------------------------------------------------
+
+export interface OrderMarginRow {
+  orderId: string;
+  clientName: string;
+  revenueUSD: number;
+  marginUSD: number;
+}
+
+export interface LowMarginOrdersView {
+  rows: OrderMarginRow[];
+}
+
+/**
+ * Per-qualifying-order net margin (`totalUSD - orderCostUSD -
+ * orderCommissionUSD`), ascending (lowest margin first) with deterministic
+ * tie-break by `orderId.localeCompare`. Lean row shape — `marginPercent` and
+ * `isLoss` are dropped (unused at the leaf render); no "pérdida"/"loss"
+ * framing anywhere. Finance-owned mirror of the deleted
+ * `lowestMargin` re-sort.
+ */
+export function buildLowMarginOrders(state: SeedState): LowMarginOrdersView {
+  const productById = new Map(state.products.map((product) => [product.id, product]));
+  const rows: OrderMarginRow[] = qualifying(state.orders).map((order) => ({
+    orderId: order.id,
+    clientName: order.client.name,
+    revenueUSD: order.totalUSD,
+    marginUSD: orderMarginUSD(order, productById),
+  }));
+  rows.sort((a, b) => a.marginUSD - b.marginUSD || a.orderId.localeCompare(b.orderId));
+  return { rows };
+}
+
 // ---- orchestrator ----------------------------------------------------------------------
 
 export interface CommissionLiabilityView {
@@ -321,6 +408,8 @@ export interface FinanceDashboardView {
   currencyExposure: CurrencyExposureView;
   gestorCommission: GestorCommissionCostView;
   warehouseRevenue: WarehouseRevenueView;
+  productMargin: ProductMarginView;
+  lowMarginOrders: LowMarginOrdersView;
   /** Reuses `buildFinanceSummary`'s rows unchanged (Layer 3c drill-down). */
   stateBreakdown: FinanceStateRow[];
 }
@@ -348,6 +437,8 @@ export function buildFinanceDashboard(state: SeedState): FinanceDashboardView {
     currencyExposure: buildCurrencyExposure(state),
     gestorCommission: buildGestorCommissionCost(state),
     warehouseRevenue: buildWarehouseRevenue(state),
+    productMargin: buildProductMargin(state),
+    lowMarginOrders: buildLowMarginOrders(state),
     stateBreakdown: summary.rows,
   };
 }
