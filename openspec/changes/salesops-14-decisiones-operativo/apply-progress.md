@@ -93,17 +93,71 @@ One test-writing mistake (not a design/implementation issue): the first draft of
 - `vitest run` (full suite, all 71 files): **484/484 passed**
 - `react-router typegen && tsc`: **exit 0, no errors**
 
+---
+
+## Batch 3 (this batch) — Phase 1.3 + Phase 2 (PR3)
+
+**Mode**: Strict TDD (RED → GREEN, verified per task)
+**Delivery**: Single PR, `size:exception`, on current branch `salesops-mvp`, committed (`3fd7f1b`), not pushed.
+**Scope**: ONLY Capa 1.3 (`buildComisionesPorPagar` + `ComisionesPorPagar`) and Capa 2 (`buildPedidosDemorados` + `PedidosDemorados`, plus confirming `buildInventoryAlerts`/`InventoryAlerts` are already reusable unchanged for stock crítico). Capa 3, Análisis, and route recomposition are explicitly out of scope for this batch — not implemented, not wired.
+
+### Completed Tasks
+
+- [x] 1.9 RED: test `buildComisionesPorPagar` — total pending sum, one row per gestor (most overdue), sort desc `diasAtraso`
+- [x] 1.10 GREEN: implement `buildComisionesPorPagar`
+- [x] 1.11 RED: test `ComisionesPorPagar` component
+- [x] 1.12 GREEN: create `components/decisiones/comisiones-por-pagar.tsx`
+- [x] 2.1 RED: test `buildPedidosDemorados` — `STAGE_DELAY_THRESHOLD_DAYS` per stage, `stageEnteredAt` mapping, excludes `entregado`/`comision_pagada`, anchors to `generatedAt`
+- [x] 2.2 GREEN: implement `buildPedidosDemorados`
+- [x] 2.3 RED: test `PedidosDemorados` component — rows + antigüedad label
+- [x] 2.4 GREEN: create `components/decisiones/pedidos-demorados.tsx`
+- [x] 2.5 Confirmed `buildInventoryAlerts`/`InventoryAlerts` slot into Capa 2 unchanged — no domain/component change made; not yet wired into the route (route wiring is Phase 4/PR7)
+
+### TDD Cycle Evidence
+
+| Task | RED (test written, confirmed failing) | GREEN (implementation, confirmed passing) | REFACTOR |
+|------|------|------|------|
+| 1.9/1.10 `buildComisionesPorPagar` | Added 6 tests to `decisiones-dashboard.test.ts` (total pending sum excl. paid/creado, días de atraso anchored to generatedAt, at-most-one-row-per-gestor using most-overdue order, exclusion of gestors with only verificado/transportando pending, per-row total sums ALL pending not just overdue, desc sort); ran `vitest run app/domain/__tests__/decisiones-dashboard.test.ts` — 12 failed (`is not a function`) | Implemented `buildComisionesPorPagar`, reusing existing `isCommissionPending`/`sumCommissionMN`/`PENDING_COMMISSION_STATES` helpers (no duplication); re-ran — 45/45 passed | None needed — purely additive |
+| 1.11/1.12 `ComisionesPorPagar` | Created `comisiones-por-pagar.test.tsx` (4 tests: total figure, per-gestor rows with días de atraso + comisión value, empty state, no "decisiones" in heading); ran — failed with module-resolution error (verified by temporarily moving the not-yet-created component path aside — confirmed "Failed to resolve import" before implementing) | Created `comisiones-por-pagar.tsx`; MN values render as plain text (`{value} MN`), matching the `kpi-header.tsx` convention (MN is not a `formatMoney`-supported currency); added `DECISIONES_HELP.comisionesPorPagar`; re-ran — 4/4 passed | None needed |
+| 2.1/2.2 `buildPedidosDemorados` | Added 6 tests to `decisiones-dashboard.test.ts` (flags order past threshold, does not flag order within threshold, never evaluates entregado/comision_pagada, anchors to generatedAt not wall-clock, excludes verificado order missing verifiedAt, desc sort by diasEnEtapa); ran — 6 failed (`is not a function`) | Implemented `buildPedidosDemorados`, reusing existing `STAGE_LABELS`/`STAGE_DELAY_THRESHOLD_DAYS`/`DelayStage`; `stageEnteredAt` helper maps creado→createdAt, verificado→verifiedAt, transportando→transportingAt, returning `undefined` (excluded) when the field is absent; re-ran — 45/45 passed | None needed |
+| 2.3/2.4 `PedidosDemorados` | Created `pedidos-demorados.test.tsx` (3 tests: rows with client name/stage label/age, empty state, no "decisiones" in heading); ran — failed with module-resolution error | Created `pedidos-demorados.tsx`; added `DECISIONES_HELP.pedidosDemorados`; re-ran — 3/3 passed | None needed |
+| 2.5 `buildInventoryAlerts`/`InventoryAlerts` reuse | N/A — confirmation-only task | Read `domain/inventory.ts` (`buildInventorySummary`) and `decisiones-dashboard.ts`'s existing `buildInventoryAlerts`/`InventoryAlertsView`/`InventoryAlertGroup`/`InventoryAlertRow` plus `components/decisiones/inventory-alerts.tsx` — confirmed both are complete, tested (`buildInventoryAlerts` in `decisiones-dashboard.test.ts`, `InventoryAlerts` in `inventory-alerts.test.tsx`) and require zero changes for Capa 2 placement | N/A — no code touched |
+
+### Files Changed (Batch 3)
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `templates/apps/salesops-mvp/app/domain/decisiones-dashboard.ts` | Modified | Added `ComisionAtrasadaRow`/`ComisionesPorPagarView`/`buildComisionesPorPagar` and `PedidoDemoradoRow`/`PedidosDemoradosView`/`stageEnteredAt`/`buildPedidosDemorados` — new section between `buildTransportistaCapacity` and the orchestrator. Reuses `isCommissionPending`, `sumCommissionMN`, `PENDING_COMMISSION_STATES`, `STAGE_LABELS`, `STAGE_DELAY_THRESHOLD_DAYS`, `DelayStage` — no existing export modified, orchestrator untouched. |
+| `templates/apps/salesops-mvp/app/domain/__tests__/decisiones-dashboard.test.ts` | Modified | Added `describe('buildComisionesPorPagar', ...)` (6 tests) and `describe('buildPedidosDemorados', ...)` (6 tests) |
+| `templates/apps/salesops-mvp/app/components/decisiones/comisiones-por-pagar.tsx` | Created | Capa 1.3 leaf — total pending MN + "más atrasadas" list (one row per gestor, días de atraso + comisión value) |
+| `templates/apps/salesops-mvp/app/components/decisiones/__tests__/comisiones-por-pagar.test.tsx` | Created | 4 tests |
+| `templates/apps/salesops-mvp/app/components/decisiones/pedidos-demorados.tsx` | Created | Capa 2 leaf — one row per demorado order (client name, stage label, antigüedad in days), sorted desc by the domain builder |
+| `templates/apps/salesops-mvp/app/components/decisiones/__tests__/pedidos-demorados.test.tsx` | Created | 3 tests |
+| `templates/apps/salesops-mvp/app/components/decisiones/help-content.ts` | Modified | Added `DECISIONES_HELP.comisionesPorPagar` and `DECISIONES_HELP.pedidosDemorados` entries — additive, old KPI/trend entries untouched (removal is Phase 4 task 4.7) |
+| `openspec/changes/salesops-14-decisiones-operativo/tasks.md` | Modified | Checked off tasks 1.9–1.12 and 2.1–2.5 |
+
+### Deviations from Design
+
+None — implementation matches design.md's Capa 1.3/Capa 2 interface contracts exactly (`ComisionAtrasadaRow`/`ComisionesPorPagarView`, `PedidoDemoradoRow`/`PedidosDemoradosView`, field names and semantics; `STAGE_DELAY_THRESHOLD_DAYS` = `{creado:2, verificado:3, transportando:2}` used as-is from Batch 1). `buildInventoryAlerts`/`InventoryAlerts` reused with zero modification, per design's explicit instruction.
+
+### Issues Found
+
+None.
+
+### Full Suite / Typecheck Confirmation (Batch 3)
+
+- `vitest run` (full suite, all 73 files): **503/503 passed**
+- `react-router typegen && tsc`: **exit 0, no errors**
+
 ### Remaining Tasks (next batches)
 
-- [ ] 1.9–1.12 Capa 1.3 — Comisiones por pagar (PR3)
-- [ ] Phase 2: Capa 2 — Qué Atiendo YA (tasks 2.1–2.5) — PR3
 - [ ] Phase 3: Capa 3 — Comportamiento en el Tiempo (tasks 3.1–3.18) — PR4/PR5
 - [ ] Phase 4: Análisis + Route Recomposition + Cleanup (tasks 4.1–4.10) — PR6/PR7/PR8
 
-### Workload / PR Boundary
+### Workload / PR Boundary (Batch 3)
 
 - Mode: single PR, `size:exception` (explicitly authorized by the orchestrator for this batch)
-- Current work unit: Unit 2 (Capa 1.1 + 1.2, PR2 per tasks.md's Suggested Work Units table)
-- Boundary: starts from the clean, committed Phase 0 tree (`3049877`) on `salesops-mvp`; ends with `buildActiveOrdersByStateAndWarehouse`/`ActiveOrdersChart` and `buildTransportistaCapacity`/`TransportistaCapacity` implemented, tested, and typechecked — no consumers wired yet (route recomposition is PR7, not touched this batch)
-- Estimated review budget impact: ~330 changed lines (domain builders + 2 leaf components + 2 test files + help-content entries), matches the tasks.md forecast for PR2, under the 400-line budget
-- Commit: created as the final step of this batch, on the current branch, not pushed
+- Current work unit: Unit 3 (Capa 1.3 + Capa 2, PR3 per tasks.md's Suggested Work Units table)
+- Boundary: starts from the committed Batch 2 tree on `salesops-mvp`; ends with `buildComisionesPorPagar`/`ComisionesPorPagar` and `buildPedidosDemorados`/`PedidosDemorados` implemented, tested, and typechecked, plus confirmation that `buildInventoryAlerts`/`InventoryAlerts` need no change — no consumers wired yet (route recomposition is Phase 4/PR7, not touched this batch)
+- Estimated review budget impact: 499 changed lines (8 files: 1 domain module, 1 domain test file, 2 new leaf components, 2 new component test files, help-content, tasks.md) — above the tasks.md PR3 estimate (~380) and the 400-line guard budget, but within the `size:exception` explicitly authorized by the orchestrator for this batch (see delivery context above)
+- Commit: `3fd7f1b`, on the current branch, not pushed
