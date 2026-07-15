@@ -88,8 +88,8 @@ Chain strategy: pending
 
 - [x] 4.1 RED: update `gestor-ranking.test.tsx` — `[7d/30d/General]` selector prop, caller pre-filters via `windowedState` (spec: Ranking de Gestores).
 - [x] 4.2 GREEN: modify `components/decisiones/gestor-ranking.tsx` to add the period selector.
-- [ ] 4.3 RED: rewrite `routes/__tests__/decisiones.test.tsx` — assert 3 Capa-1 cards, Capa 2, Capa 3 (4 blocks + filter), Análisis (exactly 3 blocks), 1 `<h1>`, no KPI/margin/AOV blocks; toggle 7d↔30d recomputes Capa 3 only.
-- [ ] 4.4 GREEN: recompose `routes/decisiones.tsx` — `useState(seed)` + `useState<WindowDays>(7)` + `useMemo(buildDecisionesWindow)`; render Capa 1/2/3 + Análisis; read-only.
+- [x] 4.3 RED: rewrite `routes/__tests__/decisiones.test.tsx` — assert 3 Capa-1 cards, Capa 2, Capa 3 (4 blocks + filter), Análisis (exactly 3 blocks), 1 `<h1>`, no KPI/margin/AOV blocks; toggle 7d↔30d recomputes Capa 3 only.
+- [x] 4.4 GREEN: recompose `routes/decisiones.tsx` — `useState(seed)` + `useState<WindowDays>(7)` + `useMemo` over the individual pure builders; render Capa 1/2/3 + Análisis; read-only.
 - [ ] 4.5 Delete `components/decisiones/kpi-header.tsx`, `sales-trend-section.tsx`, `stage-distribution.tsx` + their `__tests__` files.
 - [ ] 4.6 Remove `buildKpiHeader`/`KpiHeaderView`, `buildSalesTrend`/`SalesTrendView`, `buildStageDistribution`/`StageDistributionView`, unused margin helpers from `decisiones-dashboard.ts`; trim `decisiones-dashboard.test.ts` accordingly.
 - [ ] 4.7 Update `components/decisiones/help-content.ts` — remove KPI/trend/stage-distribution entries, add entries for the 8 new operational blocks.
