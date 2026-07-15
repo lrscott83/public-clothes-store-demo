@@ -3,11 +3,13 @@ import {
   ACTIVE_STATES,
   STAGE_DELAY_THRESHOLD_DAYS,
   buildActiveOrdersByStateAndWarehouse,
+  buildComisionesPorPagar,
   buildCurrencyMix,
   buildDecisionesDashboard,
   buildGestorRanking,
   buildInventoryAlerts,
   buildKpiHeader,
+  buildPedidosDemorados,
   buildSalesTrend,
   buildStageDistribution,
   buildTransportistaCapacity,
@@ -597,6 +599,205 @@ describe('buildTransportistaCapacity', () => {
     const view = buildTransportistaCapacity(state);
 
     expect(view.sinChofer).toBe(2);
+  });
+});
+
+describe('buildComisionesPorPagar', () => {
+  it('sums pending MN across verificado/transportando/entregado, excluding paid and creado', () => {
+    const orders = [
+      buildOrder({ id: 'o1', state: 'verificado', commissionMN: 1000, commissionPaidAt: undefined }),
+      buildOrder({ id: 'o2', state: 'entregado', commissionMN: 2000, commissionPaidAt: undefined, deliveredAt: daysBefore(1) }),
+      buildOrder({ id: 'o3', state: 'comision_pagada', commissionMN: 3000, commissionPaidAt: daysBefore(1) }),
+      buildOrder({ id: 'o4', state: 'creado', commissionMN: 500, commissionPaidAt: undefined }),
+    ];
+    const state = buildState({ orders });
+
+    const view = buildComisionesPorPagar(state);
+
+    expect(view.totalPendienteMN).toBe(3000);
+  });
+
+  it("measures días de atraso from deliveredAt, anchored to generatedAt, independent of wall-clock", () => {
+    const gestores = [{ id: 'g1', name: 'Gestor Uno' }];
+    const orders = [
+      buildOrder({
+        id: 'o1',
+        state: 'entregado',
+        gestorId: 'g1',
+        deliveredAt: daysBefore(9),
+        commissionPaidAt: undefined,
+      }),
+    ];
+    const state = buildState({ gestores, orders });
+
+    const view = buildComisionesPorPagar(state);
+
+    const row = view.rows.find((r) => r.gestorId === 'g1')!;
+    expect(row.diasAtraso).toBe(9);
+  });
+
+  it("appears at most once per gestor, using their most-overdue unpaid entregado order", () => {
+    const gestores = [{ id: 'g1', name: 'Gestor Uno' }];
+    const orders = [
+      buildOrder({
+        id: 'o-recent',
+        state: 'entregado',
+        gestorId: 'g1',
+        deliveredAt: daysBefore(3),
+        commissionMN: 100,
+        commissionPaidAt: undefined,
+      }),
+      buildOrder({
+        id: 'o-old',
+        state: 'entregado',
+        gestorId: 'g1',
+        deliveredAt: daysBefore(9),
+        commissionMN: 200,
+        commissionPaidAt: undefined,
+      }),
+    ];
+    const state = buildState({ gestores, orders });
+
+    const view = buildComisionesPorPagar(state);
+
+    const rows = view.rows.filter((r) => r.gestorId === 'g1');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].diasAtraso).toBe(9);
+    expect(rows[0].comisionMN).toBe(200);
+  });
+
+  it('excludes a gestor whose pending orders are all verificado/transportando (not yet entregado)', () => {
+    const gestores = [{ id: 'g1', name: 'Gestor Uno' }];
+    const orders = [
+      buildOrder({ id: 'o1', state: 'verificado', gestorId: 'g1', commissionPaidAt: undefined }),
+      buildOrder({ id: 'o2', state: 'transportando', gestorId: 'g1', commissionPaidAt: undefined }),
+    ];
+    const state = buildState({ gestores, orders });
+
+    const view = buildComisionesPorPagar(state);
+
+    expect(view.rows.find((r) => r.gestorId === 'g1')).toBeUndefined();
+  });
+
+  it("totalPendienteMN per row sums ALL of that gestor's pending orders, not just the overdue one", () => {
+    const gestores = [{ id: 'g1', name: 'Gestor Uno' }];
+    const orders = [
+      buildOrder({
+        id: 'o-entregado',
+        state: 'entregado',
+        gestorId: 'g1',
+        commissionMN: 500,
+        deliveredAt: daysBefore(9),
+        commissionPaidAt: undefined,
+      }),
+      buildOrder({ id: 'o-verificado', state: 'verificado', gestorId: 'g1', commissionMN: 300, commissionPaidAt: undefined }),
+    ];
+    const state = buildState({ gestores, orders });
+
+    const view = buildComisionesPorPagar(state);
+
+    const row = view.rows.find((r) => r.gestorId === 'g1')!;
+    expect(row.totalPendienteMN).toBe(800);
+  });
+
+  it('sorts rows descending by días de atraso', () => {
+    const gestores = [
+      { id: 'g1', name: 'Gestor Uno' },
+      { id: 'g2', name: 'Gestor Dos' },
+    ];
+    const orders = [
+      buildOrder({ id: 'o1', state: 'entregado', gestorId: 'g1', deliveredAt: daysBefore(3), commissionPaidAt: undefined }),
+      buildOrder({ id: 'o2', state: 'entregado', gestorId: 'g2', deliveredAt: daysBefore(9), commissionPaidAt: undefined }),
+    ];
+    const state = buildState({ gestores, orders });
+
+    const view = buildComisionesPorPagar(state);
+
+    expect(view.rows.map((r) => r.gestorId)).toEqual(['g2', 'g1']);
+  });
+});
+
+describe('buildPedidosDemorados', () => {
+  it('flags an order older than its stage threshold as demorado', () => {
+    const orders = [
+      buildOrder({
+        id: 'o1',
+        state: 'verificado',
+        verifiedAt: daysBefore(STAGE_DELAY_THRESHOLD_DAYS.verificado + 1),
+      }),
+    ];
+    const state = buildState({ orders });
+
+    const view = buildPedidosDemorados(state);
+
+    expect(view.rows.map((r) => r.orderId)).toContain('o1');
+    const row = view.rows.find((r) => r.orderId === 'o1')!;
+    expect(row.stage).toBe('verificado');
+    expect(row.diasEnEtapa).toBe(STAGE_DELAY_THRESHOLD_DAYS.verificado + 1);
+    expect(row.thresholdDays).toBe(STAGE_DELAY_THRESHOLD_DAYS.verificado);
+  });
+
+  it('does not flag an order within its stage threshold', () => {
+    const orders = [
+      buildOrder({
+        id: 'o1',
+        state: 'transportando',
+        transportingAt: daysBefore(STAGE_DELAY_THRESHOLD_DAYS.transportando - 1),
+      }),
+    ];
+    const state = buildState({ orders });
+
+    const view = buildPedidosDemorados(state);
+
+    expect(view.rows.find((r) => r.orderId === 'o1')).toBeUndefined();
+  });
+
+  it('never evaluates entregado or comision_pagada orders, however old', () => {
+    const orders = [
+      buildOrder({ id: 'o1', state: 'entregado', createdAt: daysBefore(100), deliveredAt: daysBefore(50) }),
+      buildOrder({ id: 'o2', state: 'comision_pagada', createdAt: daysBefore(100) }),
+    ];
+    const state = buildState({ orders });
+
+    const view = buildPedidosDemorados(state);
+
+    expect(view.rows).toHaveLength(0);
+  });
+
+  it('anchors stage age to generatedAt, not the wall-clock date', () => {
+    const oldGeneratedAt = '2020-01-10T12:00:00.000Z';
+    const createdAt = new Date(
+      new Date(oldGeneratedAt).getTime() - (STAGE_DELAY_THRESHOLD_DAYS.creado + 1) * DAY_MS,
+    ).toISOString();
+    const state = buildState({
+      generatedAt: oldGeneratedAt,
+      orders: [buildOrder({ id: 'o1', state: 'creado', createdAt })],
+    });
+
+    const view = buildPedidosDemorados(state);
+
+    expect(view.rows.map((r) => r.orderId)).toContain('o1');
+  });
+
+  it('excludes a verificado order missing verifiedAt from the stage-age calculation', () => {
+    const orders = [buildOrder({ id: 'o1', state: 'verificado', verifiedAt: undefined, createdAt: daysBefore(30) })];
+    const state = buildState({ orders });
+
+    const view = buildPedidosDemorados(state);
+
+    expect(view.rows.find((r) => r.orderId === 'o1')).toBeUndefined();
+  });
+
+  it('sorts rows descending by días en etapa', () => {
+    const orders = [
+      buildOrder({ id: 'o1', state: 'creado', createdAt: daysBefore(STAGE_DELAY_THRESHOLD_DAYS.creado + 1) }),
+      buildOrder({ id: 'o2', state: 'creado', createdAt: daysBefore(STAGE_DELAY_THRESHOLD_DAYS.creado + 5) }),
+    ];
+    const state = buildState({ orders });
+
+    const view = buildPedidosDemorados(state);
+
+    expect(view.rows.map((r) => r.orderId)).toEqual(['o2', 'o1']);
   });
 });
 

@@ -50,18 +50,18 @@ Chain strategy: pending
 - [x] 1.6 GREEN: implement `buildTransportistaCapacity`.
 - [x] 1.7 RED: test `TransportistaCapacity` component.
 - [x] 1.8 GREEN: create `components/decisiones/transportista-capacity.tsx`.
-- [ ] 1.9 RED: test `buildComisionesPorPagar` — total pending sum, one row per gestor (most overdue), sort desc `diasAtraso` (spec: Capa 1.3).
-- [ ] 1.10 GREEN: implement `buildComisionesPorPagar`.
-- [ ] 1.11 RED: test `ComisionesPorPagar` component.
-- [ ] 1.12 GREEN: create `components/decisiones/comisiones-por-pagar.tsx`.
+- [x] 1.9 RED: test `buildComisionesPorPagar` — total pending sum, one row per gestor (most overdue), sort desc `diasAtraso` (spec: Capa 1.3).
+- [x] 1.10 GREEN: implement `buildComisionesPorPagar`.
+- [x] 1.11 RED: test `ComisionesPorPagar` component.
+- [x] 1.12 GREEN: create `components/decisiones/comisiones-por-pagar.tsx`.
 
 ## Phase 2: Capa 2 — Qué Atiendo YA (PR3, shares with 1.9-1.12)
 
-- [ ] 2.1 RED: test `buildPedidosDemorados` — `STAGE_DELAY_THRESHOLD_DAYS` per stage, `stageEnteredAt` mapping (`createdAt`/`verificado`Time/`transportingAt`), excludes `entregado`/`comision_pagada`, anchors to `generatedAt` (spec: Capa 2).
-- [ ] 2.2 GREEN: implement `buildPedidosDemorados`.
-- [ ] 2.3 RED: test `PedidosDemorados` component — rows + antigüedad label.
-- [ ] 2.4 GREEN: create `components/decisiones/pedidos-demorados.tsx`.
-- [ ] 2.5 Confirm `buildInventoryAlerts`/`InventoryAlerts` slot into Capa 2 unchanged — no domain/component change, wiring only in Phase 4.
+- [x] 2.1 RED: test `buildPedidosDemorados` — `STAGE_DELAY_THRESHOLD_DAYS` per stage, `stageEnteredAt` mapping (`createdAt`/`verificado`Time/`transportingAt`), excludes `entregado`/`comision_pagada`, anchors to `generatedAt` (spec: Capa 2).
+- [x] 2.2 GREEN: implement `buildPedidosDemorados`.
+- [x] 2.3 RED: test `PedidosDemorados` component — rows + antigüedad label.
+- [x] 2.4 GREEN: create `components/decisiones/pedidos-demorados.tsx`.
+- [x] 2.5 Confirm `buildInventoryAlerts`/`InventoryAlerts` slot into Capa 2 unchanged — no domain/component change, wiring only in Phase 4.
 
 ## Phase 3: Capa 3 — Comportamiento en el Tiempo (PR4 + PR5)
 

@@ -19,6 +19,16 @@ export const DECISIONES_HELP = {
     title: 'Transportistas',
     text: 'Quién está repartiendo ahora y quién tenés libre. "Sin chofer" cuenta pedidos ya verificados que todavía no tienen quién los lleve: son entregas frenadas por falta de asignación.',
   },
+  comisionesPorPagar: {
+    title: 'Comisiones por pagar',
+    text: 'Lo que les debés a tus gestores en moneda nacional (MN), y quién lleva más días esperando su cobro. Es plata comprometida: priorizá pagar a quien está más atrasado.',
+  },
+
+  // --- Capa 2 — Qué atiendo YA ---
+  pedidosDemorados: {
+    title: 'Pedidos demorados/trabados',
+    text: 'Pedidos parados más tiempo del normal en su etapa actual (creado, verificado o en camino). Cada uno es una entrega frenada: revisalos hoy antes de que se conviertan en un reclamo.',
+  },
 
   // --- KPI header (Layer 1) ---
   ventas: {

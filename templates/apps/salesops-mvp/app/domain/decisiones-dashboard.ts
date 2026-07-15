@@ -491,6 +491,129 @@ export function buildTransportistaCapacity(state: SeedState): TransportistaCapac
   return { rows, disponibles, transportando, sinChofer };
 }
 
+// ---- Capa 1.3: comisiones por pagar ------------------------------------------------------
+
+export interface ComisionAtrasadaRow {
+  gestorId: string;
+  gestorName: string;
+  diasAtraso: number;
+  comisionMN: number;
+  totalPendienteMN: number;
+}
+
+export interface ComisionesPorPagarView {
+  totalPendienteMN: number;
+  rows: ComisionAtrasadaRow[];
+}
+
+/**
+ * Capa 1.3 — "Comisiones por pagar": `totalPendienteMN` sums `commissionMN`
+ * across every order pending commission (`PENDING_COMMISSION_STATES`, unpaid
+ * — same shared definition as the KPI header). The "más atrasadas" list adds
+ * at most one row per gestor: their most-overdue unpaid `entregado` order
+ * (only `entregado` orders count toward "atraso" — commission becomes
+ * payable on delivery). A gestor with zero such orders does not appear.
+ */
+export function buildComisionesPorPagar(state: SeedState): ComisionesPorPagarView {
+  const anchorMs = new Date(state.generatedAt).getTime();
+  const gestorById = new Map(state.gestores.map((gestor) => [gestor.id, gestor]));
+
+  const pendingOrders = state.orders.filter(isCommissionPending);
+  const totalPendienteMN = sumCommissionMN(pendingOrders);
+
+  const pendingByGestor = new Map<string, Order[]>();
+  for (const order of pendingOrders) {
+    const list = pendingByGestor.get(order.gestorId) ?? [];
+    list.push(order);
+    pendingByGestor.set(order.gestorId, list);
+  }
+
+  const rows: ComisionAtrasadaRow[] = [];
+  for (const [gestorId, orders] of pendingByGestor) {
+    const overdueEntregados = orders.filter((order) => order.state === 'entregado' && order.deliveredAt);
+    if (overdueEntregados.length === 0) continue;
+
+    const mostOverdue = overdueEntregados.reduce((worst, order) =>
+      new Date(order.deliveredAt!).getTime() < new Date(worst.deliveredAt!).getTime() ? order : worst,
+    );
+
+    const diasAtraso = Math.floor((anchorMs - new Date(mostOverdue.deliveredAt!).getTime()) / DAY_MS);
+    const totalPendienteGestorMN = sumCommissionMN(orders);
+
+    rows.push({
+      gestorId,
+      gestorName: gestorById.get(gestorId)?.name ?? gestorId,
+      diasAtraso,
+      comisionMN: mostOverdue.commissionMN ?? 0,
+      totalPendienteMN: totalPendienteGestorMN,
+    });
+  }
+
+  rows.sort((a, b) => b.diasAtraso - a.diasAtraso);
+
+  return { totalPendienteMN, rows };
+}
+
+// ---- Capa 2: pedidos demorados / trabados -------------------------------------------------
+
+export interface PedidoDemoradoRow {
+  orderId: string;
+  clientName: string;
+  stage: DelayStage;
+  label: string;
+  diasEnEtapa: number;
+  thresholdDays: number;
+}
+
+export interface PedidosDemoradosView {
+  rows: PedidoDemoradoRow[];
+}
+
+function stageEnteredAt(order: Order, stage: DelayStage): string | undefined {
+  if (stage === 'creado') return order.createdAt;
+  if (stage === 'verificado') return order.verifiedAt;
+  return order.transportingAt;
+}
+
+/**
+ * Capa 2 — "Pedidos demorados/trabados": flags an order in one of the 3
+ * non-completed states whose age in its CURRENT stage — measured from the
+ * timestamp it entered that stage, anchored to `state.generatedAt` — exceeds
+ * `STAGE_DELAY_THRESHOLD_DAYS` for that stage. `entregado`/`comision_pagada`
+ * orders are never evaluated. An order missing the relevant stage timestamp
+ * (e.g. a `verificado` order with no `verifiedAt`) is excluded rather than
+ * treated as infinitely old.
+ */
+export function buildPedidosDemorados(state: SeedState): PedidosDemoradosView {
+  const anchorMs = new Date(state.generatedAt).getTime();
+
+  const rows: PedidoDemoradoRow[] = [];
+  for (const order of state.orders) {
+    if (order.state !== 'creado' && order.state !== 'verificado' && order.state !== 'transportando') continue;
+    const stage = order.state as DelayStage;
+
+    const enteredAt = stageEnteredAt(order, stage);
+    if (!enteredAt) continue;
+
+    const diasEnEtapa = Math.floor((anchorMs - new Date(enteredAt).getTime()) / DAY_MS);
+    const thresholdDays = STAGE_DELAY_THRESHOLD_DAYS[stage];
+    if (diasEnEtapa < thresholdDays) continue;
+
+    rows.push({
+      orderId: order.id,
+      clientName: order.client.name,
+      stage,
+      label: STAGE_LABELS[stage],
+      diasEnEtapa,
+      thresholdDays,
+    });
+  }
+
+  rows.sort((a, b) => b.diasEnEtapa - a.diasEnEtapa);
+
+  return { rows };
+}
+
 // ---- orchestrator ----------------------------------------------------------------------
 
 export interface DashboardView {
