@@ -125,7 +125,9 @@ aovUSD: buildKpiTrend(aovCurrent, aovPrior),
 
 **Count-guard (proposal Decision 3):** the guard is on the order COUNT (`pedidosCurrent > 0`), matching Decisiones' `ventasCurrent / pedidosCurrent` parity — NOT a revenue guard. When there are 0 qualifying orders in a window, AOV is 0 (no Infinity/NaN). `pedidosCurrent`/`pedidosPrior` are private locals (Finance surfaces no "Pedidos" tile), used only to derive AOV. Window is the existing current-vs-prior split from `splitByPeriod`/`buildKpiTrend`.
 
-### 4. Wire into `buildFinanceDashboard`
+## Domain layer
+
+### 5. Wire into `buildFinanceDashboard`
 
 Add two fields to `FinanceDashboardView` and compose the two new builders (AOV rides inside `kpis` already):
 
@@ -265,37 +267,11 @@ Both files deleted whole (proposal Decision 1). After the `lowestMargin` move, `
 
 Four files deleted: the two leaves and `__tests__/top-margin-products.test.tsx` + `__tests__/lowest-margin-orders.test.tsx`.
 
-## Test plan (Strict TDD — tests first; runner `vitest run` from `templates/apps/salesops-mvp/`; typecheck `react-router typegen && tsc`)
+## Test plan (Strict TDD — tests first)
 
 Both directions are test-first: removal tests assert absence BEFORE the code is removed; addition tests are RED before the Finance builders/leaves exist.
 
-### Created (Finanzas)
-
-- **`domain/__tests__/finanzas-dashboard.test.ts`** — extend the existing suite (reuse its `buildProduct`/`buildOrder`/`buildState` fixtures; copy from the decisiones-dashboard test fixtures which are identical in shape):
-  - `describe('buildProductMargin')`: sums a product's aggregate margin across its qualifying lines (`qty*(priceUSD-costUSD)`); excludes a product with zero qualifying sales; sorts desc; orphan `productId` line contributes 0 without throwing.
-  - `describe('buildLowMarginOrders')`: rows ascending by `marginUSD`; deterministic tie-break by `orderId.localeCompare` on equal margins; orphan `productId` contributes 0 to cost without throwing; frozen-rate regression — a later `state.exchangeRates` edit does NOT change an order's `marginUSD` (uses `exchangeRateSnapshot.usdToMn`); `clientName`/`revenueUSD`/`marginUSD` populated; `marginPercent`/`isLoss` absent from the row type.
-  - `describe('buildFinanceKpiHeader')` (extend): `aovUSD.current === facturadoCurrent / pedidosCurrent`; count-guard → `aovUSD.current === 0` when the current window has 0 qualifying orders (no NaN/Infinity); `prior === 0 → delta null` trend for AOV.
-  - Orchestrator/composition: `buildFinanceDashboard(state)` exposes `productMargin.rows` and `lowMarginOrders.rows`; both empty when all orders are `creado`.
-- **`components/finanzas/__tests__/product-margin-bars.test.tsx`** — mirror `top-margin-products.test.tsx`: one `rect` per ranked product, `formatMoney` values, desc from the view; caps at TOP_N=8; empty view renders nothing; long name truncated; heading has no "finanzas".
-- **`components/finanzas/__tests__/low-margin-orders.test.tsx`** — mirror `lowest-margin-orders.test.tsx`: renders rows in the given (ascending) order, Margen column via `formatMoney`; never shows "pérdida"/"loss"; heading "Pedidos de menor margen" has no "finanzas".
-
-### Modified
-
-- **`components/finanzas/__tests__/finance-kpi-header.test.tsx`**: add `aovUSD` to the `buildKpis` fixture; `getAllByRole('button', { name: /qué significa/i }).length` `toBe(4)` → `toBe(5)`; rename the "renders all 4 tiles" test to 5 and assert `Ticket promedio` + its formatted value render.
-- **`routes/__tests__/finanzas.test.tsx`**: in the happy-path test, assert `Top productos por margen`, `Pedidos de menor margen`, and `Ticket promedio` are present; in the empty-state test, assert `Top productos por margen`/`Pedidos de menor margen` are NOT present (they sit under `view.hasData`).
-- **`domain/__tests__/decisiones-dashboard.test.ts`**: drop the `buildTopMarginProducts` import (line 10); remove the `view.aovUSD.current` assertion (line 127) and reword the test title (line 100, drop "and AOV"); delete `describe('buildTopMarginProducts')` (363–387); delete the orphan top-margin test (454–471); delete the composition assertions for `view.topMargin` (528) and `view.lowestMargin` (530, 533–544).
-- **`components/decisiones/__tests__/kpi-header.test.tsx`**: remove `aovUSD` from the `KPIS` fixture (line 16); delete/rewrite the "AOV alongside Pedidos" test (line 34) so it asserts only the margin percent sublabel.
-- **`routes/__tests__/decisiones.test.tsx`**: remove the `Top productos por margen` / `Pedidos de menor margen` heading assertions (lines 36–37).
-
-### Deleted
-
-- `domain/__tests__/decisiones.test.ts`
-- `components/decisiones/__tests__/top-margin-products.test.tsx`
-- `components/decisiones/__tests__/lowest-margin-orders.test.tsx`
-
-### Regression gate
-
-Full `vitest run` must stay green — in particular the untouched Decisiones component/domain suites (gestor-ranking still carries its own `aovUSD` row field), `period-trend.test.ts`, and the finanzas leaf suites. `react-router typegen && tsc` must pass (the deleted `./decisiones` import and removed `TopMarginView`/`ProfitabilityRow` symbols must have zero dangling references).
+Runner: `vitest run` from `templates/apps/salesops-mvp/`; typecheck `react-router typegen && tsc` from the same cwd.
 
 ## Edge cases (invariants preserved verbatim)
 
@@ -313,7 +289,3 @@ Full `vitest run` must stay green — in particular the untouched Decisiones com
 - **Domain** (`finanzas-dashboard.ts`): owns `buildProductMargin`/`buildLowMarginOrders`/AOV via its OWN private helpers; imports `SeedState`/`types`/`buildFinanceSummary`/`period-trend` only. Never imports decisiones. Each builder is single-purpose (one aggregation each) and independently unit-tested.
 - **Sections** (`components/finanzas/*`): `ProductMarginBars` (BarChart leaf) and `LowMarginOrders` (table leaf) take finance view-model types, format at the leaf, own their `FINANZAS_HELP` copy. Never import `SeedState`/`components/decisiones/*`.
 - **Generic** (`components/charts/*`, `components/shared/*`): `BarChart`/`StatTile`/`InfoPopover` reused unchanged, zero domain knowledge.
-
-## Next step
-
-Run `sdd-tasks` (after the spec is ready) to slice this into ordered RED→GREEN work units — removals-with-absence-tests first, then Finance builders, then Finance leaves, then route + help copy.

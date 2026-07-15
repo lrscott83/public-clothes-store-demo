@@ -1,8 +1,8 @@
-# Spec — salesops-mvp (Tasks 1–11)
+# Spec — salesops-mvp (Tasks 1–13)
 
 ## Purpose
 
-Define the testable contract for the `@store-mgmt/salesops-mvp` app: a workspace app that registers correctly, serves on a distinct port, resolves 7 placeholder routes with a sidebar, renders a product against a local catalog, and ships with a deterministic frozen domain model + seed generator powering all seven screens. Tasks 1–3 complete: app skeleton, local ProductCard, full seed/domain/localStorage implementation, and the 3-step "crear pedido" wizard (Carrito → Cliente → Almacén). Task 4 complete: Pantalla 2 (Operador de gestores verifica pedidos) — read-only kanban board with rate-freeze verification and commission-paid marking. Task 5 complete: Pantalla 3 (Operador de almacén) — warehouse selector, carrier assignment, delivery marking, and backward-compatible board extension. Task 6 complete: Pantalla 4 (Tasas de cambio) — exchange rate editor (USD→MN, Zelle, EUR) rendering as editable numeric fields, saved via a new pure store action `updateExchangeRates` that writes only `state.exchangeRates` and never touches `state.orders`, preserving the frozen-snapshot invariant. Task 10 complete: Pantalla 6 (Decisiones) — 3-layer visual decision dashboard with KPI header (4 tiles with 10-day trends), 4 visuals (sales trend, orders-by-stage distribution, sales-by-warehouse, currency/payment mix), and 3 actionable blocks (gestor ranking, top products by margin, inventory alerts + lowest-margin orders), all fed 100% by seeded data with no invented values, using custom inline SVG chart primitives and pure domain helpers with strict TDD test coverage. Task 11 complete: Pantalla 7 (Finanzas) — rebuilt into a 3-layer financial control panel answering "¿dónde está mi plata y hacia dónde se va?" with 4 KPI tiles (10-day period trends), 4 financial visuals (revenue-over-time trend, commission liability donut, revenue by stage, currency/settlement mix), and 3 actionable blocks (commission cost & ROI per gestor, revenue per warehouse, revenue aging by state). Maintains full architectural decoupling from decisiones (zero cross-dashboard domain imports); all metrics 100% seeded with frozen exchange-rate snapshots; read-only with no mutations; strict TDD throughout. Task 7 (Inventario) remains out of scope.
+Define the testable contract for the `@store-mgmt/salesops-mvp` app: a workspace app that registers correctly, serves on a distinct port, resolves 7 placeholder routes with a sidebar, renders a product against a local catalog, and ships with a deterministic frozen domain model + seed generator powering all seven screens. Tasks 1–3 complete: app skeleton, local ProductCard, full seed/domain/localStorage implementation, and the 3-step "crear pedido" wizard (Carrito → Cliente → Almacén). Task 4 complete: Pantalla 2 (Operador de gestores verifica pedidos) — read-only kanban board with rate-freeze verification and commission-paid marking. Task 5 complete: Pantalla 3 (Operador de almacén) — warehouse selector, carrier assignment, delivery marking, and backward-compatible board extension. Task 6 complete: Pantalla 4 (Tasas de cambio) — exchange rate editor (USD→MN, Zelle, EUR) rendering as editable numeric fields, saved via a new pure store action `updateExchangeRates` that writes only `state.exchangeRates` and never touches `state.orders`, preserving the frozen-snapshot invariant. Task 10 complete: Pantalla 6 (Decisiones) — 3-layer visual decision dashboard with KPI header (4 tiles with 10-day trends), 4 visuals (sales trend, orders-by-stage distribution, sales-by-warehouse, currency/payment mix), and 2 actionable blocks (gestor ranking and inventory alerts), all fed 100% by seeded data with no invented values, using custom inline SVG chart primitives and pure domain helpers with strict TDD test coverage. Task 11 complete: Pantalla 7 (Finanzas) — rebuilt into a 3-layer financial control panel answering "¿dónde está mi dinero y hacia dónde se va?" with 5 KPI tiles (10-day period trends including AOV), 4 financial visuals (revenue-over-time trend, commission liability donut, revenue by stage, currency/settlement mix), and 3 actionable blocks (commission cost & ROI per gestor, revenue per warehouse, revenue aging by state). Maintains full architectural decoupling from decisiones (zero cross-dashboard domain imports); all metrics 100% seeded with frozen exchange-rate snapshots; read-only with no mutations; strict TDD throughout. Task 13 complete: Move profitability reads (top products by margin, lowest-margin orders, and AOV) from Decisiones to Finanzas, where they belong logically and operationally. `/decisiones` now focuses purely on commercial operations; `/finanzas` becomes the unified source of profitability truth. Task 7 (Inventario) remains out of scope.
 
 ## Requirements
 
@@ -781,8 +781,8 @@ totals.
 The `/decisiones` route MUST render a direct-render container (no `<Form>`,
 no loader, no `useNavigate`) that loads `SeedState` via `loadSeedState` on
 mount, computes every view model once via pure domain helpers, and renders,
-top to bottom: Layer 1 (5 KPI tiles), Layer 2 (4 visuals), Layer 3 (4
-actionable blocks). It MUST render exactly one `<h1>` and no other heading
+top to bottom: Layer 1 (4 KPI tiles), Layer 2 (4 visuals), Layer 3 (2
+actionable blocks: gestor ranking and inventory alerts). It MUST render exactly one `<h1>` and no other heading
 MUST contain the word "decisiones".
 
 #### Scenario: Route renders all three layers when qualifying orders exist
@@ -790,9 +790,10 @@ MUST contain the word "decisiones".
 - GIVEN `SeedState` contains at least one order in state `verificado` or later
 - WHEN the app navigates to `/decisiones`
 - THEN exactly one `<h1>` is rendered
-- AND the 5 KPI tiles of Layer 1 are rendered
+- AND the 4 KPI tiles of Layer 1 are rendered
 - AND the 4 visuals of Layer 2 are rendered
-- AND the 4 actionable blocks of Layer 3 are rendered
+- AND Layer 3 renders gestor ranking and inventory alerts, with no
+  top-productos-por-margen or pedidos-de-menor-margen block
 
 #### Scenario: No other heading repeats "decisiones"
 
@@ -826,40 +827,43 @@ items and other orders are still processed.
 - THEN it does not throw
 - AND that item contributes `0` to cost/margin while the rest of the order's items and other orders are still aggregated
 
-### Requirement: KPI Header Has Exactly Four Tiles
+### Requirement: KPI Header Has Exactly Four Tiles (Decisiones)
 
 Layer 1 MUST render exactly four KPI tiles, in this order: Ventas (USD),
-Margen (USD + %), Pedidos + ticket promedio (AOV), Comisión pendiente (MN).
+Margen (USD + %), Pedidos (count), Comisión pendiente (MN).
 Each tile's underlying value MUST be computed only from orders with
 `state !== 'creado'`, except "Comisión pendiente (MN)", which uses the
 pending/paid/in-transit state groupings defined below.
+(Previously: third tile was "Pedidos + ticket promedio (AOV)"; AOV now lives in Finanzas Layer 1 as a separate 5th tile.)
 
 #### Scenario: Four tiles render in the fixed order
 
 - GIVEN `SeedState` contains qualifying orders
 - WHEN `/decisiones` is rendered
-- THEN the KPI header shows exactly 4 tiles in the order: Ventas, Margen, Pedidos+AOV, Comisión pendiente
+- THEN the KPI header shows exactly 4 tiles in the order: Ventas, Margen, Pedidos, Comisión pendiente
+- AND no AOV/"ticket promedio" figure renders in the KPI header
 
-### Requirement: KPI Formulas
+### Requirement: KPI Formulas (Decisiones)
 
 Each KPI tile's value, computed over a given order set, MUST use:
 
 | KPI | Formula |
 |-----|---------|
 | Ventas (USD) | `Σ order.totalUSD` |
-| Margen (USD) | `Σ (order.totalUSD − orderCostUSD − orderCommissionUSD)`, using the same per-order cost/commission formula as `buildProfitabilityRanking` |
+| Margen (USD) | `Σ (order.totalUSD − orderCostUSD − orderCommissionUSD)`, using the same per-order cost/commission formula previously exposed by `buildProfitabilityRanking` |
 | Margen (%) | `marginUSD / revenueUSD × 100`, or `0` when `revenueUSD` is `0` |
 | Pedidos | `count` of qualifying orders |
-| Ticket promedio (AOV) | `revenueUSD / count`, or `0` when `count` is `0` |
 | Comisión pendiente (MN) | `Σ order.commissionMN` over orders where `state` is `verificado`, `transportando`, or `entregado` AND `commissionPaidAt` is not set (same "pending" definition as `buildFinanceSummary`) |
 
-#### Scenario: Margin and AOV are computed from revenue, cost, and commission
+(Previously: table included a "Ticket promedio (AOV)" row; removed — AOV is now Finanzas-only.)
+
+#### Scenario: Margin and Pedidos are computed from revenue, cost, and commission
 
 - GIVEN two qualifying orders: one with `totalUSD: 500`, `commissionMN: 3000`, `exchangeRateSnapshot.usdToMn: 40`, item cost `200`; another with `totalUSD: 300`, `commissionMN: 1000`, `exchangeRateSnapshot.usdToMn: 40`, item cost `100`
 - WHEN the KPI values are computed
 - THEN `Ventas (USD)` is `800`
 - AND `Margen (USD)` is `(500 − 200 − 75) + (300 − 100 − 25) = 225 + 175 = 400`
-- AND `Pedidos` is `2` and `Ticket promedio` is `400`
+- AND `Pedidos` is `2`
 
 #### Scenario: Comisión pendiente excludes paid and creado orders
 
@@ -1005,31 +1009,6 @@ still appear with all values at `0`, not be omitted.
 - WHEN the gestor ranking is built
 - THEN that gestor's row appears with `revenueUSD: 0`, `count: 0`, `aov: 0`, `commissionEarnedMN: 0`, `commissionPendingMN: 0`
 
-### Requirement: Top Productos por Margen Ranks by Aggregate Margin, Not Revenue
-
-Layer 3's top-products block MUST rank products by aggregate margin, not
-revenue. For each product, aggregate margin MUST be computed only from
-items belonging to qualifying orders (`state !== 'creado'`) as
-`Σ (item.quantity × (item.priceUSD − product.costUSD))` across all such
-items referencing that product. This aggregation intentionally excludes any
-per-line commission allocation (commission is an order/gestor-level figure,
-not attributable to a line item without an arbitrary split). Rows MUST be
-sorted by aggregate margin descending, and a product with no qualifying
-sales MUST NOT appear (unlike the warehouse/gestor rankings, this block only
-surfaces products that actually sold).
-
-#### Scenario: A product's aggregate margin sums across all its qualifying order lines
-
-- GIVEN product `p1` (`costUSD: 10`) appears in one qualifying order line with `quantity: 2`, `priceUSD: 25`, and in another qualifying order line with `quantity: 1`, `priceUSD: 30`
-- WHEN the top-products-by-margin aggregation runs
-- THEN `p1`'s aggregate margin is `2 × (25 − 10) + 1 × (30 − 10) = 30 + 20 = 50`
-
-#### Scenario: A product with no qualifying sales does not appear
-
-- GIVEN a product in `SeedState.products` that appears in no order with `state !== 'creado'`
-- WHEN the top-products-by-margin aggregation runs
-- THEN that product does not appear in the ranking
-
 ### Requirement: Alertas de Inventario Flags Low and Out-of-Stock Products per Warehouse
 
 Layer 3's inventory alerts block MUST classify every `SeedState.inventory`
@@ -1056,29 +1035,6 @@ whose `productId` has no matching product MUST be skipped without throwing.
 - GIVEN an inventory entry with `quantity: 10`
 - WHEN the alerts block is built
 - THEN that entry does not appear in the alerts list
-
-### Requirement: Layer 3 Lowest-Margin Orders Block Reuses buildProfitabilityRanking, Ascending, Without a "Loss" Label
-
-Layer 3's "pedidos de menor margen" block MUST reuse
-`buildProfitabilityRanking`'s existing output unchanged — no new margin
-computation — and display its rows in ascending `marginUSD` order (the
-lowest-margin tail first). It MUST NOT use "pérdida"/"loss" language or
-styling in this block, even for a row where `isLoss` happens to be `true`;
-the block's framing is strictly "menor margen" (lower-margin ranking), not a
-loss report.
-
-#### Scenario: Rows render lowest margin first
-
-- GIVEN `buildProfitabilityRanking` returns rows with `marginUSD` values `300`, `100`, `50` (already sorted descending by the existing helper)
-- WHEN the Layer 3 lowest-margin block renders
-- THEN the visible row order is `50`, `100`, `300`
-
-#### Scenario: No "loss" language appears even for a technically negative-margin row
-
-- GIVEN a row with `marginUSD < 0` (hypothetically, outside the fixed-cost seed assumption)
-- WHEN the Layer 3 block renders that row
-- THEN it is not labeled or styled as a "loss"/"pérdida"
-- AND it is only distinguishable by its position in the ascending ranking
 
 ### Requirement: No Sales Target / Meta Is Rendered
 
@@ -1199,9 +1155,9 @@ pagada" action.
 - WHEN inspected
 - THEN no `<form>` and no store-mutating button exist
 
-### Requirement: Layer 1 KPI Header Has Exactly Four Tiles With Period Trend
+### Requirement: Layer 1 KPI Header Has Exactly Five Tiles With Period Trend (Finanzas)
 
-Layer 1 MUST render four tiles, each computed for the current 10-day
+Layer 1 MUST render five tiles, each computed for the current 10-day
 window vs the prior 10-day window (anchored to `SeedState.generatedAt`,
 never the wall clock) with a trend indicator:
 
@@ -1211,16 +1167,24 @@ never the wall clock) with a trend indicator:
 | Ingresos liquidados (MN) | `Σ totalMN`, qualifying |
 | Comisión pendiente (MN) | `buildFinanceSummary.kpis.commissionPendingMN` |
 | Margen neto (USD) + % | `totalUSD − costoUSD − comisiónUSD`, aggregated |
+| Ticket promedio (AOV, USD) | `ingresosFacturadosUSD / pedidosCount`, `0` when `pedidosCount` is `0` |
 
-A `0`-prior / `>0`-current window MUST trend "up" (never `Infinity`).
+A `0`-prior / `>0`-current window MUST trend "up" (never `Infinity`). AOV
+lands last, after Margen neto.
 
-#### Scenario: Four tiles render with a safe trend
+#### Scenario: Five tiles render with a safe trend
 
 - GIVEN qualifying orders in both windows, one tile with prior `0` /
   current `> 0`
 - WHEN Layer 1 computes
-- THEN all 4 tiles render in order, and that tile shows "up", never
+- THEN all 5 tiles render in order, and that tile shows "up", never
   `Infinity`
+
+#### Scenario: AOV is guarded against zero orders
+
+- GIVEN a window with zero qualifying orders
+- WHEN the AOV tile computes for that window
+- THEN its value is `0`, never `NaN` or `Infinity`
 
 ### Requirement: Layer 2 Renders Four Financial Visuals
 
@@ -1245,22 +1209,47 @@ Every day in the 20-day window MUST appear, including days at `0`.
 - WHEN inspected
 - THEN it shows one series only, no cobrado/pendiente control or label
 
-### Requirement: Layer 3 Renders Three Actionable Finance Blocks
+### Requirement: Layer 3 Renders Five Actionable Finance Blocks
 
 | Block | Field(s) |
 |---|---|
 | Comisión y ROI por gestor | `buildGestorRanking`; derived pagada = earned − pending; take-rate = commission ÷ revenue |
 | Ventas por almacén | `Σ totalUSD` by `warehouseId`, qualifying, no split |
 | Flujo por estado | existing `StateBreakdownTable`, unchanged |
+| Top productos por margen | `Σ (item.quantity × (item.priceUSD − product.costUSD))` per product, qualifying orders only, sorted margin descending; a product with no qualifying sales does not appear |
+| Pedidos de menor margen | per-order `totalUSD − orderCostUSD − orderCommissionUSD`, sorted ascending by `marginUSD` with tie-break `a.orderId.localeCompare(b.orderId)` |
 
-A gestor/warehouse with zero qualifying orders MUST still appear at `0`,
-not be omitted.
+A gestor/warehouse with zero qualifying orders MUST still appear at `0`, not
+be omitted.
 
 #### Scenario: Zero-order gestor and warehouse still appear
 
 - GIVEN a gestor and a warehouse with no qualifying orders
 - WHEN Layer 3 computes
 - THEN both appear with all values at `0`
+
+#### Scenario: Top productos por margen sorts descending and skips orphan references
+
+- GIVEN product `p1` (`costUSD: 10`) appears in a qualifying order line with
+  `quantity: 2`, `priceUSD: 25`, and another line references a `productId`
+  with no matching product
+- WHEN the product-margin block builds
+- THEN `p1`'s aggregate margin is `2 × (25 − 10) = 30`
+- AND the orphan line contributes `0` without throwing
+
+#### Scenario: Pedidos de menor margen sorts ascending with a deterministic tie-break
+
+- GIVEN two qualifying orders with equal `marginUSD` and `orderId` values
+  `"b-order"` and `"a-order"`
+- WHEN the low-margin-orders block builds
+- THEN `"a-order"` appears before `"b-order"`
+
+#### Scenario: Product margin and order margin use each order's frozen rate
+
+- GIVEN a qualifying order with `exchangeRateSnapshot.usdToMn: 40` and
+  `state.exchangeRates.usdToMn` later edited to `45`
+- WHEN the product-margin or low-margin-orders block rebuilds
+- THEN the order's contribution still uses `40`, not `45`
 
 ### Requirement: Finance Data Derives Only From Seeded Data and Each Order's Frozen Rate
 
@@ -1301,6 +1290,43 @@ unchanged).
 - GIVEN `/finanzas` renders the commission KPI/donut and help copy
 - WHEN inspected
 - THEN copy frames commission as what the owner still owes gestores, never as money owed to the owner
+
+### Requirement: Finance-Owned Product Margin and Order Margin Builders
+
+Finanzas MUST expose its own private builders for product margin and
+low-margin orders, each independently exported for unit testing, reusing
+Finanzas' existing private per-order `orderCostUSD`/`orderCommissionUSD`/
+`orderMarginUSD` helpers rather than importing from any decisiones-owned code.
+`OrderMarginRow` MUST NOT include `marginPercent` or `isLoss` fields (both
+unused at the leaf render).
+
+#### Scenario: Product margin builder sorts descending by aggregate margin
+
+- GIVEN qualifying order lines for two products with aggregate margins `50`
+  and `120`
+- WHEN `ProductMarginView` builds
+- THEN the product with margin `120` appears before the one with margin `50`
+
+#### Scenario: Order margin builder omits marginPercent and isLoss
+
+- GIVEN a qualifying order used to build an `OrderMarginRow`
+- WHEN the row is inspected
+- THEN it has no `marginPercent` or `isLoss` property
+
+### Requirement: Finanzas Help Copy Covers Product Margin, Low-Margin Orders, and AOV
+
+`FINANZAS_HELP` MUST include an entry for each of: "Top productos por
+margen", "Pedidos de menor margen", and "Ticket promedio (AOV)". Every entry
+MUST use voseo, MUST use "dinero" (never "plata"), MUST NOT use
+Gross/Net/Fees/refunds vocabulary, and MUST NOT frame any figure as "por
+cobrar".
+
+#### Scenario: New help entries avoid banned vocabulary
+
+- GIVEN the three new `FINANZAS_HELP` entries
+- WHEN their text is inspected
+- THEN none contains "Gross", "Net", "Fees", "refund", "plata", or "por
+  cobrar"
 
 ## Out of Scope (explicit non-requirements)
 
