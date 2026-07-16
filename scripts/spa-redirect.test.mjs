@@ -56,3 +56,25 @@ test('round trip recovers the original path', () => {
   const restored = redirectToPath({ ...base, pathname: u.pathname, search: u.search, hash: u.hash });
   assert.equal(restored, original);
 });
+
+import { render404Html, injectDecodeSnippet } from './spa-redirect.mjs';
+
+test('render404Html embeds the redirect fn, segment count, and home link', () => {
+  const html = render404Html('function pathToRedirect(){return null;}', 2, '/public-clothes-store-demo/salesops/');
+  assert.match(html, /function pathToRedirect\(\)\{return null;\}/);
+  assert.match(html, /pathToRedirect\(window\.location,2\)/);
+  assert.match(html, /href="\/public-clothes-store-demo\/salesops\/"/);
+  assert.match(html, /window\.location\.replace/);
+});
+
+test('injectDecodeSnippet inserts the decode script right after <head>', () => {
+  const out = injectDecodeSnippet('<html><head><meta charset="utf-8"></head><body></body></html>', 'function redirectToPath(){return null;}');
+  assert.ok(out.startsWith('<html><head><script>'), 'script must follow <head>');
+  assert.match(out, /function redirectToPath\(\)\{return null;\}/);
+  assert.match(out, /history\.replaceState/);
+  assert.match(out, /<meta charset="utf-8">/); // original head content preserved
+});
+
+test('injectDecodeSnippet throws when there is no <head>', () => {
+  assert.throws(() => injectDecodeSnippet('<html><body></body></html>', 'fn'), /<head>/);
+});
