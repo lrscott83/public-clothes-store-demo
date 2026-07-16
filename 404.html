@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Redirecting…</title>
+<script>(function(){function pathToRedirect(loc, segmentsToKeep) {
+  const keptRoot = loc.pathname.split('/').slice(0, 1 + segmentsToKeep).join('/');
+  const rest = loc.pathname.slice(1).split('/').slice(segmentsToKeep).join('/');
+  if (!rest && (!loc.search || loc.search[1] === '/')) return null;
+  const origin = loc.protocol + '//' + loc.hostname + (loc.port ? ':' + loc.port : '');
+  return (
+    origin +
+    keptRoot +
+    '/?/' +
+    rest.replace(/&/g, '~and~') +
+    (loc.search ? '&' + loc.search.slice(1).replace(/&/g, '~and~') : '') +
+    loc.hash
+  );
+}var t=pathToRedirect(window.location,2);if(t){window.location.replace(t);}})();</script>
+</head>
+<body>
+<p>If you are not redirected, <a href="/public-clothes-store-demo/">go to the home page</a>.</p>
+</body>
+</html>
