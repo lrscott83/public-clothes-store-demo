@@ -1,7 +1,6 @@
 import { Link } from 'react-router';
 import type { Route } from './+types/home';
 import { HERO, TOUR, VIEWS, CLOSING } from '../data/overview';
-import { HeroLedger } from '../components/hero-ledger';
 
 export function meta(_args: Route.MetaArgs) {
   return [
@@ -27,37 +26,33 @@ export default function Home() {
   return (
     <div className="min-h-full bg-[#F5F1E8] text-[#1B140B]">
       <div className="mx-auto max-w-6xl px-6 py-10 md:px-10 md:py-16">
-        {/* Hero — the thesis, made literal by the ledger. */}
-        <section className="grid items-center gap-10 md:grid-cols-[1.05fr_0.95fr] md:gap-14">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#673AB7]">
-              {HERO.eyebrow}
-            </p>
-            <h1 className="mt-5 text-3xl font-extrabold leading-[1.05] tracking-tight text-[#1B140B] md:text-[3.25rem]">
-              {HERO.headline}{' '}
-              <span className="text-[#673AB7]">{HERO.headlineAccent}</span>
-            </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-[#6B6154] md:text-lg">
-              {HERO.subhead}
-            </p>
-            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-              <Link
-                to={HERO.primaryCta.path}
-                className="inline-flex items-center gap-2 rounded-sm bg-[#673AB7] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#5E35B1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#673AB7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F5F1E8]"
-              >
-                {HERO.primaryCta.label}
-                <span aria-hidden>→</span>
-              </Link>
-              <Link
-                to={HERO.secondaryCta.path}
-                className="text-sm font-medium text-[#6B6154] underline-offset-4 transition-colors hover:text-[#673AB7] hover:underline"
-              >
-                {HERO.secondaryCta.label}
-              </Link>
-            </div>
+        {/* Hero — the thesis. */}
+        <section className="max-w-3xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#673AB7]">
+            {HERO.eyebrow}
+          </p>
+          <h1 className="mt-5 text-3xl font-extrabold leading-[1.05] tracking-tight text-[#1B140B] md:text-[3.25rem]">
+            {HERO.headline}{' '}
+            <span className="text-[#673AB7]">{HERO.headlineAccent}</span>
+          </h1>
+          <p className="mt-5 max-w-xl text-base leading-relaxed text-[#6B6154] md:text-lg">
+            {HERO.subhead}
+          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+            <Link
+              to={HERO.primaryCta.path}
+              className="inline-flex items-center gap-2 rounded-sm bg-[#673AB7] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#5E35B1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#673AB7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F5F1E8]"
+            >
+              {HERO.primaryCta.label}
+              <span aria-hidden>→</span>
+            </Link>
+            <Link
+              to={HERO.secondaryCta.path}
+              className="text-sm font-medium text-[#6B6154] underline-offset-4 transition-colors hover:text-[#673AB7] hover:underline"
+            >
+              {HERO.secondaryCta.label}
+            </Link>
           </div>
-
-          <HeroLedger />
         </section>
 
         {/* Suggested tour — a real ordered path, so the numbering earns its place. */}
