@@ -26,6 +26,7 @@
 import { execSync } from 'node:child_process';
 import {
   existsSync,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -33,6 +34,12 @@ import {
   cpSync,
   writeFileSync,
 } from 'node:fs';
+import {
+  pathToRedirect,
+  redirectToPath,
+  render404Html,
+  injectDecodeSnippet,
+} from './spa-redirect.mjs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -124,8 +131,28 @@ for (const { folder, app, vertical } of TARGETS) {
   }
 
   cpSync(clientDir, join(outDir, folder), { recursive: true });
+
+  // Deep links arrive here via the root 404.html redirect as `…/?/route`.
+  // Restore the real URL before react-router hydrates so it renders the route.
+  const indexPath = join(outDir, folder, 'index.html');
+  const indexHtml = readFileSync(indexPath, 'utf8');
+  writeFileSync(indexPath, injectDecodeSnippet(indexHtml, redirectToPath.toString()));
+
   console.log(`[build-pages-site] ${folder} -> ${join(outDir, folder)}`);
 }
+
+// --- Root 404 fallback -------------------------------------------------------
+// GitHub Pages serves ONLY the site-root 404.html for not-found paths (verified
+// live: per-directory 404.html is never used as a fallback). This catches every
+// deep link site-wide and redirects it into the owning app with the requested
+// route encoded in the query, where the app's index.html decode snippet
+// restores it. pathSegmentsToKeep = repo segment(s) + the app folder.
+const pathSegmentsToKeep = REPO_BASE.split('/').filter(Boolean).length + 1;
+writeFileSync(
+  join(outDir, '404.html'),
+  render404Html(pathToRedirect.toString(), pathSegmentsToKeep, `${REPO_BASE}/`),
+);
+console.log(`[build-pages-site] Root 404.html (pathSegmentsToKeep=${pathSegmentsToKeep})`);
 
 // --- Root redirect ----------------------------------------------------------
 // `/<repo>/` -> `/<repo>/<folder>/`. meta-refresh + JS fallback + visible link
