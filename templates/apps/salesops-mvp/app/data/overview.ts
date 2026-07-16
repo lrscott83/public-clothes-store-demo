@@ -47,6 +47,28 @@ export const HERO = {
   secondaryCta: { label: 'o creá un pedido de prueba', path: '/pedidos/nuevo' },
 } as const;
 
+/** One ledger line in the hero money-flow. `in` = money collected, `out` = money that leaves. */
+export interface LedgerLine {
+  label: string;
+  amount: number;
+  kind: 'in' | 'out';
+}
+
+/**
+ * The hero's signature: an illustrative money-flow that resolves the thesis
+ * ("cuánto entra, cuánto debés, qué queda limpio") into a single ledger.
+ * Demo figures in USD — net = 12.480 − 1.872 − 640 = 9.968.
+ */
+export const HERO_LEDGER = {
+  currency: 'USD',
+  lines: [
+    { label: 'Ventas', amount: 12480, kind: 'in' },
+    { label: 'Comisión a gestores', amount: 1872, kind: 'out' },
+    { label: 'Exposición a la tasa', amount: 640, kind: 'out' },
+  ] satisfies LedgerLine[],
+  netLabel: 'Neto limpio',
+} as const;
+
 export const TOUR: TourStep[] = [
   {
     n: '01',
