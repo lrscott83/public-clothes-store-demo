@@ -18,9 +18,8 @@ export function meta(_args: Route.MetaArgs) {
  * visible). Prospect-facing: states the MVP thesis, offers a suggested demo
  * path, and summarizes every view. Copy + metadata live in app/data/overview.ts.
  *
- * Design: warm-paper canvas with a single bold object — the hero ledger
- * (HeroLedger) — carrying the thesis. Everything around it stays quiet. Color
- * is semantic throughout: violet = the brand / what stays, on light surfaces.
+ * Design: warm-paper canvas with the brand violet as the single accent on light
+ * surfaces — restyles the existing sections; adds no new elements.
  */
 export default function Home() {
   return (
