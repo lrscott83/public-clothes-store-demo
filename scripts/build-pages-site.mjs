@@ -147,6 +147,9 @@ for (const { folder, app, vertical } of TARGETS) {
 // deep link site-wide and redirects it into the owning app with the requested
 // route encoded in the query, where the app's index.html decode snippet
 // restores it. pathSegmentsToKeep = repo segment(s) + the app folder.
+// NOTE: pathToRedirect.toString() / redirectToPath.toString() below embed
+// those helpers verbatim as browser source — never route them through a
+// bundler/minifier/transpiler, or the embedded code will break.
 const pathSegmentsToKeep = REPO_BASE.split('/').filter(Boolean).length + 1;
 writeFileSync(
   join(outDir, '404.html'),

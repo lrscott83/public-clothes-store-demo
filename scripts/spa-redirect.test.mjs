@@ -35,6 +35,11 @@ test('pathToRedirect returns null at the kept-segments root', () => {
   assert.equal(pathToRedirect(loc('/public-clothes-store-demo/salesops/'), 2), null);
 });
 
+test('pathToRedirect does not re-encode an already-encoded 404 re-entry (no loop)', () => {
+  // GitHub re-serves root 404.html for a non-existent folder with our own ?/ marker
+  assert.equal(pathToRedirect(loc('/public-clothes-store-demo/typo/', '?/abc'), 2), null);
+});
+
 test('redirectToPath reconstructs the real path from the marker', () => {
   const out = redirectToPath(loc('/public-clothes-store-demo/salesops/', '?/decisiones'));
   assert.equal(out, '/public-clothes-store-demo/salesops/decisiones');

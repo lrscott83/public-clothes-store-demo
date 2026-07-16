@@ -6,7 +6,7 @@
 export function pathToRedirect(loc, segmentsToKeep) {
   const keptRoot = loc.pathname.split('/').slice(0, 1 + segmentsToKeep).join('/');
   const rest = loc.pathname.slice(1).split('/').slice(segmentsToKeep).join('/');
-  if (!rest && !loc.search) return null;
+  if (!rest && (!loc.search || loc.search[1] === '/')) return null;
   const origin = loc.protocol + '//' + loc.hostname + (loc.port ? ':' + loc.port : '');
   return (
     origin +
