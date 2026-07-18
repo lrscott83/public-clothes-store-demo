@@ -1,0 +1,14 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/client"
+  runtime      = "nodejs"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// No models yet — this is the walking-skeleton baseline.
+// The first domain module (Currency / exchange rates) adds the first
+// models in its own SDD change.

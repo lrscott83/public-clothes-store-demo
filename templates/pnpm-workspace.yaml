@@ -4,5 +4,8 @@ packages:
 
 onlyBuiltDependencies:
   - '@tailwindcss/oxide'
+  - '@prisma/client'
+  - '@prisma/engines'
   - esbuild
+  - prisma
   - unrs-resolver
