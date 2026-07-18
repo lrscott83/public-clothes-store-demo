@@ -7,3 +7,4 @@ export * from './models/order';
 export * from './models/expense';
 export * from './models/sale-credit';
 export * from './enums';
+export * from './currency/index';
