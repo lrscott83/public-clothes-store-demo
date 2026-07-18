@@ -5,7 +5,8 @@
   "private": true,
   "exports": {
     "./base": "./base.config.js",
-    "./react-router": "./react-router.config.js"
+    "./react-router": "./react-router.config.js",
+    "./backend-boundaries": "./backend-boundaries.config.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.31.0",
