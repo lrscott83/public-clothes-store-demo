@@ -37,6 +37,8 @@
     "APP_VERSION",
     "API_URL",
     "SESSION_SECRET",
-    "SESSION_DOMAIN"
+    "SESSION_DOMAIN",
+    "PORT",
+    "DATABASE_URL"
   ]
 }
