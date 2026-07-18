@@ -1,4 +1,5 @@
 import config from '@store-mgmt/eslint-config/react-router';
+import { webBackendBoundaryRule } from '@store-mgmt/eslint-config/backend-boundaries';
 
 export default [
   ...config,
@@ -14,4 +15,5 @@ export default [
       ],
     },
   },
+  webBackendBoundaryRule,
 ];

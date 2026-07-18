@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\" --fix --max-warnings 0",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "test": "jest --passWithNoTests",
@@ -19,10 +20,12 @@
     "pg": "^8.22.0"
   },
   "devDependencies": {
+    "@store-mgmt/eslint-config": "workspace:*",
     "@store-mgmt/typescript-config": "workspace:*",
     "@types/jest": "^30.0.0",
     "@types/node": "^22",
     "@types/pg": "^8.20.0",
+    "eslint": "^9.31.0",
     "jest": "^30.0.0",
     "prisma": "^7.8.0",
     "rimraf": "^6.1.3",

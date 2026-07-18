@@ -7,7 +7,7 @@
     "dev": "react-router dev",
     "dev:local": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
-    "lint": "eslint . --ext .ts,.tsx",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 3",
     "typecheck": "react-router typegen && tsc",
     "clean": "rimraf build .react-router",
     "test": "vitest run"
