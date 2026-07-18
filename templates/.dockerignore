@@ -1,0 +1,10 @@
+# Keep the build context small — everything below is regenerated inside the
+# image or is irrelevant to the build.
+**/node_modules
+**/.turbo
+**/build
+**/dist
+**/dist-pages
+**/.react-router
+.git
+**/*.log
