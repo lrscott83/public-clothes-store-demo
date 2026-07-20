@@ -15,7 +15,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "lint": "eslint \"src/**/*.ts\" --fix --max-warnings 0",
     "test": "vitest run",
     "clean": "rimraf dist"
