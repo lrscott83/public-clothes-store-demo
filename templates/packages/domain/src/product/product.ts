@@ -13,7 +13,7 @@ import { InvalidProductError } from './errors.js';
 export interface Product {
   readonly id: string;
   readonly name: string;
-  readonly description?: string;
+  readonly description: string;
   readonly sku?: string;
   readonly barcode?: string;
   readonly price: Money;
@@ -39,7 +39,7 @@ export interface Product {
 export interface CreateProductInput {
   readonly id?: string;
   readonly name: string;
-  readonly description?: string;
+  readonly description: string;
   readonly sku?: string;
   readonly barcode?: string;
   readonly price: Money;

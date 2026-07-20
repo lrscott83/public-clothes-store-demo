@@ -6,6 +6,7 @@ import { money } from '../currency/money.js';
 function buildProduct(overrides: Partial<Parameters<typeof createProduct>[0]> = {}) {
   return createProduct({
     name: 'Cafetera Express',
+    description: 'Cafetera express de 15 bares con vaporizador de leche.',
     price: money(10000n, 'USD'), // $100.00
     costoUSD: money(6000n, 'USD'),
     categoryId: 'category-uuid-1',

@@ -6,6 +6,7 @@ import { money } from '../currency/money.js';
 function validInput() {
   return {
     name: 'Cafetera Express',
+    description: 'Cafetera express de 15 bares con vaporizador de leche.',
     price: money(10000n, 'USD'), // $100.00
     costoUSD: money(6000n, 'USD'), // $60.00
     categoryId: 'category-uuid-1',
