@@ -41,9 +41,13 @@ function resolveRateForCurrency(
   at: Date,
 ): ResolvedRate {
   if (currency === 'USD') {
+    // Fabricated pivot row — never persisted, so `id` is explicitly absent
+    // (never a fake/fabricated UUID). Never omit this comment when touching
+    // this branch: callers (e.g. the API's RateResponseDto) rely on the
+    // absence of `id` to distinguish "synthetic" from "real DB row".
     return {
       rate: USD_IDENTITY_RATE,
-      source: { channel: 'ZELLE', rate: USD_IDENTITY_RATE, effectiveFrom: at },
+      source: { channel: 'ZELLE', rate: USD_IDENTITY_RATE, effectiveFrom: at, id: undefined },
     };
   }
   const candidates = rates.filter((r) => CHANNEL_CURRENCY[r.channel] === currency);

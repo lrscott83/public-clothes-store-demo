@@ -65,21 +65,30 @@ Delivery is `single-pr`: orchestrator must record `size:exception` before `sdd-a
 
 ## Phase 4: api-salesops — CurrencyModule (jest, `pnpm --filter @store-mgmt/api-salesops test`)
 
-- [ ] 4.1 `apps/api-salesops/src/currency/dto/*.ts`: request/response DTOs, every money/rate field `string`.
-- [ ] 4.2 [RED] `currency.service.spec.ts`: with mocked `CURRENCY_REPOSITORY`, service maps resolved `bigint` Money/rate to decimal strings.
-- [ ] 4.3 [RED] same file: service surfaces `RateNotFoundError` as a typed exception, not a swallowed 0/null.
-- [ ] 4.4 [GREEN] `currency.service.ts`: inject `CURRENCY_REPOSITORY`, call `resolverTasa`/`convertir`, map to DTOs, to pass 4.2-4.3.
-- [ ] 4.5 [RED] `currency.controller.spec.ts`: `POST /currency/rates` → 201 string fields; `GET /currency/rates?channel&at` → latest string rate; `GET /currency/convert` → string amount + `rateApplied`.
-- [ ] 4.6 [RED] same file: `/currency/convert` with no resolvable rate → 404/422 (never 0/null); malformed decimal → 400.
-- [ ] 4.7 [GREEN] `currency.controller.ts` to pass 4.5-4.6.
-- [ ] 4.8 `currency.module.ts` (imports `InfraDbModule`; binds `CURRENCY_REPOSITORY→PrismaCurrencyRepository`; declares controller+service); wire into `app.module.ts`.
-- [ ] 4.9 Run `pnpm --filter @store-mgmt/api-salesops test` full-green.
+- [x] 4.1 `apps/api-salesops/src/currency/dto/*.ts`: request/response DTOs, every money/rate field `string`. Evidence: `dto/create-rate.dto.ts`, `dto/rate-response.dto.ts`, `dto/convert-query.dto.ts`, `dto/convert-response.dto.ts`, `dto/index.ts` — all money/rate/amount fields typed `string`. Also added `@store-mgmt/domain: workspace:*` to `apps/api-salesops/package.json` (was missing).
+- [x] 4.2 [RED] `currency.service.spec.ts`: with mocked `CURRENCY_REPOSITORY`, service maps resolved `bigint` Money/rate to decimal strings. Evidence: confirmed RED first (`Could not locate module ./currency.service.js` — missing production file), then GREEN after 4.4 (6/6 tests).
+- [x] 4.3 [RED] same file: service surfaces `RateNotFoundError` as a typed exception, not a swallowed 0/null. Evidence: `getLatestRate`/`convert` tests assert `rejects.toBeInstanceOf(RateNotFoundError)`; a third test also asserts `InvalidMoneyError` propagates for malformed decimals without touching the repository.
+- [x] 4.4 [GREEN] `currency.service.ts`: inject `CURRENCY_REPOSITORY`, call `resolverTasa`/`convertir`, map to DTOs, to pass 4.2-4.3. Evidence: 6/6 green (`pnpm --filter @store-mgmt/api-salesops test -- currency.service.spec`). Deviation note: since the port only exposes `ratesForChannel(channel, at?)` (no "all rates" method) but `resolverTasa`/`convertir`'s currency-fallback cascade needs cross-channel rows, the service fetches all 5 fixed channels in parallel (`fetchAllRates`) and lets the pure domain function do the cascade — no port/domain change needed.
+- [x] 4.5 [RED] `currency.controller.spec.ts`: `POST /currency/rates` → 201 string fields; `GET /currency/rates?channel&at` → latest string rate; `GET /currency/convert` → string amount + `rateApplied`. Evidence: confirmed RED first (`Could not locate module ./currency.controller.js`), then GREEN after 4.7.
+- [x] 4.6 [RED] same file: `/currency/convert` with no resolvable rate → 404/422 (never 0/null); malformed decimal → 400. Evidence: also added coverage for `POST /currency/rates` and `GET /currency/convert` rejecting unknown channel/currency with 400 before reaching the service. 8/8 green.
+- [x] 4.7 [GREEN] `currency.controller.ts` to pass 4.5-4.6. Evidence: validates channel/currency enums at the boundary (`assertChannel`/`assertCurrency` → 400), maps `RateNotFoundError`→404 and `InvalidMoneyError`→400 via a private `withDomainErrorMapping` wrapper. 8/8 green.
+- [x] 4.8 `currency.module.ts` (imports `InfraDbModule`; binds `CURRENCY_REPOSITORY→PrismaCurrencyRepository`; declares controller+service); wire into `app.module.ts`. Evidence: `CurrencyModule` added to `AppModule` imports; `typecheck`/`build` both exit 0, proving the DI wiring (`PrismaCurrencyRepository` resolving `PrismaService` from `InfraDbModule`) compiles and links correctly.
+- [x] 4.9 Run `pnpm --filter @store-mgmt/api-salesops test` full-green. Evidence: `Test Suites: 3 passed, 3 total / Tests: 15 passed, 15 total`.
 
 ## Phase 5: Cross-cutting Verification
 
-- [ ] 5.1 `pnpm --filter @store-mgmt/domain lint && pnpm --filter @store-mgmt/infra-db lint && pnpm --filter @store-mgmt/api-salesops lint` — `backend-boundaries --max-warnings 0` stays green; domain still imports nothing from infra/api.
-- [ ] 5.2 Run all three suites together (domain vitest, infra-db jest w/ docker Postgres, api-salesops jest); confirm every checklist item in `design.md` is satisfied.
-- [ ] 5.3 Check off `design.md`'s reviewer checklist boxes as evidence is gathered.
+- [x] 5.1 `pnpm --filter @store-mgmt/domain lint && pnpm --filter @store-mgmt/infra-db lint && pnpm --filter @store-mgmt/api-salesops lint` — `backend-boundaries --max-warnings 0` stays green; domain still imports nothing from infra/api. Evidence: all three exit 0, no output.
+- [x] 5.2 Run all three suites together (domain vitest, infra-db jest w/ docker Postgres, api-salesops jest); confirm every checklist item in `design.md` is satisfied. Evidence: domain 96/96, infra-db 6/6 (real Postgres), api-salesops 17/17 — all green; `typecheck`+`build` also exit 0 for infra-db and api-salesops (domain rebuilt first so consumers see the new `id?` type).
+- [x] 5.3 Check off `design.md`'s reviewer checklist boxes as evidence is gathered. Evidence: all 7 boxes + 1 new id-fix box marked `[x]` in `design.md`.
+
+### Cross-cutting correction (post-Phase-4): expose persisted row `id`
+
+Applied after Phase 5 was first drafted, to align with `design.md`'s own API contract table (`{ id, channel, rate, effectiveFrom }`) and the sibling `poolops-biz/apps/api-manager` convention.
+
+- [x] 5.4 [RED→GREEN] `domain/src/currency/exchange-rate.ts`: add `id?: string` to `ExchangeRate` (optional — resolver-fabricated synthetic pivot rows carry no id). `rate-resolver.ts`: USD-identity synthetic row now explicit (`id: undefined`) with a comment. `rate-resolver.test.ts`: 2 new tests (persisted-row id passthrough; synthetic row id absent). Note: since `ExchangeRate` is a TS interface and test files are excluded from this package's `tsconfig.json`, these two tests do not produce a true compile-time RED — the passthrough already worked structurally at runtime before the type change (documented honestly, not silently).
+- [x] 5.5 [RED→GREEN] `infra-db/src/currency/prisma-currency.repository.ts`: map `id: row.id` in `toDomain()` (every Prisma row has a real DB `id`). `prisma-currency.repository.spec.ts`: 2 new tests confirmed RED first against the real Postgres DB (`appended.id` was `undefined`), then GREEN.
+- [x] 5.6 [RED→GREEN] `api-salesops/src/currency/dto/rate-response.dto.ts`: add `id: string | null` (first field). `currency.service.ts`: `createRate`/`toRateResponse` map `rate.id ?? null`; `getLatestRate` maps `resolved.source.id ?? null` (null only for the synthetic-pivot read path). `currency.service.spec.ts`: 3 new/updated tests confirmed RED first, then GREEN (persisted id passthrough on create + get; `id: null` for the USD identity synthetic read). `currency.controller.spec.ts`: 2 tests updated/added for the same contract at the HTTP layer (these were already green pre-fix since the controller mock bypasses the DTO mapping — documented as a passthrough test, not a driver of the fix).
+- [x] 5.7 Re-ran full verification after the fix: domain (96/96 vitest + typecheck + build + lint), infra-db (6/6 jest + typecheck + build + lint), api-salesops (17/17 jest + typecheck + build + lint) — all green. `convert` response (`ConvertResponseDto`) intentionally unchanged — `id` is not part of its contract in `design.md`.
 
 ## Out of Scope (unchanged)
 

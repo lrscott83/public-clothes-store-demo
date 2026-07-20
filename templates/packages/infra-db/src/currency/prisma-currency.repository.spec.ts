@@ -69,6 +69,37 @@ describe('PrismaCurrencyRepository', () => {
     expect(resolved?.effectiveFrom.toISOString()).toBe('2026-01-01T00:00:00.000Z');
   });
 
+  it('appendRate() returns the persisted row with its DB-generated UUID id', async () => {
+    const appended = await repository.appendRate({
+      channel: 'ZELLE',
+      rate: 350455000n,
+      effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    expect(appended.id).toEqual(expect.any(String));
+    expect(appended.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  });
+
+  it('latestRate() and ratesForChannel() carry the persisted row id through, distinct per row', async () => {
+    const first = await repository.appendRate({
+      channel: 'ZELLE',
+      rate: 350455000n,
+      effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    const second = await repository.appendRate({
+      channel: 'ZELLE',
+      rate: 360000000n,
+      effectiveFrom: new Date('2026-02-01T00:00:00.000Z'),
+    });
+
+    const latest = await repository.latestRate('ZELLE', new Date('2026-02-15T00:00:00.000Z'));
+    expect(latest?.id).toBe(second.id);
+    expect(latest?.id).not.toBe(first.id);
+
+    const rows = await repository.ratesForChannel('ZELLE');
+    expect(rows.map((r) => r.id).sort()).toEqual([first.id, second.id].sort());
+  });
+
   it('preserves Decimal <-> bigint fidelity at RATE_SCALE=6 across an append + read round-trip', async () => {
     const rate = 350455123n; // "350.455123" — exercises all 6 decimal places
 

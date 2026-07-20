@@ -194,13 +194,14 @@ Strict TDD is active. Each test targets the runner native to its package.
 
 ## Checklist (reviewer can confirm)
 
-- [ ] `Money` stores `bigint` minor units; no `number`/float on any money path.
-- [ ] Conversion applies exactly one HALF-UP division; a drift test proves no intermediate rounding.
-- [ ] Domain imports the port, never Prisma; `backend-boundaries` lint is green (`--max-warnings 0`).
-- [ ] `exchange_rate` is append-only (`Decimal(18,6)`, indexed on `channel, effective_from`); repo exposes no update/delete.
-- [ ] Resolver throws `RateNotFoundError` — never returns `0`/`null`.
-- [ ] API returns every money/rate field as a string.
-- [ ] Tests land in the correct runner: resolver/conversion/rounding = vitest domain; append-only/latest-row = jest infra-db; endpoints = jest api.
+- [x] `Money` stores `bigint` minor units; no `number`/float on any money path.
+- [x] Conversion applies exactly one HALF-UP division; a drift test proves no intermediate rounding.
+- [x] Domain imports the port, never Prisma; `backend-boundaries` lint is green (`--max-warnings 0`). Verified across all three packages: `pnpm --filter @store-mgmt/domain lint`, `--filter @store-mgmt/infra-db lint`, `--filter @store-mgmt/api-salesops lint` all exit 0.
+- [x] `exchange_rate` is append-only (`Decimal(18,6)`, indexed on `channel, effective_from`); repo exposes no update/delete.
+- [x] Resolver throws `RateNotFoundError` — never returns `0`/`null`.
+- [x] API returns every money/rate field as a string.
+- [x] Tests land in the correct runner: resolver/conversion/rounding = vitest domain; append-only/latest-row = jest infra-db; endpoints = jest api.
+- [x] (Cross-cutting id fix, post-Phase-4) `POST`/`GET /currency/rates` responses expose the persisted row `id` per this file's API contract table; `id` is `null` (never fabricated) when the resolved rate is a synthetic pivot row. Domain `ExchangeRate.id` is optional by design (absent only for resolver-fabricated rows); infra-db and API always map the real persisted UUID.
 
 ## Out of scope (unchanged from proposal)
 

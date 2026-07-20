@@ -4,8 +4,13 @@ import { RateNotFoundError } from './errors.js';
 import { money } from './money.js';
 import type { ExchangeRate } from './exchange-rate.js';
 
-function rate(channel: ExchangeRate['channel'], decimal6: bigint, effectiveFrom: string): ExchangeRate {
-  return { channel, rate: decimal6, effectiveFrom: new Date(effectiveFrom) };
+function rate(
+  channel: ExchangeRate['channel'],
+  decimal6: bigint,
+  effectiveFrom: string,
+  id?: string,
+): ExchangeRate {
+  return { channel, rate: decimal6, effectiveFrom: new Date(effectiveFrom), id };
 }
 
 describe('resolverTasa — own rate', () => {
@@ -14,6 +19,12 @@ describe('resolverTasa — own rate', () => {
     const resolved = resolverTasa(rates, 'ZELLE', new Date('2026-02-01T00:00:00Z'));
     expect(resolved.rate).toBe(1000000n);
     expect(resolved.source.channel).toBe('ZELLE');
+  });
+
+  it('a persisted row (with an id) passes its real id through unchanged', () => {
+    const rates: ExchangeRate[] = [rate('ZELLE', 1000000n, '2026-01-01T00:00:00Z', 'rate-uuid-1')];
+    const resolved = resolverTasa(rates, 'ZELLE', new Date('2026-02-01T00:00:00Z'));
+    expect(resolved.source.id).toBe('rate-uuid-1');
   });
 
   it('picks the latest row effective at or before the query moment', () => {
@@ -31,6 +42,12 @@ describe('resolverTasa — currency fallback', () => {
     const rates: ExchangeRate[] = [];
     const resolved = resolverTasa(rates, 'USD_EFECTIVO', new Date('2026-02-01T00:00:00Z'));
     expect(resolved.rate).toBe(1000000n);
+  });
+
+  it('the fabricated USD identity pivot row has no id — never a fabricated value, only absent', () => {
+    const rates: ExchangeRate[] = [];
+    const resolved = resolverTasa(rates, 'USD_EFECTIVO', new Date('2026-02-01T00:00:00Z'));
+    expect(resolved.source.id).toBeUndefined();
   });
 
   it('falls back to another channel settling the same currency when the channel has no own row', () => {

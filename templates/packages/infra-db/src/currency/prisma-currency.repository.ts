@@ -10,13 +10,16 @@ import { PrismaService } from '../prisma-client.js';
 
 /** Shape shared by every row Prisma returns for the `ExchangeRate` model. */
 interface ExchangeRateRow {
+  readonly id: string;
   readonly channel: string;
   readonly rate: { toString(): string };
   readonly effectiveFrom: Date;
 }
 
+/** Every row Prisma returns is persisted, so `id` is always set here. */
 function toDomain(row: ExchangeRateRow): DomainExchangeRate {
   return {
+    id: row.id,
     channel: row.channel as PaymentChannel,
     rate: rateFromDecimalString(row.rate.toString()),
     effectiveFrom: row.effectiveFrom,

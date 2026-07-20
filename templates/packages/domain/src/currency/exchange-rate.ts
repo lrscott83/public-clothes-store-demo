@@ -12,8 +12,16 @@ export const RATE_SCALE = 6;
  * `RATE_SCALE`, expressed as currency-per-USD (i.e. `rate = X` means
  * "1 USD = X units of this channel's settlement currency"). USD is always
  * the pivot — rates are never stored against MN or EUR directly.
+ *
+ * `id` is the persisted row's UUID (`exchange_rate.id` in the DB) and is
+ * OPTIONAL by design: the pure rate resolver (`rate-resolver.ts`) fabricates
+ * synthetic rows for the currency-fallback cascade (e.g. the USD identity
+ * pivot, rate = 1) that were never persisted, so they carry no `id`. Every
+ * row read from or appended through `ICurrencyRepository` always has `id`
+ * set — only resolver-fabricated synthetic rows omit it.
  */
 export interface ExchangeRate {
+  readonly id?: string;
   readonly channel: PaymentChannel;
   readonly rate: bigint;
   readonly effectiveFrom: Date;
