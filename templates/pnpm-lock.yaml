@@ -341,6 +341,9 @@ importers:
       '@prisma/client':
         specifier: ^7.8.0
         version: 7.8.0(prisma@7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(magicast@0.3.5)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.8.3))(typescript@5.8.3)
+      '@store-mgmt/domain':
+        specifier: workspace:*
+        version: link:../domain
       pg:
         specifier: ^8.22.0
         version: 8.22.0
@@ -360,6 +363,9 @@ importers:
       '@types/pg':
         specifier: ^8.20.0
         version: 8.20.0
+      cross-env:
+        specifier: ^7.0.3
+        version: 7.0.3
       eslint:
         specifier: ^9.31.0
         version: 9.39.4(jiti@2.7.0)

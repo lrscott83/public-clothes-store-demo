@@ -56,12 +56,12 @@ Delivery is `single-pr`: orchestrator must record `size:exception` before `sdd-a
 
 ## Phase 3: infra-db — Prisma adapter (jest + docker Postgres, `pnpm --filter @store-mgmt/infra-db test`)
 
-- [ ] 3.1 Append `enum PaymentChannel`, `enum Currency`, `model ExchangeRate` (Decimal(18,6), `@@index([channel, effectiveFrom])`) to `templates/packages/infra-db/prisma/schema.prisma`.
-- [ ] 3.2 Generate migration `add_currency_module` (`pnpm --filter @store-mgmt/infra-db prisma:migrate`); confirm additive-only, `/health` untouched.
-- [ ] 3.3 [RED] `infra-db/src/currency/prisma-currency.repository.test.ts`: `appendRate()` called twice for same channel produces 2 rows (never UPDATE).
-- [ ] 3.4 [RED] same file: `latestRate(channel, at)` with Jan1/Mar1 rows queried at Feb15 returns Jan1; Decimal↔bigint round-trip fidelity at `RATE_SCALE=6`.
-- [ ] 3.5 [GREEN] `infra-db/src/currency/prisma-currency.repository.ts`: `PrismaCurrencyRepository implements ICurrencyRepository` to pass 3.3-3.4.
-- [ ] 3.6 Export `PrismaCurrencyRepository` from `infra-db/src/index.ts`; run `pnpm --filter @store-mgmt/infra-db test` (docker Postgres up) full-green.
+- [x] 3.1 Append `enum PaymentChannel`, `enum Currency`, `model ExchangeRate` (Decimal(18,6), `@@index([channel, effectiveFrom])`) to `templates/packages/infra-db/prisma/schema.prisma`. Evidence: additive-only append; migration below contains only `CREATE TYPE`/`CREATE TABLE`/`CREATE INDEX`.
+- [x] 3.2 Generate migration `add_currency_module` (`pnpm --filter @store-mgmt/infra-db prisma:migrate`); confirm additive-only, `/health` untouched. Evidence: `prisma/migrations/20260720154712_add_currency_module/migration.sql` — pure CREATEs, no ALTER/DROP on `_prisma_migrations`/existing tables; `PrismaService.$queryRaw\`SELECT 1\`` untouched.
+- [x] 3.3 [RED] `infra-db/src/currency/prisma-currency.repository.spec.ts` (named `.spec.ts` to match the package's existing jest `testRegex`, not `.test.ts` as originally worded): `appendRate()` called twice for same channel produces 2 rows (never UPDATE). Confirmed RED first (missing production module error) before implementing.
+- [x] 3.4 [RED] same file: `latestRate(channel, at)` with Jan1/Mar1 rows queried at Feb15 returns Jan1; Decimal↔bigint round-trip fidelity at `RATE_SCALE=6` (plus a `ratesForChannel` ordering test as a 4th case).
+- [x] 3.5 [GREEN] `infra-db/src/currency/prisma-currency.repository.ts`: `PrismaCurrencyRepository implements ICurrencyRepository` to pass 3.3-3.4. All 4 tests green against the real `store_mgmt` Postgres DB (172.17.0.1:5432).
+- [x] 3.6 Export `PrismaCurrencyRepository` from `infra-db/src/index.ts`; run `pnpm --filter @store-mgmt/infra-db test` full-green (4/4 passing). Also verified `lint` (`--max-warnings 0`) and `typecheck`/`build` green.
 
 ## Phase 4: api-salesops — CurrencyModule (jest, `pnpm --filter @store-mgmt/api-salesops test`)
 

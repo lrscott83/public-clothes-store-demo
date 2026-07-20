@@ -9,6 +9,31 @@ datasource db {
   provider = "postgresql"
 }
 
-// No models yet — this is the walking-skeleton baseline.
-// The first domain module (Currency / exchange rates) adds the first
-// models in its own SDD change.
+// First domain module: Currency / exchange rates (SDD change backend-currency).
+// Append-only: no updatedAt, no soft-delete, no valid_to. A rate change is a
+// new INSERT; "current rate" = latest row with effectiveFrom <= at.
+
+enum PaymentChannel {
+  ZELLE
+  USD_EFECTIVO
+  EUR_EFECTIVO
+  MN_TRANSFERENCIA
+  MN_EFECTIVO
+}
+
+enum Currency {
+  USD
+  EUR
+  MN
+}
+
+model ExchangeRate {
+  id            String         @id @default(uuid()) @db.Uuid
+  channel       PaymentChannel
+  rate          Decimal        @db.Decimal(18, 6) // NUMERIC — never float
+  effectiveFrom DateTime       @map("effective_from")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  @@index([channel, effectiveFrom])
+  @@map("exchange_rate")
+}
