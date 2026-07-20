@@ -14,6 +14,10 @@ export default defineConfig({
   schema: path.join(__dirname, 'prisma', 'schema.prisma'),
   migrations: {
     path: path.join(__dirname, 'prisma', 'migrations'),
+    // SINGLE seed entrypoint (seeds every Category + Product together,
+    // idempotently) — see prisma/seed.js. Consumes the package's own built
+    // dist/ output, so run `pnpm build` before `prisma db seed`.
+    seed: 'node prisma/seed.js',
   },
   datasource: {
     url: process.env.DATABASE_URL ?? '',

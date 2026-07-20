@@ -37,3 +37,48 @@ model ExchangeRate {
   @@index([channel, effectiveFrom])
   @@map("exchange_rate")
 }
+
+// Second domain module: Products & Categories (SDD change backend-products).
+// Mutable master data -> BOTH created_at + updated_at (unlike the
+// append-only ExchangeRate above). Soft-delete via `active`, never a hard
+// DELETE — order-history FK references must never be orphaned.
+
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  image     String?
+  icon      String?
+  order     Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  products Product[]
+
+  @@map("category")
+}
+
+model Product {
+  id                   String   @id @default(uuid()) @db.Uuid
+  name                 String
+  description          String
+  sku                  String?
+  barcode              String?
+  price                Decimal  @db.Decimal(18, 2) // NUMERIC — never float
+  percentDiscountPrice Decimal  @default(0) @db.Decimal(5, 2) @map("percent_discount_price")
+  discountPrice        Decimal  @default(0) @db.Decimal(18, 2) @map("discount_price")
+  costoUsd             Decimal  @db.Decimal(18, 2) @map("costo_usd")
+  categoryId           String   @db.Uuid @map("category_id")
+  image                String
+  isNew                Boolean  @default(false) @map("is_new")
+  order                Int
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@map("product")
+}
