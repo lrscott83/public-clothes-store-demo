@@ -85,7 +85,7 @@ describe('PrismaCategoryRepository', () => {
       name: 'Freidora de aire',
       description: '5 litros',
       price: { minorUnits: 10000n, currency: 'USD' },
-      costoUSD: { minorUnits: 6000n, currency: 'USD' },
+      cost: { minorUnits: 6000n, currency: 'USD' },
       categoryId: category.id,
       image: 'freidora.png',
       order: 1,

@@ -1,12 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  Currency,
   CreateProductInput,
   IProductRepository,
   Product as DomainProduct,
   ProductListFilter,
   ProductUpdateInput,
 } from '@store-mgmt/domain';
-import { moneyFromDecimalString, moneyToDecimalString, percentFromDecimalString, percentToDecimalString } from '@store-mgmt/domain';
+import {
+  discountPriceFromDecimalString,
+  discountPriceToDecimalString,
+  moneyFromDecimalString,
+  moneyToDecimalString,
+  percentFromDecimalString,
+  percentToDecimalString,
+} from '@store-mgmt/domain';
 import { PrismaService } from '../prisma-client.js';
 
 /** Shape shared by every row Prisma returns for the `Product` model. */
@@ -17,9 +25,11 @@ interface ProductRow {
   readonly sku: string | null;
   readonly barcode: string | null;
   readonly price: { toString(): string };
+  readonly priceCurrency: string;
   readonly percentDiscountPrice: { toString(): string };
   readonly discountPrice: { toString(): string };
-  readonly costoUsd: { toString(): string };
+  readonly cost: { toString(): string };
+  readonly costCurrency: string;
   readonly categoryId: string;
   readonly image: string;
   readonly isNew: boolean;
@@ -36,10 +46,10 @@ function toDomain(row: ProductRow): DomainProduct {
     description: row.description,
     sku: row.sku ?? undefined,
     barcode: row.barcode ?? undefined,
-    price: moneyFromDecimalString(row.price.toString(), 'USD'),
+    price: moneyFromDecimalString(row.price.toString(), row.priceCurrency as Currency),
     percentDiscountPrice: percentFromDecimalString(row.percentDiscountPrice.toString()),
-    discountPrice: moneyFromDecimalString(row.discountPrice.toString(), 'USD'),
-    costoUSD: moneyFromDecimalString(row.costoUsd.toString(), 'USD'),
+    discountPrice: discountPriceFromDecimalString(row.discountPrice.toString()),
+    cost: moneyFromDecimalString(row.cost.toString(), row.costCurrency as Currency),
     categoryId: row.categoryId,
     image: row.image,
     isNew: row.isNew,
@@ -53,11 +63,15 @@ function toDomain(row: ProductRow): DomainProduct {
 /**
  * Prisma adapter for `IProductRepository`. Maps the Prisma `Decimal(18,2)`
  * columns <-> the domain's `Money` VO via `moneyFromDecimalString`/
- * `moneyToDecimalString`, and `percentDiscountPrice` (`Decimal(5,2)`) <->
- * the domain's scaled `bigint` via `percentFromDecimalString`/
- * `percentToDecimalString`. `create()` never passes `id` through to Prisma —
- * the DB always generates it. `softDelete` flips `active`, never a hard
- * DELETE (order-history FK references must never be orphaned).
+ * `moneyToDecimalString` for `price`/`cost` (each paired with its own
+ * `priceCurrency`/`costCurrency` column — caller-chosen, MAY DIFFER),
+ * `percentDiscountPrice` (`Decimal(5,2)`) <-> the domain's scaled `bigint`
+ * via `percentFromDecimalString`/`percentToDecimalString`, and
+ * `discountPrice` (`Decimal(18,2)`, no currency) <-> the domain's scaled
+ * `bigint` via `discountPriceFromDecimalString`/`discountPriceToDecimalString`.
+ * `create()` never passes `id` through to Prisma — the DB always generates
+ * it. `softDelete` flips `active`, never a hard DELETE (order-history FK
+ * references must never be orphaned).
  */
 @Injectable()
 export class PrismaProductRepository implements IProductRepository {
@@ -71,9 +85,11 @@ export class PrismaProductRepository implements IProductRepository {
         sku: input.sku ?? null,
         barcode: input.barcode ?? null,
         price: moneyToDecimalString(input.price),
+        priceCurrency: input.price.currency,
         percentDiscountPrice: percentToDecimalString(input.percentDiscountPrice ?? 0n),
-        discountPrice: moneyToDecimalString(input.discountPrice ?? moneyFromDecimalString('0', 'USD')),
-        costoUsd: moneyToDecimalString(input.costoUSD),
+        discountPrice: discountPriceToDecimalString(input.discountPrice ?? 0n),
+        cost: moneyToDecimalString(input.cost),
+        costCurrency: input.cost.currency,
         categoryId: input.categoryId,
         image: input.image,
         isNew: input.isNew ?? false,
@@ -92,14 +108,18 @@ export class PrismaProductRepository implements IProductRepository {
         ...(patch.description !== undefined ? { description: patch.description } : {}),
         ...(patch.sku !== undefined ? { sku: patch.sku ?? null } : {}),
         ...(patch.barcode !== undefined ? { barcode: patch.barcode ?? null } : {}),
-        ...(patch.price !== undefined ? { price: moneyToDecimalString(patch.price) } : {}),
+        ...(patch.price !== undefined
+          ? { price: moneyToDecimalString(patch.price), priceCurrency: patch.price.currency }
+          : {}),
         ...(patch.percentDiscountPrice !== undefined
           ? { percentDiscountPrice: percentToDecimalString(patch.percentDiscountPrice) }
           : {}),
         ...(patch.discountPrice !== undefined
-          ? { discountPrice: moneyToDecimalString(patch.discountPrice) }
+          ? { discountPrice: discountPriceToDecimalString(patch.discountPrice) }
           : {}),
-        ...(patch.costoUSD !== undefined ? { costoUsd: moneyToDecimalString(patch.costoUSD) } : {}),
+        ...(patch.cost !== undefined
+          ? { cost: moneyToDecimalString(patch.cost), costCurrency: patch.cost.currency }
+          : {}),
         ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
         ...(patch.image !== undefined ? { image: patch.image } : {}),
         ...(patch.isNew !== undefined ? { isNew: patch.isNew } : {}),

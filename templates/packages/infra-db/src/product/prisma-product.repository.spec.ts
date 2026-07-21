@@ -1,4 +1,8 @@
-import { moneyFromDecimalString, moneyToDecimalString } from '@store-mgmt/domain';
+import {
+  discountPriceToDecimalString,
+  moneyFromDecimalString,
+  moneyToDecimalString,
+} from '@store-mgmt/domain';
 import { PrismaService } from '../prisma-client.js';
 import { PrismaCategoryRepository } from './prisma-category.repository.js';
 import { PrismaProductRepository } from './prisma-product.repository.js';
@@ -43,7 +47,7 @@ describe('PrismaProductRepository', () => {
       name: 'Cafetera Express',
       description: 'Cafetera express de 15 bares.',
       price: moneyFromDecimalString('149.99', 'USD'),
-      costoUSD: moneyFromDecimalString('89.99', 'USD'),
+      cost: moneyFromDecimalString('89.99', 'USD'),
       categoryId,
       image: 'https://example.com/cafetera.png',
       order: 1,
@@ -55,17 +59,49 @@ describe('PrismaProductRepository', () => {
     const created = await repository.create(
       validInput({
         percentDiscountPrice: 1250n, // 12.50%
-        discountPrice: moneyFromDecimalString('5.00', 'USD'),
+        discountPrice: 500n, // 5.00
       }),
     );
 
     expect(created.id).toEqual(expect.any(String));
     expect(created.categoryId).toBe(categoryId);
     expect(moneyToDecimalString(created.price)).toBe('149.99');
-    expect(moneyToDecimalString(created.discountPrice)).toBe('5.00');
-    expect(moneyToDecimalString(created.costoUSD)).toBe('89.99');
+    expect(discountPriceToDecimalString(created.discountPrice)).toBe('5.00');
+    expect(moneyToDecimalString(created.cost)).toBe('89.99');
     expect(created.percentDiscountPrice).toBe(1250n);
     expect(created.active).toBe(true);
+  });
+
+  it('create() honors caller-chosen currencies for price/cost, which MAY DIFFER', async () => {
+    const created = await repository.create(
+      validInput({
+        price: moneyFromDecimalString('100.00', 'EUR'),
+        cost: moneyFromDecimalString('60.00', 'MN'),
+      }),
+    );
+
+    expect(created.price.currency).toBe('EUR');
+    expect(moneyToDecimalString(created.price)).toBe('100.00');
+    expect(created.cost.currency).toBe('MN');
+    expect(moneyToDecimalString(created.cost)).toBe('60.00');
+
+    const found = await repository.findById(created.id);
+    expect(found?.price.currency).toBe('EUR');
+    expect(found?.cost.currency).toBe('MN');
+  });
+
+  it('update() re-persists price/cost currency when the Money value changes', async () => {
+    const created = await repository.create(validInput());
+
+    const updated = await repository.update(created.id, {
+      price: moneyFromDecimalString('200.00', 'EUR'),
+      cost: moneyFromDecimalString('120.00', 'EUR'),
+    });
+
+    expect(updated.price.currency).toBe('EUR');
+    expect(moneyToDecimalString(updated.price)).toBe('200.00');
+    expect(updated.cost.currency).toBe('EUR');
+    expect(moneyToDecimalString(updated.cost)).toBe('120.00');
   });
 
   it('findById() returns the full persisted shape', async () => {

@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import { moneyFromDecimalString, moneyToDecimalString, percentToDecimalString } from '@store-mgmt/domain';
+import {
+  discountPriceToDecimalString,
+  moneyFromDecimalString,
+  moneyToDecimalString,
+  percentToDecimalString,
+} from '@store-mgmt/domain';
 import type { PrismaService } from '../prisma-client.js';
 
 /** A single entry from the MVP's `catalog.json` `categories` array. */
@@ -54,8 +59,6 @@ function deterministicProductId(catalogProductId: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-const ZERO_USD = moneyFromDecimalString('0', 'USD');
-
 /**
  * SINGLE idempotent seed entrypoint — seeds every catalog Category AND
  * Product together, never split across separate per-module seed scripts.
@@ -65,10 +68,11 @@ const ZERO_USD = moneyFromDecimalString('0', 'USD');
  *    `deterministicProductId`), since it has no other natural unique key.
  * Talks to Prisma directly (not the domain ports) — seeding is an
  * infra-db-specific concern, not a domain/application capability.
- * `costoUsd` is a documented SYNTHETIC placeholder (`price * 0.6`) — no
- * real supplier-cost source yet (open input #4, design.md). Throws if a
- * product references a category slug absent from `catalog.categories` —
- * never a dangling `categoryId`.
+ * `cost` is a documented SYNTHETIC placeholder (`price * 0.6`) — no
+ * real supplier-cost source yet (open input #4, design.md). Seeded rows are
+ * always USD for both `price`/`cost` (catalog.json is USD-denominated).
+ * Throws if a product references a category slug absent from
+ * `catalog.categories` — never a dangling `categoryId`.
  */
 export async function seedProducts(prisma: PrismaService, catalog: Catalog): Promise<SeedResult> {
   const categoryIdBySlug = new Map<string, string>();
@@ -97,7 +101,7 @@ export async function seedProducts(prisma: PrismaService, catalog: Catalog): Pro
     const price = moneyToDecimalString(moneyFromDecimalString(product.price.toFixed(2), 'USD'));
     // SYNTHETIC placeholder until a real supplier-cost source exists (open
     // input #4, design.md) — never presented as real cost data.
-    const costoUsd = moneyToDecimalString(
+    const cost = moneyToDecimalString(
       moneyFromDecimalString((product.price * 0.6).toFixed(2), 'USD'),
     );
 
@@ -107,7 +111,9 @@ export async function seedProducts(prisma: PrismaService, catalog: Catalog): Pro
         name: product.name,
         description: product.description,
         price,
-        costoUsd,
+        priceCurrency: 'USD',
+        cost,
+        costCurrency: 'USD',
         categoryId,
         image: product.image,
         order: productOrder,
@@ -117,9 +123,11 @@ export async function seedProducts(prisma: PrismaService, catalog: Catalog): Pro
         name: product.name,
         description: product.description,
         price,
+        priceCurrency: 'USD',
         percentDiscountPrice: percentToDecimalString(0n),
-        discountPrice: moneyToDecimalString(ZERO_USD),
-        costoUsd,
+        discountPrice: discountPriceToDecimalString(0n),
+        cost,
+        costCurrency: 'USD',
         categoryId,
         image: product.image,
         isNew: false,

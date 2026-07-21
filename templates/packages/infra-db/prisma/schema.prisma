@@ -66,9 +66,11 @@ model Product {
   sku                  String?
   barcode              String?
   price                Decimal  @db.Decimal(18, 2) // NUMERIC — never float
+  priceCurrency        String   @map("price_currency")
   percentDiscountPrice Decimal  @default(0) @db.Decimal(5, 2) @map("percent_discount_price")
   discountPrice        Decimal  @default(0) @db.Decimal(18, 2) @map("discount_price")
-  costoUsd             Decimal  @db.Decimal(18, 2) @map("costo_usd")
+  cost                 Decimal  @db.Decimal(18, 2)
+  costCurrency         String   @map("cost_currency")
   categoryId           String   @db.Uuid @map("category_id")
   image                String
   isNew                Boolean  @default(false) @map("is_new")
