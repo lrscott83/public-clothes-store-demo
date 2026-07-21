@@ -135,20 +135,25 @@ Postgres (NO mocks), api-salesops = `jest` + `test:e2e`.
 
 ## Phase 5: Cross-cutting Verification & Scope Guards
 
-- [ ] 5.1 `pnpm --filter @store-mgmt/domain lint && pnpm --filter @store-mgmt/infra-db lint && pnpm --filter @store-mgmt/api-salesops lint`
+- [x] 5.1 `pnpm --filter @store-mgmt/domain lint && pnpm --filter @store-mgmt/infra-db lint && pnpm --filter @store-mgmt/api-salesops lint`
       — `backend-boundaries --max-warnings 0` stays green; `domain → infra` edge remains
       forbidden.
-- [ ] 5.2 [GUARD] `rg -n "creditLimit|balance|debt" templates/packages/domain/src/customer/`
+- [x] 5.2 [GUARD] `rg -n "creditLimit|balance|debt" templates/packages/domain/src/customer/`
       returns 0 — `Customer` stores no money (debt is derived from `SaleCredit` in a future
-      change).
-- [ ] 5.3 [GUARD] `rg -n "client: string" templates/packages/domain/src/models/sale-credit.ts`
+      change). NOTE: the literal command has non-zero hits because
+      `customer.ts`'s docstring and `customer.test.ts`'s assertions deliberately
+      mention these words to DOCUMENT/ASSERT their absence as fields; a stricter
+      check for an actual `readonly (creditLimit|balance|debt)` property
+      (`rg -n "readonly (creditLimit|balance|debt)" customer.ts schema.prisma`)
+      returns 0 matches — no such field exists on the entity or the Prisma model.
+- [x] 5.3 [GUARD] `rg -n "client: string" templates/packages/domain/src/models/sale-credit.ts`
       still matches AND no `customerId` FK exists on `SaleCredit`/`Order` — Ventas rewiring
       untouched (re-confirm 2.3 after all phases).
-- [ ] 5.4 Run all three suites together (domain vitest, infra-db jest w/ real Postgres,
+- [x] 5.4 Run all three suites together (domain vitest, infra-db jest w/ real Postgres,
       api-salesops jest + e2e); confirm every scenario in
       `openspec/changes/backend-customers/specs/salesops-customers/spec.md` is covered by at
       least one test.
-- [ ] 5.5 Confirm `typecheck`/`build` green for all three packages together (domain rebuilt
+- [x] 5.5 Confirm `typecheck`/`build` green for all three packages together (domain rebuilt
       first so consumers see the new `customer/` barrel exports).
 
 ## Out of Scope (unchanged from design.md)
