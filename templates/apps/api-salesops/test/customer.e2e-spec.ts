@@ -42,6 +42,38 @@ describe('Customer (e2e)', () => {
     expect(response.body.active).toBe(true);
   });
 
+  it('rejects an empty fullName -> 400, never persisted', async () => {
+    const response = await request(app.getHttpServer()).post('/customers').send({ fullName: '' });
+
+    expect(response.status).toBe(400);
+    const rows = await prisma.customer.findMany({ where: { fullName: '' } });
+    expect(rows).toHaveLength(0);
+  });
+
+  it('rejects a whitespace-only fullName -> 400, never persisted', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/customers')
+      .send({ fullName: '   ' });
+
+    expect(response.status).toBe(400);
+    const rows = await prisma.customer.findMany({ where: { fullName: '   ' } });
+    expect(rows).toHaveLength(0);
+  });
+
+  it('rejects clearing fullName to empty on update -> 400, original name untouched', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/customers')
+      .send({ fullName: 'Sofía Ramos' });
+
+    const response = await request(app.getHttpServer())
+      .patch(`/customers/${created.body.id}`)
+      .send({ fullName: '' });
+
+    expect(response.status).toBe(400);
+    const found = await request(app.getHttpServer()).get(`/customers/${created.body.id}`);
+    expect(found.body.fullName).toBe('Sofía Ramos');
+  });
+
   it('rejects a second customer with the same documentId -> 409', async () => {
     await request(app.getHttpServer())
       .post('/customers')

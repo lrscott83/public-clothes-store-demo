@@ -120,6 +120,18 @@ Postgres (NO mocks), api-salesops = `jest` + `test:e2e`.
 - [x] 4.5 [GREEN] `apps/api-salesops/src/customer/customer.controller.ts` to pass 4.4,
       mapping `InvalidCustomerError → 400` and `DuplicateCustomerDocumentError → 409` via a
       `withDomainErrorMapping` helper (mirror `WarehouseController`).
+      **Real-coverage note (post-verify fix, C1)**: 4.2/4.4 as originally written only
+      exercised a MOCKED `InvalidCustomerError` rejection — the real `create`/`update`
+      path never called the domain factory `createCustomer()`, so an empty/whitespace
+      `fullName` was actually persisted with HTTP 201/200 in the live system (found by
+      `sdd-verify`, `sdd/backend-customers/verify-report` C1). Fixed:
+      `CustomerService.create`/`.update` (`apps/api-salesops/src/customer/customer.service.ts`)
+      now call `createCustomer(...)` to validate before delegating to the repository.
+      Added real coverage: `customer.e2e-spec.ts` (real Postgres) now asserts
+      empty/whitespace `fullName` on create → 400 and clearing `fullName` on update → 400,
+      with a DB-row assertion that nothing was persisted; `customer.service.spec.ts` now
+      asserts `InvalidCustomerError` is thrown and `repo.create`/`repo.update` are NEVER
+      called, without mocking the repository to reject.
 - [x] 4.6 `apps/api-salesops/src/customer/customer.module.ts`: `imports: [InfraDbModule]`;
       providers `CustomerService`, `{ provide: CUSTOMER_REPOSITORY, useClass: PrismaCustomerRepository }`;
       declares `CustomerController`.

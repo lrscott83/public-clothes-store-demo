@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Customer as DomainCustomer, ICustomerRepository } from '@store-mgmt/domain';
-import { CUSTOMER_REPOSITORY } from '@store-mgmt/domain';
+import { CUSTOMER_REPOSITORY, InvalidCustomerError } from '@store-mgmt/domain';
 import { CustomerService } from './customer.service.js';
 
 function buildRepoMock(): jest.Mocked<ICustomerRepository> {
@@ -57,6 +57,22 @@ describe('CustomerService', () => {
         updatedAt: '2026-01-01T00:00:00.000Z',
       });
     });
+
+    // Real invariant check — does NOT mock the repository to reject; it
+    // exercises the actual `createCustomer()` domain guard wired into the
+    // service. Proves the repository is never even called, unlike the
+    // pre-fix bypass where nothing in the real path stopped an empty name.
+    it('throws InvalidCustomerError for an empty fullName WITHOUT reaching the repository', async () => {
+      await expect(service.create({ fullName: '' })).rejects.toThrow(InvalidCustomerError);
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws InvalidCustomerError for a whitespace-only fullName WITHOUT reaching the repository', async () => {
+      await expect(service.create({ fullName: '   ' })).rejects.toThrow(InvalidCustomerError);
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('update', () => {
@@ -66,6 +82,22 @@ describe('CustomerService', () => {
       const result = await service.update('customer-uuid-1', { cellPhone: '555-1234' });
 
       expect(result.cellPhone).toBe('555-1234');
+      expect(repo.update).toHaveBeenCalledWith('customer-uuid-1', { cellPhone: '555-1234' });
+    });
+
+    it('throws InvalidCustomerError when clearing fullName to empty, WITHOUT reaching the repository', async () => {
+      await expect(service.update('customer-uuid-1', { fullName: '' })).rejects.toThrow(
+        InvalidCustomerError,
+      );
+
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('does not validate fullName when the patch omits it', async () => {
+      repo.update.mockResolvedValue({ ...sampleCustomer, cellPhone: '555-1234' });
+
+      await service.update('customer-uuid-1', { cellPhone: '555-1234' });
+
       expect(repo.update).toHaveBeenCalledWith('customer-uuid-1', { cellPhone: '555-1234' });
     });
   });
