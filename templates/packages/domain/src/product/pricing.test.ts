@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { finalPrice, isOffer, percentFromDecimalString, percentToDecimalString } from './pricing.js';
+import {
+  finalPrice,
+  isOffer,
+  percentFromDecimalString,
+  percentToDecimalString,
+  discountPriceFromDecimalString,
+  discountPriceToDecimalString,
+} from './pricing.js';
 import { createProduct } from './product.js';
 import { money } from '../currency/money.js';
 
@@ -8,7 +15,7 @@ function buildProduct(overrides: Partial<Parameters<typeof createProduct>[0]> = 
     name: 'Cafetera Express',
     description: 'Cafetera express de 15 bares con vaporizador de leche.',
     price: money(10000n, 'USD'), // $100.00
-    costoUSD: money(6000n, 'USD'),
+    cost: money(6000n, 'USD'),
     categoryId: 'category-uuid-1',
     image: 'https://example.com/cafetera.png',
     order: 1,
@@ -21,7 +28,7 @@ describe('finalPrice', () => {
     const product = buildProduct({
       price: money(10000n, 'USD'),
       percentDiscountPrice: 2000n, // 20.00%
-      discountPrice: money(500n, 'USD'),
+      discountPrice: 500n,
     });
     expect(finalPrice(product).minorUnits).toBe(7500n);
   });
@@ -38,7 +45,7 @@ describe('finalPrice', () => {
     const product = buildProduct({
       price: money(1000n, 'USD'),
       percentDiscountPrice: 5000n, // 50.00%
-      discountPrice: money(2000n, 'USD'),
+      discountPrice: 2000n,
     });
     expect(finalPrice(product).minorUnits).toBe(0n);
   });
@@ -60,11 +67,22 @@ describe('finalPrice', () => {
     const product = buildProduct({
       price: money(100n, 'USD'),
       percentDiscountPrice: 1450n,
-      discountPrice: money(0n, 'USD'),
+      discountPrice: 0n,
     });
     const result = finalPrice(product);
     expect(result.minorUnits).toBe(85n);
     expect(result.minorUnits).not.toBe(86n); // the float-drift (wrong) figure
+  });
+
+  it('resolves in price.currency, independent of cost.currency (price/cost may differ)', () => {
+    const product = buildProduct({
+      price: money(10000n, 'EUR'),
+      cost: money(6000n, 'MN'),
+      percentDiscountPrice: 1000n, // 10%
+    });
+    const result = finalPrice(product);
+    expect(result.currency).toBe('EUR');
+    expect(result.minorUnits).toBe(9000n);
   });
 });
 
@@ -75,7 +93,7 @@ describe('isOffer', () => {
   });
 
   it('is true when discountPrice > 0', () => {
-    const product = buildProduct({ discountPrice: money(100n, 'USD') });
+    const product = buildProduct({ discountPrice: 100n });
     expect(isOffer(product)).toBe(true);
   });
 
@@ -108,5 +126,31 @@ describe('percentFromDecimalString / percentToDecimalString round-trip', () => {
     const scaled = percentFromDecimalString('5.5');
     expect(scaled).toBe(550n);
     expect(percentToDecimalString(scaled)).toBe('5.50');
+  });
+});
+
+describe('discountPriceFromDecimalString / discountPriceToDecimalString round-trip', () => {
+  it('round-trips a decimal-safe amount ("5.00" <-> 500n)', () => {
+    const scaled = discountPriceFromDecimalString('5.00');
+    expect(scaled).toBe(500n);
+    expect(discountPriceToDecimalString(scaled)).toBe('5.00');
+  });
+
+  it('round-trips zero ("0" <-> 0n)', () => {
+    const scaled = discountPriceFromDecimalString('0');
+    expect(scaled).toBe(0n);
+    expect(discountPriceToDecimalString(scaled)).toBe('0.00');
+  });
+
+  it('pads a single decimal digit to scale 2', () => {
+    const scaled = discountPriceFromDecimalString('1.5');
+    expect(scaled).toBe(150n);
+    expect(discountPriceToDecimalString(scaled)).toBe('1.50');
+  });
+
+  it('never a float — an exact bigint, no currency attached', () => {
+    const scaled = discountPriceFromDecimalString('99.99');
+    expect(typeof scaled).toBe('bigint');
+    expect(scaled).toBe(9999n);
   });
 });
