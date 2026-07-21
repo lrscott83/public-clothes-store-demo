@@ -9,3 +9,4 @@ export * from './enums/index.js';
 export * from './currency/index.js';
 export * from './product/index.js';
 export * from './inventory/index.js';
+export * from './customer/index.js';
