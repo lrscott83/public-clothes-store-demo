@@ -1,5 +1,6 @@
 import { PrismaService } from '../prisma-client.js';
 import { PrismaCategoryRepository } from './prisma-category.repository.js';
+import { PrismaProductRepository } from './prisma-product.repository.js';
 
 /**
  * Integration tests against the real `store_mgmt` Postgres database (no
@@ -75,5 +76,29 @@ describe('PrismaCategoryRepository', () => {
 
     const fullList = await repository.list({ includeInactive: true });
     expect(fullList.map((c) => c.id)).toContain(inactive.id);
+  });
+
+  it('deactivating a category keeps referencing products intact — never orphaned/cascaded', async () => {
+    const category = await repository.create({ name: 'Freidoras', slug: 'freidoras', order: 6 });
+    const productRepository = new PrismaProductRepository(prisma);
+    const product = await productRepository.create({
+      name: 'Freidora de aire',
+      description: '5 litros',
+      price: { minorUnits: 10000n, currency: 'USD' },
+      costoUSD: { minorUnits: 6000n, currency: 'USD' },
+      categoryId: category.id,
+      image: 'freidora.png',
+      order: 1,
+    });
+
+    await repository.softDelete(category.id);
+
+    const stillFound = await repository.findById(category.id);
+    expect(stillFound).not.toBeNull();
+    expect(stillFound?.active).toBe(false);
+
+    const productStillLinked = await productRepository.findById(product.id);
+    expect(productStillLinked).not.toBeNull();
+    expect(productStillLinked?.categoryId).toBe(category.id);
   });
 });
