@@ -4,3 +4,6 @@ export type { PrismaClient } from '../generated/client/client.js';
 export { PrismaCurrencyRepository } from './currency/prisma-currency.repository.js';
 export { PrismaCategoryRepository } from './product/prisma-category.repository.js';
 export { PrismaProductRepository } from './product/prisma-product.repository.js';
+export { PrismaWarehouseRepository } from './inventory/prisma-warehouse.repository.js';
+export { PrismaStockLevelRepository } from './inventory/prisma-stock-level.repository.js';
+export { PrismaStockMovementRepository } from './inventory/prisma-stock-movement.repository.js';

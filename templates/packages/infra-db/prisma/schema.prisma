@@ -80,7 +80,76 @@ model Product {
   updatedAt            DateTime @updatedAt @map("updated_at")
 
   category Category @relation(fields: [categoryId], references: [id])
+  // Inverse relations only — Product carries ZERO inventory scalar fields
+  // (see design.md decision #10; `rg -i "stock|warehouse"` under
+  // packages/domain/src/product/ must stay 0).
+  stockLevels StockLevel[]
+  movements   StockMovement[]
 
   @@index([categoryId])
   @@map("product")
+}
+
+// Third domain module: Almacenes + Inventario (SDD change backend-inventory).
+// `Warehouse`/`StockLevel` are mutable master data -> BOTH created_at +
+// updated_at. `StockMovement` is an append-only audit log -> created_at
+// only, no soft-delete (mirrors ExchangeRate). `onHand` mutates ONLY via a
+// recorded StockMovement, inside one prisma.$transaction (design.md's
+// central decision) — no direct "set onHand" write anywhere.
+
+enum StockMovementType {
+  purchase_in
+  sale_out
+  transfer_in
+  transfer_out
+  adjustment_in
+  adjustment_out
+}
+
+model Warehouse {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  stockLevels StockLevel[]
+  movements   StockMovement[]
+
+  @@map("warehouse")
+}
+
+model StockLevel {
+  id          String   @id @default(uuid()) @db.Uuid
+  productId   String   @db.Uuid @map("product_id")
+  warehouseId String   @db.Uuid @map("warehouse_id")
+  onHand      Int      @default(0) @map("on_hand")
+  reserved    Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  product   Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([productId, warehouseId])
+  @@index([warehouseId])
+  @@map("stock_level")
+  // DB backstop (raw SQL in migration): CHECK (on_hand >= 0 AND reserved >= 0)
+}
+
+model StockMovement {
+  id          String            @id @default(uuid()) @db.Uuid
+  productId   String            @db.Uuid @map("product_id")
+  warehouseId String            @db.Uuid @map("warehouse_id")
+  type        StockMovementType
+  quantity    Int // positive magnitude; type implies direction
+  reason      String?
+  createdBy   String?           @map("created_by")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  product   Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([productId, warehouseId])
+  @@map("stock_movement")
 }
