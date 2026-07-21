@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the testable contract for the `salesops-products` capability: the catalog master-data vertical slice providing a `Product` entity and a flat `Category` entity, decimal-safe USD pricing via the `Money` value object with a derived `finalPrice`/`isOffer` (never stored), soft-delete with no orphaned references, a commission-free Product boundary (commission owned by a future Gestores/Comisiones add-on through a port), and an idempotent catalog seed of the 11 category slugs — all persisted behind hexagonal repository ports and exposed as CRUD HTTP endpoints that serialize decimals as strings.
+Define the testable contract for the `salesops-products` capability: the catalog master-data vertical slice providing a `Product` entity and a flat `Category` entity, decimal-safe multi-currency pricing via the `Money` value object with a derived `finalPrice`/`isOffer` (never stored), soft-delete with no orphaned references, a commission-free Product boundary (commission owned by a future Gestores/Comisiones add-on through a port), and an idempotent catalog seed of the 11 category slugs — all persisted behind hexagonal repository ports and exposed as CRUD HTTP endpoints that serialize decimals as strings and money fields as `{ amount, currency }`.
 
 ## Requirements
 
@@ -17,16 +17,18 @@ The system MUST persist a `Product` entity as master data referenced by Ventas, 
 | description | string | — |
 | sku | string | nullable |
 | barcode | string | nullable |
-| price | Money(USD) | required, > 0 |
+| price | Money | required, amount > 0, currency required (USD/EUR/MN) |
 | percentDiscountPrice | number | 0–100, default 0 |
-| discountPrice | Money(USD) | ≥ 0, default 0 |
-| costoUSD | Money(USD) | supplier cost |
+| discountPrice | decimal | ≥ 0, default 0, no currency |
+| cost | Money | required, amount ≥ 0, currency required (USD/EUR/MN); MAY differ from `price`'s currency |
 | categoryId | FK → Category.id | required |
 | image | string | — |
 | isNew | boolean | default false |
 | order | int | display order |
 | active | boolean | soft-delete |
 | createdAt / updatedAt | datetime | audit |
+
+`price.currency` and `cost.currency` are each chosen independently by the caller and MAY DIFFER (e.g. bought in one currency, sold in another) — the system MUST NOT force either to a fixed currency.
 
 #### Scenario: Product created with required fields
 
@@ -97,7 +99,7 @@ The system MUST derive `finalPrice` and `isOffer` at read time — never store t
 
 ### Requirement: Decimal-Safe Money for Price and Cost
 
-`price`, `discountPrice`, and `costoUSD` MUST be the existing `Money` VO from `@store-mgmt/domain` currency, denominated in USD. `finalPrice` computation MUST use the Money VO's HALF-UP rounding at scale 2 applied once, never intermediate float arithmetic.
+`price` and `cost` MUST be the existing `Money` VO from `@store-mgmt/domain` currency — each carries its own required `currency` (USD/EUR/MN), chosen by the caller, never forced to a fixed currency, and `price.currency` MAY DIFFER from `cost.currency`. `discountPrice` MUST be a bare decimal-safe scaled value (no currency attached), reusing the same scaled-decimal discipline as `percentDiscountPrice`. `finalPrice` computation MUST use the Money VO's HALF-UP rounding at scale 2 applied once, never intermediate float arithmetic, and resolves in `price.currency`.
 
 #### Scenario: Pricing math never uses float
 
@@ -110,6 +112,28 @@ The system MUST derive `finalPrice` and `isOffer` at read time — never store t
 - GIVEN an empty exchange-rate table
 - WHEN a `Product` with `price` in USD is read
 - THEN the system resolves it without requiring any rate row, since USD is the pivot currency
+
+#### Scenario: price and cost currencies may differ
+
+- GIVEN a `Product` created with `price` denominated in EUR and `cost` denominated in MN
+- WHEN the product is persisted and read back
+- THEN both currencies round-trip independently — the system MUST NOT force `price` and `cost` to share a currency
+
+### Requirement: API Requires an Explicit Currency per Money Field
+
+Every HTTP request/response `Money`-backed field (`price`, `cost`, derived `finalPrice`) MUST be represented as `{ amount: string, currency: string }`, with `currency` REQUIRED and validated against the supported `Currency` set (USD/EUR/MN). `discountPrice` and `percentDiscountPrice` remain plain decimal strings (no currency).
+
+#### Scenario: Missing or unknown currency rejected
+
+- GIVEN a `POST /products` or `PATCH /products/:id` payload where `price.currency` or `cost.currency` is missing or not one of USD/EUR/MN
+- WHEN the request is submitted
+- THEN the system MUST reject it with 400, never silently defaulting to a currency
+
+#### Scenario: Response currency reflects the persisted choice
+
+- GIVEN a `Product` persisted with `price` in EUR and `cost` in MN
+- WHEN it is read via the API
+- THEN the response's `price.currency` is `"EUR"`, `cost.currency` is `"MN"`, and `finalPrice.currency` equals `price.currency`
 
 ### Requirement: Soft-Delete and No Orphan Products
 
