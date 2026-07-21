@@ -103,34 +103,34 @@ Postgres (NO mocks), api-salesops = `jest` + `test:e2e`.
 
 ## Phase 4: api-salesops — CustomerModule REST (jest + e2e, `pnpm --filter @store-mgmt/api-salesops test`)
 
-- [ ] 4.1 `apps/api-salesops/src/customer/dto/*.ts`: `create-customer.dto.ts`
+- [x] 4.1 `apps/api-salesops/src/customer/dto/*.ts`: `create-customer.dto.ts`
       (`fullName!`, optional `documentId`/`cellPhone`/`email`/`address`/`note`),
       `update-customer.dto.ts` (all optional incl. `active`), `customer-response.dto.ts`
       (all fields, dates as ISO strings, nulls preserved), `dto/index.ts`. Mirror the
       warehouse DTOs — no money fields.
-- [ ] 4.2 [RED] `customer.service.spec.ts`: with a mocked `CUSTOMER_REPOSITORY`, the
+- [x] 4.2 [RED] `customer.service.spec.ts`: with a mocked `CUSTOMER_REPOSITORY`, the
       service creates/updates/soft-deletes/lists/finds-by-id and maps domain `Customer` →
       `CustomerResponseDto` (dates → strings, nulls kept).
-- [ ] 4.3 [GREEN] `apps/api-salesops/src/customer/customer.service.ts` to pass 4.2 (mirror
+- [x] 4.3 [GREEN] `apps/api-salesops/src/customer/customer.service.ts` to pass 4.2 (mirror
       `WarehouseService`).
-- [ ] 4.4 [RED] `customer.controller.spec.ts`: `POST /customers` → 201; empty `fullName` →
+- [x] 4.4 [RED] `customer.controller.spec.ts`: `POST /customers` → 201; empty `fullName` →
       400; duplicate `documentId` → 409 (mapping `DuplicateCustomerDocumentError`);
       `GET /customers` → active-only by default; `GET /customers/:id` → 200/404;
       `PATCH /customers/:id` → 200; `DELETE /customers/:id` → soft-delete (not hard).
-- [ ] 4.5 [GREEN] `apps/api-salesops/src/customer/customer.controller.ts` to pass 4.4,
+- [x] 4.5 [GREEN] `apps/api-salesops/src/customer/customer.controller.ts` to pass 4.4,
       mapping `InvalidCustomerError → 400` and `DuplicateCustomerDocumentError → 409` via a
       `withDomainErrorMapping` helper (mirror `WarehouseController`).
-- [ ] 4.6 `apps/api-salesops/src/customer/customer.module.ts`: `imports: [InfraDbModule]`;
+- [x] 4.6 `apps/api-salesops/src/customer/customer.module.ts`: `imports: [InfraDbModule]`;
       providers `CustomerService`, `{ provide: CUSTOMER_REPOSITORY, useClass: PrismaCustomerRepository }`;
       declares `CustomerController`.
-- [ ] 4.7 Wire `CustomerModule` into `apps/api-salesops/src/app.module.ts` imports,
+- [x] 4.7 Wire `CustomerModule` into `apps/api-salesops/src/app.module.ts` imports,
       alongside the existing modules.
-- [ ] 4.8 [RED] `customer.e2e-spec.ts` (`test:e2e`, real Postgres): full HTTP lifecycle —
+- [x] 4.8 [RED] `customer.e2e-spec.ts` (`test:e2e`, real Postgres): full HTTP lifecycle —
       create → 201; create with same `documentId` → 409; get by id → 200; list → active
       only; delete → soft-delete then still retrievable by id with `active=false`; unknown
       id → 404.
-- [ ] 4.9 [GREEN] Confirm 4.8 passes end-to-end; adjust wiring only if needed.
-- [ ] 4.10 Run `pnpm --filter @store-mgmt/api-salesops test` + `test:e2e` full-green
+- [x] 4.9 [GREEN] Confirm 4.8 passes end-to-end; adjust wiring only if needed.
+- [x] 4.10 Run `pnpm --filter @store-mgmt/api-salesops test` + `test:e2e` full-green
       (existing suites + new customer suites); `typecheck`/`build` exit 0.
 
 ## Phase 5: Cross-cutting Verification & Scope Guards
