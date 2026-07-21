@@ -1,14 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   CreateProductInput,
+  Currency,
   ICategoryRepository,
   IProductRepository,
+  Money,
   Product as DomainProduct,
 } from '@store-mgmt/domain';
 import {
   CATEGORY_REPOSITORY,
   InvalidProductError,
   PRODUCT_REPOSITORY,
+  discountPriceFromDecimalString,
+  discountPriceToDecimalString,
   finalPrice,
   isOffer,
   moneyFromDecimalString,
@@ -16,15 +20,22 @@ import {
   percentFromDecimalString,
   percentToDecimalString,
 } from '@store-mgmt/domain';
-import type { CreateProductDto, ProductResponseDto, UpdateProductDto } from './dto/index.js';
+import type {
+  CreateProductDto,
+  MoneyAmountDto,
+  ProductResponseDto,
+  UpdateProductDto,
+} from './dto/index.js';
 
 /**
  * Orchestration layer for products: the only place with both I/O (via
  * `PRODUCT_REPOSITORY`/`CATEGORY_REPOSITORY`) and domain pricing logic
- * (`finalPrice`/`isOffer`). Maps decimal-string DTO fields <-> the domain's
- * `Money`/scaled-`bigint` percent, and validates `categoryId` exists before
- * ever calling `productRepository.create` — never a silent 500 or a
- * dangling FK.
+ * (`finalPrice`/`isOffer`). Maps decimal-string/`MoneyAmountDto` DTO fields
+ * <-> the domain's `Money`/scaled-`bigint` percent/discount, and validates
+ * `categoryId` exists before ever calling `productRepository.create` —
+ * never a silent 500 or a dangling FK. `price`/`cost` currencies are
+ * caller-chosen and MAY DIFFER; the controller validates currency
+ * membership before this service is reached.
  */
 @Injectable()
 export class ProductService {
@@ -56,16 +67,14 @@ export class ProductService {
       ...(patch.description !== undefined ? { description: patch.description } : {}),
       ...(patch.sku !== undefined ? { sku: patch.sku } : {}),
       ...(patch.barcode !== undefined ? { barcode: patch.barcode } : {}),
-      ...(patch.price !== undefined ? { price: moneyFromDecimalString(patch.price, 'USD') } : {}),
+      ...(patch.price !== undefined ? { price: this.toMoney(patch.price) } : {}),
       ...(patch.percentDiscountPrice !== undefined
         ? { percentDiscountPrice: percentFromDecimalString(patch.percentDiscountPrice) }
         : {}),
       ...(patch.discountPrice !== undefined
-        ? { discountPrice: moneyFromDecimalString(patch.discountPrice, 'USD') }
+        ? { discountPrice: discountPriceFromDecimalString(patch.discountPrice) }
         : {}),
-      ...(patch.costoUSD !== undefined
-        ? { costoUSD: moneyFromDecimalString(patch.costoUSD, 'USD') }
-        : {}),
+      ...(patch.cost !== undefined ? { cost: this.toMoney(patch.cost) } : {}),
       ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
       ...(patch.image !== undefined ? { image: patch.image } : {}),
       ...(patch.isNew !== undefined ? { isNew: patch.isNew } : {}),
@@ -89,20 +98,28 @@ export class ProductService {
     return rows.map((row) => this.toResponse(row));
   }
 
+  private toMoney(amount: MoneyAmountDto): Money {
+    return moneyFromDecimalString(amount.amount, amount.currency as Currency);
+  }
+
+  private toMoneyAmountDto(amount: Money): MoneyAmountDto {
+    return { amount: moneyToDecimalString(amount), currency: amount.currency };
+  }
+
   private toDomainInput(input: CreateProductDto): CreateProductInput {
     return {
       name: input.name,
       description: input.description,
       sku: input.sku,
       barcode: input.barcode,
-      price: moneyFromDecimalString(input.price, 'USD'),
+      price: this.toMoney(input.price),
       percentDiscountPrice: input.percentDiscountPrice
         ? percentFromDecimalString(input.percentDiscountPrice)
         : undefined,
       discountPrice: input.discountPrice
-        ? moneyFromDecimalString(input.discountPrice, 'USD')
+        ? discountPriceFromDecimalString(input.discountPrice)
         : undefined,
-      costoUSD: moneyFromDecimalString(input.costoUSD, 'USD'),
+      cost: this.toMoney(input.cost),
       categoryId: input.categoryId,
       image: input.image,
       isNew: input.isNew,
@@ -118,11 +135,11 @@ export class ProductService {
       description: product.description,
       sku: product.sku ?? null,
       barcode: product.barcode ?? null,
-      price: moneyToDecimalString(product.price),
+      price: this.toMoneyAmountDto(product.price),
       percentDiscountPrice: percentToDecimalString(product.percentDiscountPrice),
-      discountPrice: moneyToDecimalString(product.discountPrice),
-      costoUSD: moneyToDecimalString(product.costoUSD),
-      finalPrice: moneyToDecimalString(finalPrice(product)),
+      discountPrice: discountPriceToDecimalString(product.discountPrice),
+      cost: this.toMoneyAmountDto(product.cost),
+      finalPrice: this.toMoneyAmountDto(finalPrice(product)),
       isOffer: isOffer(product),
       categoryId: product.categoryId,
       image: product.image,

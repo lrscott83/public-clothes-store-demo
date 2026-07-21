@@ -14,11 +14,26 @@ import {
 } from '@nestjs/common';
 import { InvalidMoneyError, InvalidProductError } from '@store-mgmt/domain';
 import { ProductService } from './product.service.js';
-import type { CreateProductDto, ProductResponseDto, UpdateProductDto } from './dto/index.js';
+import type {
+  CreateProductDto,
+  MoneyAmountDto,
+  ProductResponseDto,
+  UpdateProductDto,
+} from './dto/index.js';
+
+const VALID_CURRENCIES = new Set<string>(['USD', 'EUR', 'MN']);
+
+/** Validates a `MoneyAmountDto.currency` — REQUIRED, from the Currency set. */
+function assertCurrency(amount: MoneyAmountDto): void {
+  if (!VALID_CURRENCIES.has(amount.currency)) {
+    throw new BadRequestException(`Unknown currency: "${amount.currency}"`);
+  }
+}
 
 /**
- * REST delivery for the Product module. Maps `InvalidProductError` (e.g.
- * missing/nonexistent `categoryId`) and `InvalidMoneyError` (malformed
+ * REST delivery for the Product module. Validates `price`/`cost` currency at
+ * the boundary (`price`/`cost` MAY differ) and maps `InvalidProductError`
+ * (e.g. missing/nonexistent `categoryId`) and `InvalidMoneyError` (malformed
  * decimal string) -> 400. `GET /:id` returns even soft-deleted products
  * (historical references, e.g. past orders); `GET /products` excludes them
  * by default. `DELETE` always soft-deletes — never a hard DELETE.
@@ -30,6 +45,8 @@ export class ProductController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() body: CreateProductDto): Promise<ProductResponseDto> {
+    assertCurrency(body.price);
+    assertCurrency(body.cost);
     return this.withDomainErrorMapping(() => this.productService.create(body));
   }
 
@@ -55,6 +72,12 @@ export class ProductController {
     @Param('id') id: string,
     @Body() body: UpdateProductDto,
   ): Promise<ProductResponseDto> {
+    if (body.price !== undefined) {
+      assertCurrency(body.price);
+    }
+    if (body.cost !== undefined) {
+      assertCurrency(body.cost);
+    }
     return this.withDomainErrorMapping(() => this.productService.update(id, body));
   }
 

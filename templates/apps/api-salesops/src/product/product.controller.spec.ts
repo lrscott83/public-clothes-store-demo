@@ -19,11 +19,11 @@ const sampleResponse = {
   description: 'Cafetera express de 15 bares.',
   sku: null,
   barcode: null,
-  price: '100.00',
+  price: { amount: '100.00', currency: 'USD' },
   percentDiscountPrice: '20.00',
   discountPrice: '5.00',
-  costoUSD: '60.00',
-  finalPrice: '75.00',
+  cost: { amount: '60.00', currency: 'USD' },
+  finalPrice: { amount: '75.00', currency: 'USD' },
   isOffer: true,
   categoryId: 'category-uuid-1',
   image: 'https://example.com/cafetera.png',
@@ -67,10 +67,10 @@ describe('ProductController', () => {
       const response = await request(app.getHttpServer()).post('/products').send({
         name: 'Cafetera Express',
         description: 'Cafetera express de 15 bares.',
-        price: '100.00',
+        price: { amount: '100.00', currency: 'USD' },
         percentDiscountPrice: '20.00',
         discountPrice: '5.00',
-        costoUSD: '60.00',
+        cost: { amount: '60.00', currency: 'USD' },
         categoryId: 'category-uuid-1',
         image: 'https://example.com/cafetera.png',
         order: 1,
@@ -80,14 +80,67 @@ describe('ProductController', () => {
       expect(response.body).toEqual(sampleResponse);
     });
 
+    it('accepts price and cost denominated in DIFFERENT currencies', async () => {
+      service.create.mockResolvedValue({
+        ...sampleResponse,
+        price: { amount: '100.00', currency: 'EUR' },
+        cost: { amount: '60.00', currency: 'MN' },
+        finalPrice: { amount: '75.00', currency: 'EUR' },
+      });
+
+      const response = await request(app.getHttpServer()).post('/products').send({
+        name: 'Cafetera Express',
+        description: 'Cafetera express de 15 bares.',
+        price: { amount: '100.00', currency: 'EUR' },
+        cost: { amount: '60.00', currency: 'MN' },
+        categoryId: 'category-uuid-1',
+        image: 'https://example.com/cafetera.png',
+        order: 1,
+      });
+
+      expect(response.status).toBe(201);
+      expect(response.body.price).toEqual({ amount: '100.00', currency: 'EUR' });
+      expect(response.body.cost).toEqual({ amount: '60.00', currency: 'MN' });
+    });
+
+    it('rejects an unknown price currency with 400 — never a silent 500', async () => {
+      const response = await request(app.getHttpServer()).post('/products').send({
+        name: 'Cafetera Express',
+        description: 'x',
+        price: { amount: '100.00', currency: 'ARS' },
+        cost: { amount: '60.00', currency: 'USD' },
+        categoryId: 'category-uuid-1',
+        image: 'https://example.com/cafetera.png',
+        order: 1,
+      });
+
+      expect(response.status).toBe(400);
+      expect(service.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown cost currency with 400 — never a silent 500', async () => {
+      const response = await request(app.getHttpServer()).post('/products').send({
+        name: 'Cafetera Express',
+        description: 'x',
+        price: { amount: '100.00', currency: 'USD' },
+        cost: { amount: '60.00', currency: 'ARS' },
+        categoryId: 'category-uuid-1',
+        image: 'https://example.com/cafetera.png',
+        order: 1,
+      });
+
+      expect(response.status).toBe(400);
+      expect(service.create).not.toHaveBeenCalled();
+    });
+
     it('maps a missing-category InvalidProductError to 400', async () => {
       service.create.mockRejectedValue(new InvalidProductError('Category "does-not-exist" does not exist'));
 
       const response = await request(app.getHttpServer()).post('/products').send({
         name: 'Cafetera Express',
         description: 'x',
-        price: '100.00',
-        costoUSD: '60.00',
+        price: { amount: '100.00', currency: 'USD' },
+        cost: { amount: '60.00', currency: 'USD' },
         categoryId: 'does-not-exist',
         image: 'https://example.com/cafetera.png',
         order: 1,
@@ -102,8 +155,8 @@ describe('ProductController', () => {
       const response = await request(app.getHttpServer()).post('/products').send({
         name: 'Cafetera Express',
         description: 'x',
-        price: 'not-a-number',
-        costoUSD: '60.00',
+        price: { amount: 'not-a-number', currency: 'USD' },
+        cost: { amount: '60.00', currency: 'USD' },
         categoryId: 'category-uuid-1',
         image: 'https://example.com/cafetera.png',
         order: 1,

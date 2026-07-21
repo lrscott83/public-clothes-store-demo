@@ -1,8 +1,12 @@
+import type { MoneyAmountDto } from './money-amount.dto.js';
+
 /**
- * Response shape for every Product CRUD endpoint. `price`/`discountPrice`/
- * `costoUSD`/`percentDiscountPrice` are decimal strings, never numbers.
- * `finalPrice` and `isOffer` are DERIVED at read time (never stored) via
- * the domain's pure `pricing.ts` and included on every read response.
+ * Response shape for every Product CRUD endpoint. `price`/`cost`/derived
+ * `finalPrice` are `MoneyAmountDto` (`{ amount, currency }`); `finalPrice`'s
+ * currency is `price`'s. `percentDiscountPrice`/`discountPrice` are decimal
+ * strings, never numbers. `finalPrice` and `isOffer` are DERIVED at read
+ * time (never stored) via the domain's pure `pricing.ts` and included on
+ * every read response.
  */
 export class ProductResponseDto {
   id!: string;
@@ -10,11 +14,11 @@ export class ProductResponseDto {
   description!: string;
   sku!: string | null;
   barcode!: string | null;
-  price!: string;
+  price!: MoneyAmountDto;
   percentDiscountPrice!: string;
   discountPrice!: string;
-  costoUSD!: string;
-  finalPrice!: string;
+  cost!: MoneyAmountDto;
+  finalPrice!: MoneyAmountDto;
   isOffer!: boolean;
   categoryId!: string;
   image!: string;

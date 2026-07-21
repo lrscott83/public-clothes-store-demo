@@ -47,8 +47,8 @@ const sampleProduct: DomainProduct = {
   barcode: undefined,
   price: money(10000n, 'USD'),
   percentDiscountPrice: 2000n,
-  discountPrice: money(500n, 'USD'),
-  costoUSD: money(6000n, 'USD'),
+  discountPrice: 500n,
+  cost: money(6000n, 'USD'),
   categoryId: 'category-uuid-1',
   image: 'https://example.com/cafetera.png',
   isNew: false,
@@ -84,23 +84,45 @@ describe('ProductService', () => {
       const result = await service.create({
         name: 'Cafetera Express',
         description: 'Cafetera express de 15 bares.',
-        price: '100.00',
+        price: { amount: '100.00', currency: 'USD' },
         percentDiscountPrice: '20.00',
         discountPrice: '5.00',
-        costoUSD: '60.00',
+        cost: { amount: '60.00', currency: 'USD' },
         categoryId: 'category-uuid-1',
         image: 'https://example.com/cafetera.png',
         order: 1,
       });
 
-      expect(result.price).toBe('100.00');
+      expect(result.price).toEqual({ amount: '100.00', currency: 'USD' });
       expect(result.percentDiscountPrice).toBe('20.00');
       expect(result.discountPrice).toBe('5.00');
-      expect(result.costoUSD).toBe('60.00');
-      // finalPrice = 100 - 20 - 5 = 75.00
-      expect(result.finalPrice).toBe('75.00');
+      expect(result.cost).toEqual({ amount: '60.00', currency: 'USD' });
+      // finalPrice = 100 - 20 - 5 = 75.00, in price's currency
+      expect(result.finalPrice).toEqual({ amount: '75.00', currency: 'USD' });
       expect(result.isOffer).toBe(true);
       expect(result.sku).toBeNull();
+    });
+
+    it('passes through price/cost currencies verbatim to the repository input — they may differ', async () => {
+      categoryRepo.findById.mockResolvedValue(sampleCategory);
+      productRepo.create.mockResolvedValue(sampleProduct);
+
+      await service.create({
+        name: 'Cafetera Express',
+        description: 'Cafetera express de 15 bares.',
+        price: { amount: '100.00', currency: 'EUR' },
+        cost: { amount: '60.00', currency: 'MN' },
+        categoryId: 'category-uuid-1',
+        image: 'https://example.com/cafetera.png',
+        order: 1,
+      });
+
+      expect(productRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          price: { minorUnits: 10000n, currency: 'EUR' },
+          cost: { minorUnits: 6000n, currency: 'MN' },
+        }),
+      );
     });
 
     it('rejects creation with a missing/nonexistent categoryId — never a silent 500', async () => {
@@ -110,8 +132,8 @@ describe('ProductService', () => {
         service.create({
           name: 'Cafetera Express',
           description: 'x',
-          price: '100.00',
-          costoUSD: '60.00',
+          price: { amount: '100.00', currency: 'USD' },
+          cost: { amount: '60.00', currency: 'USD' },
           categoryId: 'does-not-exist',
           image: 'https://example.com/cafetera.png',
           order: 1,
@@ -127,7 +149,7 @@ describe('ProductService', () => {
 
       const result = await service.findById('product-uuid-1');
 
-      expect(result?.finalPrice).toBe('75.00');
+      expect(result?.finalPrice).toEqual({ amount: '75.00', currency: 'USD' });
       expect(result?.isOffer).toBe(true);
     });
   });
@@ -138,7 +160,7 @@ describe('ProductService', () => {
 
       const result = await service.list();
 
-      expect(result[0]?.finalPrice).toBe('75.00');
+      expect(result[0]?.finalPrice).toEqual({ amount: '75.00', currency: 'USD' });
     });
   });
 
