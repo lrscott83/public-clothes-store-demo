@@ -153,3 +153,25 @@ model StockMovement {
   @@index([productId, warehouseId])
   @@map("stock_movement")
 }
+
+// Fourth domain module: Clientes (SDD change backend-customers). Flat master
+// data -> BOTH created_at + updated_at. Soft-delete via `active`, never a
+// hard DELETE — a future Ventas SaleCredit/Order FK must never be orphaned.
+// `documentId` is optional and unique-when-present: a plain @unique on a
+// nullable column allows many NULLs (Postgres treats NULLs as distinct)
+// while rejecting duplicate non-null values — no partial index needed
+// (design.md). NO relations — the Ventas FK is a future change.
+model Customer {
+  id         String   @id @default(uuid()) @db.Uuid
+  fullName   String   @map("full_name")
+  documentId String?  @unique @map("document_id")
+  cellPhone  String?  @map("cell_phone")
+  email      String?
+  address    String?
+  note       String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("customer")
+}
