@@ -80,6 +80,53 @@ export function resolverTasa(
 }
 
 /**
+ * Same as `resolverTasa`, but never throws — returns `undefined` when no rate
+ * resolves (channel nor its currency). Used by the same-currency soft-resolve
+ * branch: "consult a rate first, else 1x1", never a hard failure.
+ */
+function tryResolverTasa(
+  rates: ExchangeRate[],
+  channel: PaymentChannel,
+  at: Date,
+): ResolvedRate | undefined {
+  try {
+    return resolverTasa(rates, channel, at);
+  } catch (err) {
+    if (err instanceof RateNotFoundError) return undefined;
+    throw err;
+  }
+}
+
+/**
+ * Same as `resolveRateForCurrency`, but never throws — returns `undefined`
+ * when no rate resolves for that bare currency. Used by
+ * `convertirEntreMonedas`'s same-currency soft-resolve branch (channel-less,
+ * so it soft-resolves by currency directly rather than via a channel cascade).
+ */
+function tryResolveRateForCurrency(
+  rates: ExchangeRate[],
+  currency: Currency,
+  at: Date,
+): ResolvedRate | undefined {
+  try {
+    return resolveRateForCurrency(rates, currency, at);
+  } catch (err) {
+    if (err instanceof RateNotFoundError) return undefined;
+    throw err;
+  }
+}
+
+/**
+ * Fabricates a non-persisted 1x1 identity `ExchangeRate` for the same-currency
+ * soft-resolve fallback (`id` absent marks it synthetic — mirrors the USD
+ * pivot's fabricated row in `resolveRateForCurrency`; never a fake/fabricated
+ * UUID, only an absent one).
+ */
+function syntheticIdentity(channel: PaymentChannel, at: Date): ExchangeRate {
+  return { channel, rate: USD_IDENTITY_RATE, effectiveFrom: at, id: undefined };
+}
+
+/**
  * Rounds an exact non-negative bigint rational HALF-UP: round(numerator /
  * denominator). Sale settlement is never negative, so only non-negative
  * operands are supported (per design).
@@ -111,12 +158,17 @@ export function convertir(
     );
   }
 
-  const originResolved = resolverTasa(rates, channel, at);
-
+  // Same-currency: consult a rate first (soft-resolve, never throws), fall
+  // back to the synthetic 1x1 identity only when NO rate exists at all. This
+  // MUST run before the unconditional `resolverTasa` call below, otherwise a
+  // same-currency conversion with no rate on file would throw instead of
+  // identity (decision #5).
   if (origen.currency === monedaDestino) {
-    return { money: origen, rateApplied: originResolved.source };
+    const soft = tryResolverTasa(rates, channel, at);
+    return { money: origen, rateApplied: soft?.source ?? syntheticIdentity(channel, at) };
   }
 
+  const originResolved = resolverTasa(rates, channel, at);
   const destResolved = resolveRateForCurrency(rates, monedaDestino, at);
 
   // Single exact rational: origen -> USD -> destino, one HALF-UP rounding.
@@ -129,5 +181,42 @@ export function convertir(
   return {
     money: { minorUnits: destinoMinorUnits, currency: monedaDestino },
     rateApplied: destResolved.source,
+  };
+}
+
+/**
+ * Channel-less currency-to-currency conversion — for contexts with no
+ * `PaymentChannel` (e.g. `OrderLine` product-native currency -> order
+ * currency). Same same-currency/cross-currency rules as `convertir`: consults
+ * a rate for the bare currency first (soft-resolve), 1x1 identity only when
+ * none exists; cross-currency resolves BOTH sides via `resolveRateForCurrency`
+ * (raises `RateNotFoundError` when a non-USD rate is missing — never defaults
+ * to 1x1) and applies ONE HALF-UP-rounded pivot, stamping the ORIGEN-side rate
+ * (the rate that priced the foreign line) — decision #6.
+ */
+export function convertirEntreMonedas(
+  rates: ExchangeRate[],
+  origen: Money,
+  monedaDestino: Currency,
+  at: Date,
+): ConversionResult {
+  if (origen.currency === monedaDestino) {
+    const soft = tryResolveRateForCurrency(rates, origen.currency, at);
+    return { money: origen, rateApplied: soft?.source ?? syntheticIdentity('ZELLE', at) };
+  }
+
+  const originResolved = resolveRateForCurrency(rates, origen.currency, at);
+  const destResolved = resolveRateForCurrency(rates, monedaDestino, at);
+
+  // Single exact rational: origen -> USD -> destino, one HALF-UP rounding.
+  const numerator =
+    origen.minorUnits * destResolved.rate * 10n ** BigInt(MONEY_SCALE[monedaDestino]);
+  const denominator =
+    originResolved.rate * 10n ** BigInt(MONEY_SCALE[origen.currency]);
+  const destinoMinorUnits = divRoundHalfUp(numerator, denominator);
+
+  return {
+    money: { minorUnits: destinoMinorUnits, currency: monedaDestino },
+    rateApplied: originResolved.source,
   };
 }

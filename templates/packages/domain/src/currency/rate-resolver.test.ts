@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolverTasa, convertir } from './rate-resolver.js';
+import { resolverTasa, convertir, convertirEntreMonedas } from './rate-resolver.js';
 import { RateNotFoundError } from './errors.js';
 import { money } from './money.js';
 import type { ExchangeRate } from './exchange-rate.js';
@@ -147,5 +147,81 @@ describe('convertir — bigint overflow safety', () => {
     // Exact bigint computation (verified independently) — no precision loss despite
     // the intermediate numerator vastly exceeding Number.MAX_SAFE_INTEGER.
     expect(result.money.minorUnits).toBe(38092934783n);
+  });
+});
+
+describe('convertir — same-currency soft-resolve (new branch, decision #5)', () => {
+  it('same-currency with an existing rate applies the resolved rate, not a blind passthrough', () => {
+    const rates: ExchangeRate[] = [rate('MN_EFECTIVO', 355000000n, '2026-01-01T00:00:00Z')];
+    const origen = money(50000n, 'MN');
+    const result = convertir(rates, origen, 'MN_EFECTIVO', 'MN', new Date('2026-02-01T00:00:00Z'));
+
+    expect(result.money).toEqual(origen);
+    expect(result.rateApplied.rate).toBe(355000000n);
+    expect(result.rateApplied.channel).toBe('MN_EFECTIVO');
+  });
+
+  it('same-currency with NO resolvable rate falls back to a synthetic 1x1 identity instead of throwing', () => {
+    const rates: ExchangeRate[] = [];
+    const origen = money(50000n, 'MN');
+    const result = convertir(rates, origen, 'MN_EFECTIVO', 'MN', new Date('2026-02-01T00:00:00Z'));
+
+    expect(result.money).toEqual(origen);
+    expect(result.rateApplied.id).toBeUndefined();
+  });
+
+  it('cross-currency with no rate still throws RateNotFoundError — never defaults to 1x1 (regression guard)', () => {
+    const rates: ExchangeRate[] = [];
+    const origen = money(50000n, 'EUR');
+    expect(() =>
+      convertir(rates, origen, 'EUR_EFECTIVO', 'MN', new Date('2026-02-01T00:00:00Z')),
+    ).toThrow(RateNotFoundError);
+  });
+});
+
+describe('convertirEntreMonedas — channel-less currency-to-currency conversion (decision #6)', () => {
+  it('has no PaymentChannel parameter — arity is exactly 4 (rates, origen, monedaDestino, at)', () => {
+    expect(convertirEntreMonedas.length).toBe(4);
+  });
+
+  it('same-currency with a resolvable rate uses it, not a blind passthrough', () => {
+    const rates: ExchangeRate[] = [rate('MN_TRANSFERENCIA', 355000000n, '2026-01-01T00:00:00Z')];
+    const origen = money(20000n, 'MN');
+    const result = convertirEntreMonedas(rates, origen, 'MN', new Date('2026-02-01T00:00:00Z'));
+
+    expect(result.money).toEqual(origen);
+    expect(result.rateApplied.rate).toBe(355000000n);
+  });
+
+  it('same-currency with no resolvable rate falls back to 1x1 identity', () => {
+    const rates: ExchangeRate[] = [];
+    const origen = money(20000n, 'MN');
+    const result = convertirEntreMonedas(rates, origen, 'MN', new Date('2026-02-01T00:00:00Z'));
+
+    expect(result.money).toEqual(origen);
+    expect(result.rateApplied.id).toBeUndefined();
+  });
+
+  it('cross-currency computes origen -> USD -> destino with ONE HALF-UP rounding, stamping the origen-side rate', () => {
+    // Same fixture as `convertir`'s pivot test: EUR->MN via resolveRateForCurrency on both sides.
+    const rates: ExchangeRate[] = [
+      rate('EUR_EFECTIVO', 920000n, '2026-01-01T00:00:00Z'),
+      rate('MN_TRANSFERENCIA', 350455000n, '2026-01-01T00:00:00Z'),
+    ];
+    const origen = money(10000n, 'EUR'); // 100.00 EUR
+    const result = convertirEntreMonedas(rates, origen, 'MN', new Date('2026-02-01T00:00:00Z'));
+
+    expect(result.money.currency).toBe('MN');
+    expect(result.money.minorUnits).toBe(3809293n);
+    // origen-side (product-native) rate is stamped — the rate that priced the foreign line.
+    expect(result.rateApplied.channel).toBe('EUR_EFECTIVO');
+  });
+
+  it('cross-currency with no resolvable destination rate throws RateNotFoundError, never defaults to 1x1', () => {
+    const rates: ExchangeRate[] = [rate('EUR_EFECTIVO', 920000n, '2026-01-01T00:00:00Z')];
+    const origen = money(10000n, 'EUR');
+    expect(() =>
+      convertirEntreMonedas(rates, origen, 'MN', new Date('2026-02-01T00:00:00Z')),
+    ).toThrow(RateNotFoundError);
   });
 });
