@@ -85,6 +85,8 @@ model Product {
   // packages/domain/src/product/ must stay 0).
   stockLevels StockLevel[]
   movements   StockMovement[]
+  // Inverse relation only — added by the Ventas module (backend-ventas).
+  orderLines  OrderLine[]
 
   @@index([categoryId])
   @@map("product")
@@ -115,6 +117,8 @@ model Warehouse {
 
   stockLevels StockLevel[]
   movements   StockMovement[]
+  // Inverse relation only — added by the Ventas module (backend-ventas).
+  orders      Order[]
 
   @@map("warehouse")
 }
@@ -173,5 +177,137 @@ model Customer {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
+  // Inverse relations only — added by the Ventas module (SDD change
+  // backend-ventas). Customer carries zero Ventas scalar fields.
+  orders      Order[]
+  saleCredits SaleCredit[]
+
   @@map("customer")
+}
+
+// Fifth domain module: Ventas (SDD change backend-ventas). `Order` is the
+// aggregate root — persists/loads with `OrderLine[]`/`OrderPayment[]`/an
+// optional `SaleCredit` as ONE unit (design.md decision #1). Mutable ->
+// created_at + updated_at; soft-delete via `active`, never a hard DELETE.
+// `OrderLine`/`OrderPayment` carry `onDelete: Cascade` as defense-in-depth
+// (children are meaningless without the root; we never hard-delete the
+// root either, so cascade only guards accidental removal).
+//
+// DEVIATION from design.md's literal Prisma block (flagged, not a domain
+// change): design.md was written BEFORE Phase 3 locked the actual domain
+// shape. The frozen `OrderLine.rateApplied`/`OrderPayment.rateApplied`/
+// `SaleCredit.rateApplied` are full `ExchangeRate` objects
+// (`{id?, channel, rate, effectiveFrom}`), not a bare `bigint` — so each
+// needs its own `rateChannel` column (design.md omitted it) to round-trip
+// losslessly, since a resolved rate's channel is NOT always the same as
+// `OrderPayment.channel` (cross-currency payments resolve the DEST-side
+// channel, per `convertir`). `SaleCredit` likewise needs its own
+// `rateApplied`/`rateChannel`/`rateEffectiveFrom` — design.md's SaleCredit
+// block omitted them entirely, but the frozen `SaleCredit` domain
+// interface requires them. All additions below are ADDITIVE (new nullable
+// -free-but-newly-introduced columns on brand-new tables) — no existing
+// table changes.
+
+enum OrderStatus {
+  creado
+  verificado
+  entregado
+  cancelado
+}
+
+enum DeliveryMode {
+  recogida
+  domicilio
+}
+
+model Order {
+  id            String       @id @default(uuid()) @db.Uuid
+  customerId    String       @db.Uuid @map("customer_id")
+  customerName  String       @map("customer_name") // snapshot
+  warehouseId   String       @db.Uuid @map("warehouse_id")
+  deliveryMode  DeliveryMode @map("delivery_mode") // REQUIRED; domicilio engages future Delivery module
+  currency      String // derived USD|MN
+  status        OrderStatus  @default(creado)
+  subtotal      Decimal      @db.Decimal(18, 2) // Money in `currency`
+  discountTotal Decimal      @db.Decimal(18, 2) @map("discount_total")
+  total         Decimal      @db.Decimal(18, 2)
+  orderDate     DateTime     @map("order_date")
+  verifiedAt    DateTime?    @map("verified_at") // freeze stamp (rate+totals, NO commission)
+  deliveredAt   DateTime?    @map("delivered_at") // stamped at verificado->entregado
+  active        Boolean      @default(true)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  customer   Customer       @relation(fields: [customerId], references: [id])
+  warehouse  Warehouse      @relation(fields: [warehouseId], references: [id])
+  lines      OrderLine[]
+  payments   OrderPayment[]
+  saleCredit SaleCredit?
+
+  @@index([customerId])
+  @@map("sales_order") // "order" is a SQL reserved word
+}
+
+model OrderLine {
+  id                   String         @id @default(uuid()) @db.Uuid
+  orderId              String         @db.Uuid @map("order_id")
+  productId            String         @db.Uuid @map("product_id")
+  productName          String         @map("product_name") // snapshot
+  categoryName         String         @map("category_name") // snapshot
+  price                Decimal        @db.Decimal(18, 2) // native
+  priceCurrency        String         @map("price_currency") // native currency
+  percentDiscountPrice Decimal        @default(0) @db.Decimal(5, 2) @map("percent_discount_price")
+  discountPrice        Decimal        @default(0) @db.Decimal(18, 2) @map("discount_price")
+  quantity             Int
+  unitFinalPrice       Decimal        @db.Decimal(18, 2) @map("unit_final_price") // native
+  lineTotalNative      Decimal        @db.Decimal(18, 2) @map("line_total_native") // native
+  rateApplied          Decimal        @db.Decimal(18, 6) @map("rate_applied") // scale-6
+  rateChannel          PaymentChannel @map("rate_channel") // see module-level DEVIATION note
+  rateEffectiveFrom    DateTime       @map("rate_effective_from")
+  lineTotalOrder       Decimal        @db.Decimal(18, 2) @map("line_total_order") // in Order.currency, frozen
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@map("order_line")
+}
+
+model OrderPayment {
+  id                    String         @id @default(uuid()) @db.Uuid
+  orderId               String         @db.Uuid @map("order_id")
+  channel               PaymentChannel
+  amount                Decimal        @db.Decimal(18, 2) // in CHANNEL_CURRENCY[channel]
+  rateApplied           Decimal        @db.Decimal(18, 6) @map("rate_applied")
+  rateChannel           PaymentChannel @map("rate_channel") // see module-level DEVIATION note
+  rateEffectiveFrom     DateTime       @map("rate_effective_from")
+  amountInOrderCurrency Decimal        @db.Decimal(18, 2) @map("amount_in_order_currency") // Order.currency
+  createdAt             DateTime       @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_payment")
+}
+
+model SaleCredit {
+  id                String         @id @default(uuid()) @db.Uuid
+  orderId           String         @unique @db.Uuid @map("order_id") // 0..1
+  customerId        String         @db.Uuid @map("customer_id") // FK, replaces legacy `client: string`
+  total             Decimal        @db.Decimal(18, 2) // Order.currency
+  paid              Decimal        @default(0) @db.Decimal(18, 2) // Order.currency
+  rateApplied       Decimal        @db.Decimal(18, 6) @map("rate_applied") // see module-level DEVIATION note
+  rateChannel       PaymentChannel @map("rate_channel")
+  rateEffectiveFrom DateTime       @map("rate_effective_from")
+  paidDate          DateTime?      @map("paid_date")
+  paidType          String?        @map("paid_type")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@map("sale_credit")
 }

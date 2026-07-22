@@ -8,3 +8,4 @@ export { PrismaWarehouseRepository } from './inventory/prisma-warehouse.reposito
 export { PrismaStockLevelRepository } from './inventory/prisma-stock-level.repository.js';
 export { PrismaStockMovementRepository } from './inventory/prisma-stock-movement.repository.js';
 export { PrismaCustomerRepository } from './customer/prisma-customer.repository.js';
+export { PrismaOrderRepository } from './ventas/prisma-order.repository.js';
