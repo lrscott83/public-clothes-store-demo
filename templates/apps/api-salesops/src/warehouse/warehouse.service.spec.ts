@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import type { IWarehouseRepository, Warehouse as DomainWarehouse } from '@store-mgmt/domain';
-import { WAREHOUSE_REPOSITORY } from '@store-mgmt/domain';
+import { InvalidWarehouseError, WAREHOUSE_REPOSITORY } from '@store-mgmt/domain';
 import { WarehouseService } from './warehouse.service.js';
 
 function buildRepoMock(): jest.Mocked<IWarehouseRepository> {
@@ -47,6 +47,22 @@ describe('WarehouseService', () => {
         updatedAt: '2026-01-01T00:00:00.000Z',
       });
     });
+
+    // Real invariant check — does NOT mock the repository to reject; it
+    // exercises the actual `createWarehouse()` domain guard wired into the
+    // service. Proves the repository is never even called, unlike the
+    // pre-fix bypass where nothing in the real path stopped an empty name.
+    it('throws InvalidWarehouseError for an empty name WITHOUT reaching the repository', async () => {
+      await expect(service.create({ name: '' })).rejects.toThrow(InvalidWarehouseError);
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws InvalidWarehouseError for a whitespace-only name WITHOUT reaching the repository', async () => {
+      await expect(service.create({ name: '   ' })).rejects.toThrow(InvalidWarehouseError);
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('update', () => {
@@ -57,6 +73,22 @@ describe('WarehouseService', () => {
 
       expect(result.name).toBe('Renamed');
       expect(repo.update).toHaveBeenCalledWith('warehouse-uuid-1', { name: 'Renamed' });
+    });
+
+    it('throws InvalidWarehouseError when clearing name to empty, WITHOUT reaching the repository', async () => {
+      await expect(service.update('warehouse-uuid-1', { name: '' })).rejects.toThrow(
+        InvalidWarehouseError,
+      );
+
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('does not validate name when the patch omits it', async () => {
+      repo.update.mockResolvedValue({ ...sampleWarehouse, active: false });
+
+      await service.update('warehouse-uuid-1', { active: false });
+
+      expect(repo.update).toHaveBeenCalledWith('warehouse-uuid-1', { active: false });
     });
   });
 
