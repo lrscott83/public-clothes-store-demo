@@ -186,6 +186,14 @@ Each `OrderLine` (owned by `Order`) MUST snapshot pricing at creation time and r
 as foreign keys — NEVER a free-text `client: string`. `total`/`paid` are Money in
 `Order.currency`; `isPaid` is derived `paid >= total`; rates are frozen.
 
+**Deferred this slice — credit-only order creation:** the `SaleCredit` entity shape
+(FKs, `isPaid`) IS delivered, but CREATING an order that is *fully* on credit (a
+`SaleCredit` with no balancing upfront payment) is NOT supported this slice. `createOrder`
+enforces `Σ payment amountInOrderCurrency === total` unconditionally, so a credit-only
+order (`total > 0`, empty payments) raises `InvalidOrderError`. Enabling the credit-only
+path (relaxing the payment-sum invariant so `SaleCredit` covers the unpaid remainder) is
+deferred — the entity is ready, the aggregate invariant is not yet loosened for it.
+
 #### Scenario: SaleCredit references customerId, not free text
 
 - GIVEN a credit sale
@@ -197,6 +205,14 @@ as foreign keys — NEVER a free-text `client: string`. `total`/`paid` are Money
 - GIVEN a `SaleCredit` with `paid < total`
 - WHEN inspected
 - THEN `isPaid` is `false`; once `paid >= total`, `isPaid` becomes `true`
+
+#### Scenario: Credit-only order creation is deferred this slice
+
+- GIVEN an order with `total > 0` and no upfront payments (fully on credit)
+- WHEN `createOrder` runs
+- THEN it raises `InvalidOrderError` (payment-sum invariant) — the credit-only creation
+  path is deferred; the `SaleCredit` entity is delivered but the aggregate invariant is
+  not yet relaxed to admit it
 
 ### Requirement: Currency Conversion Rules for a Sale
 
