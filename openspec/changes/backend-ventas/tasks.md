@@ -114,11 +114,11 @@ existing `salesops-ventas` branch, one work-unit commit per unit below, pushed a
 
 ## Phase 6: Cross-cutting Verification
 
-- [ ] 6.1 `pnpm --filter @store-mgmt/domain lint && pnpm --filter @store-mgmt/infra-db lint && pnpm --filter @store-mgmt/api-salesops lint` — `backend-boundaries --max-warnings 0` stays green; `domain → infra` edge remains forbidden (the Prisma `tx` in `applyStockMovementTx`/`applyReservationTx` never appears in `IOrderRepository`/`IStockLevelRepository`).
-- [ ] 6.2 `rg -n "prisma\.(stock|order)" templates/packages/domain/src/ventas/ templates/packages/domain/src/inventory/` returns 0 matches — `Order` never writes stock or its own persistence rows directly, only via ports.
-- [ ] 6.3 Run all three suites together (domain vitest, infra-db jest w/ real Postgres, api-salesops jest+e2e); confirm every scenario in `openspec/changes/backend-ventas/specs/salesops-ventas/spec.md` and `specs/salesops-currency/spec.md` is covered by at least one test.
-- [ ] 6.4 Confirm `typecheck`/`build` green for all three packages together (domain rebuilt first so consumers see the new `ventas/` barrel exports, `convertirEntreMonedas`, and the extended `IStockLevelRepository`).
-- [ ] 6.5 Commit work-unit by work-unit per the table above (6 commits), then push `salesops-ventas` — no PR opened, per owner delivery decision.
+- [x] 6.1 `pnpm --filter @store-mgmt/domain lint && pnpm --filter @store-mgmt/infra-db lint && pnpm --filter @store-mgmt/api-salesops lint` — `backend-boundaries --max-warnings 0` stays green; `domain → infra` edge remains forbidden (the Prisma `tx` in `applyStockMovementTx`/`applyReservationTx` never appears in `IOrderRepository`/`IStockLevelRepository`).
+- [x] 6.2 `rg -n "prisma\.(stock|order)" templates/packages/domain/src/ventas/ templates/packages/domain/src/inventory/` returns 0 matches — `Order` never writes stock or its own persistence rows directly, only via ports.
+- [x] 6.3 Run all three suites together (domain vitest, infra-db jest w/ real Postgres, api-salesops jest+e2e); confirm every scenario in `openspec/changes/backend-ventas/specs/salesops-ventas/spec.md` and `specs/salesops-currency/spec.md` is covered by at least one test.
+- [x] 6.4 Confirm `typecheck`/`build` green for all three packages together (domain rebuilt first so consumers see the new `ventas/` barrel exports, `convertirEntreMonedas`, and the extended `IStockLevelRepository`).
+- [x] 6.5 Commit work-unit by work-unit per the table above (6 commits), then push `salesops-ventas` — no PR opened, per owner delivery decision.
 
 ## Out of Scope (per design.md)
 
