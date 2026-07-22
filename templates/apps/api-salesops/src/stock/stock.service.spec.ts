@@ -20,7 +20,13 @@ function buildProductRepoMock(): jest.Mocked<IProductRepository> {
 }
 
 function buildStockLevelRepoMock(): jest.Mocked<IStockLevelRepository> {
-  return { findById: jest.fn(), findByProductAndWarehouse: jest.fn(), list: jest.fn() };
+  return {
+    findById: jest.fn(),
+    findByProductAndWarehouse: jest.fn(),
+    list: jest.fn(),
+    reserve: jest.fn(),
+    release: jest.fn(),
+  };
 }
 
 function buildStockMovementRepoMock(): jest.Mocked<IStockMovementRepository> {
