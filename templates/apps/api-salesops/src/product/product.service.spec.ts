@@ -141,6 +141,87 @@ describe('ProductService', () => {
       ).rejects.toBeInstanceOf(InvalidProductError);
       expect(productRepo.create).not.toHaveBeenCalled();
     });
+
+    // Real money-invariant checks — exercise the actual createProduct() domain
+    // guard wired into the service, not a mocked rejection. Proves the
+    // repository is never reached when a monetary invariant is violated.
+    function validCreateInput() {
+      return {
+        name: 'Cafetera Express',
+        description: 'x',
+        price: { amount: '100.00', currency: 'USD' },
+        cost: { amount: '60.00', currency: 'USD' },
+        categoryId: 'category-uuid-1',
+        image: 'https://example.com/cafetera.png',
+        order: 1,
+      };
+    }
+
+    it('throws InvalidProductError for a non-positive price WITHOUT reaching the product repository', async () => {
+      categoryRepo.findById.mockResolvedValue(sampleCategory);
+
+      await expect(
+        service.create({ ...validCreateInput(), price: { amount: '0.00', currency: 'USD' } }),
+      ).rejects.toThrow(InvalidProductError);
+
+      expect(productRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws InvalidProductError for a negative cost WITHOUT reaching the product repository', async () => {
+      categoryRepo.findById.mockResolvedValue(sampleCategory);
+
+      await expect(
+        service.create({ ...validCreateInput(), cost: { amount: '-1.00', currency: 'USD' } }),
+      ).rejects.toThrow(InvalidProductError);
+
+      expect(productRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws InvalidProductError for an out-of-range percentDiscountPrice WITHOUT reaching the product repository', async () => {
+      categoryRepo.findById.mockResolvedValue(sampleCategory);
+
+      await expect(
+        service.create({ ...validCreateInput(), percentDiscountPrice: '150.00' }),
+      ).rejects.toThrow(InvalidProductError);
+
+      expect(productRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws InvalidProductError for a negative discountPrice WITHOUT reaching the product repository', async () => {
+      categoryRepo.findById.mockResolvedValue(sampleCategory);
+
+      await expect(
+        service.create({ ...validCreateInput(), discountPrice: '-1.00' }),
+      ).rejects.toThrow(InvalidProductError);
+
+      expect(productRepo.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update', () => {
+    it('throws InvalidProductError for a non-positive price WITHOUT reaching the product repository', async () => {
+      await expect(
+        service.update('product-uuid-1', { price: { amount: '0.00', currency: 'USD' } }),
+      ).rejects.toThrow(InvalidProductError);
+
+      expect(productRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('throws InvalidProductError for a negative cost WITHOUT reaching the product repository', async () => {
+      await expect(
+        service.update('product-uuid-1', { cost: { amount: '-1.00', currency: 'USD' } }),
+      ).rejects.toThrow(InvalidProductError);
+
+      expect(productRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('does not validate money fields when the patch omits them', async () => {
+      productRepo.update.mockResolvedValue({ ...sampleProduct, active: false });
+
+      await service.update('product-uuid-1', { active: false });
+
+      expect(productRepo.update).toHaveBeenCalledWith('product-uuid-1', { active: false });
+    });
   });
 
   describe('findById', () => {

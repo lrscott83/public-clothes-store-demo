@@ -11,6 +11,11 @@ import {
   CATEGORY_REPOSITORY,
   InvalidProductError,
   PRODUCT_REPOSITORY,
+  assertValidProductCost,
+  assertValidProductDiscountPrice,
+  assertValidProductPercentDiscount,
+  assertValidProductPrice,
+  createProduct,
   discountPriceFromDecimalString,
   discountPriceToDecimalString,
   finalPrice,
@@ -45,16 +50,36 @@ export class ProductService {
   ) {}
 
   async create(input: CreateProductDto): Promise<ProductResponseDto> {
+    const domainInput = this.toDomainInput(input);
+    // Enforce the money invariants (price > 0, cost >= 0, discount bounds)
+    // on the real path BEFORE any I/O — never persist a corrupt price/cost.
+    createProduct(domainInput);
+
     const category = await this.categoryRepository.findById(input.categoryId);
     if (!category) {
       throw new InvalidProductError(`Category "${input.categoryId}" does not exist`);
     }
 
-    const created = await this.productRepository.create(this.toDomainInput(input));
+    const created = await this.productRepository.create(domainInput);
     return this.toResponse(created);
   }
 
   async update(id: string, patch: UpdateProductDto): Promise<ProductResponseDto> {
+    // Validate only the monetary fields the partial patch actually carries —
+    // field-by-field, since a patch never reconstructs a whole Product.
+    if (patch.price !== undefined) {
+      assertValidProductPrice(this.toMoney(patch.price));
+    }
+    if (patch.cost !== undefined) {
+      assertValidProductCost(this.toMoney(patch.cost));
+    }
+    if (patch.percentDiscountPrice !== undefined) {
+      assertValidProductPercentDiscount(percentFromDecimalString(patch.percentDiscountPrice));
+    }
+    if (patch.discountPrice !== undefined) {
+      assertValidProductDiscountPrice(discountPriceFromDecimalString(patch.discountPrice));
+    }
+
     if (patch.categoryId !== undefined) {
       const category = await this.categoryRepository.findById(patch.categoryId);
       if (!category) {

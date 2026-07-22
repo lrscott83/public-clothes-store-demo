@@ -36,17 +36,35 @@ export interface CreateCategoryInput {
 }
 
 /**
- * Validates and constructs a `Category`. Enforces a non-empty, non-whitespace
- * `slug` (the unique key). Throws `InvalidCategoryError` — never silently
- * accepts a blank slug.
+ * Atomic invariant: `name` must not be empty or whitespace-only. Exported so
+ * the API's partial-update path can validate just this field without
+ * reconstructing a whole `Category`. Throws `InvalidCategoryError`.
  */
-export function createCategory(input: CreateCategoryInput): Category {
-  if (!input.name || input.name.trim().length === 0) {
+export function assertValidCategoryName(name: string): void {
+  if (!name || name.trim().length === 0) {
     throw new InvalidCategoryError('Category name must not be empty');
   }
-  if (!input.slug || input.slug.trim().length === 0) {
+}
+
+/**
+ * Atomic invariant: `slug` (the unique key) must not be empty or
+ * whitespace-only. Exported for the same partial-update reason as
+ * `assertValidCategoryName`. Throws `InvalidCategoryError`.
+ */
+export function assertValidCategorySlug(slug: string): void {
+  if (!slug || slug.trim().length === 0) {
     throw new InvalidCategoryError('Category slug must not be empty or whitespace-only');
   }
+}
+
+/**
+ * Validates and constructs a `Category`. Enforces a non-empty, non-whitespace
+ * `name` and `slug` (the unique key) via the atomic field guards. Throws
+ * `InvalidCategoryError` — never silently accepts a blank name/slug.
+ */
+export function createCategory(input: CreateCategoryInput): Category {
+  assertValidCategoryName(input.name);
+  assertValidCategorySlug(input.slug);
 
   const now = new Date();
   return {

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { createProduct } from './product.js';
+import {
+  assertValidProductCost,
+  assertValidProductDiscountPrice,
+  assertValidProductPercentDiscount,
+  assertValidProductPrice,
+  createProduct,
+} from './product.js';
 import { InvalidProductError } from './errors.js';
 import { money } from '../currency/money.js';
 
@@ -64,6 +70,27 @@ describe('createProduct — invariants', () => {
     });
     expect(product.price.currency).toBe('EUR');
     expect(product.cost.currency).toBe('MN');
+  });
+
+  it('validates atomic field guards for the partial-update path', () => {
+    // assertValidProductPrice
+    expect(() => assertValidProductPrice(money(0n, 'USD'))).toThrow(InvalidProductError);
+    expect(() => assertValidProductPrice(money(-100n, 'USD'))).toThrow(InvalidProductError);
+    expect(() => assertValidProductPrice(money(1n, 'USD'))).not.toThrow();
+
+    // assertValidProductCost
+    expect(() => assertValidProductCost(money(-1n, 'USD'))).toThrow(InvalidProductError);
+    expect(() => assertValidProductCost(money(0n, 'USD'))).not.toThrow();
+
+    // assertValidProductPercentDiscount
+    expect(() => assertValidProductPercentDiscount(-1n)).toThrow(InvalidProductError);
+    expect(() => assertValidProductPercentDiscount(10_001n)).toThrow(InvalidProductError);
+    expect(() => assertValidProductPercentDiscount(0n)).not.toThrow();
+    expect(() => assertValidProductPercentDiscount(10_000n)).not.toThrow();
+
+    // assertValidProductDiscountPrice
+    expect(() => assertValidProductDiscountPrice(-1n)).toThrow(InvalidProductError);
+    expect(() => assertValidProductDiscountPrice(0n)).not.toThrow();
   });
 
   it('accepts valid input and defaults percentDiscountPrice/discountPrice to 0 when omitted', () => {

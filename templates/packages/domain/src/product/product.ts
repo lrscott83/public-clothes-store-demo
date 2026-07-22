@@ -63,33 +63,68 @@ const PERCENT_MIN = 0n;
 const PERCENT_MAX = 10_000n;
 
 /**
- * Validates and constructs a `Product`. Enforces: `price` > 0;
- * `percentDiscountPrice` within [0, 100] (scale-2 bounds); `discountPrice`
- * >= 0; `cost` >= 0. The currency of `price`/`cost` is CALLER-CHOSEN (not
- * forced to USD) and MAY DIFFER between the two — only the `Currency` type
- * constrains valid values (USD/EUR/MN). Throws `InvalidProductError` —
- * never silently clamps or defaults an out-of-range value.
+ * Atomic invariant: `price` must be strictly greater than 0. Exported so the
+ * API's partial-update path can validate just this field without
+ * reconstructing a whole `Product`. Throws `InvalidProductError`.
  */
-export function createProduct(input: CreateProductInput): Product {
-  if (input.price.minorUnits <= 0n) {
+export function assertValidProductPrice(price: Money): void {
+  if (price.minorUnits <= 0n) {
     throw new InvalidProductError('Product price must be greater than 0');
   }
+}
 
-  const percentDiscountPrice = input.percentDiscountPrice ?? 0n;
+/**
+ * Atomic invariant: `percentDiscountPrice` (scale-2) must be within
+ * [0, 100_00]. Exported for the partial-update path. Throws
+ * `InvalidProductError`.
+ */
+export function assertValidProductPercentDiscount(percentDiscountPrice: bigint): void {
   if (percentDiscountPrice < PERCENT_MIN || percentDiscountPrice > PERCENT_MAX) {
     throw new InvalidProductError(
       `Product percentDiscountPrice must be between 0 and 100 (got scaled value ${percentDiscountPrice})`,
     );
   }
+}
 
-  const discountPrice = input.discountPrice ?? 0n;
+/**
+ * Atomic invariant: `discountPrice` (scale-2, no currency) must be >= 0.
+ * Exported for the partial-update path. Throws `InvalidProductError`.
+ */
+export function assertValidProductDiscountPrice(discountPrice: bigint): void {
   if (discountPrice < 0n) {
     throw new InvalidProductError('Product discountPrice must not be negative');
   }
+}
 
-  if (input.cost.minorUnits < 0n) {
+/**
+ * Atomic invariant: `cost` must be >= 0. Exported for the partial-update
+ * path. Throws `InvalidProductError`.
+ */
+export function assertValidProductCost(cost: Money): void {
+  if (cost.minorUnits < 0n) {
     throw new InvalidProductError('Product cost must not be negative');
   }
+}
+
+/**
+ * Validates and constructs a `Product`. Enforces: `price` > 0;
+ * `percentDiscountPrice` within [0, 100] (scale-2 bounds); `discountPrice`
+ * >= 0; `cost` >= 0 via the atomic field guards. The currency of
+ * `price`/`cost` is CALLER-CHOSEN (not forced to USD) and MAY DIFFER between
+ * the two — only the `Currency` type constrains valid values (USD/EUR/MN).
+ * Throws `InvalidProductError` — never silently clamps or defaults an
+ * out-of-range value.
+ */
+export function createProduct(input: CreateProductInput): Product {
+  assertValidProductPrice(input.price);
+
+  const percentDiscountPrice = input.percentDiscountPrice ?? 0n;
+  assertValidProductPercentDiscount(percentDiscountPrice);
+
+  const discountPrice = input.discountPrice ?? 0n;
+  assertValidProductDiscountPrice(discountPrice);
+
+  assertValidProductCost(input.cost);
 
   const now = new Date();
   return {

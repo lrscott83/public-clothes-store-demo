@@ -66,6 +66,26 @@ describe('CategoryService', () => {
       ).rejects.toBeInstanceOf(InvalidCategoryError);
       expect(repo.create).not.toHaveBeenCalled();
     });
+
+    // Real invariant check — exercises the actual createCategory() domain
+    // guard wired into the service, not a mocked rejection. Proves the
+    // repository is never even reached on malformed input.
+    it('throws InvalidCategoryError for an empty name WITHOUT reaching the repository', async () => {
+      await expect(service.create({ name: '', slug: 'cafeteras', order: 1 })).rejects.toThrow(
+        InvalidCategoryError,
+      );
+
+      expect(repo.findBySlug).not.toHaveBeenCalled();
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws InvalidCategoryError for an empty slug WITHOUT reaching the repository', async () => {
+      await expect(service.create({ name: 'Cafeteras', slug: '   ', order: 1 })).rejects.toThrow(
+        InvalidCategoryError,
+      );
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('update', () => {
@@ -76,6 +96,30 @@ describe('CategoryService', () => {
 
       expect(result.name).toBe('Cafeteras Updated');
       expect(repo.update).toHaveBeenCalledWith('category-uuid-1', { name: 'Cafeteras Updated' });
+    });
+
+    it('throws InvalidCategoryError when clearing name to empty, WITHOUT reaching the repository', async () => {
+      await expect(service.update('category-uuid-1', { name: '' })).rejects.toThrow(
+        InvalidCategoryError,
+      );
+
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('throws InvalidCategoryError when clearing slug to whitespace, WITHOUT reaching the repository', async () => {
+      await expect(service.update('category-uuid-1', { slug: '   ' })).rejects.toThrow(
+        InvalidCategoryError,
+      );
+
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('does not validate name/slug when the patch omits them', async () => {
+      repo.update.mockResolvedValue({ ...sampleCategory, order: 5 });
+
+      await service.update('category-uuid-1', { order: 5 });
+
+      expect(repo.update).toHaveBeenCalledWith('category-uuid-1', { order: 5 });
     });
   });
 

@@ -1,6 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Category as DomainCategory, ICategoryRepository } from '@store-mgmt/domain';
-import { CATEGORY_REPOSITORY, InvalidCategoryError } from '@store-mgmt/domain';
+import {
+  CATEGORY_REPOSITORY,
+  InvalidCategoryError,
+  assertValidCategoryName,
+  assertValidCategorySlug,
+  createCategory,
+} from '@store-mgmt/domain';
 import type { CategoryResponseDto, CreateCategoryDto, UpdateCategoryDto } from './dto/index.js';
 
 /**
@@ -8,6 +14,13 @@ import type { CategoryResponseDto, CreateCategoryDto, UpdateCategoryDto } from '
  * `CATEGORY_REPOSITORY`) and the duplicate-slug guard. Maps the domain
  * `Category` to the API's `CategoryResponseDto` (image/icon `undefined` ->
  * `null`, dates -> ISO strings).
+ *
+ * `create` runs the payload through `createCategory()` BEFORE any I/O so a
+ * blank name/slug is rejected without ever touching the DB; `update` uses the
+ * atomic field guards to validate only the fields a partial patch carries.
+ * These are the only place `InvalidCategoryError` fires for malformed shape on
+ * the real HTTP path (the repository/Prisma layer has no notion of the
+ * invariant, by design).
  */
 @Injectable()
 export class CategoryService {
@@ -16,6 +29,7 @@ export class CategoryService {
   ) {}
 
   async create(input: CreateCategoryDto): Promise<CategoryResponseDto> {
+    createCategory(input);
     const existing = await this.categoryRepository.findBySlug(input.slug);
     if (existing) {
       throw new InvalidCategoryError(`Category slug "${input.slug}" already exists`);
@@ -25,6 +39,12 @@ export class CategoryService {
   }
 
   async update(id: string, patch: UpdateCategoryDto): Promise<CategoryResponseDto> {
+    if (patch.name !== undefined) {
+      assertValidCategoryName(patch.name);
+    }
+    if (patch.slug !== undefined) {
+      assertValidCategorySlug(patch.slug);
+    }
     const updated = await this.categoryRepository.update(id, patch);
     return this.toResponse(updated);
   }
