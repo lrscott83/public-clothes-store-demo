@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type {
   IStockLevelRepository,
+  ReserveStockInput,
   StockLevel as DomainStockLevel,
   StockLevelListFilter,
 } from '@store-mgmt/domain';
 import { PrismaService } from '../prisma-client.js';
+import { applyReservationTx } from './apply-reservation.js';
 
 /** Shape shared by every row Prisma returns for the `StockLevel` model. */
 interface StockLevelRow {
@@ -30,12 +32,16 @@ function toDomain(row: StockLevelRow): DomainStockLevel {
 }
 
 /**
- * Prisma adapter for `IStockLevelRepository` — READ-ONLY. Writes to
- * `StockLevel` happen exclusively through the transactional
- * `PrismaStockMovementRepository.record` flow; this repository never
- * creates or updates a row. A missing `(productId, warehouseId)` pair
- * resolves to `null` — the caller treats that as zero stock, never an
- * error (StockLevel rows are lazily created on first movement).
+ * Prisma adapter for `IStockLevelRepository` — reads + reservation writes.
+ * Physical `onHand` mutations still happen exclusively through the
+ * transactional `PrismaStockMovementRepository.record` flow; this
+ * repository never creates or updates `onHand` directly. `reserve`/
+ * `release` are the ONLY writes exposed here, and they touch `reserved`
+ * exclusively via `applyReservationTx`, each wrapped in its OWN
+ * `$transaction` (see `apply-reservation.ts`). A missing
+ * `(productId, warehouseId)` pair resolves to `null` on reads — the caller
+ * treats that as zero stock, never an error (StockLevel rows are lazily
+ * created on first movement or first reservation).
  */
 @Injectable()
 export class PrismaStockLevelRepository implements IStockLevelRepository {
@@ -64,5 +70,13 @@ export class PrismaStockLevelRepository implements IStockLevelRepository {
       },
     });
     return rows.map(toDomain);
+  }
+
+  async reserve(input: ReserveStockInput): Promise<DomainStockLevel> {
+    return this.prisma.$transaction((tx) => applyReservationTx(tx, input, 'reserve'));
+  }
+
+  async release(input: ReserveStockInput): Promise<DomainStockLevel> {
+    return this.prisma.$transaction((tx) => applyReservationTx(tx, input, 'release'));
   }
 }

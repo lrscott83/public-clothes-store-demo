@@ -1,3 +1,4 @@
+import { InsufficientStockError, InvalidStockLevelError } from '@store-mgmt/domain';
 import { PrismaService } from '../prisma-client.js';
 import { PrismaWarehouseRepository } from './prisma-warehouse.repository.js';
 import { PrismaStockLevelRepository } from './prisma-stock-level.repository.js';
@@ -90,5 +91,68 @@ describe('PrismaStockLevelRepository', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.warehouseId).toBe(warehouse.id);
+  });
+
+  it('reserve() wraps applyReservationTx in its own $transaction and returns the mapped StockLevel', async () => {
+    const { product, warehouse } = await seedProductAndWarehouse();
+    await prisma.stockLevel.create({
+      data: { productId: product.id, warehouseId: warehouse.id, onHand: 10, reserved: 0 },
+    });
+
+    const result = await repository.reserve({
+      productId: product.id,
+      warehouseId: warehouse.id,
+      quantity: 3,
+    });
+
+    expect(result.reserved).toBe(3);
+    expect(result.onHand).toBe(10);
+
+    const level = await repository.findByProductAndWarehouse(product.id, warehouse.id);
+    expect(level?.reserved).toBe(3);
+  });
+
+  it('reserve() beyond available throws InsufficientStockError and mutates zero rows', async () => {
+    const { product, warehouse } = await seedProductAndWarehouse();
+    await prisma.stockLevel.create({
+      data: { productId: product.id, warehouseId: warehouse.id, onHand: 2, reserved: 0 },
+    });
+
+    await expect(
+      repository.reserve({ productId: product.id, warehouseId: warehouse.id, quantity: 5 }),
+    ).rejects.toThrow(InsufficientStockError);
+
+    const level = await repository.findByProductAndWarehouse(product.id, warehouse.id);
+    expect(level?.reserved).toBe(0); // unchanged
+  });
+
+  it('release() wraps applyReservationTx in its own $transaction and returns the mapped StockLevel', async () => {
+    const { product, warehouse } = await seedProductAndWarehouse();
+    await prisma.stockLevel.create({
+      data: { productId: product.id, warehouseId: warehouse.id, onHand: 10, reserved: 5 },
+    });
+
+    const result = await repository.release({
+      productId: product.id,
+      warehouseId: warehouse.id,
+      quantity: 5,
+    });
+
+    expect(result.reserved).toBe(0);
+    expect(result.onHand).toBe(10);
+  });
+
+  it('release() beyond reserved throws InvalidStockLevelError and mutates zero rows', async () => {
+    const { product, warehouse } = await seedProductAndWarehouse();
+    await prisma.stockLevel.create({
+      data: { productId: product.id, warehouseId: warehouse.id, onHand: 10, reserved: 1 },
+    });
+
+    await expect(
+      repository.release({ productId: product.id, warehouseId: warehouse.id, quantity: 3 }),
+    ).rejects.toThrow(InvalidStockLevelError);
+
+    const level = await repository.findByProductAndWarehouse(product.id, warehouse.id);
+    expect(level?.reserved).toBe(1); // unchanged
   });
 });

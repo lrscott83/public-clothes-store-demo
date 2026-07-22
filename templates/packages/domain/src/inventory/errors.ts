@@ -33,3 +33,11 @@ export class NegativeStockError extends Error {
     this.name = 'NegativeStockError';
   }
 }
+
+/** Thrown when a `reserve()` would push `available` (`onHand - reserved`) below 0. */
+export class InsufficientStockError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InsufficientStockError';
+  }
+}

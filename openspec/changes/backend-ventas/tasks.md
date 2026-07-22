@@ -43,15 +43,15 @@ existing `salesops-ventas` branch, one work-unit commit per unit below, pushed a
 
 ## Phase 2: Inventory — Reserve/Release Extension (vitest domain, jest infra-db + real Postgres)
 
-- [ ] 2.1 `domain/src/inventory/stock-level-repository.port.ts`: extend `IStockLevelRepository` with `reserve(input: ReserveStockInput): Promise<StockLevel>` and `release(input: ReserveStockInput): Promise<StockLevel>`; add `interface ReserveStockInput { productId; warehouseId; quantity }`; amend the "read-only" doc comment to "reads + reservation writes"; existing `findById`/`findByProductAndWarehouse`/`list` UNCHANGED.
-- [ ] 2.2 `domain/src/inventory/errors.ts`: add `InsufficientStockError` (reserve would push `available = onHand - reserved` negative); existing `NegativeStockError` reused for the `sale_out` path.
-- [ ] 2.3 `domain/src/inventory/index.ts`: export `ReserveStockInput` + `InsufficientStockError`.
-- [ ] 2.4 Run `pnpm --filter @store-mgmt/domain test` — shipped inventory suite (`warehouse`/`stock-level`/`stock-movement`) stays green, additive-only, zero regressions.
-- [ ] 2.5 [RED] `infra-db/src/inventory/apply-reservation.spec.ts` (NEW): reserve raises `reserved` by `qty` when `available >= qty`; reserve beyond available (`on_hand - (reserved+q) < 0`) throws `InsufficientStockError`, zero rows mutated; release lowers `reserved` by `qty`; release beyond `reserved` (`reserved-q < 0`) throws the existing `InvalidStockLevelError` (over-release guard), zero rows mutated.
-- [ ] 2.6 [GREEN] `infra-db/src/inventory/apply-reservation.ts`: `applyReservationTx(tx, {productId, warehouseId, quantity}, dir: 'reserve'|'release')` — upsert level; guarded UPDATE per direction (design decision #7), to pass 2.5.
-- [ ] 2.7 [RED] `infra-db/src/inventory/prisma-stock-level.repository.spec.ts` (extend, additive cases): `reserve()`/`release()` wrap `applyReservationTx` in their OWN `$transaction` and return the mapped `StockLevel`; existing read-only specs untouched and still pass.
-- [ ] 2.8 [GREEN] `infra-db/src/inventory/prisma-stock-level.repository.ts`: implement `reserve`/`release` per design decision #7, to pass 2.7; confirm shipped read-method specs stay green.
-- [ ] 2.9 Run `pnpm --filter @store-mgmt/infra-db test` — full inventory suite green incl. new reservation specs; `prisma-stock-movement.repository.spec.ts` (onHand path) shows zero regression.
+- [x] 2.1 `domain/src/inventory/stock-level-repository.port.ts`: extend `IStockLevelRepository` with `reserve(input: ReserveStockInput): Promise<StockLevel>` and `release(input: ReserveStockInput): Promise<StockLevel>`; add `interface ReserveStockInput { productId; warehouseId; quantity }`; amend the "read-only" doc comment to "reads + reservation writes"; existing `findById`/`findByProductAndWarehouse`/`list` UNCHANGED.
+- [x] 2.2 `domain/src/inventory/errors.ts`: add `InsufficientStockError` (reserve would push `available = onHand - reserved` negative); existing `NegativeStockError` reused for the `sale_out` path.
+- [x] 2.3 `domain/src/inventory/index.ts`: export `ReserveStockInput` + `InsufficientStockError`.
+- [x] 2.4 Run `pnpm --filter @store-mgmt/domain test` — shipped inventory suite (`warehouse`/`stock-level`/`stock-movement`) stays green, additive-only, zero regressions.
+- [x] 2.5 [RED] `infra-db/src/inventory/apply-reservation.spec.ts` (NEW): reserve raises `reserved` by `qty` when `available >= qty`; reserve beyond available (`on_hand - (reserved+q) < 0`) throws `InsufficientStockError`, zero rows mutated; release lowers `reserved` by `qty`; release beyond `reserved` (`reserved-q < 0`) throws the existing `InvalidStockLevelError` (over-release guard), zero rows mutated.
+- [x] 2.6 [GREEN] `infra-db/src/inventory/apply-reservation.ts`: `applyReservationTx(tx, {productId, warehouseId, quantity}, dir: 'reserve'|'release')` — upsert level; guarded UPDATE per direction (design decision #7), to pass 2.5.
+- [x] 2.7 [RED] `infra-db/src/inventory/prisma-stock-level.repository.spec.ts` (extend, additive cases): `reserve()`/`release()` wrap `applyReservationTx` in their OWN `$transaction` and return the mapped `StockLevel`; existing read-only specs untouched and still pass.
+- [x] 2.8 [GREEN] `infra-db/src/inventory/prisma-stock-level.repository.ts`: implement `reserve`/`release` per design decision #7, to pass 2.7; confirm shipped read-method specs stay green.
+- [x] 2.9 Run `pnpm --filter @store-mgmt/infra-db test` — full inventory suite green incl. new reservation specs; `prisma-stock-movement.repository.spec.ts` (onHand path) shows zero regression.
 
 ## Phase 3: Domain — Order Aggregate (vitest, `pnpm --filter @store-mgmt/domain test`)
 
