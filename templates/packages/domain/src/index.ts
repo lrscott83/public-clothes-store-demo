@@ -1,5 +1,4 @@
 export * from './models/base.js';
-export * from './models/auth.js';
 export * from './models/store.js';
 export * from './models/inventory.js';
 export * from './models/expense.js';
@@ -9,3 +8,4 @@ export * from './product/index.js';
 export * from './inventory/index.js';
 export * from './customer/index.js';
 export * from './ventas/index.js';
+export * from './users/index.js';

@@ -33,18 +33,18 @@ proceeds on a single branch, one work-unit commit per unit below, pushed at the 
 
 ## Phase 1: Domain — Identity Core (vitest, `pnpm --filter @store-mgmt/domain test`)
 
-- [ ] 1.1 [RED] `domain/src/users/roles.test.ts`: `hasRole`/`addRole`/`removeRole`/`getRoles` bit ops per spec scenarios (multi-role hold, targeted clear).
-- [ ] 1.2 [RED] same file: `effectiveRoles` — admin returns union of ALL bits; owner returns union of business bits (not admin); else unchanged; `can(roles, requiredMask)` union-satisfies test.
-- [ ] 1.3 [GREEN] `domain/src/users/roles.ts`: `USER_ROLES` bitmask const + `RoleHelpers` + `effectiveRoles`/`can`, to pass 1.1-1.2.
-- [ ] 1.4 [RED] `domain/src/users/user.test.ts`: `createUser` — unique/required `login`, optional `email`/`cellPhone` resolve `null`, no `isEmailVerified` field, `passwordHash` bcrypt-shape invariant throws `InvalidUserError` on bad hash, empty/whitespace `login`/`fullName` rejected.
-- [ ] 1.5 [GREEN] `domain/src/users/user.ts`: `User` entity + `CreateUserInput` + `createUser` factory, to pass 1.4.
-- [ ] 1.6 [RED] `domain/src/users/operador-almacen.test.ts`: `OperadorAlmacen` shape — `userId` PK/FK, `warehouseId` NOT unique.
-- [ ] 1.7 [GREEN] `domain/src/users/operador-almacen.ts` to pass 1.6.
-- [ ] 1.8 `domain/src/users/refresh-token.ts` + `password-reset-token.ts`: pure domain models (no behavior beyond shape), mirrors design §2.
-- [ ] 1.9 `domain/src/users/{user-repository,refresh-token-repository,password-reset-token-repository,operador-almacen-repository}.port.ts`: interfaces + Symbols (`USER_REPOSITORY`, etc.) per design §5/§6.
-- [ ] 1.10 `domain/src/users/errors.ts`: `InvalidUserError`, `DuplicateLoginError`.
-- [ ] 1.11 `domain/src/users/index.ts` barrel; add `export * from './users/index.js'` to `domain/src/index.ts`; DROP the `export * from './models/auth.js'` line and delete `domain/src/models/auth.ts`. Verify via `rg` that no consumer imports `AuthModel`/`UserModel`/`LoginRequest`/`RegisterRequest`/`Credentials`/`StoreModuleFeatures` from `@store-mgmt/domain` before deleting.
-- [ ] 1.12 Run `pnpm --filter @store-mgmt/domain test && pnpm --filter @store-mgmt/domain typecheck` — full domain suite green, zero regressions, no ambiguous re-export.
+- [x] 1.1 [RED] `domain/src/users/roles.test.ts`: `hasRole`/`addRole`/`removeRole`/`getRoles` bit ops per spec scenarios (multi-role hold, targeted clear).
+- [x] 1.2 [RED] same file: `effectiveRoles` — admin returns union of ALL bits; owner returns union of business bits (not admin); else unchanged; `can(roles, requiredMask)` union-satisfies test.
+- [x] 1.3 [GREEN] `domain/src/users/roles.ts`: `USER_ROLES` bitmask const + `RoleHelpers` + `effectiveRoles`/`can`, to pass 1.1-1.2.
+- [x] 1.4 [RED] `domain/src/users/user.test.ts`: `createUser` — unique/required `login`, optional `email`/`cellPhone` resolve `null`, no `isEmailVerified` field, `passwordHash` bcrypt-shape invariant throws `InvalidUserError` on bad hash, empty/whitespace `login`/`fullName` rejected.
+- [x] 1.5 [GREEN] `domain/src/users/user.ts`: `User` entity + `CreateUserInput` + `createUser` factory, to pass 1.4.
+- [x] 1.6 [RED] `domain/src/users/operador-almacen.test.ts`: `OperadorAlmacen` shape — `userId` PK/FK, `warehouseId` NOT unique.
+- [x] 1.7 [GREEN] `domain/src/users/operador-almacen.ts` to pass 1.6.
+- [x] 1.8 `domain/src/users/refresh-token.ts` + `password-reset-token.ts`: pure domain models (no behavior beyond shape), mirrors design §2.
+- [x] 1.9 `domain/src/users/{user-repository,refresh-token-repository,password-reset-token-repository,operador-almacen-repository}.port.ts`: interfaces + Symbols (`USER_REPOSITORY`, etc.) per design §5/§6.
+- [x] 1.10 `domain/src/users/errors.ts`: `InvalidUserError`, `DuplicateLoginError`.
+- [x] 1.11 `domain/src/users/index.ts` barrel; add `export * from './users/index.js'` to `domain/src/index.ts`; DROP the `export * from './models/auth.js'` line and delete `domain/src/models/auth.ts`. Verify via `rg` that no consumer imports `AuthModel`/`UserModel`/`LoginRequest`/`RegisterRequest`/`Credentials`/`StoreModuleFeatures` from `@store-mgmt/domain` before deleting.
+- [x] 1.12 Run `pnpm --filter @store-mgmt/domain test && pnpm --filter @store-mgmt/domain typecheck` — full domain suite green, zero regressions, no ambiguous re-export.
 
 ## Phase 2: infra-db — Prisma + Migration/Backfill (jest + real Postgres, `pnpm --filter @store-mgmt/infra-db test`)
 
