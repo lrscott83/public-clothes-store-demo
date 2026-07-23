@@ -98,18 +98,20 @@ líneas/pagos), pero el texto diverge del código.
 
 ---
 
-## 4. Pendiente viejo — Rewire de `customerId` en Ventas
+## 4. Pendiente viejo — Rewire de `customerId` en Ventas ✅ HECHO (2026-07-23)
+
+> **Cerrado (commit `60a9e11`).** Resultó ser lo simple: los scaffolds legacy
+> `models/order.ts` + `models/sale-credit.ts` (con `client: string` texto libre)
+> NO los importaba nadie en todo el repo — código muerto. Se borraron. El
+> `SaleCredit` real del agregado ya usa `customerId` (FK) desde este slice, así
+> que no había ningún "rewire" pendiente. NO confundir con el soft-delete de
+> datos de cliente (eso es runtime y ya está bien).
+
+Contexto original (dejado como registro):
 
 Anterior a este slice: la `SaleCredit` legacy referenciaba al cliente por texto libre
 (`client: string`). Ahora **ya existen** la entidad `Customer` (módulo Clientes) y el
-agregado `Order` con `SaleCredit.customerId` como FK. Falta cerrar la promoción
-end-to-end donde algún camino todavía asuma el texto libre.
-
-- **Verificar primero:** `rg -n "client" templates/packages/domain/src/models/sale-credit.ts`
-  y buscar consumidores del scaffold legacy `models/order.ts` / `models/sale-credit.ts`
-  (recordar que su export del barrel se quitó en el commit `b30331b`).
-- Si no queda ningún consumidor del texto libre, esto puede ser solo **borrar los
-  scaffolds legacy** `models/order.ts` + `models/sale-credit.ts` (huérfanos) y cerrar.
+agregado `Order` con `SaleCredit.customerId` como FK.
 
 ---
 
