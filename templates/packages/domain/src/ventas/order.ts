@@ -45,7 +45,6 @@ export interface Order {
   readonly payments: readonly OrderPayment[];
   readonly saleCredit: SaleCredit | null;
   readonly orderDate: Date;
-  readonly active: boolean;
   readonly verifiedAt: Date | null;
   readonly deliveredAt: Date | null;
   readonly createdAt: Date;
@@ -69,7 +68,6 @@ export interface CreateOrderInput {
   readonly saleCredit?: SaleCredit | null;
   readonly total?: Money;
   readonly orderDate?: Date;
-  readonly active?: boolean;
   readonly createdAt?: Date;
   readonly updatedAt?: Date;
 }
@@ -155,7 +153,6 @@ export function createOrder(input: CreateOrderInput, rates: ExchangeRate[], at: 
     payments,
     saleCredit: input.saleCredit ?? null,
     orderDate: input.orderDate ?? at,
-    active: input.active ?? true,
     verifiedAt: null,
     deliveredAt: null,
     createdAt: input.createdAt ?? at,

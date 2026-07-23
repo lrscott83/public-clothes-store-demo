@@ -446,30 +446,8 @@ describe('PrismaOrderRepository', () => {
     });
   });
 
-  describe('softDelete (4.19)', () => {
-    it('flips active=false; row + lines + payments remain findById-able', async () => {
-      const { product, warehouse, customer } = await seedFixtures();
-      const order = buildSingleLineOrder(
-        product.id,
-        product.name,
-        'Cafeteras',
-        warehouse.id,
-        customer.id,
-        customer.fullName,
-      );
-      const created = await repository.create(order);
-
-      await repository.softDelete(created.id);
-
-      const found = await repository.findById(created.id);
-      expect(found?.active).toBe(false);
-      expect(found?.lines).toHaveLength(1);
-      expect(found?.payments).toHaveLength(1);
-    });
-  });
-
   describe('list / update (4.20)', () => {
-    it('list() excludes inactive orders by default, includes with includeInactive', async () => {
+    it('list() filters by customerId — an Order is never deleted, so it always lists', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       const order = buildSingleLineOrder(
         product.id,
@@ -480,13 +458,12 @@ describe('PrismaOrderRepository', () => {
         customer.fullName,
       );
       const created = await repository.create(order);
-      await repository.softDelete(created.id);
 
-      const activeOnly = await repository.list({ customerId: customer.id });
-      expect(activeOnly.find((o) => o.id === created.id)).toBeUndefined();
+      const forCustomer = await repository.list({ customerId: customer.id });
+      expect(forCustomer.find((o) => o.id === created.id)).toBeDefined();
 
-      const withInactive = await repository.list({ customerId: customer.id, includeInactive: true });
-      expect(withInactive.find((o) => o.id === created.id)).toBeDefined();
+      const forOtherCustomer = await repository.list({ customerId: '00000000-0000-0000-0000-000000000000' });
+      expect(forOtherCustomer.find((o) => o.id === created.id)).toBeUndefined();
     });
 
     it('update() patches scalar fields', async () => {

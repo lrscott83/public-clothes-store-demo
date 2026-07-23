@@ -119,10 +119,6 @@ export class VentasService {
     return this.toResponse(updated);
   }
 
-  async softDelete(id: string): Promise<void> {
-    await this.orderRepository.softDelete(id);
-  }
-
   async findById(id: string): Promise<OrderResponseDto | null> {
     const found = await this.orderRepository.findById(id);
     return found ? this.toResponse(found) : null;
@@ -183,7 +179,6 @@ export class VentasService {
       payments: order.payments.map((payment) => this.toPaymentResponse(payment)),
       saleCredit: order.saleCredit ? this.toSaleCreditResponse(order.saleCredit) : null,
       orderDate: order.orderDate.toISOString(),
-      active: order.active,
       verifiedAt: order.verifiedAt ? order.verifiedAt.toISOString() : null,
       deliveredAt: order.deliveredAt ? order.deliveredAt.toISOString() : null,
       createdAt: order.createdAt.toISOString(),

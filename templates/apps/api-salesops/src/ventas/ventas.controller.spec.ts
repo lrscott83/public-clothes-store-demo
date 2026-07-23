@@ -14,7 +14,6 @@ import { VentasService } from './ventas.service.js';
 type VentasServiceMock = {
   create: jest.Mock;
   update: jest.Mock;
-  softDelete: jest.Mock;
   findById: jest.Mock;
   list: jest.Mock;
   confirm: jest.Mock;
@@ -37,7 +36,6 @@ const sampleResponse = {
   payments: [],
   saleCredit: null,
   orderDate: '2026-01-01T00:00:00.000Z',
-  active: true,
   verifiedAt: null,
   deliveredAt: null,
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -69,7 +67,6 @@ describe('VentasController', () => {
     service = {
       create: jest.fn(),
       update: jest.fn(),
-      softDelete: jest.fn(),
       findById: jest.fn(),
       list: jest.fn(),
       confirm: jest.fn(),
@@ -141,14 +138,14 @@ describe('VentasController', () => {
   });
 
   describe('GET /orders', () => {
-    it('returns the active-only list by default', async () => {
+    it('returns the full list', async () => {
       service.list.mockResolvedValue([sampleResponse]);
 
       const response = await request(app.getHttpServer()).get('/orders');
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual([sampleResponse]);
-      expect(service.list).toHaveBeenCalledWith({ includeInactive: false });
+      expect(service.list).toHaveBeenCalledWith();
     });
   });
 
@@ -205,11 +202,10 @@ describe('VentasController', () => {
   });
 
   describe('DELETE /orders/:id', () => {
-    it('soft-deletes and returns 200, never a hard delete', async () => {
+    it('does not exist — an Order is an immutable event and is never deleted', async () => {
       const response = await request(app.getHttpServer()).delete('/orders/order-uuid-1');
 
-      expect(response.status).toBe(200);
-      expect(service.softDelete).toHaveBeenCalledWith('order-uuid-1');
+      expect(response.status).toBe(404);
     });
   });
 

@@ -190,10 +190,14 @@ model Customer {
 // Fifth domain module: Ventas (SDD change backend-ventas). `Order` is the
 // aggregate root — persists/loads with `OrderLine[]`/`OrderPayment[]`/an
 // optional `SaleCredit` as ONE unit (design.md decision #1). Mutable ->
-// created_at + updated_at; soft-delete via `active`, never a hard DELETE.
-// `OrderLine`/`OrderPayment` carry `onDelete: Cascade` as defense-in-depth
-// (children are meaningless without the root; we never hard-delete the
-// root either, so cascade only guards accidental removal).
+// created_at + updated_at. An Order is an immutable transactional EVENT: it
+// is NEVER deleted (no hard DELETE and NO soft-delete `active` flag either) —
+// its whole lifecycle lives in the `OrderStatus` machine
+// (creado/verificado/entregado/cancelado). Mirrors the append-only
+// `StockMovement`/`ExchangeRate` records. `OrderLine`/`OrderPayment` carry
+// `onDelete: Cascade` as defense-in-depth (children are meaningless without
+// the root; the root is never deleted, so cascade only guards accidental
+// removal).
 //
 // DEVIATION from design.md's literal Prisma block (flagged, not a domain
 // change): design.md was written BEFORE Phase 3 locked the actual domain
@@ -236,7 +240,6 @@ model Order {
   orderDate     DateTime     @map("order_date")
   verifiedAt    DateTime?    @map("verified_at") // freeze stamp (rate+totals, NO commission)
   deliveredAt   DateTime?    @map("delivered_at") // stamped at verificado->entregado
-  active        Boolean      @default(true)
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 

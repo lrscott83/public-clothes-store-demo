@@ -15,7 +15,6 @@ function buildOrderRepoMock(): jest.Mocked<IOrderRepository> {
   return {
     create: jest.fn(),
     update: jest.fn(),
-    softDelete: jest.fn(),
     findById: jest.fn(),
     list: jest.fn(),
     confirm: jest.fn(),
@@ -75,7 +74,6 @@ function sampleOrder(overrides: Partial<DomainOrder> = {}): DomainOrder {
     ],
     saleCredit: null,
     orderDate: at,
-    active: true,
     verifiedAt: null,
     deliveredAt: null,
     createdAt: at,
@@ -261,13 +259,6 @@ describe('VentasService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]?.id).toBe('order-uuid-1');
-    });
-  });
-
-  describe('softDelete', () => {
-    it('delegates to the repository softDelete', async () => {
-      await service.softDelete('order-uuid-1');
-      expect(orderRepo.softDelete).toHaveBeenCalledWith('order-uuid-1');
     });
   });
 });

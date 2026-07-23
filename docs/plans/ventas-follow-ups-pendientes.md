@@ -113,6 +113,23 @@ end-to-end donde algún camino todavía asuma el texto libre.
 
 ---
 
+## 5. Order inmutable — NUNCA borrable ✅ HECHO (2026-07-23)
+
+Surgió de la auditoría de deletes. Decisión del owner: una `Order` (y sus hijos)
+es un **evento transaccional inmutable** — no se borra ni con soft-delete. Su
+ciclo de vida vive 100% en la máquina de estados (`creado/verificado/entregado/
+cancelado`); cancelar/devolver son ESTADOS, no borrados. Se alinea con
+`StockMovement`/`ExchangeRate` (append-only, sin `active`).
+
+Removido en las tres capas: `active` de la entidad `Order`/`CreateOrderInput`/
+factory y del mapeo Prisma; `softDelete` + `includeInactive` del port, repo,
+service y controller; endpoint `@Delete(':id')`; campo `active` del
+`OrderResponseDto`. Migración `20260723010000_order_drop_active_never_deletable`
+dropea la columna `sales_order.active`. `DELETE /orders/:id` ahora da 404 (guardado
+por test). El soft-delete de datos maestros (Customer/Product/Warehouse/Category)
+**se mantiene** — el cambio es solo para Order. Verificado: domain 202, infra-db
+83, api-salesops unit 140 + e2e 32. Ver [[ventas/order-never-deletable]].
+
 ## Orden sugerido para mañana
 
 > **Reordenado (owner, 2026-07-23):** W5 se difiere al final — la primera versión

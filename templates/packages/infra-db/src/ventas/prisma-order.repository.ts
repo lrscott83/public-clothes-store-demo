@@ -85,7 +85,6 @@ interface OrderRow {
   readonly orderDate: Date;
   readonly verifiedAt: Date | null;
   readonly deliveredAt: Date | null;
-  readonly active: boolean;
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly lines: readonly OrderLineRow[];
@@ -176,7 +175,6 @@ function orderToDomain(row: OrderRow): DomainOrder {
     payments: row.payments.map((payment) => paymentToDomain(payment, currency)),
     saleCredit: row.saleCredit ? saleCreditToDomain(row.saleCredit, currency) : null,
     orderDate: row.orderDate,
-    active: row.active,
     verifiedAt: row.verifiedAt,
     deliveredAt: row.deliveredAt,
     createdAt: row.createdAt,
@@ -235,7 +233,6 @@ export class PrismaOrderRepository implements IOrderRepository {
           orderDate: order.orderDate,
           verifiedAt: order.verifiedAt,
           deliveredAt: order.deliveredAt,
-          active: order.active,
           createdAt: order.createdAt,
           updatedAt: order.updatedAt,
         },
@@ -316,15 +313,10 @@ export class PrismaOrderRepository implements IOrderRepository {
         ...(patch.orderDate !== undefined ? { orderDate: patch.orderDate } : {}),
         ...(patch.verifiedAt !== undefined ? { verifiedAt: patch.verifiedAt } : {}),
         ...(patch.deliveredAt !== undefined ? { deliveredAt: patch.deliveredAt } : {}),
-        ...(patch.active !== undefined ? { active: patch.active } : {}),
       },
       include: AGGREGATE_INCLUDE,
     });
     return orderToDomain(row);
-  }
-
-  async softDelete(id: string): Promise<void> {
-    await this.prisma.order.update({ where: { id }, data: { active: false } });
   }
 
   async findById(id: string): Promise<DomainOrder | null> {
@@ -335,7 +327,6 @@ export class PrismaOrderRepository implements IOrderRepository {
   async list(filter?: OrderListFilter): Promise<DomainOrder[]> {
     const rows = await this.prisma.order.findMany({
       where: {
-        ...(filter?.includeInactive ? {} : { active: true }),
         ...(filter?.customerId ? { customerId: filter.customerId } : {}),
         ...(filter?.status ? { status: filter.status } : {}),
       },

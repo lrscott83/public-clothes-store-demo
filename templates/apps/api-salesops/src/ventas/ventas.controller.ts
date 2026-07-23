@@ -3,7 +3,6 @@ import {
   Body,
   ConflictException,
   Controller,
-  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -11,7 +10,6 @@ import {
   Param,
   Patch,
   Post,
-  Query,
 } from '@nestjs/common';
 import {
   CHANNEL_CURRENCY,
@@ -61,7 +59,9 @@ function assertChannel(channel: string): void {
  * Unknown `id` -> 404 on every id-scoped route, including the three action
  * endpoints (`VentasService.confirm/deliver/cancel/update` pre-check
  * existence and resolve to `null`, mapped here the same way `findById`
- * already is). `DELETE` always soft-deletes — never a hard DELETE.
+ * already is). There is NO `DELETE` route: an Order is an immutable
+ * transactional event — its lifecycle is the status machine
+ * (creado/verificado/entregado/cancelado), never a deletion.
  */
 @Controller('orders')
 export class VentasController {
@@ -81,8 +81,8 @@ export class VentasController {
   }
 
   @Get()
-  async list(@Query('includeInactive') includeInactive?: string): Promise<OrderResponseDto[]> {
-    return this.ventasService.list({ includeInactive: includeInactive === 'true' });
+  async list(): Promise<OrderResponseDto[]> {
+    return this.ventasService.list();
   }
 
   @Get(':id')
@@ -108,12 +108,6 @@ export class VentasController {
     });
   }
 
-  @Delete(':id')
-  @HttpCode(HttpStatus.OK)
-  async softDelete(@Param('id') id: string): Promise<{ id: string }> {
-    await this.ventasService.softDelete(id);
-    return { id };
-  }
 
   @Post(':id/confirm')
   @HttpCode(HttpStatus.OK)

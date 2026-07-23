@@ -67,7 +67,6 @@ export class OrderResponseDto {
   payments!: OrderPaymentResponseDto[];
   saleCredit!: SaleCreditResponseDto | null;
   orderDate!: string;
-  active!: boolean;
   verifiedAt!: string | null;
   deliveredAt!: string | null;
   createdAt!: string;

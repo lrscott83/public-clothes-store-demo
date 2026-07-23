@@ -2,8 +2,6 @@ import type { CreateOrderInput, Order, OrderStatus } from './order.js';
 
 /** Optional filter for `IOrderRepository.list`. */
 export interface OrderListFilter {
-  /** When omitted or `false`, `active: false` orders are excluded (default listing). */
-  readonly includeInactive?: boolean;
   readonly customerId?: string;
   readonly status?: OrderStatus;
 }
@@ -19,12 +17,14 @@ export type OrderUpdateInput = Partial<Omit<Order, 'id' | 'createdAt'>>;
  * `confirm`/`deliver`/`cancel` are the THREE atomic status transitions
  * (design decision #8) — each wraps its own guard + stock-bridge side
  * effect (reserve/consume+release/release) in a single transaction at the
- * infra layer. `softDelete` flips `active`, never a hard DELETE.
+ * infra layer. An Order is an immutable transactional event — there is NO
+ * delete (not even soft-delete): its lifecycle is expressed ONLY through the
+ * status machine (creado/verificado/entregado/cancelado). Mirrors the
+ * append-only `StockMovement`/`ExchangeRate` records.
  */
 export interface IOrderRepository {
   create(input: CreateOrderInput): Promise<Order>;
   update(id: string, patch: OrderUpdateInput): Promise<Order>;
-  softDelete(id: string): Promise<void>;
   findById(id: string): Promise<Order | null>;
   list(filter?: OrderListFilter): Promise<Order[]>;
   /** `creado -> verificado`: freezes rate+totals AND reserves stock per line. */
