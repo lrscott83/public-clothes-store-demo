@@ -4,8 +4,8 @@ import type { ExchangeRate } from '../currency/exchange-rate.js';
 /**
  * A credit sale (0..1 per `Order`, credit sales only). References `orderId`
  * and `customerId` as foreign keys — NEVER a free-text `client: string`
- * (the pre-hexagonal `models/sale-credit.ts` scaffold had exactly that flaw;
- * this is the corrected shape). `total`/`paid` are Money in `Order.currency`;
+ * (the now-removed pre-hexagonal `models/sale-credit.ts` scaffold had exactly
+ * that flaw; this is the corrected shape). `total`/`paid` are Money in `Order.currency`;
  * rates are frozen at the same moment the owning `Order` freezes.
  */
 export interface SaleCredit {
