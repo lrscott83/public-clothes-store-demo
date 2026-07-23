@@ -139,6 +139,8 @@ model StockLevel {
   @@index([warehouseId])
   @@map("stock_level")
   // DB backstop (raw SQL in migration): CHECK (on_hand >= 0 AND reserved >= 0)
+  // DB backstop (raw SQL in migration, W4): CHECK (reserved <= on_hand) —
+  // IMMEDIATE, makes deliver's release-before-sale_out ordering load-bearing.
 }
 
 model StockMovement {

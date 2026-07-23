@@ -2,7 +2,6 @@ import type { ExchangeRate } from '@store-mgmt/domain';
 import {
   InsufficientStockError,
   InvalidOrderStateError,
-  NegativeStockError,
   createOrder,
   money,
 } from '@store-mgmt/domain';
@@ -277,7 +276,7 @@ describe('PrismaOrderRepository', () => {
       expect(level?.reserved).toBe(0); // released
     });
 
-    it('sale_out exceeding onHand throws NegativeStockError, whole tx rolls back (order stays verificado)', async () => {
+    it('delivers at zero stock margin (onHand === reserved) — release-before-sale_out keeps the reserved <= on_hand invariant clean (W4)', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       await stockIn(product.id, warehouse.id, 4);
       const order = buildSingleLineOrder(
@@ -290,27 +289,59 @@ describe('PrismaOrderRepository', () => {
         4,
       );
       const created = await repository.create(order);
-      await repository.confirm(created.id);
+      await repository.confirm(created.id); // onHand=4, reserved=4 — ZERO available margin
 
-      // Drain onHand out-of-band so deliver's sale_out now exceeds it while
-      // reserved is still 4 (simulates a race that only the guarded UPDATE
-      // must catch).
-      await stockMovementRepository.record({
-        productId: product.id,
-        warehouseId: warehouse.id,
-        type: 'adjustment_out',
-        quantity: 3,
-      });
+      const delivered = await repository.deliver(created.id);
 
-      await expect(repository.deliver(created.id)).rejects.toThrow(NegativeStockError);
-
-      const stillVerificado = await repository.findById(created.id);
-      expect(stillVerificado?.status).toBe('verificado');
-      expect(stillVerificado?.deliveredAt).toBeNull();
+      // Load-bearing ordering (design.md #4): if deliver ran sale_out BEFORE
+      // release, the intermediate row would be onHand=0 while reserved is still
+      // 4 -> violates the IMMEDIATE `reserved <= on_hand` CHECK and rolls the
+      // whole tx back. Success at the zero margin is what makes the ordering
+      // observable — flip the two calls and this test goes red.
+      expect(delivered.status).toBe('entregado');
+      expect(delivered.deliveredAt).not.toBeNull();
 
       const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
-      expect(level?.reserved).toBe(4); // release reverted too — whole tx rolled back
-      expect(level?.onHand).toBe(1); // 4 - 3 adjustment, sale_out never applied
+      expect(level?.onHand).toBe(0); // 4 - 4
+      expect(level?.reserved).toBe(0); // released
+    });
+
+    it('cannot drain reserved stock out-of-band: an adjustment_out below the reservation is rejected, the order stays verificado and deliverable (W4)', async () => {
+      const { product, warehouse, customer } = await seedFixtures();
+      await stockIn(product.id, warehouse.id, 4);
+      const order = buildSingleLineOrder(
+        product.id,
+        product.name,
+        'Cafeteras',
+        warehouse.id,
+        customer.id,
+        customer.fullName,
+        4,
+      );
+      const created = await repository.create(order);
+      await repository.confirm(created.id); // onHand=4, reserved=4
+
+      // Under the `reserved <= on_hand` invariant, reserved stock can never be
+      // physically removed without first releasing/cancelling the reservation
+      // — an out-of-band adjustment_out (that would drop onHand below reserved)
+      // is refused by the DB. This replaces the old "sale_out exceeds onHand"
+      // scenario, whose setup is now unconstructable by design.
+      await expect(
+        stockMovementRepository.record({
+          productId: product.id,
+          warehouseId: warehouse.id,
+          type: 'adjustment_out',
+          quantity: 3,
+        }),
+      ).rejects.toThrow();
+
+      const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
+      expect(level?.onHand).toBe(4); // unchanged — the drain was rejected
+      expect(level?.reserved).toBe(4); // reservation intact
+
+      // The reservation survived, so the verificado order still delivers cleanly.
+      const delivered = await repository.deliver(created.id);
+      expect(delivered.status).toBe('entregado');
     });
   });
 

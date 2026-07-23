@@ -47,7 +47,24 @@ se deriva automáticamente del gap `total − Σpagos`, o el cliente la manda ex
 
 ---
 
-## 2. W4 — Orden `release`→`sale_out` en `deliver` (correcto pero no verificado)
+## 2. W4 — Orden `release`→`sale_out` en `deliver` ✅ HECHO (2026-07-23)
+
+> **Cerrado.** El plan original de este ítem tenía un error técnico: el guard de
+> `sale_out` (`on_hand + delta >= 0`) NO mira `reserved`, así que el orden era
+> genuinamente **inobservable** en el margen `onHand === reserved` — ambos órdenes
+> pasaban. Y `CHECK ... DEFERRABLE` es SQL inválido en Postgres para un CHECK (y
+> diferido correría en COMMIT, sin distinguir el orden). **Fix real:** un `CHECK
+> (reserved <= on_hand)` **INMEDIATO** (migración `20260723000000_stock_level_
+> reserved_le_onhand`). Decisión del owner: `reserved > on_hand` NUNCA es legal
+> (para sacar stock reservado hay que liberar/cancelar primero). Consecuencias:
+> un `adjustment_out` que drene stock reservado ahora se rechaza, y el
+> `NegativeStockError` de `deliver` queda inalcanzable (backstop de defensa en
+> profundidad). Tests: constraint en `prisma-stock-level.repository.spec.ts` +
+> deliver en margen cero (regression lock del orden) y "no se puede drenar
+> reservado" en `prisma-order.repository.spec.ts`. Verificado: infra-db 84/84,
+> api-salesops unit 141/141 + e2e 32/32. Ver [[ventas/w4-reserved-le-onhand-invariant]].
+
+**(Contexto original — dejado como registro del razonamiento):**
 
 **Qué pasa hoy:** en `deliver`, por línea se hace `applyReservationTx('release')`
 **antes** de `applyStockMovementTx(sale_out)` (ADR#4 — el orden es load-bearing en el
@@ -98,9 +115,13 @@ end-to-end donde algún camino todavía asuma el texto libre.
 
 ## Orden sugerido para mañana
 
-1. **W5** primero (es la única brecha funcional real; arrastra W6 en el mismo commit).
-2. **W4** después (endurecimiento + test de margen; independiente).
-3. **Rewire/limpieza de customerId** (probablemente solo borrar scaffolds huérfanos).
+> **Reordenado (owner, 2026-07-23):** W5 se difiere al final — la primera versión
+> no crea ventas 100% a crédito, así que no bloquea. Arrancamos por W4.
+
+1. ~~**W4**~~ ✅ HECHO (2026-07-23) — CHECK inmediato `reserved <= on_hand`.
+2. **Rewire/limpieza de customerId** (probablemente solo borrar scaffolds huérfanos). ← siguiente
+3. **W5** al final (arrastra W6 en el mismo commit) — solo cuando se necesite
+   crear ventas a crédito sin pago inicial.
 
 Cada uno en su propio commit work-unit sobre `salesops-ventas` (o rama nueva si el
 owner prefiere separar), mismo criterio de entrega: sin PR salvo que se indique.

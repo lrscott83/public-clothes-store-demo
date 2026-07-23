@@ -155,4 +155,24 @@ describe('PrismaStockLevelRepository', () => {
     const level = await repository.findByProductAndWarehouse(product.id, warehouse.id);
     expect(level?.reserved).toBe(1); // unchanged
   });
+
+  // Defense-in-depth DB invariant (W4): `reserved <= on_hand` must hold at
+  // every statement boundary, not just `on_hand >= 0 AND reserved >= 0`. This
+  // is what makes `PrismaOrderRepository.deliver`'s release-before-sale_out
+  // ordering LOAD-BEARING and observable — a raw UPDATE that drops on_hand
+  // below reserved (or any out-movement that ignores reserved) is rejected by
+  // the DB. An IMMEDIATE (non-deferrable) CHECK, so it fires per statement.
+  it('rejects an UPDATE that drops on_hand below reserved (reserved <= on_hand CHECK)', async () => {
+    const { product, warehouse } = await seedProductAndWarehouse();
+    const level = await prisma.stockLevel.create({
+      data: { productId: product.id, warehouseId: warehouse.id, onHand: 5, reserved: 5 },
+    });
+
+    await expect(
+      prisma.$executeRaw`UPDATE "stock_level" SET "on_hand" = 3 WHERE "id" = ${level.id}::uuid`,
+    ).rejects.toThrow();
+
+    const found = await repository.findByProductAndWarehouse(product.id, warehouse.id);
+    expect(found?.onHand).toBe(5); // unchanged — constraint rolled the write back
+  });
 });

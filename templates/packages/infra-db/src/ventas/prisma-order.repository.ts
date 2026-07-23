@@ -377,8 +377,11 @@ export class PrismaOrderRepository implements IOrderRepository {
 
       for (const line of orderRow.lines) {
         // Release BEFORE sale_out — load-bearing ordering (design.md
-        // decision #4): keeps every intermediate statement's `available`
-        // invariant-clean.
+        // decision #4): keeps every intermediate statement's `reserved <=
+        // on_hand` invariant clean. The IMMEDIATE DB CHECK of the same name
+        // (W4 migration) enforces this — reversing these two calls drives the
+        // intermediate row to `on_hand < reserved` and rolls the tx back
+        // (locked by the zero-margin deliver test).
         await applyReservationTx(
           tx,
           { productId: line.productId, warehouseId: orderRow.warehouseId, quantity: line.quantity },
