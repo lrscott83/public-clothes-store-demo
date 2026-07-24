@@ -9,8 +9,30 @@
  * `apps/api-idp/src/common/config/jwt.config.ts`.
  */
 
-const JWT_SECRET = process.env.JWT_SECRET || 'store-mgmt-dev-jwt-secret-change-me';
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || 'store-mgmt-dev-refresh-secret-change-me';
+/**
+ * Resolves an env-var-backed secret. Outside `production` (dev/test), an
+ * unset env var falls back to `fallback` so local runs and the test suite
+ * keep working without extra setup. In `production`, a missing env var
+ * THROWS at import/bootstrap time — a committed fallback secret must never
+ * be reachable in prod (anyone reading this file could otherwise forge
+ * valid JWTs).
+ */
+export function resolveSecret(envVarName: string, fallback: string): string {
+  const value = process.env[envVarName];
+  if (value) return value;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `${envVarName} must be set in production — refusing to start with a committed fallback secret.`,
+    );
+  }
+  return fallback;
+}
+
+const JWT_SECRET = resolveSecret('JWT_SECRET', 'store-mgmt-dev-jwt-secret-change-me');
+const REFRESH_TOKEN_SECRET = resolveSecret(
+  'REFRESH_TOKEN_SECRET',
+  'store-mgmt-dev-refresh-secret-change-me',
+);
 
 export interface JwtConfig {
   readonly secret: string;

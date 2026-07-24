@@ -13,15 +13,17 @@ import type { Request } from 'express';
 import { DuplicateLoginError, InvalidUserError, type User as DomainUser } from '@store-mgmt/domain';
 import { JwtAuthGuard } from '@store-mgmt/api-common';
 import { AuthService } from './auth.service.js';
-import type {
+import type { LoginResponseDto, RefreshResponseDto, UserResponseDto } from './dto/index.js';
+// SECURITY (FIX 4): value imports (NOT `import type`) — the global
+// `ValidationPipe` needs the real class at runtime via `design:paramtypes`
+// for every DTO bound with `@Body()`; a type-only import erases the class
+// and Nest silently skips validation/whitelisting for that parameter.
+import {
   ChangePasswordDto,
-  LoginResponseDto,
   PasswordResetConfirmDto,
   PasswordResetRequestDto,
   RefreshDto,
-  RefreshResponseDto,
   SignupDto,
-  UserResponseDto,
 } from './dto/index.js';
 import { LocalAuthGuard } from './local-auth.guard.js';
 
@@ -71,9 +73,7 @@ export class AuthController {
 
   @Post('password-reset/request')
   @HttpCode(HttpStatus.OK)
-  async requestPasswordReset(
-    @Body() body: PasswordResetRequestDto,
-  ): Promise<{ message: string; resetToken?: string }> {
+  async requestPasswordReset(@Body() body: PasswordResetRequestDto): Promise<{ message: string }> {
     return this.authService.initiatePasswordReset(body.login);
   }
 

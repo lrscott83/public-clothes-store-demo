@@ -95,13 +95,19 @@ export class PrismaUserRepository implements IUserRepository {
     }
   }
 
+  /**
+   * SECURITY (FIX 4): explicit allow-list, and `passwordHash` is
+   * deliberately NOT one of the columns here — even if a caller bypasses the
+   * `UserUpdateInput` type (e.g. via an `as any`/`as never` cast), this
+   * method physically cannot write `passwordHash`. Use `updatePassword` for
+   * that — the ONLY path allowed to touch it.
+   */
   async update(id: string, patch: UserUpdateInput): Promise<DomainUser> {
     try {
       const row = await this.prisma.user.update({
         where: { id },
         data: {
           ...(patch.login !== undefined ? { login: patch.login } : {}),
-          ...(patch.passwordHash !== undefined ? { passwordHash: patch.passwordHash } : {}),
           ...(patch.fullName !== undefined ? { fullName: patch.fullName } : {}),
           ...(patch.email !== undefined ? { email: patch.email } : {}),
           ...(patch.cellPhone !== undefined ? { cellPhone: patch.cellPhone } : {}),
@@ -116,6 +122,12 @@ export class PrismaUserRepository implements IUserRepository {
       }
       throw err;
     }
+  }
+
+  /** The ONLY method allowed to change `passwordHash` (SECURITY FIX 4). */
+  async updatePassword(id: string, passwordHash: string): Promise<DomainUser> {
+    const row = await this.prisma.user.update({ where: { id }, data: { passwordHash } });
+    return toDomain(row);
   }
 
   async findById(id: string): Promise<DomainUser | null> {

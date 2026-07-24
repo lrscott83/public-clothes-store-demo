@@ -2,19 +2,31 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, Roles, RolesGuard } from '@store-mgmt/api-common';
-import { USER_ROLES } from '@store-mgmt/domain';
+import type { Request } from 'express';
+import { JwtAuthGuard, Roles, RolesGuard, type SanitizedUser } from '@store-mgmt/api-common';
+import { RoleHelpers, USER_ROLES } from '@store-mgmt/domain';
 import type { UserResponseDto } from '../auth/dto/user-response.dto.js';
-import type { CreateUserDto, UpdateUserDto } from './dto/index.js';
+// SECURITY (FIX 4): these MUST be value imports, not `import type` — the
+// global `ValidationPipe` relies on `reflect-metadata`'s `design:paramtypes`
+// to know the real DTO class for each `@Body()` param. A type-only import is
+// erased by the TS compiler, so the runtime metatype degrades to `Object`
+// and NestJS silently skips validation/whitelisting entirely.
+import { CreateUserDto, UpdateUserDto } from './dto/index.js';
 import { UsersService } from './users.service.js';
+
+interface AuthenticatedRequest extends Request {
+  user: SanitizedUser;
+}
 
 /**
  * Admin/owner-only user administration (design.md §6/locked matrix: `admin`
@@ -30,7 +42,8 @@ export class UsersController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() body: CreateUserDto): Promise<UserResponseDto> {
+  async create(@Req() req: AuthenticatedRequest, @Body() body: CreateUserDto): Promise<UserResponseDto> {
+    assertNoUnauthorizedAdminGrant(req.user.roles, body.roles);
     return this.usersService.create(body);
   }
 
@@ -45,7 +58,12 @@ export class UsersController {
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() body: UpdateUserDto): Promise<UserResponseDto> {
+  async update(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: UpdateUserDto,
+  ): Promise<UserResponseDto> {
+    assertNoUnauthorizedAdminGrant(req.user.roles, body.roles);
     return this.usersService.update(id, body);
   }
 
@@ -54,4 +72,20 @@ export class UsersController {
   async deactivate(@Param('id') id: string): Promise<UserResponseDto> {
     return this.usersService.deactivate(id);
   }
+}
+
+/**
+ * SECURITY (FIX 3 — privilege ceiling): a caller who does NOT hold `admin`
+ * may NEVER set the `admin` bit on a create OR update payload — otherwise an
+ * `owner` (or any other `@Roles(admin, owner)`-admitted caller) could mint or
+ * self-promote to system super-root. `admin` itself is exempt (it can grant
+ * anything). A `roles` value of `undefined` (field omitted) is a no-op —
+ * nothing to check.
+ */
+function assertNoUnauthorizedAdminGrant(callerRoles: number, requestedRoles: number | undefined): void {
+  if (requestedRoles === undefined) return;
+  if (!RoleHelpers.hasRole(requestedRoles, USER_ROLES.admin)) return;
+  if (RoleHelpers.hasRole(callerRoles, USER_ROLES.admin)) return;
+
+  throw new ForbiddenException('Only an admin caller may grant the admin role.');
 }

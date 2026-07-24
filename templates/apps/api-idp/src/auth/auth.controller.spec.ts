@@ -142,7 +142,7 @@ describe('AuthController', () => {
   });
 
   describe('POST /auth/password-reset/request and /confirm', () => {
-    it('request returns 200 with a generic message', async () => {
+    it('request returns 200 with a generic message and NEVER a resetToken field', async () => {
       service.initiatePasswordReset.mockResolvedValue({ message: 'generic' });
 
       const response = await request(app.getHttpServer())
@@ -151,6 +151,8 @@ describe('AuthController', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.message).toBe('generic');
+      // SECURITY: public/unauthenticated endpoint must never echo the token.
+      expect(response.body.resetToken).toBeUndefined();
     });
 
     it('confirm returns 200 on success', async () => {

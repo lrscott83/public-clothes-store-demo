@@ -24,6 +24,7 @@ function buildRepoMock(): jest.Mocked<IUserRepository> {
   return {
     create: jest.fn(),
     update: jest.fn(),
+    updatePassword: jest.fn(),
     findById: jest.fn(),
     findByLogin: jest.fn(),
     list: jest.fn(),

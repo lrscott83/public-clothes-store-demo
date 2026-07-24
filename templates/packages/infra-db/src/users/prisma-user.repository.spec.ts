@@ -97,6 +97,32 @@ describe('PrismaUserRepository', () => {
     expect(updated.login).toBe('jdoe');
   });
 
+  it('SECURITY (FIX 4): update() NEVER writes passwordHash, even if a caller forces it through the patch object', async () => {
+    const created = await repository.create({ login: 'jdoe', passwordHash: VALID_HASH, fullName: 'Jane Doe' });
+    const evilHash = '$2b$10$evilInjectedHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+
+    // `as any` simulates a caller that bypasses the `UserUpdateInput` type
+    // (e.g. a bug, or a future non-TS caller) — the repository itself must
+    // be the last line of defense, independent of the type system.
+    await repository.update(created.id, { fullName: 'Jane D.', passwordHash: evilHash } as never);
+
+    const found = await repository.findByLogin('jdoe');
+    expect(found?.fullName).toBe('Jane D.');
+    expect(found?.passwordHash).toBe(VALID_HASH);
+    expect(found?.passwordHash).not.toBe(evilHash);
+  });
+
+  it('updatePassword() is the ONLY path that changes passwordHash', async () => {
+    const created = await repository.create({ login: 'jdoe', passwordHash: VALID_HASH, fullName: 'Jane Doe' });
+    const newHash = '$2b$10$newRealHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+
+    const updated = await repository.updatePassword(created.id, newHash);
+
+    expect(updated.passwordHash).toBe(newHash);
+    const found = await repository.findByLogin('jdoe');
+    expect(found?.passwordHash).toBe(newHash);
+  });
+
   it('list() returns every persisted User', async () => {
     await repository.create({ login: 'jdoe', passwordHash: VALID_HASH, fullName: 'Jane Doe' });
     await repository.create({ login: 'asmith', passwordHash: VALID_HASH, fullName: 'Ann Smith' });

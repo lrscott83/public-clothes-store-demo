@@ -1,15 +1,10 @@
-// Jest runs in plain Node and does NOT auto-load `.env` the way `prisma.config.ts`
-// does. Repository tests read `process.env.DATABASE_URL` directly (see
-// `src/prisma-client.ts`), so load the package `.env` here before any test file
-// runs.
-//
-// NOTE: `process.loadEnvFile()` (the Node 20.6+ built-in used by
-// `prisma.config.ts`) is a no-op when called from inside Jest's sandboxed
-// `vm` realm — it does not throw, but it silently fails to write into
-// `process.env` (verified empirically: same file loads fine via plain
-// `node -e`, but not under `jest`, with or without
-// `--experimental-vm-modules`). So this setup file parses the `.env` file
-// itself instead of relying on that built-in.
+// Jest runs in plain Node before NestJS's `ConfigModule.forRoot()` gets a
+// chance to load the package `.env` (that only happens once `AppModule` is
+// imported by a test file). This setup file parses the package `.env`
+// itself and force-points DATABASE_URL at the dedicated `store_mgmt_test`
+// database BEFORE any test file (and therefore any PrismaService) is
+// constructed — mirroring `packages/infra-db/jest.setup.js`. Test suites
+// must NEVER touch the dev `store_mgmt` database.
 const fs = require('fs');
 const path = require('path');
 
@@ -37,10 +32,8 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-// Test suites must NEVER touch the dev `store_mgmt` database — force
-// DATABASE_URL onto the dedicated `store_mgmt_test` database before any test
-// file (and therefore any PrismaService) is constructed. Set `TEST_URL` in
-// `.env` to point somewhere else; the literal below is just a dev fallback.
+// Set TEST_URL in `.env` to point somewhere else; the literal below is just
+// a dev fallback, never shipped (this file is test-only, not part of dist).
 process.env.DATABASE_URL =
   process.env.TEST_URL ??
   'postgresql://postgres:postgres@172.17.0.1:5432/store_mgmt_test?schema=public';

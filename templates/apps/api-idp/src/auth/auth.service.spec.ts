@@ -31,6 +31,7 @@ function buildUserRepoMock(): jest.Mocked<IUserRepository> {
   return {
     create: jest.fn(),
     update: jest.fn(),
+    updatePassword: jest.fn(),
     findById: jest.fn(),
     findByLogin: jest.fn(),
     list: jest.fn(),
@@ -278,7 +279,10 @@ describe('AuthService', () => {
       await service.changePassword(baseUser.id, 'current', 'new-password');
 
       expect(bcrypt.compare).toHaveBeenCalledWith('current', VALID_HASH);
-      expect(userRepo.update).toHaveBeenCalledWith(baseUser.id, { passwordHash: 'newhash' });
+      // SECURITY (FIX 4): password changes go through the DEDICATED
+      // `updatePassword` port method — never the generic `update`.
+      expect(userRepo.updatePassword).toHaveBeenCalledWith(baseUser.id, 'newhash');
+      expect(userRepo.update).not.toHaveBeenCalled();
       expect(refreshTokenRepo.revokeByUserId).toHaveBeenCalledWith(baseUser.id);
     });
 
@@ -304,10 +308,12 @@ describe('AuthService', () => {
         expect.objectContaining({ userId: baseUser.id }),
       );
       expect(result.message).toBeTruthy();
-      expect(result.resetToken).toBeDefined();
+      // SECURITY: the token must NEVER be echoed back on the public,
+      // unauthenticated response — that would be an account-takeover oracle.
+      expect(result).not.toHaveProperty('resetToken');
     });
 
-    it('returns the same generic message for an unknown login (enumeration-safe)', async () => {
+    it('returns the same generic message for an unknown login (enumeration-safe), with NO token field on either response', async () => {
       userRepo.findByLogin.mockResolvedValue(null);
 
       const known = await (async () => {
@@ -318,6 +324,10 @@ describe('AuthService', () => {
 
       expect(unknown.message).toBe(known.message);
       expect(passwordResetTokenRepo.create).toHaveBeenCalledTimes(1);
+      // SECURITY: identical shape (no resetToken) whether the login exists or not.
+      expect(known).not.toHaveProperty('resetToken');
+      expect(unknown).not.toHaveProperty('resetToken');
+      expect(Object.keys(known)).toEqual(Object.keys(unknown));
     });
 
     it('resetPassword rejects a second use of the same (already-used) token', async () => {
@@ -364,7 +374,9 @@ describe('AuthService', () => {
 
       await service.resetPassword('reset-token', 'new-password');
 
-      expect(userRepo.update).toHaveBeenCalledWith(baseUser.id, { passwordHash: 'newhash' });
+      // SECURITY (FIX 4): dedicated `updatePassword` — never generic `update`.
+      expect(userRepo.updatePassword).toHaveBeenCalledWith(baseUser.id, 'newhash');
+      expect(userRepo.update).not.toHaveBeenCalled();
       expect(passwordResetTokenRepo.markAsUsed).toHaveBeenCalledWith('prt-1');
       expect(refreshTokenRepo.revokeByUserId).toHaveBeenCalledWith(baseUser.id);
     });

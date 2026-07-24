@@ -133,8 +133,17 @@ describe('Auth (e2e)', () => {
       .post('/auth/password-reset/request')
       .send({ login });
     expect(requestResponse.status).toBe(200);
-    expect(requestResponse.body.resetToken).toEqual(expect.any(String));
-    const resetToken: string = requestResponse.body.resetToken;
+    // SECURITY: the token is NEVER echoed on the public response.
+    expect(requestResponse.body.resetToken).toBeUndefined();
+
+    // Obtain the token OUT-OF-BAND (as the "email delivery" would in
+    // production) — read it directly from the DB via Prisma.
+    const user = await prisma.user.findUniqueOrThrow({ where: { login } });
+    const persistedToken = await prisma.passwordResetToken.findFirstOrThrow({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    const resetToken: string = persistedToken.token;
 
     const confirmResponse = await request(app.getHttpServer())
       .post('/auth/password-reset/confirm')
@@ -169,7 +178,11 @@ describe('Auth (e2e)', () => {
     expect(knownResponse.status).toBe(200);
     expect(unknownResponse.status).toBe(200);
     expect(unknownResponse.body.message).toBe(knownResponse.body.message);
+    // SECURITY: no token field on EITHER response — same shape whether the
+    // login exists or not (no account-takeover oracle, no enumeration leak).
+    expect(knownResponse.body.resetToken).toBeUndefined();
     expect(unknownResponse.body.resetToken).toBeUndefined();
+    expect(Object.keys(knownResponse.body).sort()).toEqual(Object.keys(unknownResponse.body).sort());
   });
 
   it('unknown login and wrong password reject with the SAME 401 error shape (no enumeration leak)', async () => {

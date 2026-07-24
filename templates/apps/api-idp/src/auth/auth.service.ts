@@ -182,18 +182,23 @@ export class AuthService {
       throw new UnauthorizedException('La contraseña actual es incorrecta');
     }
     const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    await this.userRepository.update(userId, { passwordHash });
+    // SECURITY (FIX 4): dedicated `updatePassword` path — never the generic
+    // `update` (which cannot touch `passwordHash` at all, by design).
+    await this.userRepository.updatePassword(userId, passwordHash);
     await this.refreshTokenRepository.revokeByUserId(userId);
   }
 
   /**
    * Mints a single-use, 15-min opaque reset token. Enumeration-safe: ALWAYS
-   * returns the same generic message regardless of whether `login` matched
-   * a real, active account. Email delivery is deferred (no `EmailService`
-   * in this repo, design.md §8 non-goal) — the token is surfaced on the
-   * response for dev/demo purposes ONLY.
+   * returns the SAME generic message shape regardless of whether `login`
+   * matched a real, active account — the token is NEVER included in the
+   * response (this endpoint is public/unauthenticated; echoing the token
+   * would be an account-takeover oracle). Email delivery is deferred (no
+   * `EmailService` in this repo, design.md §8 non-goal) — for dev/demo
+   * visibility the token is logged server-side ONLY, never returned to the
+   * caller.
    */
-  async initiatePasswordReset(login: string): Promise<{ message: string; resetToken?: string }> {
+  async initiatePasswordReset(login: string): Promise<{ message: string }> {
     const user = await this.userRepository.findByLogin(login);
     if (!user || !user.isActive) {
       return { message: GENERIC_RESET_MESSAGE };
@@ -204,7 +209,10 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60_000);
     await this.passwordResetTokenRepository.create({ token, userId: user.id, expiresAt });
 
-    return { message: GENERIC_RESET_MESSAGE, resetToken: token };
+    // Dev-visibility only — never returned in the HTTP response.
+    console.log(`[password-reset] token for login="${login}": ${token}`);
+
+    return { message: GENERIC_RESET_MESSAGE };
   }
 
   /** Validates the reset token (not expired, not used), rehashes, marks the token used, and revokes all refresh tokens. */
@@ -220,7 +228,8 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    await this.userRepository.update(user.id, { passwordHash });
+    // SECURITY (FIX 4): dedicated `updatePassword` path.
+    await this.userRepository.updatePassword(user.id, passwordHash);
     await this.passwordResetTokenRepository.markAsUsed(resetToken.id);
     await this.refreshTokenRepository.revokeByUserId(user.id);
   }

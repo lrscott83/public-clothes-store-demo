@@ -90,7 +90,8 @@ ALTER TABLE "warehouse_operator" ADD CONSTRAINT "warehouse_operator_warehouse_id
 ALTER TABLE "customer" ADD COLUMN "user_id" UUID;
 
 -- Step 3: Mint one app_user per existing customer AND link it, in a single
--- correlated statement. The id fragment in `login` guarantees uniqueness
+-- correlated statement. The FULL id hex appended to `login` guarantees
+-- uniqueness — `customer.id` is the table PK, so no two rows can collide,
 -- even for duplicate customer full_names. `gen_random_uuid()` is core
 -- Postgres (13+); no extension required. The `'!'` password_hash is NOT a
 -- valid bcrypt string, so `bcrypt.compare(pw, '!')` never matches —
@@ -110,7 +111,7 @@ WITH new_users AS (
   INSERT INTO "app_user" (id, login, password_hash, full_name, is_active, roles, created_at, updated_at)
   SELECT
     gen_random_uuid(),
-    lower(regexp_replace(c.full_name, '[^a-zA-Z0-9]+', '.', 'g')) || '.' || left(replace(c.id::text, '-', ''), 6),
+    lower(regexp_replace(c.full_name, '[^a-zA-Z0-9]+', '.', 'g')) || '.' || replace(c.id::text, '-', ''),
     '!',
     c.full_name,
     true,
@@ -125,7 +126,7 @@ UPDATE "customer" c
 SET user_id = u.id
 FROM new_users u
 WHERE c.user_id IS NULL
-  AND u.login = lower(regexp_replace(c.full_name, '[^a-zA-Z0-9]+', '.', 'g')) || '.' || left(replace(c.id::text, '-', ''), 6);
+  AND u.login = lower(regexp_replace(c.full_name, '[^a-zA-Z0-9]+', '.', 'g')) || '.' || replace(c.id::text, '-', '');
 
 -- Step 4: Enforce NOT NULL — safe now, every row was backfilled in step 3.
 ALTER TABLE "customer" ALTER COLUMN "user_id" SET NOT NULL;
