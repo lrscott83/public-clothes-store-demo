@@ -119,6 +119,8 @@ model Warehouse {
   movements   StockMovement[]
   // Inverse relation only — added by the Ventas module (backend-ventas).
   orders      Order[]
+  // Inverse relation only — added by the Users/Roles module (backend-users-roles).
+  warehouseOperators WarehouseOperator[]
 
   @@map("warehouse")
 }
@@ -167,8 +169,14 @@ model StockMovement {
 // nullable column allows many NULLs (Postgres treats NULLs as distinct)
 // while rejecting duplicate non-null values — no partial index needed
 // (design.md). NO relations — the Ventas FK is a future change.
+// MODIFIED by the Users/Roles module (backend-users-roles): added the
+// REQUIRED, UNIQUE `userId` FK (1:1 with `User`) — every Customer now
+// references exactly one login identity. See the migration in
+// prisma/migrations/*_add_users_roles_module for the backfill sequence that
+// made this NOT NULL against pre-existing rows.
 model Customer {
   id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @unique @db.Uuid @map("user_id")
   fullName   String   @map("full_name")
   documentId String?  @unique @map("document_id")
   cellPhone  String?  @map("cell_phone")
@@ -178,6 +186,8 @@ model Customer {
   active     Boolean  @default(true)
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
 
   // Inverse relations only — added by the Ventas module (SDD change
   // backend-ventas). Customer carries zero Ventas scalar fields.
@@ -315,4 +325,76 @@ model SaleCredit {
   customer Customer @relation(fields: [customerId], references: [id])
 
   @@map("sale_credit")
+}
+
+// Sixth domain module: Users / Roles / Autenticación (SDD change
+// backend-users-roles). Isolated identity module, api-idp pattern — see
+// design.md. `User` maps to table "app_user", NOT "user" (USER is a Postgres
+// reserved word, same reason `Order` maps to "sales_order"). `login` (NOT
+// `email`) is the unique, required authentication identifier. `roles` is an
+// Int bitmask (see `packages/domain/src/users/roles.ts`).
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  login        String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  email        String?
+  cellPhone    String?  @map("cell_phone")
+  isActive     Boolean  @default(true) @map("is_active")
+  roles        Int      @default(1) // bitmask; default = user(1)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  warehouseOperator   WarehouseOperator? // 0..1 detail
+  customer            Customer? // inverse of the 1:1 link
+
+  @@map("app_user")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique // opaque rtid (crypto.randomBytes hex)
+  userId    String   @db.Uuid @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  isRevoked Boolean  @default(false) @map("is_revoked")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_token")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique // opaque single-use token
+  userId    String   @db.Uuid @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  isUsed    Boolean  @default(false) @map("is_used")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_token")
+}
+
+// Per-warehouse scope detail for a user holding the `warehouse_operator`
+// role. `userId` is both PK and FK (1:1 with `User`). `warehouseId` is
+// deliberately NOT unique — a single `Warehouse` MAY have many operators.
+model WarehouseOperator {
+  userId      String   @id @db.Uuid @map("user_id")
+  warehouseId String   @db.Uuid @map("warehouse_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([warehouseId])
+  @@map("warehouse_operator")
 }

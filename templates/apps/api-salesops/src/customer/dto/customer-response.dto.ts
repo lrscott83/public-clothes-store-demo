@@ -1,6 +1,7 @@
 /** Response shape for every Customer CRUD endpoint. Nulls are preserved as-is. */
 export class CustomerResponseDto {
   id!: string;
+  userId!: string;
   fullName!: string;
   documentId!: string | null;
   cellPhone!: string | null;

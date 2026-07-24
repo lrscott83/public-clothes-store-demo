@@ -51,12 +51,15 @@ describe('PrismaOrderRepository', () => {
     await prisma.category.deleteMany({});
     await prisma.warehouse.deleteMany({});
     await prisma.customer.deleteMany({});
+    await prisma.user.deleteMany({});
     await prisma.exchangeRate.deleteMany({});
   });
 
   afterAll(async () => {
     await prisma.$disconnect();
   });
+
+  const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
   async function seedFixtures() {
     const category = await categoryRepository.create({ name: 'Cafeteras', slug: 'cafeteras', order: 1 });
@@ -70,7 +73,12 @@ describe('PrismaOrderRepository', () => {
       order: 1,
     });
     const warehouse = await warehouseRepository.create({ name: 'Pinar del Río' });
-    const customer = await customerRepository.create({ fullName: 'Ana Torres' });
+    // Every Customer now requires an existing User (backend-users-roles,
+    // Customer.userId 1:1) — mint one for this fixture.
+    const user = await prisma.user.create({
+      data: { login: 'ana.torres.spec', passwordHash: VALID_HASH, fullName: 'Ana Torres' },
+    });
+    const customer = await customerRepository.create({ fullName: 'Ana Torres', userId: user.id });
     return { category, product, warehouse, customer };
   }
 

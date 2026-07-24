@@ -13,13 +13,21 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { DuplicateCustomerDocumentError, InvalidCustomerError } from '@store-mgmt/domain';
+import {
+  CustomerUserNotFoundError,
+  DuplicateCustomerDocumentError,
+  DuplicateCustomerUserError,
+  InvalidCustomerError,
+} from '@store-mgmt/domain';
 import { CustomerService } from './customer.service.js';
 import type { CreateCustomerDto, CustomerResponseDto, UpdateCustomerDto } from './dto/index.js';
 
 /**
  * REST delivery for the Customer module. Maps `InvalidCustomerError` -> 400
- * (e.g. empty fullName) and `DuplicateCustomerDocumentError` -> 409. `DELETE`
+ * (e.g. empty fullName/userId), `CustomerUserNotFoundError` -> 400 (the
+ * given `userId` does not reference an existing `User`), and both
+ * `DuplicateCustomerDocumentError`/`DuplicateCustomerUserError` -> 409
+ * (backend-users-roles: `userId` is a required, unique 1:1 link). `DELETE`
  * always soft-deletes (`active=false`) — never a hard DELETE. Mirrors
  * `WarehouseController`.
  */
@@ -69,7 +77,13 @@ export class CustomerController {
       if (err instanceof InvalidCustomerError) {
         throw new BadRequestException(err.message);
       }
+      if (err instanceof CustomerUserNotFoundError) {
+        throw new BadRequestException(err.message);
+      }
       if (err instanceof DuplicateCustomerDocumentError) {
+        throw new ConflictException(err.message);
+      }
+      if (err instanceof DuplicateCustomerUserError) {
         throw new ConflictException(err.message);
       }
       throw err;

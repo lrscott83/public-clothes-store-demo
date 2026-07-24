@@ -1,8 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
+
+/** Bcrypt hash shape accepted by the domain `passwordHash` invariant — never a real credential. */
+const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
 /**
  * Full HTTP lifecycle against the real `store_mgmt` Postgres database (no
@@ -51,9 +55,15 @@ describe('Ventas (e2e)', () => {
       .send({ name: 'Depósito Ventas E2E' });
     warehouseId = warehouse.body.id;
 
+    // Every Customer now requires an existing User (backend-users-roles,
+    // Customer.userId 1:1) — mint one for this fixture, unique login per
+    // run since `beforeEach` re-creates it every test.
+    const user = await prisma.user.create({
+      data: { login: `ventas.e2e.${randomUUID()}`, passwordHash: VALID_HASH, fullName: 'Cliente Ventas E2E' },
+    });
     const customer = await request(app.getHttpServer())
       .post('/customers')
-      .send({ fullName: 'Cliente Ventas E2E' });
+      .send({ fullName: 'Cliente Ventas E2E', userId: user.id });
     customerId = customer.body.id;
 
     const usdProduct = await request(app.getHttpServer())
@@ -113,6 +123,7 @@ describe('Ventas (e2e)', () => {
     await prisma.category.deleteMany({});
     await prisma.warehouse.deleteMany({});
     await prisma.customer.deleteMany({});
+    await prisma.user.deleteMany({});
     await prisma.exchangeRate.deleteMany({});
   });
 

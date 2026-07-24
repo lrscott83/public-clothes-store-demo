@@ -28,6 +28,10 @@ describe('seedOrders', () => {
     await prisma.product.deleteMany({ where: { name: { startsWith: 'Producto Demo' } } });
     await prisma.category.deleteMany({ where: { slug: 'ventas-seed-demo' } });
     await prisma.customer.deleteMany({});
+    // `seedOrders` -> `seedCustomers` mints/links an `app_user` per demo
+    // customer (backend-users-roles, Customer.userId 1:1) — clean those up
+    // too, same "only rows this seed itself creates" discipline as above.
+    await prisma.user.deleteMany({});
     await prisma.warehouse.deleteMany({});
   });
 

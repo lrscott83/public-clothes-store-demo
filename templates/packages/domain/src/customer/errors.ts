@@ -19,3 +19,19 @@ export class DuplicateCustomerDocumentError extends Error {
     this.name = 'DuplicateCustomerDocumentError';
   }
 }
+
+/** Thrown when `Customer.userId` does not reference an existing `User` (FK violation). */
+export class CustomerUserNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CustomerUserNotFoundError';
+  }
+}
+
+/** Thrown when `Customer.userId` would collide with an existing customer's — the 1:1 link is unique. */
+export class DuplicateCustomerUserError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DuplicateCustomerUserError';
+  }
+}

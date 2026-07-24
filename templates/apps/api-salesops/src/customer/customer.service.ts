@@ -32,7 +32,12 @@ export class CustomerService {
 
   async update(id: string, patch: UpdateCustomerDto): Promise<CustomerResponseDto> {
     if (patch.fullName !== undefined) {
-      createCustomer({ ...patch, fullName: patch.fullName });
+      // `userId` is NOT part of `UpdateCustomerDto` (the 1:1 User link is
+      // set once at creation, never re-pointed via PATCH) — the factory
+      // requires it structurally, so a placeholder satisfies the type. The
+      // built `Customer` is discarded either way; only the `fullName`
+      // invariant check matters here.
+      createCustomer({ ...patch, fullName: patch.fullName, userId: 'update-invariant-check-only' });
     }
     const updated = await this.customerRepository.update(id, patch);
     return this.toResponse(updated);
@@ -55,6 +60,7 @@ export class CustomerService {
   private toResponse(customer: DomainCustomer): CustomerResponseDto {
     return {
       id: customer.id,
+      userId: customer.userId,
       fullName: customer.fullName,
       documentId: customer.documentId,
       cellPhone: customer.cellPhone,

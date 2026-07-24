@@ -6,13 +6,18 @@ import type {
   CustomerUpdateInput,
   ICustomerRepository,
 } from '@store-mgmt/domain';
-import { DuplicateCustomerDocumentError } from '@store-mgmt/domain';
+import {
+  CustomerUserNotFoundError,
+  DuplicateCustomerDocumentError,
+  DuplicateCustomerUserError,
+} from '@store-mgmt/domain';
 import { Prisma } from '../../generated/client/client.js';
 import { PrismaService } from '../prisma-client.js';
 
 /** Shape shared by every row Prisma returns for the `Customer` model. */
 interface CustomerRow {
   readonly id: string;
+  readonly userId: string;
   readonly fullName: string;
   readonly documentId: string | null;
   readonly cellPhone: string | null;
@@ -27,6 +32,7 @@ interface CustomerRow {
 function toDomain(row: CustomerRow): DomainCustomer {
   return {
     id: row.id,
+    userId: row.userId,
     fullName: row.fullName,
     documentId: row.documentId,
     cellPhone: row.cellPhone,
@@ -66,6 +72,11 @@ function isUniqueViolation(err: unknown, target: string): boolean {
   return Array.isArray(fields) && fields.includes(target);
 }
 
+/** True when `err` is a Prisma foreign-key-constraint violation (P2003) — the referenced row does not exist. */
+function isForeignKeyViolation(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003';
+}
+
 /**
  * Prisma adapter for `ICustomerRepository`. `create()` never passes `id`
  * through to Prisma — the DB always generates it (`@default(uuid())`).
@@ -73,7 +84,10 @@ function isUniqueViolation(err: unknown, target: string): boolean {
  * `document_id` and translate it to the domain
  * `DuplicateCustomerDocumentError` (design.md's central decision) — there is
  * deliberately NO application-level pre-check, the unique index is the
- * single source of truth. `softDelete` flips `active`, never a hard DELETE.
+ * single source of truth. `create` ALSO translates a P2002 on `user_id`
+ * (the 1:1 link is unique) to `DuplicateCustomerUserError`, and a P2003 FK
+ * violation on `user_id` (no such `User`) to `CustomerUserNotFoundError`
+ * (backend-users-roles). `softDelete` flips `active`, never a hard DELETE.
  * Mirrors `PrismaWarehouseRepository`.
  */
 @Injectable()
@@ -84,6 +98,7 @@ export class PrismaCustomerRepository implements ICustomerRepository {
     try {
       const row = await this.prisma.customer.create({
         data: {
+          userId: input.userId,
           fullName: input.fullName,
           documentId: input.documentId ?? null,
           cellPhone: input.cellPhone ?? null,
@@ -99,6 +114,12 @@ export class PrismaCustomerRepository implements ICustomerRepository {
         throw new DuplicateCustomerDocumentError(
           `documentId "${input.documentId}" is already in use`,
         );
+      }
+      if (isUniqueViolation(err, 'user_id')) {
+        throw new DuplicateCustomerUserError(`userId "${input.userId}" already has a Customer`);
+      }
+      if (isForeignKeyViolation(err)) {
+        throw new CustomerUserNotFoundError(`User "${input.userId}" does not exist`);
       }
       throw err;
     }

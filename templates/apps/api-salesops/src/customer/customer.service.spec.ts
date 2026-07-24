@@ -15,6 +15,7 @@ function buildRepoMock(): jest.Mocked<ICustomerRepository> {
 
 const sampleCustomer: DomainCustomer = {
   id: 'customer-uuid-1',
+  userId: 'user-uuid-1',
   fullName: 'Ana Torres',
   documentId: null,
   cellPhone: null,
@@ -42,10 +43,11 @@ describe('CustomerService', () => {
     it('creates a customer and maps it to a response DTO, dates -> ISO strings, nulls kept', async () => {
       repo.create.mockResolvedValue(sampleCustomer);
 
-      const result = await service.create({ fullName: 'Ana Torres' });
+      const result = await service.create({ fullName: 'Ana Torres', userId: 'user-uuid-1' });
 
       expect(result).toEqual({
         id: 'customer-uuid-1',
+        userId: 'user-uuid-1',
         fullName: 'Ana Torres',
         documentId: null,
         cellPhone: null,
@@ -63,13 +65,25 @@ describe('CustomerService', () => {
     // service. Proves the repository is never even called, unlike the
     // pre-fix bypass where nothing in the real path stopped an empty name.
     it('throws InvalidCustomerError for an empty fullName WITHOUT reaching the repository', async () => {
-      await expect(service.create({ fullName: '' })).rejects.toThrow(InvalidCustomerError);
+      await expect(service.create({ fullName: '', userId: 'user-uuid-1' })).rejects.toThrow(
+        InvalidCustomerError,
+      );
 
       expect(repo.create).not.toHaveBeenCalled();
     });
 
     it('throws InvalidCustomerError for a whitespace-only fullName WITHOUT reaching the repository', async () => {
-      await expect(service.create({ fullName: '   ' })).rejects.toThrow(InvalidCustomerError);
+      await expect(service.create({ fullName: '   ', userId: 'user-uuid-1' })).rejects.toThrow(
+        InvalidCustomerError,
+      );
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws InvalidCustomerError for a missing userId WITHOUT reaching the repository', async () => {
+      await expect(service.create({ fullName: 'Ana Torres', userId: '' })).rejects.toThrow(
+        InvalidCustomerError,
+      );
 
       expect(repo.create).not.toHaveBeenCalled();
     });

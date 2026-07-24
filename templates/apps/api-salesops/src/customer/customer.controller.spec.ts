@@ -1,6 +1,11 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { DuplicateCustomerDocumentError, InvalidCustomerError } from '@store-mgmt/domain';
+import {
+  CustomerUserNotFoundError,
+  DuplicateCustomerDocumentError,
+  DuplicateCustomerUserError,
+  InvalidCustomerError,
+} from '@store-mgmt/domain';
 import request from 'supertest';
 import { CustomerController } from './customer.controller.js';
 import { CustomerService } from './customer.service.js';
@@ -15,6 +20,7 @@ type CustomerServiceMock = {
 
 const sampleResponse = {
   id: 'customer-uuid-1',
+  userId: 'user-uuid-1',
   fullName: 'Ana Torres',
   documentId: null,
   cellPhone: null,
@@ -58,7 +64,7 @@ describe('CustomerController', () => {
 
       const response = await request(app.getHttpServer())
         .post('/customers')
-        .send({ fullName: 'Ana Torres' });
+        .send({ fullName: 'Ana Torres', userId: 'user-uuid-1' });
 
       expect(response.status).toBe(201);
       expect(response.body).toEqual(sampleResponse);
@@ -67,7 +73,9 @@ describe('CustomerController', () => {
     it('maps an empty-fullName InvalidCustomerError to 400', async () => {
       service.create.mockRejectedValue(new InvalidCustomerError('Customer fullName must not be empty'));
 
-      const response = await request(app.getHttpServer()).post('/customers').send({ fullName: '' });
+      const response = await request(app.getHttpServer())
+        .post('/customers')
+        .send({ fullName: '', userId: 'user-uuid-1' });
 
       expect(response.status).toBe(400);
     });
@@ -79,7 +87,29 @@ describe('CustomerController', () => {
 
       const response = await request(app.getHttpServer())
         .post('/customers')
-        .send({ fullName: 'Ana Torres', documentId: 'D1' });
+        .send({ fullName: 'Ana Torres', userId: 'user-uuid-1', documentId: 'D1' });
+
+      expect(response.status).toBe(409);
+    });
+
+    it('maps a non-existent userId CustomerUserNotFoundError to 400', async () => {
+      service.create.mockRejectedValue(new CustomerUserNotFoundError('User "ghost" does not exist'));
+
+      const response = await request(app.getHttpServer())
+        .post('/customers')
+        .send({ fullName: 'Ana Torres', userId: 'ghost' });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('maps a duplicate userId DuplicateCustomerUserError to 409', async () => {
+      service.create.mockRejectedValue(
+        new DuplicateCustomerUserError('userId "user-uuid-1" already has a Customer'),
+      );
+
+      const response = await request(app.getHttpServer())
+        .post('/customers')
+        .send({ fullName: 'Ana Torres', userId: 'user-uuid-1' });
 
       expect(response.status).toBe(409);
     });
