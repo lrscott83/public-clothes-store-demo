@@ -11,8 +11,10 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-import { InvalidMoneyError, InvalidProductError } from '@store-mgmt/domain';
+import { JwtAuthGuard, Roles, RolesGuard } from '@store-mgmt/api-common';
+import { InvalidMoneyError, InvalidProductError, USER_ROLES } from '@store-mgmt/domain';
 import { ProductService } from './product.service.js';
 import type {
   CreateProductDto,
@@ -36,14 +38,18 @@ function assertCurrency(amount: MoneyAmountDto): void {
  * (e.g. missing/nonexistent `categoryId`) and `InvalidMoneyError` (malformed
  * decimal string) -> 400. `GET /:id` returns even soft-deleted products
  * (historical references, e.g. past orders); `GET /products` excludes them
- * by default. `DELETE` always soft-deletes — never a hard DELETE.
+ * by default. `DELETE` always soft-deletes — never a hard DELETE. Catalog
+ * reads are open to any authenticated user; writes are `owner`/`admin`-only
+ * (backend-users-roles permission matrix).
  */
 @Controller('products')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
   async create(@Body() body: CreateProductDto): Promise<ProductResponseDto> {
     assertCurrency(body.price);
     assertCurrency(body.cost);
@@ -68,6 +74,7 @@ export class ProductController {
   }
 
   @Patch(':id')
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
   async update(
     @Param('id') id: string,
     @Body() body: UpdateProductDto,
@@ -83,6 +90,7 @@ export class ProductController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
   async softDelete(@Param('id') id: string): Promise<{ id: string }> {
     await this.productService.softDelete(id);
     return { id };

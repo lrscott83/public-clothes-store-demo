@@ -1,13 +1,18 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { RolesGuard } from '@store-mgmt/api-common';
 import {
   InsufficientStockError,
   InvalidOrderError,
   InvalidOrderStateError,
   NegativeStockError,
   RateNotFoundError,
+  USER_ROLES,
+  WAREHOUSE_OPERATOR_REPOSITORY,
+  type IWarehouseOperatorRepository,
 } from '@store-mgmt/domain';
 import request from 'supertest';
+import { overrideJwtAuth } from '../test-support/auth-test-helpers.js';
 import { VentasController } from './ventas.controller.js';
 import { VentasService } from './ventas.service.js';
 
@@ -20,6 +25,9 @@ type VentasServiceMock = {
   deliver: jest.Mock;
   cancel: jest.Mock;
 };
+
+const OWN_WAREHOUSE_ID = 'warehouse-uuid-1';
+const OTHER_WAREHOUSE_ID = 'warehouse-uuid-2';
 
 const sampleResponse = {
   id: 'order-uuid-1',
@@ -59,6 +67,42 @@ const validCreateBody = {
   payments: [{ channel: 'USD_EFECTIVO', amount: { amount: '100.00', currency: 'USD' } }],
 };
 
+/** Builds a test app with `JwtAuthGuard` overridden to inject `req.user` with `roles` (`null` -> 401), keeping the REAL `RolesGuard`. `warehouseOperatorRepository.findByUserId` defaults to a row scoped to `OWN_WAREHOUSE_ID`. */
+async function buildApp(
+  service: VentasServiceMock,
+  roles: number | null,
+  warehouseOperatorRepository: jest.Mocked<IWarehouseOperatorRepository> = buildOperatorRepoMock(),
+): Promise<INestApplication> {
+  const builder = overrideJwtAuth(
+    Test.createTestingModule({
+      controllers: [VentasController],
+      providers: [
+        { provide: VentasService, useValue: service },
+        { provide: WAREHOUSE_OPERATOR_REPOSITORY, useValue: warehouseOperatorRepository },
+        RolesGuard,
+      ],
+    }),
+    roles,
+  );
+  const module: TestingModule = await builder.compile();
+  const app = module.createNestApplication();
+  await app.init();
+  return app;
+}
+
+function buildOperatorRepoMock(): jest.Mocked<IWarehouseOperatorRepository> {
+  return {
+    create: jest.fn(),
+    findByUserId: jest.fn().mockResolvedValue({
+      userId: 'test-user-1',
+      warehouseId: OWN_WAREHOUSE_ID,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    }),
+    findByWarehouseId: jest.fn(),
+  };
+}
+
 describe('VentasController', () => {
   let app: INestApplication;
   let service: VentasServiceMock;
@@ -74,13 +118,13 @@ describe('VentasController', () => {
       cancel: jest.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [VentasController],
-      providers: [{ provide: VentasService, useValue: service }],
-    }).compile();
-
-    app = module.createNestApplication();
-    await app.init();
+    // `admin` passes every role gate AND bypasses warehouse scoping — keeps
+    // pre-existing tests focused on behavior, not on the role/scope matrix
+    // (that's covered below). `deliver` now pre-checks existence via
+    // `findById` (for the warehouse-scope check) BEFORE calling `deliver` —
+    // every pre-existing `deliver` test must mock `findById` too.
+    service.findById.mockResolvedValue(sampleResponse);
+    app = await buildApp(service, USER_ROLES.admin);
   });
 
   afterEach(async () => {
@@ -279,6 +323,117 @@ describe('VentasController', () => {
       const response = await request(app.getHttpServer()).post('/orders/order-uuid-1/cancel');
 
       expect(response.status).toBe(409);
+    });
+  });
+
+  describe('RolesGuard enforcement', () => {
+    it('rejects an unauthenticated request with 401', async () => {
+      await app.close();
+      app = await buildApp(service, null);
+
+      const response = await request(app.getHttpServer()).get('/orders');
+      expect(response.status).toBe(401);
+    });
+
+    it('rejects a plain "user" caller with 403', async () => {
+      await app.close();
+      app = await buildApp(service, USER_ROLES.user);
+
+      const response = await request(app.getHttpServer()).get('/orders');
+      expect(response.status).toBe(403);
+    });
+
+    it('admits a "sales_operator" caller creating an order -> 201', async () => {
+      await app.close();
+      service.create.mockResolvedValue(sampleResponse);
+      app = await buildApp(service, USER_ROLES.sales_operator);
+
+      const response = await request(app.getHttpServer()).post('/orders').send(validCreateBody);
+      expect(response.status).toBe(201);
+    });
+
+    it('rejects a "warehouse_operator" caller creating an order with 403 — not a sales role', async () => {
+      await app.close();
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+
+      const response = await request(app.getHttpServer()).post('/orders').send(validCreateBody);
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('warehouse_operator scope on GET /orders (list)', () => {
+    it('filters the list to the operator\'s own warehouse', async () => {
+      await app.close();
+      const otherWarehouseOrder = { ...sampleResponse, id: 'order-uuid-2', warehouseId: OTHER_WAREHOUSE_ID };
+      service.list.mockResolvedValue([sampleResponse, otherWarehouseOrder]);
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+
+      const response = await request(app.getHttpServer()).get('/orders');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([sampleResponse]);
+    });
+
+    it('does NOT filter for an "owner"/"admin"/"sales_operator" caller', async () => {
+      await app.close();
+      const otherWarehouseOrder = { ...sampleResponse, id: 'order-uuid-2', warehouseId: OTHER_WAREHOUSE_ID };
+      service.list.mockResolvedValue([sampleResponse, otherWarehouseOrder]);
+      app = await buildApp(service, USER_ROLES.sales_operator);
+
+      const response = await request(app.getHttpServer()).get('/orders');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveLength(2);
+    });
+  });
+
+  describe('warehouse_operator scope on GET /orders/:id', () => {
+    it('admits a "warehouse_operator" reading an order in THEIR OWN warehouse -> 200', async () => {
+      await app.close();
+      service.findById.mockResolvedValue(sampleResponse);
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+
+      const response = await request(app.getHttpServer()).get('/orders/order-uuid-1');
+      expect(response.status).toBe(200);
+    });
+
+    it('rejects a "warehouse_operator" reading an order in ANOTHER warehouse with 403', async () => {
+      await app.close();
+      service.findById.mockResolvedValue({ ...sampleResponse, warehouseId: OTHER_WAREHOUSE_ID });
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+
+      const response = await request(app.getHttpServer()).get('/orders/order-uuid-1');
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('warehouse_operator scope on POST /orders/:id/deliver', () => {
+    it('rejects a "sales_operator" caller with 403 — deliver is a warehouse-floor action', async () => {
+      await app.close();
+      app = await buildApp(service, USER_ROLES.sales_operator);
+
+      const response = await request(app.getHttpServer()).post('/orders/order-uuid-1/deliver');
+      expect(response.status).toBe(403);
+    });
+
+    it('admits a "warehouse_operator" delivering an order in THEIR OWN warehouse -> 200', async () => {
+      await app.close();
+      service.findById.mockResolvedValue(sampleResponse);
+      service.deliver.mockResolvedValue({ ...sampleResponse, status: 'entregado' });
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+
+      const response = await request(app.getHttpServer()).post('/orders/order-uuid-1/deliver');
+      expect(response.status).toBe(200);
+    });
+
+    it('rejects a "warehouse_operator" delivering an order in ANOTHER warehouse with 403', async () => {
+      await app.close();
+      service.findById.mockResolvedValue({ ...sampleResponse, warehouseId: OTHER_WAREHOUSE_ID });
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+
+      const response = await request(app.getHttpServer()).post('/orders/order-uuid-1/deliver');
+      expect(response.status).toBe(403);
+      expect(service.deliver).not.toHaveBeenCalled();
     });
   });
 });

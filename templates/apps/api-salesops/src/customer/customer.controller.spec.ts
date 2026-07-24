@@ -1,12 +1,15 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { RolesGuard } from '@store-mgmt/api-common';
 import {
   CustomerUserNotFoundError,
   DuplicateCustomerDocumentError,
   DuplicateCustomerUserError,
   InvalidCustomerError,
+  USER_ROLES,
 } from '@store-mgmt/domain';
 import request from 'supertest';
+import { overrideJwtAuth } from '../test-support/auth-test-helpers.js';
 import { CustomerController } from './customer.controller.js';
 import { CustomerService } from './customer.service.js';
 
@@ -32,6 +35,21 @@ const sampleResponse = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+/** Builds a test app with `JwtAuthGuard` overridden to inject `req.user` with `roles` (`null` -> 401), keeping the REAL `RolesGuard`. */
+async function buildApp(service: CustomerServiceMock, roles: number | null): Promise<INestApplication> {
+  const builder = overrideJwtAuth(
+    Test.createTestingModule({
+      controllers: [CustomerController],
+      providers: [{ provide: CustomerService, useValue: service }, RolesGuard],
+    }),
+    roles,
+  );
+  const module: TestingModule = await builder.compile();
+  const app = module.createNestApplication();
+  await app.init();
+  return app;
+}
+
 describe('CustomerController', () => {
   let app: INestApplication;
   let service: CustomerServiceMock;
@@ -45,13 +63,9 @@ describe('CustomerController', () => {
       list: jest.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [CustomerController],
-      providers: [{ provide: CustomerService, useValue: service }],
-    }).compile();
-
-    app = module.createNestApplication();
-    await app.init();
+    // `admin` passes every role gate (super-root) — keeps pre-existing tests
+    // focused on behavior, not on the role matrix (that's covered below).
+    app = await buildApp(service, USER_ROLES.admin);
   });
 
   afterEach(async () => {
@@ -177,6 +191,42 @@ describe('CustomerController', () => {
 
       expect(response.status).toBe(200);
       expect(service.softDelete).toHaveBeenCalledWith('customer-uuid-1');
+    });
+  });
+
+  describe('RolesGuard enforcement (every route: owner/admin/sales_operator only)', () => {
+    it('rejects an unauthenticated request with 401', async () => {
+      await app.close();
+      app = await buildApp(service, null);
+
+      const response = await request(app.getHttpServer()).get('/customers');
+      expect(response.status).toBe(401);
+    });
+
+    it('rejects a plain "user" caller with 403 — customer data is cockpit-internal', async () => {
+      await app.close();
+      app = await buildApp(service, USER_ROLES.user);
+
+      const response = await request(app.getHttpServer()).get('/customers');
+      expect(response.status).toBe(403);
+    });
+
+    it('admits a "sales_operator" caller -> 200', async () => {
+      await app.close();
+      service.list.mockResolvedValue([sampleResponse]);
+      app = await buildApp(service, USER_ROLES.sales_operator);
+
+      const response = await request(app.getHttpServer()).get('/customers');
+      expect(response.status).toBe(200);
+    });
+
+    it('admits an "admin" caller (super-root) -> 200', async () => {
+      await app.close();
+      service.list.mockResolvedValue([sampleResponse]);
+      app = await buildApp(service, USER_ROLES.admin);
+
+      const response = await request(app.getHttpServer()).get('/customers');
+      expect(response.status).toBe(200);
     });
   });
 });

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { InfraDbModule } from '@store-mgmt/infra-db';
+import { AuthModule } from './auth/auth.module.js';
 import { CategoryModule } from './category/category.module.js';
 import { CurrencyModule } from './currency/currency.module.js';
 import { CustomerModule } from './customer/customer.module.js';
@@ -14,6 +15,7 @@ import { WarehouseModule } from './warehouse/warehouse.module.js';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     InfraDbModule,
+    AuthModule,
     HealthModule,
     CurrencyModule,
     CategoryModule,

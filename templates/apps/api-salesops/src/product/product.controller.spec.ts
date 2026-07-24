@@ -1,7 +1,9 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { InvalidMoneyError, InvalidProductError } from '@store-mgmt/domain';
+import { RolesGuard } from '@store-mgmt/api-common';
+import { InvalidMoneyError, InvalidProductError, USER_ROLES } from '@store-mgmt/domain';
 import request from 'supertest';
+import { overrideJwtAuth } from '../test-support/auth-test-helpers.js';
 import { ProductController } from './product.controller.js';
 import { ProductService } from './product.service.js';
 
@@ -34,6 +36,21 @@ const sampleResponse = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+/** Builds a test app with `JwtAuthGuard` overridden to inject `req.user` with `roles` (`null` -> 401), keeping the REAL `RolesGuard`. */
+async function buildApp(service: ProductServiceMock, roles: number | null): Promise<INestApplication> {
+  const builder = overrideJwtAuth(
+    Test.createTestingModule({
+      controllers: [ProductController],
+      providers: [{ provide: ProductService, useValue: service }, RolesGuard],
+    }),
+    roles,
+  );
+  const module: TestingModule = await builder.compile();
+  const app = module.createNestApplication();
+  await app.init();
+  return app;
+}
+
 describe('ProductController', () => {
   let app: INestApplication;
   let service: ProductServiceMock;
@@ -47,13 +64,9 @@ describe('ProductController', () => {
       list: jest.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [ProductController],
-      providers: [{ provide: ProductService, useValue: service }],
-    }).compile();
-
-    app = module.createNestApplication();
-    await app.init();
+    // `admin` passes every role gate (super-root) — keeps pre-existing tests
+    // focused on behavior, not on the role matrix (that's covered below).
+    app = await buildApp(service, USER_ROLES.admin);
   });
 
   afterEach(async () => {
@@ -216,6 +229,41 @@ describe('ProductController', () => {
 
       expect(response.status).toBe(200);
       expect(service.softDelete).toHaveBeenCalledWith('product-uuid-1');
+    });
+  });
+
+  describe('RolesGuard enforcement (reads: any authenticated user; writes: owner/admin)', () => {
+    it('rejects an unauthenticated read with 401', async () => {
+      await app.close();
+      app = await buildApp(service, null);
+
+      const response = await request(app.getHttpServer()).get('/products');
+      expect(response.status).toBe(401);
+    });
+
+    it('admits a plain "user" caller on a read route', async () => {
+      await app.close();
+      service.list.mockResolvedValue([sampleResponse]);
+      app = await buildApp(service, USER_ROLES.user);
+
+      const response = await request(app.getHttpServer()).get('/products');
+      expect(response.status).toBe(200);
+    });
+
+    it('rejects a plain "user" caller writing with 403', async () => {
+      await app.close();
+      app = await buildApp(service, USER_ROLES.user);
+
+      const response = await request(app.getHttpServer()).delete('/products/product-uuid-1');
+      expect(response.status).toBe(403);
+    });
+
+    it('admits an "owner" caller writing -> 200', async () => {
+      await app.close();
+      app = await buildApp(service, USER_ROLES.owner);
+
+      const response = await request(app.getHttpServer()).delete('/products/product-uuid-1');
+      expect(response.status).toBe(200);
     });
   });
 });

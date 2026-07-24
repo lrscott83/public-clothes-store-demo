@@ -3,14 +3,20 @@ import {
   Body,
   ConflictException,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
   NotFoundException,
   Param,
   Patch,
   Post,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard, Roles, RolesGuard, type SanitizedUser } from '@store-mgmt/api-common';
+import type { Request } from 'express';
 import {
   CHANNEL_CURRENCY,
   InsufficientStockError,
@@ -18,6 +24,10 @@ import {
   InvalidOrderStateError,
   NegativeStockError,
   RateNotFoundError,
+  RoleHelpers,
+  USER_ROLES,
+  WAREHOUSE_OPERATOR_REPOSITORY,
+  type IWarehouseOperatorRepository,
 } from '@store-mgmt/domain';
 import { VentasService } from './ventas.service.js';
 import type {
@@ -26,6 +36,9 @@ import type {
   OrderResponseDto,
   UpdateOrderDto,
 } from './dto/index.js';
+
+/** `Request` carrying the `req.user` populated by `JwtStrategy` — never carries `passwordHash`. */
+type AuthenticatedRequest = Request & { user: SanitizedUser };
 
 const VALID_CURRENCIES = new Set<string>(['USD', 'EUR', 'MN']);
 const VALID_CHANNELS = new Set<string>(Object.keys(CHANNEL_CURRENCY));
@@ -61,11 +74,23 @@ function assertChannel(channel: string): void {
  * existence and resolve to `null`, mapped here the same way `findById`
  * already is). There is NO `DELETE` route: an Order is an immutable
  * transactional event — its lifecycle is the status machine
- * (creado/verificado/entregado/cancelado), never a deletion.
+ * (creado/verificado/entregado/cancelado), never a deletion. `create`/
+ * `update`/`confirm`/`cancel` are `owner`/`admin`/`sales_operator`-only.
+ * `list`/`findById` ALSO admit `warehouse_operator`, scoped to their OWN
+ * `warehouseId`. `deliver` is `owner`/`admin`/`warehouse_operator`-only
+ * (NOT `sales_operator` — delivery is a warehouse-floor action), likewise
+ * scoped to the operator's own warehouse (backend-users-roles permission
+ * matrix / OperadorAlmacen Warehouse Scope requirement).
  */
 @Controller('orders')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator)
 export class VentasController {
-  constructor(private readonly ventasService: VentasService) {}
+  constructor(
+    private readonly ventasService: VentasService,
+    @Inject(WAREHOUSE_OPERATOR_REPOSITORY)
+    private readonly warehouseOperatorRepository: IWarehouseOperatorRepository,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -81,16 +106,23 @@ export class VentasController {
   }
 
   @Get()
-  async list(): Promise<OrderResponseDto[]> {
-    return this.ventasService.list();
+  @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.warehouse_operator)
+  async list(@Req() req: AuthenticatedRequest): Promise<OrderResponseDto[]> {
+    const orders = await this.ventasService.list();
+    return this.scopeToOperatorWarehouse(req.user, orders);
   }
 
   @Get(':id')
-  async findById(@Param('id') id: string): Promise<OrderResponseDto> {
+  @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.warehouse_operator)
+  async findById(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<OrderResponseDto> {
     const found = await this.ventasService.findById(id);
     if (!found) {
       throw new NotFoundException(`Order "${id}" not found`);
     }
+    await this.assertOrderWarehouseScope(req.user, found.warehouseId);
     return found;
   }
 
@@ -108,7 +140,6 @@ export class VentasController {
     });
   }
 
-
   @Post(':id/confirm')
   @HttpCode(HttpStatus.OK)
   async confirm(@Param('id') id: string): Promise<OrderResponseDto> {
@@ -123,8 +154,17 @@ export class VentasController {
 
   @Post(':id/deliver')
   @HttpCode(HttpStatus.OK)
-  async deliver(@Param('id') id: string): Promise<OrderResponseDto> {
+  @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.warehouse_operator)
+  async deliver(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<OrderResponseDto> {
     return this.withDomainErrorMapping(async () => {
+      const existing = await this.ventasService.findById(id);
+      if (!existing) {
+        throw new NotFoundException(`Order "${id}" not found`);
+      }
+      await this.assertOrderWarehouseScope(req.user, existing.warehouseId);
       const delivered = await this.ventasService.deliver(id);
       if (!delivered) {
         throw new NotFoundException(`Order "${id}" not found`);
@@ -143,6 +183,46 @@ export class VentasController {
       }
       return cancelled;
     });
+  }
+
+  /**
+   * `owner`/`admin`/`sales_operator` see every order (no scoping); a plain
+   * `warehouse_operator` is scoped to their OWN `warehouseId` — MUST match
+   * the order's `warehouseId`, else 403.
+   */
+  private async assertOrderWarehouseScope(user: SanitizedUser, warehouseId: string): Promise<void> {
+    if (!this.isScopedWarehouseOperator(user)) {
+      return;
+    }
+    const operator = await this.warehouseOperatorRepository.findByUserId(user.id);
+    if (!operator || operator.warehouseId !== warehouseId) {
+      throw new ForbiddenException('Not scoped to this warehouse');
+    }
+  }
+
+  /** Filters `orders` to the operator's own `warehouseId`; `owner`/`admin`/`sales_operator` see every order unfiltered. */
+  private async scopeToOperatorWarehouse(
+    user: SanitizedUser,
+    orders: OrderResponseDto[],
+  ): Promise<OrderResponseDto[]> {
+    if (!this.isScopedWarehouseOperator(user)) {
+      return orders;
+    }
+    const operator = await this.warehouseOperatorRepository.findByUserId(user.id);
+    if (!operator) {
+      return [];
+    }
+    return orders.filter((order) => order.warehouseId === operator.warehouseId);
+  }
+
+  /** `true` only for a caller whose access to this endpoint comes SOLELY from `warehouse_operator` (not owner/admin/sales_operator). */
+  private isScopedWarehouseOperator(user: SanitizedUser): boolean {
+    return (
+      RoleHelpers.hasRole(user.roles, USER_ROLES.warehouse_operator) &&
+      !RoleHelpers.hasRole(user.roles, USER_ROLES.owner) &&
+      !RoleHelpers.hasRole(user.roles, USER_ROLES.admin) &&
+      !RoleHelpers.hasRole(user.roles, USER_ROLES.sales_operator)
+    );
   }
 
   private async withDomainErrorMapping<T>(fn: () => Promise<T>): Promise<T> {

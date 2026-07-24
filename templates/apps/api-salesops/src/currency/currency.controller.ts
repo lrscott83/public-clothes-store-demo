@@ -8,9 +8,11 @@ import {
   NotFoundException,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard, Roles, RolesGuard } from '@store-mgmt/api-common';
 import type { Currency, PaymentChannel } from '@store-mgmt/domain';
-import { CHANNEL_CURRENCY, InvalidMoneyError, RateNotFoundError } from '@store-mgmt/domain';
+import { CHANNEL_CURRENCY, InvalidMoneyError, RateNotFoundError, USER_ROLES } from '@store-mgmt/domain';
 import { CurrencyService } from './currency.service.js';
 import type { ConvertResponseDto, CreateRateDto, RateResponseDto } from './dto/index.js';
 
@@ -35,14 +37,18 @@ function assertCurrency(value: string): Currency {
  * REST delivery for the Currency module. Validates channel/currency enums at
  * the boundary and maps domain errors (`RateNotFoundError` -> 404,
  * `InvalidMoneyError` -> 400) so the API never surfaces a bare 500 or a
- * swallowed 0/null for money paths.
+ * swallowed 0/null for money paths. Rate reads are open to any authenticated
+ * user; rate writes are `owner`/`admin`-only (backend-users-roles permission
+ * matrix).
  */
 @Controller('currency')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class CurrencyController {
   constructor(private readonly currencyService: CurrencyService) {}
 
   @Post('rates')
   @HttpCode(HttpStatus.CREATED)
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
   async createRate(@Body() body: CreateRateDto): Promise<RateResponseDto> {
     const channel = assertChannel(body.channel);
     return this.withDomainErrorMapping(() =>

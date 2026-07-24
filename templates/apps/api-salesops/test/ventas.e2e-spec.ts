@@ -1,23 +1,29 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { USER_ROLES } from '@store-mgmt/domain';
 import { PrismaService } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
+import { authHeader, createAuthedUser, createAuthedWarehouseOperator } from './support/auth-e2e-helper.js';
 
-/** Bcrypt hash shape accepted by the domain `passwordHash` invariant — never a real credential. */
+/** Bcrypt hash shape accepted by the domain `passwordHash` invariant -- never a real credential. */
 const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
 /**
  * Full HTTP lifecycle against the real `store_mgmt` Postgres database (no
- * mocks) — same discipline as the domain/infra-db suites. Covers the
+ * mocks) -- same discipline as the domain/infra-db suites. Covers the
  * spec's stock-bridge (reserve/consume/release), currency-derivation,
  * split-payment, and 4-state-machine scenarios end-to-end (design.md
- * decision #3/#4/#8).
+ * decision #3/#4/#8). All requests authenticate as `admin` (super-root --
+ * bypasses both the role matrix and the warehouse-operator scope) so the
+ * business-logic assertions stay focused; the dedicated `RolesGuard
+ * enforcement` block at the bottom exercises the role matrix + scope itself.
  */
 describe('Ventas (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let adminToken: string;
 
   let categoryId: string;
   let warehouseId: string;
@@ -45,13 +51,17 @@ describe('Ventas (e2e)', () => {
   });
 
   beforeEach(async () => {
+    adminToken = (await createAuthedUser(prisma, USER_ROLES.admin)).token;
+
     const category = await request(app.getHttpServer())
       .post('/categories')
+      .set(...authHeader(adminToken))
       .send({ name: 'Ventas E2E', slug: 'ventas-e2e', order: 1 });
     categoryId = category.body.id;
 
     const warehouse = await request(app.getHttpServer())
       .post('/warehouses')
+      .set(...authHeader(adminToken))
       .send({ name: 'Depósito Ventas E2E' });
     warehouseId = warehouse.body.id;
 
@@ -63,11 +73,13 @@ describe('Ventas (e2e)', () => {
     });
     const customer = await request(app.getHttpServer())
       .post('/customers')
+      .set(...authHeader(adminToken))
       .send({ fullName: 'Cliente Ventas E2E', userId: user.id });
     customerId = customer.body.id;
 
     const usdProduct = await request(app.getHttpServer())
       .post('/products')
+      .set(...authHeader(adminToken))
       .send({
         name: 'Producto USD',
         description: 'Producto en USD',
@@ -81,6 +93,7 @@ describe('Ventas (e2e)', () => {
 
     const mnProduct = await request(app.getHttpServer())
       .post('/products')
+      .set(...authHeader(adminToken))
       .send({
         name: 'Producto MN',
         description: 'Producto en MN',
@@ -94,6 +107,7 @@ describe('Ventas (e2e)', () => {
 
     const eurProduct = await request(app.getHttpServer())
       .post('/products')
+      .set(...authHeader(adminToken))
       .send({
         name: 'Producto EUR',
         description: 'Producto en EUR',
@@ -109,18 +123,22 @@ describe('Ventas (e2e)', () => {
     // (needed by the "missing rate" scenario further below).
     await request(app.getHttpServer())
       .post('/currency/rates')
+      .set(...authHeader(adminToken))
       .send({ channel: 'MN_EFECTIVO', rate: '350.000000', effectiveFrom: '2020-01-01T00:00:00.000Z' });
   });
 
   afterEach(async () => {
     // `Order` cascades to `OrderLine`/`OrderPayment`/`SaleCredit` on delete
     // (schema.prisma `onDelete: Cascade`) — one deleteMany clears the whole
-    // aggregate tree.
+    // aggregate tree. `User` cascades to `WarehouseOperator` the same way.
     await prisma.order.deleteMany({});
     await prisma.stockMovement.deleteMany({});
     await prisma.stockLevel.deleteMany({});
     await prisma.product.deleteMany({});
     await prisma.category.deleteMany({});
+    // `WarehouseOperator.warehouseId` has no `onDelete: Cascade` (only the
+    // `userId` side does) — must clear it BEFORE `warehouse.deleteMany`.
+    await prisma.warehouseOperator.deleteMany({});
     await prisma.warehouse.deleteMany({});
     await prisma.customer.deleteMany({});
     await prisma.user.deleteMany({});
@@ -130,6 +148,7 @@ describe('Ventas (e2e)', () => {
   async function stockIn(productId: string, quantity: string): Promise<void> {
     await request(app.getHttpServer())
       .post('/stock/movements')
+      .set(...authHeader(adminToken))
       .send({ productId, warehouseId, type: 'purchase_in', quantity })
       .expect(201);
   }
@@ -137,6 +156,7 @@ describe('Ventas (e2e)', () => {
   async function getStockLevel(productId: string): Promise<{ onHand: string; reserved: string; available: string }> {
     const response = await request(app.getHttpServer())
       .get('/stock')
+      .set(...authHeader(adminToken))
       .query({ productId, warehouseId });
     return response.body;
   }
@@ -144,6 +164,7 @@ describe('Ventas (e2e)', () => {
   it('creates a mixed USD/MN order -> derives USD, converting the MN line', async () => {
     const response = await request(app.getHttpServer())
       .post('/orders')
+      .set(...authHeader(adminToken))
       .send({
         customerId,
         customerName: 'Cliente Ventas E2E',
@@ -168,6 +189,7 @@ describe('Ventas (e2e)', () => {
   it('creates a split-payment order that sums exactly to total', async () => {
     const response = await request(app.getHttpServer())
       .post('/orders')
+      .set(...authHeader(adminToken))
       .send({
         customerId,
         customerName: 'Cliente Ventas E2E',
@@ -197,6 +219,7 @@ describe('Ventas (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
+      .set(...authHeader(adminToken))
       .send({
         customerId,
         customerName: 'Cliente Ventas E2E',
@@ -208,7 +231,9 @@ describe('Ventas (e2e)', () => {
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
 
-    const response = await request(app.getHttpServer()).post(`/orders/${created.body.id}/confirm`);
+    const response = await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/confirm`)
+      .set(...authHeader(adminToken));
 
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('verificado');
@@ -225,6 +250,7 @@ describe('Ventas (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
+      .set(...authHeader(adminToken))
       .send({
         customerId,
         customerName: 'Cliente Ventas E2E',
@@ -235,9 +261,14 @@ describe('Ventas (e2e)', () => {
         ],
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
-    await request(app.getHttpServer()).post(`/orders/${created.body.id}/confirm`).expect(200);
+    await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/confirm`)
+      .set(...authHeader(adminToken))
+      .expect(200);
 
-    const response = await request(app.getHttpServer()).post(`/orders/${created.body.id}/deliver`);
+    const response = await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/deliver`)
+      .set(...authHeader(adminToken));
 
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('entregado');
@@ -254,6 +285,7 @@ describe('Ventas (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
+      .set(...authHeader(adminToken))
       .send({
         customerId,
         customerName: 'Cliente Ventas E2E',
@@ -264,9 +296,14 @@ describe('Ventas (e2e)', () => {
         ],
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
-    await request(app.getHttpServer()).post(`/orders/${created.body.id}/confirm`).expect(200);
+    await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/confirm`)
+      .set(...authHeader(adminToken))
+      .expect(200);
 
-    const response = await request(app.getHttpServer()).post(`/orders/${created.body.id}/cancel`);
+    const response = await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/cancel`)
+      .set(...authHeader(adminToken));
 
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('cancelado');
@@ -281,6 +318,7 @@ describe('Ventas (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
+      .set(...authHeader(adminToken))
       .send({
         customerId,
         customerName: 'Cliente Ventas E2E',
@@ -293,7 +331,9 @@ describe('Ventas (e2e)', () => {
       });
     expect(created.body.status).toBe('creado');
 
-    const response = await request(app.getHttpServer()).post(`/orders/${created.body.id}/cancel`);
+    const response = await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/cancel`)
+      .set(...authHeader(adminToken));
 
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('cancelado');
@@ -308,6 +348,7 @@ describe('Ventas (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
+      .set(...authHeader(adminToken))
       .send({
         customerId,
         customerName: 'Cliente Ventas E2E',
@@ -319,11 +360,15 @@ describe('Ventas (e2e)', () => {
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
 
-    const response = await request(app.getHttpServer()).post(`/orders/${created.body.id}/confirm`);
+    const response = await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/confirm`)
+      .set(...authHeader(adminToken));
 
     expect(response.status).toBe(409);
 
-    const found = await request(app.getHttpServer()).get(`/orders/${created.body.id}`);
+    const found = await request(app.getHttpServer())
+      .get(`/orders/${created.body.id}`)
+      .set(...authHeader(adminToken));
     expect(found.body.status).toBe('creado');
 
     const level = await getStockLevel(usdProductId);
@@ -336,6 +381,7 @@ describe('Ventas (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/orders')
+      .set(...authHeader(adminToken))
       .send({
         customerId,
         customerName: 'Cliente Ventas E2E',
@@ -358,6 +404,7 @@ describe('Ventas (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
+      .set(...authHeader(adminToken))
       .send({
         customerId,
         customerName: 'Cliente Ventas E2E',
@@ -368,12 +415,24 @@ describe('Ventas (e2e)', () => {
         ],
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
-    await request(app.getHttpServer()).post(`/orders/${created.body.id}/confirm`).expect(200);
-    await request(app.getHttpServer()).post(`/orders/${created.body.id}/deliver`).expect(200);
+    await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/confirm`)
+      .set(...authHeader(adminToken))
+      .expect(200);
+    await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/deliver`)
+      .set(...authHeader(adminToken))
+      .expect(200);
 
-    const confirmResponse = await request(app.getHttpServer()).post(`/orders/${created.body.id}/confirm`);
-    const deliverResponse = await request(app.getHttpServer()).post(`/orders/${created.body.id}/deliver`);
-    const cancelResponse = await request(app.getHttpServer()).post(`/orders/${created.body.id}/cancel`);
+    const confirmResponse = await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/confirm`)
+      .set(...authHeader(adminToken));
+    const deliverResponse = await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/deliver`)
+      .set(...authHeader(adminToken));
+    const cancelResponse = await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/cancel`)
+      .set(...authHeader(adminToken));
 
     expect(confirmResponse.status).toBe(409);
     expect(deliverResponse.status).toBe(409);
@@ -383,12 +442,162 @@ describe('Ventas (e2e)', () => {
   it('returns 404 for confirm/deliver/cancel on an unknown order id', async () => {
     const unknownId = '00000000-0000-0000-0000-000000000000';
 
-    const confirmResponse = await request(app.getHttpServer()).post(`/orders/${unknownId}/confirm`);
-    const deliverResponse = await request(app.getHttpServer()).post(`/orders/${unknownId}/deliver`);
-    const cancelResponse = await request(app.getHttpServer()).post(`/orders/${unknownId}/cancel`);
+    const confirmResponse = await request(app.getHttpServer())
+      .post(`/orders/${unknownId}/confirm`)
+      .set(...authHeader(adminToken));
+    const deliverResponse = await request(app.getHttpServer())
+      .post(`/orders/${unknownId}/deliver`)
+      .set(...authHeader(adminToken));
+    const cancelResponse = await request(app.getHttpServer())
+      .post(`/orders/${unknownId}/cancel`)
+      .set(...authHeader(adminToken));
 
     expect(confirmResponse.status).toBe(404);
     expect(deliverResponse.status).toBe(404);
     expect(cancelResponse.status).toBe(404);
+  });
+
+  describe('RolesGuard enforcement + warehouse_operator scope', () => {
+    it('rejects an unauthenticated request with 401', async () => {
+      const response = await request(app.getHttpServer()).get('/orders');
+      expect(response.status).toBe(401);
+    });
+
+    it('rejects a plain "user" caller with 403', async () => {
+      const { token } = await createAuthedUser(prisma, USER_ROLES.user);
+
+      const response = await request(app.getHttpServer()).get('/orders').set(...authHeader(token));
+      expect(response.status).toBe(403);
+    });
+
+    it('a "sales_operator" caller creates an order -> 201, but cannot deliver it (403 — warehouse-floor action)', async () => {
+      const { token: salesToken } = await createAuthedUser(prisma, USER_ROLES.sales_operator);
+
+      const created = await request(app.getHttpServer())
+        .post('/orders')
+        .set(...authHeader(salesToken))
+        .send({
+          customerId,
+          customerName: 'Cliente Ventas E2E',
+          warehouseId,
+          deliveryMode: 'recogida',
+          lines: [
+            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+          ],
+          payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+        });
+      expect(created.status).toBe(201);
+
+      const deliverResponse = await request(app.getHttpServer())
+        .post(`/orders/${created.body.id}/deliver`)
+        .set(...authHeader(salesToken));
+      expect(deliverResponse.status).toBe(403);
+    });
+
+    it('a "warehouse_operator" scoped to the order\'s OWN warehouse can deliver it -> 200', async () => {
+      await stockIn(usdProductId, '10');
+      const { token: operatorToken } = await createAuthedWarehouseOperator(prisma, warehouseId);
+
+      const created = await request(app.getHttpServer())
+        .post('/orders')
+        .set(...authHeader(adminToken))
+        .send({
+          customerId,
+          customerName: 'Cliente Ventas E2E',
+          warehouseId,
+          deliveryMode: 'recogida',
+          lines: [
+            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+          ],
+          payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+        });
+      await request(app.getHttpServer())
+        .post(`/orders/${created.body.id}/confirm`)
+        .set(...authHeader(adminToken))
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .post(`/orders/${created.body.id}/deliver`)
+        .set(...authHeader(operatorToken));
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('entregado');
+    });
+
+    it('a "warehouse_operator" scoped to a DIFFERENT warehouse cannot deliver -> 403', async () => {
+      await stockIn(usdProductId, '10');
+      const otherWarehouse = await request(app.getHttpServer())
+        .post('/warehouses')
+        .set(...authHeader(adminToken))
+        .send({ name: 'Otro Depósito E2E' });
+      const { token: operatorToken } = await createAuthedWarehouseOperator(prisma, otherWarehouse.body.id);
+
+      const created = await request(app.getHttpServer())
+        .post('/orders')
+        .set(...authHeader(adminToken))
+        .send({
+          customerId,
+          customerName: 'Cliente Ventas E2E',
+          warehouseId,
+          deliveryMode: 'recogida',
+          lines: [
+            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+          ],
+          payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+        });
+      await request(app.getHttpServer())
+        .post(`/orders/${created.body.id}/confirm`)
+        .set(...authHeader(adminToken))
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .post(`/orders/${created.body.id}/deliver`)
+        .set(...authHeader(operatorToken));
+
+      expect(response.status).toBe(403);
+    });
+
+    it('GET /orders filters to the warehouse_operator\'s own warehouse', async () => {
+      const otherWarehouse = await request(app.getHttpServer())
+        .post('/warehouses')
+        .set(...authHeader(adminToken))
+        .send({ name: 'Otro Depósito Lista E2E' });
+
+      const ownOrder = await request(app.getHttpServer())
+        .post('/orders')
+        .set(...authHeader(adminToken))
+        .send({
+          customerId,
+          customerName: 'Cliente Ventas E2E',
+          warehouseId,
+          deliveryMode: 'recogida',
+          lines: [
+            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+          ],
+          payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+        });
+      const otherOrder = await request(app.getHttpServer())
+        .post('/orders')
+        .set(...authHeader(adminToken))
+        .send({
+          customerId,
+          customerName: 'Cliente Ventas E2E',
+          warehouseId: otherWarehouse.body.id,
+          deliveryMode: 'recogida',
+          lines: [
+            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+          ],
+          payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+        });
+
+      const { token: operatorToken } = await createAuthedWarehouseOperator(prisma, warehouseId);
+
+      const response = await request(app.getHttpServer()).get('/orders').set(...authHeader(operatorToken));
+
+      expect(response.status).toBe(200);
+      const ids = response.body.map((o: { id: string }) => o.id);
+      expect(ids).toContain(ownOrder.body.id);
+      expect(ids).not.toContain(otherOrder.body.id);
+    });
   });
 });

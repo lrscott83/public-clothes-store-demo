@@ -1,7 +1,9 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { InvalidMoneyError, RateNotFoundError } from '@store-mgmt/domain';
+import { RolesGuard } from '@store-mgmt/api-common';
+import { InvalidMoneyError, RateNotFoundError, USER_ROLES } from '@store-mgmt/domain';
 import request from 'supertest';
+import { overrideJwtAuth } from '../test-support/auth-test-helpers.js';
 import { CurrencyController } from './currency.controller.js';
 import { CurrencyService } from './currency.service.js';
 
@@ -10,6 +12,21 @@ type CurrencyServiceMock = {
   getLatestRate: jest.Mock;
   convert: jest.Mock;
 };
+
+/** Builds a test app with `JwtAuthGuard` overridden to inject `req.user` with `roles` (`null` -> 401), keeping the REAL `RolesGuard`. */
+async function buildApp(service: CurrencyServiceMock, roles: number | null): Promise<INestApplication> {
+  const builder = overrideJwtAuth(
+    Test.createTestingModule({
+      controllers: [CurrencyController],
+      providers: [{ provide: CurrencyService, useValue: service }, RolesGuard],
+    }),
+    roles,
+  );
+  const module: TestingModule = await builder.compile();
+  const app = module.createNestApplication();
+  await app.init();
+  return app;
+}
 
 describe('CurrencyController', () => {
   let app: INestApplication;
@@ -22,13 +39,9 @@ describe('CurrencyController', () => {
       convert: jest.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [CurrencyController],
-      providers: [{ provide: CurrencyService, useValue: service }],
-    }).compile();
-
-    app = module.createNestApplication();
-    await app.init();
+    // `admin` passes every role gate (super-root) — keeps pre-existing tests
+    // focused on behavior, not on the role matrix (that's covered below).
+    app = await buildApp(service, USER_ROLES.admin);
   });
 
   afterEach(async () => {
@@ -167,6 +180,56 @@ describe('CurrencyController', () => {
 
       expect(response.status).toBe(400);
       expect(service.convert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('RolesGuard enforcement (rate reads: any authenticated user; rate writes: owner/admin)', () => {
+    it('rejects an unauthenticated read with 401', async () => {
+      await app.close();
+      app = await buildApp(service, null);
+
+      const response = await request(app.getHttpServer()).get('/currency/rates').query({ channel: 'ZELLE' });
+      expect(response.status).toBe(401);
+    });
+
+    it('admits a plain "user" caller on a read route', async () => {
+      await app.close();
+      service.getLatestRate.mockResolvedValue({
+        id: 'rate-uuid-2',
+        channel: 'ZELLE',
+        rate: '350.455000',
+        effectiveFrom: '2026-01-01T00:00:00.000Z',
+      });
+      app = await buildApp(service, USER_ROLES.user);
+
+      const response = await request(app.getHttpServer()).get('/currency/rates').query({ channel: 'ZELLE' });
+      expect(response.status).toBe(200);
+    });
+
+    it('rejects a plain "user" caller writing a rate with 403', async () => {
+      await app.close();
+      app = await buildApp(service, USER_ROLES.user);
+
+      const response = await request(app.getHttpServer())
+        .post('/currency/rates')
+        .send({ channel: 'ZELLE', rate: '350.455', effectiveFrom: '2026-01-01T00:00:00.000Z' });
+      expect(response.status).toBe(403);
+    });
+
+    it('admits an "owner" caller writing a rate -> 201', async () => {
+      await app.close();
+      service.createRate.mockResolvedValue({
+        id: 'rate-uuid-1',
+        channel: 'ZELLE',
+        rate: '350.455000',
+        effectiveFrom: '2026-01-01T00:00:00.000Z',
+      });
+      app = await buildApp(service, USER_ROLES.owner);
+
+      const response = await request(app.getHttpServer())
+        .post('/currency/rates')
+        .send({ channel: 'ZELLE', rate: '350.455', effectiveFrom: '2026-01-01T00:00:00.000Z' });
+      expect(response.status).toBe(201);
     });
   });
 });

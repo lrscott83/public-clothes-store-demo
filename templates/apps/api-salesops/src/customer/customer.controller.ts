@@ -12,12 +12,15 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard, Roles, RolesGuard } from '@store-mgmt/api-common';
 import {
   CustomerUserNotFoundError,
   DuplicateCustomerDocumentError,
   DuplicateCustomerUserError,
   InvalidCustomerError,
+  USER_ROLES,
 } from '@store-mgmt/domain';
 import { CustomerService } from './customer.service.js';
 import type { CreateCustomerDto, CustomerResponseDto, UpdateCustomerDto } from './dto/index.js';
@@ -29,9 +32,13 @@ import type { CreateCustomerDto, CustomerResponseDto, UpdateCustomerDto } from '
  * `DuplicateCustomerDocumentError`/`DuplicateCustomerUserError` -> 409
  * (backend-users-roles: `userId` is a required, unique 1:1 link). `DELETE`
  * always soft-deletes (`active=false`) — never a hard DELETE. Mirrors
- * `WarehouseController`.
+ * `WarehouseController`. Every route (read + write) is `owner`/`admin`/
+ * `sales_operator`-only (backend-users-roles permission matrix) — customer
+ * master data is cockpit-internal, never exposed to a plain `user`.
  */
 @Controller('customers')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator)
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 

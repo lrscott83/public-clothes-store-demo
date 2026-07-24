@@ -11,22 +11,28 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-import { InvalidWarehouseError } from '@store-mgmt/domain';
+import { JwtAuthGuard, Roles, RolesGuard } from '@store-mgmt/api-common';
+import { InvalidWarehouseError, USER_ROLES } from '@store-mgmt/domain';
 import { WarehouseService } from './warehouse.service.js';
 import type { CreateWarehouseDto, UpdateWarehouseDto, WarehouseResponseDto } from './dto/index.js';
 
 /**
  * REST delivery for the Warehouse module. Maps `InvalidWarehouseError` -> 400
  * (e.g. empty name). `DELETE` always soft-deletes (`active=false`) — never a
- * hard DELETE. Mirrors `CategoryController`.
+ * hard DELETE. Mirrors `CategoryController`. Reads are open to any
+ * authenticated user; writes are `owner`/`admin`-only (backend-users-roles
+ * permission matrix).
  */
 @Controller('warehouses')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class WarehouseController {
   constructor(private readonly warehouseService: WarehouseService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
   async create(@Body() body: CreateWarehouseDto): Promise<WarehouseResponseDto> {
     return this.withDomainErrorMapping(() => this.warehouseService.create(body));
   }
@@ -46,6 +52,7 @@ export class WarehouseController {
   }
 
   @Patch(':id')
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
   async update(
     @Param('id') id: string,
     @Body() body: UpdateWarehouseDto,
@@ -55,6 +62,7 @@ export class WarehouseController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
   async softDelete(@Param('id') id: string): Promise<{ id: string }> {
     await this.warehouseService.softDelete(id);
     return { id };
