@@ -86,22 +86,33 @@ DONE — committed in `5298951 feat(users): infra-db persistence + Customer.user
 
 ## Phase 4: `apps/api-idp` (NEW app — LocalStrategy, the only app that owns it)
 
-- [ ] 4.1 Scaffold `apps/api-idp/` (`package.json`, `nest-cli.json`, `tsconfig.json`, `tsconfig.build.json`, `main.ts`, `test/jest-e2e.json`) mirroring `apps/api-salesops`'s NestJS scaffold; wire into root turbo pipeline.
-- [ ] 4.2 `api-idp/src/auth/local.strategy.ts`: `usernameField:'login'`, delegates to `AuthService.validateUser`.
-- [ ] 4.3 [RED] `api-idp/src/auth/auth.service.spec.ts`: `validateUser` — correct login+password (bcrypt.compare) returns user sans hash; wrong password / unknown login both reject with the SAME error class (no enumeration leak, spec scenario); inactive user rejected.
-- [ ] 4.4 [RED] same file: `login` issues access JWT (`{sub,login}` only, ADR-2) + refresh JWT with persisted opaque `rtid`.
-- [ ] 4.5 [RED] same file: `refresh` — valid unused token rotates (new access+refresh, old `rtid` marked used); replaying an already-rotated token revokes the WHOLE family (reuse-detection, design §5 steps 1-7); concurrent-rotation race (`revokeIfActive` returns 0) also revokes family.
-- [ ] 4.6 [RED] same file: `changePassword` — verifies current hash, updates, calls `revokeByUserId` (all refresh tokens die).
-- [ ] 4.7 [RED] same file: `initiatePasswordReset`/`resetPassword` — mints single-use opaque token (15-min expiry), second use of the same token rejected, success revokes all refresh tokens; enumeration-safe generic response on unknown login/email.
-- [ ] 4.8 [GREEN] `api-idp/src/auth/auth.service.ts`: implement `validateUser`/`login`/`refresh`/`changePassword`/`initiatePasswordReset`/`resetPassword` per design §5, to pass 4.3-4.7.
-- [ ] 4.9 `api-idp/src/auth/dto/*.ts` (`login.dto.ts`, `signup.dto.ts`, `change-password.dto.ts`, `refresh.dto.ts`, `password-reset.dto.ts`) + `mappers/user.mapper.ts` (strips `passwordHash`).
-- [ ] 4.10 [RED] `api-idp/src/auth/auth.controller.spec.ts`: `POST /auth/login` 200+tokens / 401 on bad credentials; `POST /auth/signup` 201 (creates `User` via `createUser`+bcrypt hash at the edge); `POST /auth/change-password` 200, revokes sessions; `POST /auth/refresh` 200 rotated pair / 401 on reuse; `POST /auth/password-reset/*` 200 generic response.
-- [ ] 4.11 [GREEN] `api-idp/src/auth/auth.controller.ts` + `auth.module.ts` to pass 4.10.
-- [ ] 4.12 [RED] `api-idp/src/users/users.controller.spec.ts`: admin/owner CRUD — list/get/update roles/deactivate a user; non-admin/owner rejected 403 (delegates to `RolesGuard`).
-- [ ] 4.13 [GREEN] `api-idp/src/users/{users.service,users.controller,users.module}.ts` + `dto/*` to pass 4.12.
-- [ ] 4.14 `api-idp/src/app/app.module.ts`: wire `InfraDbModule`, `AuthModule`, `UsersModule`, Passport (`Local`+`Jwt` strategies), `ConfigModule`.
-- [ ] 4.15 [RED→GREEN] `api-idp/test/auth.e2e-spec.ts`: full HTTP lifecycle against real Postgres — signup→login→refresh-rotation→reuse-detection-revokes-family→change-password-revokes-sessions→password-reset-single-use; unknown-login and wrong-password both 401 with identical error shape.
-- [ ] 4.16 Run `pnpm --filter @store-mgmt/api-idp test && test:e2e && typecheck && build && lint` full-green.
+DONE — this apply run (not yet committed — orchestrator commits). Naming
+deviations from the original task wording: `dto/refresh.dto.ts` (not
+`refresh-token.dto.ts`) and `dto/password-reset-request.dto.ts` +
+`dto/password-reset-confirm.dto.ts` (split, not one `password-reset.dto.ts`)
+— clearer 1:1 with the two-step request/confirm endpoints. Public
+`POST /auth/signup` always defaults to the `user` role (no `roles` field
+accepted); a separate admin/owner-only `POST /users` (Users module) accepts
+an explicit `roles` bitmask — this split prevents privilege escalation via
+public self-registration and was not explicit in the original task wording
+but follows directly from design.md §6's locked matrix.
+
+- [x] 4.1 Scaffold `apps/api-idp/` (`package.json`, `nest-cli.json`, `tsconfig.json`, `tsconfig.build.json`, `main.ts`, `test/jest-e2e.json`) mirroring `apps/api-salesops`'s NestJS scaffold; wire into root turbo pipeline. `apps/*` was already globbed by `pnpm-workspace.yaml`, no change needed there. `env.example` created; `.env` could NOT be created by the agent (sandbox blocks writing new dotenv files) — **manual step needed**: copy `apps/api-idp/env.example` to `apps/api-idp/.env` before running `dev`/`start` locally (tests were verified by exporting `DATABASE_URL` inline instead).
+- [x] 4.2 `api-idp/src/auth/local.strategy.ts`: `usernameField:'login'`, delegates to `AuthService.validateUser`. Plus `local-auth.guard.ts` (`AuthGuard('local')`).
+- [x] 4.3 [RED] `api-idp/src/auth/auth.service.spec.ts`: `validateUser` — correct login+password (bcrypt.compare) returns user sans hash; wrong password / unknown login both reject with the SAME error class (no enumeration leak, spec scenario); inactive user rejected.
+- [x] 4.4 [RED] same file: `login` issues access JWT (`{sub,login}` only, ADR-2) + refresh JWT with persisted opaque `rtid`.
+- [x] 4.5 [RED] same file: `refresh` — valid unused token rotates (new access+refresh, old `rtid` marked used); replaying an already-rotated token revokes the WHOLE family (reuse-detection, design §5 steps 1-7); concurrent-rotation race (`revokeIfActive` returns 0) also revokes family.
+- [x] 4.6 [RED] same file: `changePassword` — verifies current hash, updates, calls `revokeByUserId` (all refresh tokens die).
+- [x] 4.7 [RED] same file: `initiatePasswordReset`/`resetPassword` — mints single-use opaque token (15-min expiry), second use of the same token rejected, success revokes all refresh tokens; enumeration-safe generic response on unknown login.
+- [x] 4.8 [GREEN] `api-idp/src/auth/auth.service.ts`: implemented `validateUser`/`login`/`signup`/`refresh`/`changePassword`/`initiatePasswordReset`/`resetPassword` per design §5, ported the refresh rotation/reuse-detection algorithm near-verbatim from poolops `auth.service.ts:496-587` (cited in code comment). 19 unit tests green.
+- [x] 4.9 `api-idp/src/auth/dto/*.ts` (`login.dto.ts`, `signup.dto.ts`, `change-password.dto.ts`, `refresh.dto.ts`, `password-reset-request.dto.ts`, `password-reset-confirm.dto.ts`, `user-response.dto.ts`, `login-response.dto.ts`, `refresh-response.dto.ts`) + `mappers/user.mapper.ts` (strips `passwordHash`, adds `roleLabels` via `RoleHelpers.getRoleLabels`).
+- [x] 4.10 [RED] `api-idp/src/auth/auth.controller.spec.ts`: `POST /auth/login` 200+tokens / 401 on bad credentials (via overridden `LocalAuthGuard`); `POST /auth/signup` 201 / 400 (`InvalidUserError`) / 409 (`DuplicateLoginError`); `POST /auth/refresh` 200 rotated pair / 401 propagated; `POST /auth/password-reset/request|confirm` 200.
+- [x] 4.11 [GREEN] `api-idp/src/auth/auth.controller.ts` + `auth.module.ts` to pass 4.10.
+- [x] 4.12 [RED] `api-idp/src/users/users.controller.spec.ts`: admin/owner CRUD — list/get/update roles/deactivate a user; unauthenticated 401, non-admin/owner rejected 403 (delegates to the REAL `RolesGuard`, not a bypass mock — only `JwtAuthGuard` is overridden to inject `req.user`); admin super-root admitted.
+- [x] 4.13 [GREEN] `api-idp/src/users/{users.service,users.controller,users.module}.ts` + `dto/*` to pass 4.12. 8 unit tests green.
+- [x] 4.14 `api-idp/src/app/app.module.ts`: wires `InfraDbModule`, `AuthModule` (which itself wires `PassportModule`/`JwtModule.register(JWT_CONFIG)`/`Local`+shared `Jwt` strategies), `UsersModule`, `ConfigModule.forRoot({isGlobal:true})`.
+- [x] 4.15 [RED→GREEN] `api-idp/test/auth.e2e-spec.ts`: full HTTP lifecycle against real Postgres — signup→login→refresh-rotation→replay-of-rotated-token-revokes-family(→even-the-latest-token-dies)→change-password-revokes-sessions(old-refresh-dies+old-password-stops-working)→password-reset-request/confirm-single-use(second-confirm-401); unknown-login and wrong-password both 401 with the identical message; duplicate signup 409; enumeration-safe generic reset-request message; protected `GET /users` via the REAL `JwtAuthGuard`+`RolesGuard` (401 unauthenticated, 403 plain-`user`, 200 owner/admin). 9 e2e tests green.
+- [x] 4.16 Ran `pnpm --filter @store-mgmt/api-idp test && test:e2e && typecheck && build && lint` full-green (44 unit + 9 e2e = 53 tests; typecheck/build/lint all exit 0, `--max-warnings 0`). One typing bridge needed: `@store-mgmt/api-common`'s `JwtConfig`/`RefreshTokenConfig.expiresIn` is typed as a plain `string` (env-var friendly) but `@nestjs/jwt`'s real `JwtModuleOptions`/`JwtSignOptions`/`JwtVerifyOptions` type against `jsonwebtoken`'s stricter `StringValue` template-literal type — Phase 3 never caught this because it had no real `JwtModule.register()`/`sign()`/`verify()` consumer. Fixed with local `as JwtModuleOptions`/`as JwtSignOptions`/`as JwtVerifyOptions` casts in `auth.module.ts`/`auth.service.ts` ONLY (api-common itself untouched) — the runtime value is a valid `ms`-style string either way, this only bridges the two type definitions.
 
 ## Phase 5: `apps/api-salesops` — Consume JWT + RolesGuard + Customer.userId
 
