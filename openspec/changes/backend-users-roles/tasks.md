@@ -48,39 +48,41 @@ proceeds on a single branch, one work-unit commit per unit below, pushed at the 
 
 ## Phase 2: infra-db — Prisma + Migration/Backfill (jest + real Postgres, `pnpm --filter @store-mgmt/infra-db test`)
 
-- [ ] 2.1 Append `model User @@map("app_user")`, `model RefreshToken @@map("refresh_token")`, `model PasswordResetToken @@map("password_reset_token")`, `model OperadorAlmacen @@map("operador_almacen")` to `infra-db/prisma/schema.prisma` (exact shapes, design §2); add `Warehouse.operadores` inverse relation only — additive.
-- [ ] 2.2 MODIFY `Customer` in schema.prisma: add `userId String @unique @db.Uuid @map("user_id")` + `user User @relation(...)` (design §2) — schema-level only, migration handles the NOT-NULL sequencing.
-- [ ] 2.3 Generate migration `add_users_roles_module` with the 5-step raw-SQL sequence from design §3 (create 4 tables → add nullable `customer.user_id` → mint+correlate backfill CTE → `SET NOT NULL` → unique index + FK), applied via `prisma migrate deploy`; confirm fresh-DB no-op path (steps 1,2,4,5 only) and non-empty-DB backfill path both documented in the migration file comment.
-- [ ] 2.4 [RED] `infra-db/src/users/prisma-user.repository.spec.ts`: `create` persists + rejects duplicate `login` (`DuplicateLoginError`, P2002 translation); `findByLogin`/`findById` round-trip; `email`/`cellPhone` resolve `null` when omitted.
-- [ ] 2.5 [GREEN] `infra-db/src/users/prisma-user.repository.ts` to pass 2.4.
-- [ ] 2.6 [RED] `infra-db/src/users/prisma-refresh-token.repository.spec.ts`: `create`/`findByToken`/`revokeIfActive` (returns 0 on already-revoked, atomic guarded UPDATE)/`revokeByUserId`/`deleteExpired`.
-- [ ] 2.7 [GREEN] `infra-db/src/users/prisma-refresh-token.repository.ts` to pass 2.6.
-- [ ] 2.8 [RED] `infra-db/src/users/prisma-password-reset-token.repository.spec.ts`: `create`/`findByToken`/`markAsUsed`/`revokeByUserId`/`deleteExpired`, single-use enforced at repo level (second `markAsUsed` on a used token is a no-op-safe path — actual single-use business check lives in the app service).
-- [ ] 2.9 [GREEN] `infra-db/src/users/prisma-password-reset-token.repository.ts` to pass 2.8.
-- [ ] 2.10 [RED] `infra-db/src/users/prisma-operador-almacen.repository.spec.ts`: create/find by `userId`; two operators can share one `warehouseId` (NOT unique, per spec scenario).
-- [ ] 2.11 [GREEN] `infra-db/src/users/prisma-operador-almacen.repository.ts` to pass 2.10.
-- [ ] 2.12 [RED] `infra-db/src/users/seed.spec.ts`: `seedUsers` idempotently upserts (keyed on `login`) the 4 cockpit accounts (`admin`, `owner`, `op.almacen`+`OperadorAlmacen` row, `op.gestores`) with bcrypt-hashed dev passwords; running twice does not duplicate.
-- [ ] 2.13 [GREEN] `infra-db/src/users/seed.ts` to pass 2.12.
-- [ ] 2.14 [RED] `infra-db/src/customer/prisma-customer.repository.spec.ts` (extend): `create` now requires an existing `userId`; creating with a non-existent `userId` is rejected (FK violation surfaces as a named error); duplicate `userId` on a second Customer rejected (1:1).
-- [ ] 2.15 [GREEN] adjust `infra-db/src/customer/prisma-customer.repository.ts` mapping/error-translation to pass 2.14 (design §2, Customer MODIFIED).
-- [ ] 2.16 [RED] `infra-db/src/customer/seed.spec.ts` (extend): `seedCustomers` find-or-creates a matching `app_user` (`deriveLogin(fullName)`, bcrypt dev password, `roles=user`) per demo customer, then links `userId`; idempotent on both sides.
-- [ ] 2.17 [GREEN] `infra-db/src/customer/seed.ts` (modified) — shared `deriveLogin(fullName)` helper (reused by the migration's login-shape, kept consistent per design §3/ADR-5) to pass 2.16.
-- [ ] 2.18 `infra-db/prisma/seed.js`: reorder to products → warehouses → **users** → customers.
-- [ ] 2.19 Export the 4 new repos from `infra-db/src/index.ts`.
-- [ ] 2.20 Run `pnpm --filter @store-mgmt/infra-db test` full-green (existing currency/product/inventory/customer/ventas suites + new users suites, `maxWorkers:1`); `lint`/`typecheck`/`build` exit 0.
+DONE — committed in `5298951 feat(users): infra-db persistence + Customer.userId 1:1 migration (Phase 2)`. Naming deviation: `OperadorAlmacen`/`operador_almacen` renamed to English `WarehouseOperator`/`warehouse_operator` (code/DB-in-English convention) — same model, English identifiers.
+
+- [x] 2.1 Append `model User @@map("app_user")`, `model RefreshToken @@map("refresh_token")`, `model PasswordResetToken @@map("password_reset_token")`, `model WarehouseOperator @@map("warehouse_operator")` to `infra-db/prisma/schema.prisma` (exact shapes, design §2); add `Warehouse` inverse relation only — additive.
+- [x] 2.2 MODIFY `Customer` in schema.prisma: add `userId String @unique @db.Uuid @map("user_id")` + `user User @relation(...)` (design §2) — schema-level only, migration handles the NOT-NULL sequencing.
+- [x] 2.3 Generate migration `add_users_roles_module` (`20260723030000_add_users_roles_module`) with the 5-step raw-SQL sequence from design §3 (create 4 tables → add nullable `customer.user_id` → mint+correlate backfill CTE → `SET NOT NULL` → unique index + FK), applied via `prisma migrate deploy`; fresh-DB no-op path and non-empty-DB backfill path both documented in the migration file comment.
+- [x] 2.4 [RED] `infra-db/src/users/prisma-user.repository.spec.ts`: `create` persists + rejects duplicate `login` (`DuplicateLoginError`, P2002 translation); `findByLogin`/`findById` round-trip; `email`/`cellPhone` resolve `null` when omitted.
+- [x] 2.5 [GREEN] `infra-db/src/users/prisma-user.repository.ts` to pass 2.4.
+- [x] 2.6 [RED] `infra-db/src/users/prisma-refresh-token.repository.spec.ts`: `create`/`findByToken`/`revokeIfActive` (returns 0 on already-revoked, atomic guarded UPDATE)/`revokeByUserId`/`deleteExpired`.
+- [x] 2.7 [GREEN] `infra-db/src/users/prisma-refresh-token.repository.ts` to pass 2.6.
+- [x] 2.8 [RED] `infra-db/src/users/prisma-password-reset-token.repository.spec.ts`: `create`/`findByToken`/`markAsUsed`/`revokeByUserId`/`deleteExpired`, single-use enforced at repo level (second `markAsUsed` on a used token is a no-op-safe path — actual single-use business check lives in the app service).
+- [x] 2.9 [GREEN] `infra-db/src/users/prisma-password-reset-token.repository.ts` to pass 2.8.
+- [x] 2.10 [RED] `infra-db/src/users/prisma-warehouse-operator.repository.spec.ts`: create/find by `userId`; two operators can share one `warehouseId` (NOT unique, per spec scenario).
+- [x] 2.11 [GREEN] `infra-db/src/users/prisma-warehouse-operator.repository.ts` to pass 2.10.
+- [x] 2.12 [RED] `infra-db/src/users/seed.spec.ts`: `seedUsers` idempotently upserts (keyed on `login`) the cockpit accounts with bcrypt-hashed dev passwords; running twice does not duplicate.
+- [x] 2.13 [GREEN] `infra-db/src/users/seed.ts` to pass 2.12.
+- [x] 2.14 [RED] `infra-db/src/customer/prisma-customer.repository.spec.ts` (extend): `create` now requires an existing `userId`; creating with a non-existent `userId` is rejected (FK violation surfaces as a named error); duplicate `userId` on a second Customer rejected (1:1).
+- [x] 2.15 [GREEN] adjust `infra-db/src/customer/prisma-customer.repository.ts` mapping/error-translation to pass 2.14 (design §2, Customer MODIFIED).
+- [x] 2.16 [RED] `infra-db/src/customer/seed.spec.ts` (extend): `seedCustomers` find-or-creates a matching `app_user` (`deriveLogin(fullName)`, bcrypt dev password, `roles=user`) per demo customer, then links `userId`; idempotent on both sides.
+- [x] 2.17 [GREEN] `infra-db/src/customer/seed.ts` (modified) — shared `deriveLogin(fullName)` helper (reused by the migration's login-shape, kept consistent per design §3/ADR-5) to pass 2.16.
+- [x] 2.18 `infra-db/prisma/seed.js`: reorder to products → warehouses → **users** → customers.
+- [x] 2.19 Export the 4 new repos from `infra-db/src/index.ts`.
+- [x] 2.20 Run `pnpm --filter @store-mgmt/infra-db test` full-green (existing currency/product/inventory/customer/ventas suites + new users suites, `maxWorkers:1`); `lint`/`typecheck`/`build` exit 0. (Re-confirmed during Phase 3 apply: 119/119 tests green.)
 
 ## Phase 3: `packages/api-common` (NEW package — shared auth kit, ADR-3)
 
-- [ ] 3.1 Scaffold `packages/api-common/` (`package.json`, `tsconfig.json`, `eslint.config.mjs`, turbo wiring) mirroring `packages/infra-db`'s NestJS-adjacent config; add to root `pnpm-workspace`/turbo pipeline.
-- [ ] 3.2 `api-common/src/auth/jwt.config.ts`: `JWT_CONFIG`/`REFRESH_TOKEN_CONFIG` reading `JWT_SECRET`/`REFRESH_TOKEN_SECRET`/`ACCESS_TOKEN_EXPIRES_IN`/`REFRESH_TOKEN_EXPIRES_IN` env vars (ADR-4), single source of truth.
-- [ ] 3.3 [RED] `api-common/src/auth/jwt.strategy.spec.ts`: `validate(payload)` resolves `req.user` FRESH via `IUserRepository.findById`; rejects missing/inactive user; strips `passwordHash`; short TTL cache (~30s) bounds repeated lookups (ADR-2).
-- [ ] 3.4 [GREEN] `api-common/src/auth/jwt.strategy.ts` to pass 3.3.
-- [ ] 3.5 `api-common/src/auth/jwt-auth.guard.ts`: `AuthGuard('jwt')`.
-- [ ] 3.6 [RED] `api-common/src/auth/roles.guard.spec.ts`: no `@Roles()` metadata → allow; admin bit → allow regardless of required mask; union-satisfies (`owner` passes a business-role check); missing role → `ForbiddenException`; no `req.user` → handled upstream by `JwtAuthGuard` (401 before guard runs).
-- [ ] 3.7 [GREEN] `api-common/src/auth/roles.decorator.ts` (`@Roles(...bits)`, `SetMetadata`) + `api-common/src/auth/roles.guard.ts` to pass 3.6.
-- [ ] 3.8 `api-common/src/index.ts` barrel exporting the auth kit.
-- [ ] 3.9 Extend `eslint-config/backend-boundaries.config.js`: `api-common` is backend-only (web apps forbidden from importing it, alongside `infra-db`/`api-salesops`); `domain` still forbidden from importing `api-*` (already covered by existing `domainBoundaryRule` pattern — confirm it matches `@store-mgmt/api-common`).
-- [ ] 3.10 Run `pnpm --filter @store-mgmt/api-common test && typecheck && build && lint` full-green.
+- [x] 3.1 Scaffold `packages/api-common/` (`package.json`, `tsconfig.json`, `eslint.config.mjs`, `jest.config.js`, turbo wiring) mirroring `packages/infra-db`'s NestJS-adjacent config; `pnpm-workspace.yaml` already globs `packages/*` (no change needed there); added `JWT_SECRET`/`REFRESH_TOKEN_SECRET`/`ACCESS_TOKEN_EXPIRES_IN`/`REFRESH_TOKEN_EXPIRES_IN` to `turbo.json` `globalEnv`.
+- [x] 3.2 `api-common/src/auth/jwt.config.ts`: `JWT_CONFIG`/`REFRESH_TOKEN_CONFIG` reading `JWT_SECRET`/`REFRESH_TOKEN_SECRET`/`ACCESS_TOKEN_EXPIRES_IN`/`REFRESH_TOKEN_EXPIRES_IN` env vars (ADR-4), single source of truth.
+- [x] 3.3 [RED] `api-common/src/auth/jwt.strategy.spec.ts`: `validate(payload)` resolves `req.user` FRESH via `IUserRepository.findById`; rejects missing/inactive user; strips `passwordHash`; short TTL cache (~30s) bounds repeated lookups (ADR-2). (Also added `cache/ttl-cache.spec.ts` RED for the underlying `TtlCache` util.)
+- [x] 3.4 [GREEN] `api-common/src/auth/jwt.strategy.ts` to pass 3.3 (+ `cache/ttl-cache.ts` GREEN).
+- [x] 3.5 `api-common/src/auth/jwt-auth.guard.ts`: `AuthGuard('jwt')`.
+- [x] 3.6 [RED] `api-common/src/auth/roles.guard.spec.ts`: no `@Roles()` metadata → allow; admin bit → allow regardless of required mask; union-satisfies (`owner` passes a business-role check); holding the exact role → allow; missing role → `ForbiddenException`; defensive no-`req.user` case → `ForbiddenException`.
+- [x] 3.7 [GREEN] `api-common/src/auth/roles.decorator.ts` (`@Roles(...bits)`, `SetMetadata`) + `api-common/src/auth/roles.guard.ts` to pass 3.6.
+- [x] 3.8 `api-common/src/index.ts` barrel exporting the auth kit.
+- [x] 3.9 Extended `eslint-config/backend-boundaries.config.js`: `@store-mgmt/api-common` added to `webBackendBoundaryRule` (web apps forbidden from importing it, alongside `infra-db`/`api-salesops`); confirmed `domainBoundaryRule`'s existing `@store-mgmt/api-*` glob already matches `@store-mgmt/api-common` (no change needed there).
+- [x] 3.10 Ran `pnpm --filter @store-mgmt/api-common test && typecheck && build && lint` full-green (20/20 tests).
 
 ## Phase 4: `apps/api-idp` (NEW app — LocalStrategy, the only app that owns it)
 

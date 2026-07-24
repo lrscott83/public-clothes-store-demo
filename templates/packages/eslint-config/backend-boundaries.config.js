@@ -1,7 +1,8 @@
 // Shared rule: enforce the backend architecture boundaries for store-mgmt.
 // - `@store-mgmt/domain` must never import from infra-* packages or apps.
 // - Web apps (salesops-mvp, static-store) must never import backend-only
-//   packages (`@store-mgmt/infra-db`, `@store-mgmt/api-salesops`).
+//   packages (`@store-mgmt/infra-db`, `@store-mgmt/api-salesops`,
+//   `@store-mgmt/api-common`).
 // Usage: consumers spread `domainBoundaryRule` or `webBackendBoundaryRule`
 // into their own flat ESLint config.
 
@@ -44,6 +45,11 @@ export const webBackendBoundaryRule = {
             group: ["@store-mgmt/api-salesops", "@store-mgmt/api-salesops/*"],
             message:
               "Backend-only package. Web apps must not import @store-mgmt/api-salesops.",
+          },
+          {
+            group: ["@store-mgmt/api-common", "@store-mgmt/api-common/*"],
+            message:
+              "Backend-only package. Web apps must not import @store-mgmt/api-common.",
           },
         ],
       },
