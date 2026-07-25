@@ -106,7 +106,7 @@ describe('PrismaOrderRepository', () => {
         customerId,
         customerName,
         warehouseId,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           {
             productId,
@@ -124,7 +124,7 @@ describe('PrismaOrderRepository', () => {
   }
 
   describe('create / findById — aggregate round-trip (4.3)', () => {
-    it('persists order+lines+payments in one round-trip; deliveryMode required; initial status=creado', async () => {
+    it('persists order+lines+payments in one round-trip; deliveryMode required; initial status=created', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       const order = buildSingleLineOrder(
         product.id,
@@ -137,8 +137,8 @@ describe('PrismaOrderRepository', () => {
 
       const created = await repository.create(order);
 
-      expect(created.status).toBe('creado');
-      expect(created.deliveryMode).toBe('recogida');
+      expect(created.status).toBe('created');
+      expect(created.deliveryMode).toBe('pickup');
       expect(created.lines).toHaveLength(1);
       expect(created.payments).toHaveLength(1);
       expect(created.currency).toBe('USD');
@@ -175,8 +175,8 @@ describe('PrismaOrderRepository', () => {
     });
   });
 
-  describe('confirm — creado -> verificado (4.5, 4.7)', () => {
-    it('rejects a non-creado source', async () => {
+  describe('confirm — created -> verified (4.5, 4.7)', () => {
+    it('rejects a non-created source', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       await stockIn(product.id, warehouse.id, 10);
       const order = buildSingleLineOrder(
@@ -209,7 +209,7 @@ describe('PrismaOrderRepository', () => {
 
       const confirmed = await repository.confirm(created.id);
 
-      expect(confirmed.status).toBe('verificado');
+      expect(confirmed.status).toBe('verified');
       expect(confirmed.verifiedAt).not.toBeNull();
 
       const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
@@ -233,17 +233,17 @@ describe('PrismaOrderRepository', () => {
 
       await expect(repository.confirm(created.id)).rejects.toThrow(InsufficientStockError);
 
-      const stillCreado = await repository.findById(created.id);
-      expect(stillCreado?.status).toBe('creado');
-      expect(stillCreado?.verifiedAt).toBeNull();
+      const stillCreated = await repository.findById(created.id);
+      expect(stillCreated?.status).toBe('created');
+      expect(stillCreated?.verifiedAt).toBeNull();
 
       const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
       expect(level?.reserved).toBe(0); // zero reservation persisted
     });
   });
 
-  describe('deliver — verificado -> entregado (4.9, 4.11)', () => {
-    it('rejects a non-verificado source', async () => {
+  describe('deliver — verified -> delivered (4.9, 4.11)', () => {
+    it('rejects a non-verified source', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       await stockIn(product.id, warehouse.id, 10);
       const order = buildSingleLineOrder(
@@ -276,7 +276,7 @@ describe('PrismaOrderRepository', () => {
 
       const delivered = await repository.deliver(created.id);
 
-      expect(delivered.status).toBe('entregado');
+      expect(delivered.status).toBe('delivered');
       expect(delivered.deliveredAt).not.toBeNull();
 
       const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
@@ -306,7 +306,7 @@ describe('PrismaOrderRepository', () => {
       // 4 -> violates the IMMEDIATE `reserved <= on_hand` CHECK and rolls the
       // whole tx back. Success at the zero margin is what makes the ordering
       // observable — flip the two calls and this test goes red.
-      expect(delivered.status).toBe('entregado');
+      expect(delivered.status).toBe('delivered');
       expect(delivered.deliveredAt).not.toBeNull();
 
       const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
@@ -314,7 +314,7 @@ describe('PrismaOrderRepository', () => {
       expect(level?.reserved).toBe(0); // released
     });
 
-    it('cannot drain reserved stock out-of-band: an adjustment_out below the reservation is rejected, the order stays verificado and deliverable (W4)', async () => {
+    it('cannot drain reserved stock out-of-band: an adjustment_out below the reservation is rejected, the order stays verified and deliverable (W4)', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       await stockIn(product.id, warehouse.id, 4);
       const order = buildSingleLineOrder(
@@ -347,14 +347,14 @@ describe('PrismaOrderRepository', () => {
       expect(level?.onHand).toBe(4); // unchanged — the drain was rejected
       expect(level?.reserved).toBe(4); // reservation intact
 
-      // The reservation survived, so the verificado order still delivers cleanly.
+      // The reservation survived, so the verified order still delivers cleanly.
       const delivered = await repository.deliver(created.id);
-      expect(delivered.status).toBe('entregado');
+      expect(delivered.status).toBe('delivered');
     });
   });
 
-  describe('cancel — creado|verificado -> cancelado (4.13, 4.14)', () => {
-    it('cancel from verificado releases the reservation, onHand untouched', async () => {
+  describe('cancel — created|verified -> cancelled (4.13, 4.14)', () => {
+    it('cancel from verified releases the reservation, onHand untouched', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       await stockIn(product.id, warehouse.id, 10);
       const order = buildSingleLineOrder(
@@ -371,13 +371,13 @@ describe('PrismaOrderRepository', () => {
 
       const cancelled = await repository.cancel(created.id);
 
-      expect(cancelled.status).toBe('cancelado');
+      expect(cancelled.status).toBe('cancelled');
       const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
       expect(level?.onHand).toBe(10);
       expect(level?.reserved).toBe(0);
     });
 
-    it('cancel from creado has no stock effect, status -> cancelado directly', async () => {
+    it('cancel from created has no stock effect, status -> cancelled directly', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       await stockIn(product.id, warehouse.id, 10);
       const order = buildSingleLineOrder(
@@ -392,15 +392,15 @@ describe('PrismaOrderRepository', () => {
 
       const cancelled = await repository.cancel(created.id);
 
-      expect(cancelled.status).toBe('cancelado');
+      expect(cancelled.status).toBe('cancelled');
       const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
       expect(level?.onHand).toBe(10);
       expect(level?.reserved ?? 0).toBe(0);
     });
   });
 
-  describe('entregado is terminal (4.15)', () => {
-    it('confirm/deliver/cancel are all rejected once entregado, with no mutation', async () => {
+  describe('delivered is terminal (4.15)', () => {
+    it('confirm/deliver/cancel are all rejected once delivered, with no mutation', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       await stockIn(product.id, warehouse.id, 10);
       const order = buildSingleLineOrder(
@@ -420,13 +420,13 @@ describe('PrismaOrderRepository', () => {
       await expect(repository.deliver(created.id)).rejects.toThrow(InvalidOrderStateError);
       await expect(repository.cancel(created.id)).rejects.toThrow(InvalidOrderStateError);
 
-      const stillEntregado = await repository.findById(created.id);
-      expect(stillEntregado?.status).toBe('entregado');
+      const stillDelivered = await repository.findById(created.id);
+      expect(stillDelivered?.status).toBe('delivered');
     });
   });
 
   describe('freeze is read-only (4.17)', () => {
-    it('a later appendRate does not move a verificado order stamped rateApplied/totals', async () => {
+    it('a later appendRate does not move a verified order stamped rateApplied/totals', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       await stockIn(product.id, warehouse.id, 10);
       const order = buildSingleLineOrder(
@@ -443,7 +443,7 @@ describe('PrismaOrderRepository', () => {
       const lineTotalOrderBefore = confirmed.lines[0]?.lineTotalOrder.minorUnits;
 
       await currencyRepository.appendRate({
-        channel: 'MN_TRANSFERENCIA',
+        channel: 'MN_TRANSFER',
         rate: 999999999n,
         effectiveFrom: new Date('2026-07-22T01:00:00Z'),
       });

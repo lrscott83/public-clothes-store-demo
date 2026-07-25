@@ -124,7 +124,7 @@ describe('Ventas (e2e)', () => {
     await request(app.getHttpServer())
       .post('/currency/rates')
       .set(...authHeader(adminToken))
-      .send({ channel: 'MN_EFECTIVO', rate: '350.000000', effectiveFrom: '2020-01-01T00:00:00.000Z' });
+      .send({ channel: 'MN_CASH', rate: '350.000000', effectiveFrom: '2020-01-01T00:00:00.000Z' });
   });
 
   afterEach(async () => {
@@ -169,7 +169,7 @@ describe('Ventas (e2e)', () => {
         customerId,
         customerName: 'Cliente Ventas E2E',
         warehouseId,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
           { productId: mnProductId, productName: 'Producto MN', categoryName: 'Ventas E2E', price: { amount: '350.00', currency: 'MN' }, quantity: 1 },
@@ -179,7 +179,7 @@ describe('Ventas (e2e)', () => {
 
     expect(response.status).toBe(201);
     expect(response.body.currency).toBe('USD');
-    expect(response.body.status).toBe('creado');
+    expect(response.body.status).toBe('created');
     expect(response.body.total).toBe('101.00');
     expect(response.body.lines).toHaveLength(2);
     const mnLine = response.body.lines.find((l: { productId: string }) => l.productId === mnProductId);
@@ -194,13 +194,13 @@ describe('Ventas (e2e)', () => {
         customerId,
         customerName: 'Cliente Ventas E2E',
         warehouseId,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 2 },
         ],
         payments: [
           { channel: 'ZELLE', amount: { amount: '150.00', currency: 'USD' } },
-          { channel: 'USD_EFECTIVO', amount: { amount: '50.00', currency: 'USD' } },
+          { channel: 'USD_CASH', amount: { amount: '50.00', currency: 'USD' } },
         ],
       });
 
@@ -224,7 +224,7 @@ describe('Ventas (e2e)', () => {
         customerId,
         customerName: 'Cliente Ventas E2E',
         warehouseId,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
@@ -236,7 +236,7 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken));
 
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('verificado');
+    expect(response.body.status).toBe('verified');
     expect(response.body.verifiedAt).not.toBeNull();
 
     const level = await getStockLevel(usdProductId);
@@ -255,7 +255,7 @@ describe('Ventas (e2e)', () => {
         customerId,
         customerName: 'Cliente Ventas E2E',
         warehouseId,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
@@ -271,7 +271,7 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken));
 
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('entregado');
+    expect(response.body.status).toBe('delivered');
     expect(response.body.deliveredAt).not.toBeNull();
 
     const level = await getStockLevel(usdProductId);
@@ -280,7 +280,7 @@ describe('Ventas (e2e)', () => {
     expect(level.available).toBe('5');
   });
 
-  it('cancel from verificado releases the reservation, onHand untouched', async () => {
+  it('cancel from verified releases the reservation, onHand untouched', async () => {
     await stockIn(usdProductId, '10');
 
     const created = await request(app.getHttpServer())
@@ -290,7 +290,7 @@ describe('Ventas (e2e)', () => {
         customerId,
         customerName: 'Cliente Ventas E2E',
         warehouseId,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
@@ -306,14 +306,14 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken));
 
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('cancelado');
+    expect(response.body.status).toBe('cancelled');
 
     const level = await getStockLevel(usdProductId);
     expect(level.onHand).toBe('10');
     expect(level.reserved).toBe('0');
   });
 
-  it('cancel from creado has NO stock effect (nothing was ever reserved)', async () => {
+  it('cancel from created has NO stock effect (nothing was ever reserved)', async () => {
     await stockIn(usdProductId, '10');
 
     const created = await request(app.getHttpServer())
@@ -323,27 +323,27 @@ describe('Ventas (e2e)', () => {
         customerId,
         customerName: 'Cliente Ventas E2E',
         warehouseId,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
-    expect(created.body.status).toBe('creado');
+    expect(created.body.status).toBe('created');
 
     const response = await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/cancel`)
       .set(...authHeader(adminToken));
 
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('cancelado');
+    expect(response.body.status).toBe('cancelled');
 
     const level = await getStockLevel(usdProductId);
     expect(level.onHand).toBe('10');
     expect(level.reserved).toBe('0');
   });
 
-  it('confirm with insufficient stock -> 409, order stays creado, no partial reservation', async () => {
+  it('confirm with insufficient stock -> 409, order stays created, no partial reservation', async () => {
     await stockIn(usdProductId, '2');
 
     const created = await request(app.getHttpServer())
@@ -353,7 +353,7 @@ describe('Ventas (e2e)', () => {
         customerId,
         customerName: 'Cliente Ventas E2E',
         warehouseId,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
@@ -369,7 +369,7 @@ describe('Ventas (e2e)', () => {
     const found = await request(app.getHttpServer())
       .get(`/orders/${created.body.id}`)
       .set(...authHeader(adminToken));
-    expect(found.body.status).toBe('creado');
+    expect(found.body.status).toBe('created');
 
     const level = await getStockLevel(usdProductId);
     expect(level.onHand).toBe('2');
@@ -386,11 +386,11 @@ describe('Ventas (e2e)', () => {
         customerId,
         customerName: 'Cliente Ventas E2E',
         warehouseId,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           { productId: eurProductId, productName: 'Producto EUR', categoryName: 'Ventas E2E', price: { amount: '50.00', currency: 'EUR' }, quantity: 1 },
         ],
-        payments: [{ channel: 'EUR_EFECTIVO', amount: { amount: '50.00', currency: 'EUR' } }],
+        payments: [{ channel: 'EUR_CASH', amount: { amount: '50.00', currency: 'EUR' } }],
       });
 
     expect(response.status).toBe(409);
@@ -399,7 +399,7 @@ describe('Ventas (e2e)', () => {
     expect(afterCount).toBe(beforeCount);
   });
 
-  it('confirm/deliver/cancel on an entregado order all -> 409 InvalidOrderStateError, entregado terminal', async () => {
+  it('confirm/deliver/cancel on an delivered order all -> 409 InvalidOrderStateError, delivered terminal', async () => {
     await stockIn(usdProductId, '10');
 
     const created = await request(app.getHttpServer())
@@ -409,7 +409,7 @@ describe('Ventas (e2e)', () => {
         customerId,
         customerName: 'Cliente Ventas E2E',
         warehouseId,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
@@ -480,7 +480,7 @@ describe('Ventas (e2e)', () => {
           customerId,
           customerName: 'Cliente Ventas E2E',
           warehouseId,
-          deliveryMode: 'recogida',
+          deliveryMode: 'pickup',
           lines: [
             { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
           ],
@@ -505,7 +505,7 @@ describe('Ventas (e2e)', () => {
           customerId,
           customerName: 'Cliente Ventas E2E',
           warehouseId,
-          deliveryMode: 'recogida',
+          deliveryMode: 'pickup',
           lines: [
             { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
           ],
@@ -521,7 +521,7 @@ describe('Ventas (e2e)', () => {
         .set(...authHeader(operatorToken));
 
       expect(response.status).toBe(200);
-      expect(response.body.status).toBe('entregado');
+      expect(response.body.status).toBe('delivered');
     });
 
     it('a "warehouse_operator" scoped to a DIFFERENT warehouse cannot deliver -> 403', async () => {
@@ -539,7 +539,7 @@ describe('Ventas (e2e)', () => {
           customerId,
           customerName: 'Cliente Ventas E2E',
           warehouseId,
-          deliveryMode: 'recogida',
+          deliveryMode: 'pickup',
           lines: [
             { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
           ],
@@ -570,7 +570,7 @@ describe('Ventas (e2e)', () => {
           customerId,
           customerName: 'Cliente Ventas E2E',
           warehouseId,
-          deliveryMode: 'recogida',
+          deliveryMode: 'pickup',
           lines: [
             { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
           ],
@@ -583,7 +583,7 @@ describe('Ventas (e2e)', () => {
           customerId,
           customerName: 'Cliente Ventas E2E',
           warehouseId: otherWarehouse.body.id,
-          deliveryMode: 'recogida',
+          deliveryMode: 'pickup',
           lines: [
             { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
           ],

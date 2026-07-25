@@ -6,16 +6,16 @@ import type { Currency } from './money.js';
  */
 export type PaymentChannel =
   | 'ZELLE'
-  | 'USD_EFECTIVO'
-  | 'EUR_EFECTIVO'
-  | 'MN_TRANSFERENCIA'
-  | 'MN_EFECTIVO';
+  | 'USD_CASH'
+  | 'EUR_CASH'
+  | 'MN_TRANSFER'
+  | 'MN_CASH';
 
 /** Each channel has a single, fixed settlement currency. */
 export const CHANNEL_CURRENCY: Record<PaymentChannel, Currency> = {
   ZELLE: 'USD',
-  USD_EFECTIVO: 'USD',
-  EUR_EFECTIVO: 'EUR',
-  MN_TRANSFERENCIA: 'MN',
-  MN_EFECTIVO: 'MN',
+  USD_CASH: 'USD',
+  EUR_CASH: 'EUR',
+  MN_TRANSFER: 'MN',
+  MN_CASH: 'MN',
 };

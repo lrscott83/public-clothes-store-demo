@@ -32,7 +32,7 @@ export interface OrderLine {
   readonly lineTotalNative: Money;
   readonly rateApplied: ExchangeRate;
   readonly rateEffectiveFrom: Date;
-  /** `lineTotalNative` converted into `Order.currency`, frozen at `verificado`. */
+  /** `lineTotalNative` converted into `Order.currency`, frozen at `verified`. */
   readonly lineTotalOrder: Money;
 }
 

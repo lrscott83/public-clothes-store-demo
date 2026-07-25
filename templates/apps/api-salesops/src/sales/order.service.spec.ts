@@ -39,9 +39,9 @@ function sampleOrder(overrides: Partial<DomainOrder> = {}): DomainOrder {
     customerId: 'customer-uuid-1',
     customerName: 'Ana Torres',
     warehouseId: 'warehouse-uuid-1',
-    deliveryMode: 'recogida',
+    deliveryMode: 'pickup',
     currency: 'USD',
-    status: 'creado',
+    status: 'created',
     subtotal: { minorUnits: 10000n, currency: 'USD' },
     discountTotal: { minorUnits: 0n, currency: 'USD' },
     total: { minorUnits: 10000n, currency: 'USD' },
@@ -57,7 +57,7 @@ function sampleOrder(overrides: Partial<DomainOrder> = {}): DomainOrder {
         quantity: 1,
         unitFinalPrice: { minorUnits: 10000n, currency: 'USD' },
         lineTotalNative: { minorUnits: 10000n, currency: 'USD' },
-        rateApplied: { channel: 'USD_EFECTIVO', rate: 1000000n, effectiveFrom: at },
+        rateApplied: { channel: 'USD_CASH', rate: 1000000n, effectiveFrom: at },
         rateEffectiveFrom: at,
         lineTotalOrder: { minorUnits: 10000n, currency: 'USD' },
       },
@@ -65,9 +65,9 @@ function sampleOrder(overrides: Partial<DomainOrder> = {}): DomainOrder {
     payments: [
       {
         id: 'payment-uuid-1',
-        channel: 'USD_EFECTIVO',
+        channel: 'USD_CASH',
         amount: { minorUnits: 10000n, currency: 'USD' },
-        rateApplied: { channel: 'USD_EFECTIVO', rate: 1000000n, effectiveFrom: at },
+        rateApplied: { channel: 'USD_CASH', rate: 1000000n, effectiveFrom: at },
         rateEffectiveFrom: at,
         amountInOrderCurrency: { minorUnits: 10000n, currency: 'USD' },
       },
@@ -86,7 +86,7 @@ const sampleCreateDto: CreateOrderDto = {
   customerId: 'customer-uuid-1',
   customerName: 'Ana Torres',
   warehouseId: 'warehouse-uuid-1',
-  deliveryMode: 'recogida',
+  deliveryMode: 'pickup',
   lines: [
     {
       productId: 'product-uuid-1',
@@ -96,7 +96,7 @@ const sampleCreateDto: CreateOrderDto = {
       quantity: 1,
     },
   ],
-  payments: [{ channel: 'USD_EFECTIVO', amount: { amount: '100.00', currency: 'USD' } }],
+  payments: [{ channel: 'USD_CASH', amount: { amount: '100.00', currency: 'USD' } }],
 };
 
 describe('OrderService', () => {
@@ -127,9 +127,9 @@ describe('OrderService', () => {
       expect(orderRepo.create).toHaveBeenCalledTimes(1);
       const passedOrder = orderRepo.create.mock.calls[0]?.[0] as DomainOrder;
       // The repository is a dumb persister — it must receive an
-      // already-built aggregate (status='creado', currency derived, totals
+      // already-built aggregate (status='created', currency derived, totals
       // computed), not the raw DTO.
-      expect(passedOrder.status).toBe('creado');
+      expect(passedOrder.status).toBe('created');
       expect(passedOrder.currency).toBe('USD');
       expect(passedOrder.total.minorUnits).toBe(10000n);
       expect(result.id).toBe('order-uuid-1');
@@ -149,7 +149,7 @@ describe('OrderService', () => {
             quantity: 1,
           },
         ],
-        payments: [{ channel: 'EUR_EFECTIVO', amount: { amount: '50.00', currency: 'EUR' } }],
+        payments: [{ channel: 'EUR_CASH', amount: { amount: '50.00', currency: 'EUR' } }],
       };
 
       await expect(service.create(crossCurrencyDto)).rejects.toThrow(RateNotFoundError);
@@ -160,12 +160,12 @@ describe('OrderService', () => {
   describe('confirm/deliver/cancel', () => {
     it('confirm delegates straight to the repository and maps the response', async () => {
       orderRepo.findById.mockResolvedValue(sampleOrder());
-      orderRepo.confirm.mockResolvedValue(sampleOrder({ status: 'verificado', verifiedAt: at }));
+      orderRepo.confirm.mockResolvedValue(sampleOrder({ status: 'verified', verifiedAt: at }));
 
       const result = await service.confirm('order-uuid-1');
 
       expect(orderRepo.confirm).toHaveBeenCalledWith('order-uuid-1');
-      expect(result?.status).toBe('verificado');
+      expect(result?.status).toBe('verified');
     });
 
     it('confirm propagates InsufficientStockError unmapped', async () => {
@@ -185,7 +185,7 @@ describe('OrderService', () => {
     });
 
     it('deliver delegates straight to the repository and propagates NegativeStockError unmapped', async () => {
-      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verificado' }));
+      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verified' }));
       orderRepo.deliver.mockRejectedValue(new NegativeStockError('onHand would go negative'));
 
       await expect(service.deliver('order-uuid-1')).rejects.toThrow(NegativeStockError);
@@ -193,9 +193,9 @@ describe('OrderService', () => {
     });
 
     it('cancel delegates straight to the repository and propagates InvalidOrderStateError unmapped', async () => {
-      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'entregado' }));
+      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'delivered' }));
       orderRepo.cancel.mockRejectedValue(
-        new InvalidOrderStateError('order-uuid-1', 'creado|verificado', 'entregado'),
+        new InvalidOrderStateError('order-uuid-1', 'created|verified', 'delivered'),
       );
 
       await expect(service.cancel('order-uuid-1')).rejects.toThrow(InvalidOrderStateError);
@@ -203,7 +203,7 @@ describe('OrderService', () => {
   });
 
   describe('update', () => {
-    it('updates while status is creado', async () => {
+    it('updates while status is created', async () => {
       orderRepo.findById.mockResolvedValue(sampleOrder());
       orderRepo.update.mockResolvedValue(sampleOrder({ customerName: 'New Name' }));
 
@@ -212,8 +212,8 @@ describe('OrderService', () => {
       expect(result?.customerName).toBe('New Name');
     });
 
-    it('rejects updating a verificado order with InvalidOrderStateError, WITHOUT calling repo.update', async () => {
-      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verificado' }));
+    it('rejects updating a verified order with InvalidOrderStateError, WITHOUT calling repo.update', async () => {
+      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verified' }));
 
       await expect(
         service.update('order-uuid-1', { customerName: 'New Name' }),

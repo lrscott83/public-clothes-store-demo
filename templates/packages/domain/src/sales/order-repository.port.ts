@@ -19,7 +19,7 @@ export type OrderUpdateInput = Partial<Omit<Order, 'id' | 'createdAt'>>;
  * effect (reserve/consume+release/release) in a single transaction at the
  * infra layer. An Order is an immutable transactional event — there is NO
  * delete (not even soft-delete): its lifecycle is expressed ONLY through the
- * status machine (creado/verificado/entregado/cancelado). Mirrors the
+ * status machine (created/verified/delivered/cancelled). Mirrors the
  * append-only `StockMovement`/`ExchangeRate` records.
  */
 export interface IOrderRepository {
@@ -27,11 +27,11 @@ export interface IOrderRepository {
   update(id: string, patch: OrderUpdateInput): Promise<Order>;
   findById(id: string): Promise<Order | null>;
   list(filter?: OrderListFilter): Promise<Order[]>;
-  /** `creado -> verificado`: freezes rate+totals AND reserves stock per line. */
+  /** `created -> verified`: freezes rate+totals AND reserves stock per line. */
   confirm(id: string): Promise<Order>;
-  /** `verificado -> entregado`: releases the reservation THEN consumes stock (`sale_out`) per line. */
+  /** `verified -> delivered`: releases the reservation THEN consumes stock (`sale_out`) per line. */
   deliver(id: string): Promise<Order>;
-  /** `creado|verificado -> cancelado`: releases the reservation per line when source is `verificado`; no-op when source is `creado`. */
+  /** `created|verified -> cancelled`: releases the reservation per line when source is `verified`; no-op when source is `created`. */
   cancel(id: string): Promise<Order>;
 }
 

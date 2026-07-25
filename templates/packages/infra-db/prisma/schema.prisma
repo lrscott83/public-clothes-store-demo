@@ -15,10 +15,10 @@ datasource db {
 
 enum PaymentChannel {
   ZELLE
-  USD_EFECTIVO
-  EUR_EFECTIVO
-  MN_TRANSFERENCIA
-  MN_EFECTIVO
+  USD_CASH
+  EUR_CASH
+  MN_TRANSFER
+  MN_CASH
 }
 
 enum Currency {
@@ -203,7 +203,7 @@ model Customer {
 // created_at + updated_at. An Order is an immutable transactional EVENT: it
 // is NEVER deleted (no hard DELETE and NO soft-delete `active` flag either) —
 // its whole lifecycle lives in the `OrderStatus` machine
-// (creado/verificado/entregado/cancelado). Mirrors the append-only
+// (created/verified/delivered/cancelled). Mirrors the append-only
 // `StockMovement`/`ExchangeRate` records. `OrderLine`/`OrderPayment` carry
 // `onDelete: Cascade` as defense-in-depth (children are meaningless without
 // the root; the root is never deleted, so cascade only guards accidental
@@ -225,15 +225,15 @@ model Customer {
 // table changes.
 
 enum OrderStatus {
-  creado
-  verificado
-  entregado
-  cancelado
+  created
+  verified
+  delivered
+  cancelled
 }
 
 enum DeliveryMode {
-  recogida
-  domicilio
+  pickup
+  delivery
 }
 
 model Order {
@@ -241,15 +241,15 @@ model Order {
   customerId    String       @db.Uuid @map("customer_id")
   customerName  String       @map("customer_name") // snapshot
   warehouseId   String       @db.Uuid @map("warehouse_id")
-  deliveryMode  DeliveryMode @map("delivery_mode") // REQUIRED; domicilio engages future Delivery module
+  deliveryMode  DeliveryMode @map("delivery_mode") // REQUIRED; delivery engages future Delivery module
   currency      String // derived USD|MN
-  status        OrderStatus  @default(creado)
+  status        OrderStatus  @default(created)
   subtotal      Decimal      @db.Decimal(18, 2) // Money in `currency`
   discountTotal Decimal      @db.Decimal(18, 2) @map("discount_total")
   total         Decimal      @db.Decimal(18, 2)
   orderDate     DateTime     @map("order_date")
   verifiedAt    DateTime?    @map("verified_at") // freeze stamp (rate+totals, NO commission)
-  deliveredAt   DateTime?    @map("delivered_at") // stamped at verificado->entregado
+  deliveredAt   DateTime?    @map("delivered_at") // stamped at verified->delivered
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 

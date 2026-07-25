@@ -11,17 +11,23 @@ import type { SaleCredit } from './sale-credit.js';
 import { InvalidOrderError, InvalidOrderStateError } from './errors.js';
 
 /**
- * `Order` fulfillment path. This slice (Ventas) implements only the
- * `recogida` direct edge (`verificado -> entregado`); `domicilio` continues
- * through a FUTURE Delivery module out of scope here — Ventas never models
+ * `Order` fulfillment path. This slice (Sales) implements only the
+ * `pickup` direct edge (`verified -> delivered`); `delivery` continues
+ * through a FUTURE Delivery module out of scope here — Sales never models
  * `despachando`/`transportando`.
  */
-export type DeliveryMode = 'recogida' | 'domicilio';
+/**
+ * NOTE: `deliveryMode: 'delivery'` and `status: 'delivered'` are
+ * INDEPENDENT axes on `Order` — a `pickup` order still reaches the
+ * `delivered` status. Do not conflate the two just because they share the
+ * "delivery"/"delivered" root word.
+ */
+export type DeliveryMode = 'pickup' | 'delivery';
 
-/** Exactly 4 states — `entregado` is TERMINAL, no outgoing transition. */
-export type OrderStatus = 'creado' | 'verificado' | 'entregado' | 'cancelado';
+/** Exactly 4 states — `delivered` is TERMINAL, no outgoing transition. */
+export type OrderStatus = 'created' | 'verified' | 'delivered' | 'cancelled';
 
-const VALID_DELIVERY_MODES: readonly DeliveryMode[] = ['recogida', 'domicilio'];
+const VALID_DELIVERY_MODES: readonly DeliveryMode[] = ['pickup', 'delivery'];
 
 /**
  * `Order` aggregate root — owns `OrderLine[]` + `OrderPayment[]` + an
@@ -145,7 +151,7 @@ export function createOrder(input: CreateOrderInput, rates: ExchangeRate[], at: 
     warehouseId: input.warehouseId,
     deliveryMode: input.deliveryMode,
     currency,
-    status: 'creado',
+    status: 'created',
     subtotal,
     discountTotal,
     total,
@@ -161,39 +167,39 @@ export function createOrder(input: CreateOrderInput, rates: ExchangeRate[], at: 
 }
 
 /**
- * Pure guard: `creado -> verificado`. Freezes rate + totals (already frozen
+ * Pure guard: `created -> verified`. Freezes rate + totals (already frozen
  * at line/payment build time inside `createOrder`) and stamps `verifiedAt`.
  * Rejects any other source status with `InvalidOrderStateError` — this
- * includes double-verify (`verificado -> verificado`).
+ * includes double-verify (`verified -> verified`).
  */
 export function confirmOrder(order: Order, at: Date): Order {
-  if (order.status !== 'creado') {
-    throw new InvalidOrderStateError(order.id, 'creado', order.status);
+  if (order.status !== 'created') {
+    throw new InvalidOrderStateError(order.id, 'created', order.status);
   }
-  return { ...order, status: 'verificado', verifiedAt: at, updatedAt: at };
+  return { ...order, status: 'verified', verifiedAt: at, updatedAt: at };
 }
 
 /**
- * Pure guard: `verificado -> entregado`, the ONLY delivery edge Ventas
+ * Pure guard: `verified -> delivered`, the ONLY delivery edge Sales
  * models this slice regardless of `deliveryMode` (see `DeliveryMode`).
  * Rejects any other source status with `InvalidOrderStateError`.
  */
 export function deliverOrder(order: Order, at: Date): Order {
-  if (order.status !== 'verificado') {
-    throw new InvalidOrderStateError(order.id, 'verificado', order.status);
+  if (order.status !== 'verified') {
+    throw new InvalidOrderStateError(order.id, 'verified', order.status);
   }
-  return { ...order, status: 'entregado', deliveredAt: at, updatedAt: at };
+  return { ...order, status: 'delivered', deliveredAt: at, updatedAt: at };
 }
 
 /**
- * Pure guard: `cancelado` is reachable ONLY from `creado` or `verificado`.
- * `entregado` is TERMINAL — cancelling an already-delivered order (a
+ * Pure guard: `cancelled` is reachable ONLY from `created` or `verified`.
+ * `delivered` is TERMINAL — cancelling an already-delivered order (a
  * "devolución") is out of scope this slice and rejected with
- * `InvalidOrderStateError`, same as any other post-`entregado` transition.
+ * `InvalidOrderStateError`, same as any other post-`delivered` transition.
  */
 export function cancelOrder(order: Order, at: Date): Order {
-  if (order.status !== 'creado' && order.status !== 'verificado') {
-    throw new InvalidOrderStateError(order.id, 'creado|verificado', order.status);
+  if (order.status !== 'created' && order.status !== 'verified') {
+    throw new InvalidOrderStateError(order.id, 'created|verified', order.status);
   }
-  return { ...order, status: 'cancelado', updatedAt: at };
+  return { ...order, status: 'cancelled', updatedAt: at };
 }

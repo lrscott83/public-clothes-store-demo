@@ -49,13 +49,13 @@ describe('buildOrderLine — pricing snapshot', () => {
   it('converts lineTotalNative into the order currency via convertirEntreMonedas, stamping the ORIGEN-side rateApplied+rateEffectiveFrom', () => {
     const rates: ExchangeRate[] = [
       {
-        channel: 'EUR_EFECTIVO',
+        channel: 'EUR_CASH',
         rate: 1000000n, // EUR at parity with USD (clean math)
         effectiveFrom: new Date('2026-01-01T00:00:00Z'),
         id: 'rate-eur',
       },
       {
-        channel: 'MN_TRANSFERENCIA',
+        channel: 'MN_TRANSFER',
         rate: 300000000n, // 1 USD = 300.000000 MN
         effectiveFrom: new Date('2026-01-01T00:00:00Z'),
         id: 'rate-mn',
@@ -83,7 +83,7 @@ describe('buildOrderLine — pricing snapshot', () => {
   it('same-currency with an existing rate on file stamps that resolved rate, not a blind passthrough', () => {
     const rates: ExchangeRate[] = [
       {
-        channel: 'MN_EFECTIVO',
+        channel: 'MN_CASH',
         rate: 305000000n,
         effectiveFrom: new Date('2026-01-01T00:00:00Z'),
         id: 'rate-mn-efectivo',

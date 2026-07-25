@@ -105,8 +105,8 @@ export class OrderService {
   async update(id: string, patch: UpdateOrderDto): Promise<OrderResponseDto | null> {
     const existing = await this.orderRepository.findById(id);
     if (!existing) return null;
-    if (existing.status !== 'creado') {
-      throw new InvalidOrderStateError(id, 'creado', existing.status);
+    if (existing.status !== 'created') {
+      throw new InvalidOrderStateError(id, 'created', existing.status);
     }
 
     const updated = await this.orderRepository.update(id, {

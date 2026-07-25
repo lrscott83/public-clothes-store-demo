@@ -104,30 +104,30 @@ describe('PrismaCurrencyRepository', () => {
     const rate = 350455123n; // "350.455123" — exercises all 6 decimal places
 
     const appended = await repository.appendRate({
-      channel: 'MN_EFECTIVO',
+      channel: 'MN_CASH',
       rate,
       effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
     });
     expect(appended.rate).toBe(rate);
 
-    const resolved = await repository.latestRate('MN_EFECTIVO', new Date('2026-01-02T00:00:00.000Z'));
+    const resolved = await repository.latestRate('MN_CASH', new Date('2026-01-02T00:00:00.000Z'));
 
     expect(resolved?.rate).toBe(rate);
   });
 
   it('ratesForChannel(channel) returns every appended row for that channel, ordered by effectiveFrom desc', async () => {
     await repository.appendRate({
-      channel: 'EUR_EFECTIVO',
+      channel: 'EUR_CASH',
       rate: 300000000n,
       effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
     });
     await repository.appendRate({
-      channel: 'EUR_EFECTIVO',
+      channel: 'EUR_CASH',
       rate: 310000000n,
       effectiveFrom: new Date('2026-02-01T00:00:00.000Z'),
     });
 
-    const rows = await repository.ratesForChannel('EUR_EFECTIVO');
+    const rows = await repository.ratesForChannel('EUR_CASH');
 
     expect(rows).toHaveLength(2);
     expect(rows[0]?.rate).toBe(310000000n);

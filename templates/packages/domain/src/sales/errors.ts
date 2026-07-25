@@ -16,7 +16,7 @@ export class InvalidOrderError extends Error {
  * Thrown when a status-transition guard (`confirmOrder`/`deliverOrder`/
  * `cancelOrder`) is invoked from a source status that does not allow it.
  * `expected` documents the only source status(es) the transition accepts
- * (e.g. `'creado'` or `'creado|verificado'`); `actual` is the order's real
+ * (e.g. `'created'` or `'created|verified'`); `actual` is the order's real
  * status at the time of the attempt.
  */
 export class InvalidOrderStateError extends Error {

@@ -30,7 +30,7 @@ function baseInput(overrides: Partial<CreateOrderInput> = {}): CreateOrderInput 
     customerId: 'customer-1',
     customerName: 'Ana Torres',
     warehouseId: 'warehouse-1',
-    deliveryMode: 'recogida',
+    deliveryMode: 'pickup',
     lines: [usdLine()],
     payments: [usdPayment()],
     ...overrides,
@@ -41,7 +41,7 @@ describe('createOrder — currency derivation, deliveryMode, initial status (3.7
   it('any USD line forces order currency to USD, even mixed with an MN line', () => {
     const rates: ExchangeRate[] = [
       {
-        channel: 'MN_TRANSFERENCIA',
+        channel: 'MN_TRANSFER',
         rate: 350000000n, // 1 USD = 350.000000 MN
         effectiveFrom: new Date('2026-01-01T00:00:00Z'),
         id: 'rate-mn',
@@ -73,13 +73,13 @@ describe('createOrder — currency derivation, deliveryMode, initial status (3.7
   it('all-MN/EUR lines (no USD line) derive MN', () => {
     const rates: ExchangeRate[] = [
       {
-        channel: 'EUR_EFECTIVO',
+        channel: 'EUR_CASH',
         rate: 1000000n, // EUR at parity with USD
         effectiveFrom: new Date('2026-01-01T00:00:00Z'),
         id: 'rate-eur',
       },
       {
-        channel: 'MN_TRANSFERENCIA',
+        channel: 'MN_TRANSFER',
         rate: 300000000n, // 1 USD = 300.000000 MN
         effectiveFrom: new Date('2026-01-01T00:00:00Z'),
         id: 'rate-mn',
@@ -103,7 +103,7 @@ describe('createOrder — currency derivation, deliveryMode, initial status (3.7
             quantity: 1,
           },
         ],
-        payments: [{ channel: 'MN_EFECTIVO', amount: money(3060000n, 'MN') }],
+        payments: [{ channel: 'MN_CASH', amount: money(3060000n, 'MN') }],
       }),
       rates,
       AT,
@@ -118,19 +118,19 @@ describe('createOrder — currency derivation, deliveryMode, initial status (3.7
 
   it('rejects a missing deliveryMode', () => {
     expect(() =>
-      createOrder(baseInput({ deliveryMode: undefined as unknown as 'recogida' }), [], AT),
+      createOrder(baseInput({ deliveryMode: undefined as unknown as 'pickup' }), [], AT),
     ).toThrow(InvalidOrderError);
   });
 
   it('rejects an invalid deliveryMode', () => {
     expect(() =>
-      createOrder(baseInput({ deliveryMode: 'transportando' as unknown as 'recogida' }), [], AT),
+      createOrder(baseInput({ deliveryMode: 'transportando' as unknown as 'pickup' }), [], AT),
     ).toThrow(InvalidOrderError);
   });
 
-  it('starts life in status creado, with no verifiedAt/deliveredAt stamped', () => {
+  it('starts life in status created, with no verifiedAt/deliveredAt stamped', () => {
     const order = createOrder(baseInput(), [], AT);
-    expect(order.status).toBe('creado');
+    expect(order.status).toBe('created');
     expect(order.verifiedAt).toBeNull();
     expect(order.deliveredAt).toBeNull();
   });
@@ -198,46 +198,46 @@ describe('createOrder — currency conversion rules (3.9)', () => {
 });
 
 describe('confirmOrder / deliverOrder / cancelOrder — pure state-machine guards (3.10)', () => {
-  it('confirmOrder transitions creado -> verificado and stamps verifiedAt', () => {
+  it('confirmOrder transitions created -> verified and stamps verifiedAt', () => {
     const created = createOrder(baseInput(), [], AT);
     const confirmedAt = new Date('2026-07-23T00:00:00Z');
     const confirmed = confirmOrder(created, confirmedAt);
-    expect(confirmed.status).toBe('verificado');
+    expect(confirmed.status).toBe('verified');
     expect(confirmed.verifiedAt).toEqual(confirmedAt);
   });
 
-  it('confirmOrder rejects a non-creado source (double-verify)', () => {
+  it('confirmOrder rejects a non-created source (double-verify)', () => {
     const created = createOrder(baseInput(), [], AT);
     const confirmed = confirmOrder(created, AT);
     expect(() => confirmOrder(confirmed, AT)).toThrow(InvalidOrderStateError);
   });
 
-  it('deliverOrder rejects a creado order (must be verificado first)', () => {
+  it('deliverOrder rejects a created order (must be verified first)', () => {
     const created = createOrder(baseInput(), [], AT);
     expect(() => deliverOrder(created, AT)).toThrow(InvalidOrderStateError);
   });
 
-  it('deliverOrder transitions verificado -> entregado directly and stamps deliveredAt', () => {
+  it('deliverOrder transitions verified -> delivered directly and stamps deliveredAt', () => {
     const created = createOrder(baseInput(), [], AT);
     const confirmed = confirmOrder(created, AT);
     const deliveredAt = new Date('2026-07-24T00:00:00Z');
     const delivered = deliverOrder(confirmed, deliveredAt);
-    expect(delivered.status).toBe('entregado');
+    expect(delivered.status).toBe('delivered');
     expect(delivered.deliveredAt).toEqual(deliveredAt);
   });
 
-  it('cancelOrder succeeds from creado', () => {
+  it('cancelOrder succeeds from created', () => {
     const created = createOrder(baseInput(), [], AT);
-    expect(cancelOrder(created, AT).status).toBe('cancelado');
+    expect(cancelOrder(created, AT).status).toBe('cancelled');
   });
 
-  it('cancelOrder succeeds from verificado', () => {
+  it('cancelOrder succeeds from verified', () => {
     const created = createOrder(baseInput(), [], AT);
     const confirmed = confirmOrder(created, AT);
-    expect(cancelOrder(confirmed, AT).status).toBe('cancelado');
+    expect(cancelOrder(confirmed, AT).status).toBe('cancelled');
   });
 
-  it('entregado is terminal — confirm/deliver/cancel all rejected', () => {
+  it('delivered is terminal — confirm/deliver/cancel all rejected', () => {
     const created = createOrder(baseInput(), [], AT);
     const confirmed = confirmOrder(created, AT);
     const delivered = deliverOrder(confirmed, AT);
@@ -252,12 +252,12 @@ describe('confirmOrder / deliverOrder / cancelOrder — pure state-machine guard
     const delivered = deliverOrder(confirmed, AT);
     try {
       cancelOrder(delivered, AT);
-      expect.unreachable('cancelOrder must throw on a terminal entregado order');
+      expect.unreachable('cancelOrder must throw on a terminal delivered order');
     } catch (err) {
       expect(err).toBeInstanceOf(InvalidOrderStateError);
       const stateError = err as InstanceType<typeof InvalidOrderStateError>;
       expect(stateError.orderId).toBe(delivered.id);
-      expect(stateError.actual).toBe('entregado');
+      expect(stateError.actual).toBe('delivered');
     }
   });
 });

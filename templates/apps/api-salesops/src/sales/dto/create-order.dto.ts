@@ -30,7 +30,7 @@ export class CreateOrderPaymentDto {
 
 /**
  * Request body for `POST /orders`. `deliveryMode` is REQUIRED
- * (`"recogida"|"domicilio"`). `total`/`currency` are NEVER accepted from the
+ * (`"pickup"|"delivery"`). `total`/`currency` are NEVER accepted from the
  * client — both are DERIVED by the domain factory `createOrder()` from
  * `lines` (spec: "Totals are derived, not accepted as input"; "currency is
  * DERIVED, never selected"). `payments` defaults to an empty split when

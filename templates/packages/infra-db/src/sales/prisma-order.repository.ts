@@ -192,7 +192,7 @@ function orderToDomain(row: OrderRow): DomainOrder {
  * a non-literal argument). This repository never recomputes currency,
  * totals, or per-line/payment conversions — it persists exactly what it is
  * given and reconstructs the identical shape on every read (`findById`
- * never re-resolves rates, `verificado` snapshots stay read-only, see
+ * never re-resolves rates, `verified` snapshots stay read-only, see
  * `confirm`).
  *
  * `confirm`/`deliver`/`cancel` are the three atomic status transitions
@@ -339,8 +339,8 @@ export class PrismaOrderRepository implements IOrderRepository {
   async confirm(id: string): Promise<DomainOrder> {
     const row = await this.prisma.$transaction(async (tx) => {
       const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: { lines: true } });
-      if (orderRow.status !== 'creado') {
-        throw new InvalidOrderStateError(id, 'creado', orderRow.status);
+      if (orderRow.status !== 'created') {
+        throw new InvalidOrderStateError(id, 'created', orderRow.status);
       }
 
       for (const line of orderRow.lines) {
@@ -351,7 +351,7 @@ export class PrismaOrderRepository implements IOrderRepository {
         );
       }
 
-      await tx.order.update({ where: { id }, data: { status: 'verificado', verifiedAt: new Date() } });
+      await tx.order.update({ where: { id }, data: { status: 'verified', verifiedAt: new Date() } });
 
       return tx.order.findUniqueOrThrow({ where: { id }, include: AGGREGATE_INCLUDE });
     });
@@ -362,8 +362,8 @@ export class PrismaOrderRepository implements IOrderRepository {
   async deliver(id: string): Promise<DomainOrder> {
     const row = await this.prisma.$transaction(async (tx) => {
       const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: { lines: true } });
-      if (orderRow.status !== 'verificado') {
-        throw new InvalidOrderStateError(id, 'verificado', orderRow.status);
+      if (orderRow.status !== 'verified') {
+        throw new InvalidOrderStateError(id, 'verified', orderRow.status);
       }
 
       for (const line of orderRow.lines) {
@@ -386,7 +386,7 @@ export class PrismaOrderRepository implements IOrderRepository {
         });
       }
 
-      await tx.order.update({ where: { id }, data: { status: 'entregado', deliveredAt: new Date() } });
+      await tx.order.update({ where: { id }, data: { status: 'delivered', deliveredAt: new Date() } });
 
       return tx.order.findUniqueOrThrow({ where: { id }, include: AGGREGATE_INCLUDE });
     });
@@ -397,11 +397,11 @@ export class PrismaOrderRepository implements IOrderRepository {
   async cancel(id: string): Promise<DomainOrder> {
     const row = await this.prisma.$transaction(async (tx) => {
       const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: { lines: true } });
-      if (orderRow.status !== 'creado' && orderRow.status !== 'verificado') {
-        throw new InvalidOrderStateError(id, 'creado|verificado', orderRow.status);
+      if (orderRow.status !== 'created' && orderRow.status !== 'verified') {
+        throw new InvalidOrderStateError(id, 'created|verified', orderRow.status);
       }
 
-      if (orderRow.status === 'verificado') {
+      if (orderRow.status === 'verified') {
         for (const line of orderRow.lines) {
           await applyReservationTx(
             tx,
@@ -411,7 +411,7 @@ export class PrismaOrderRepository implements IOrderRepository {
         }
       }
 
-      await tx.order.update({ where: { id }, data: { status: 'cancelado' } });
+      await tx.order.update({ where: { id }, data: { status: 'cancelled' } });
 
       return tx.order.findUniqueOrThrow({ where: { id }, include: AGGREGATE_INCLUDE });
     });

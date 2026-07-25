@@ -74,7 +74,7 @@ function assertChannel(channel: string): void {
  * existence and resolve to `null`, mapped here the same way `findById`
  * already is). There is NO `DELETE` route: an Order is an immutable
  * transactional event — its lifecycle is the status machine
- * (creado/verificado/entregado/cancelado), never a deletion. `create`/
+ * (created/verified/delivered/cancelled), never a deletion. `create`/
  * `update`/`confirm`/`cancel` are `owner`/`admin`/`sales_operator`-only.
  * `list`/`findById` ALSO admit `warehouse_operator`, scoped to their OWN
  * `warehouseId`. `deliver` is `owner`/`admin`/`warehouse_operator`-only

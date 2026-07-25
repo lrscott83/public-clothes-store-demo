@@ -5,7 +5,7 @@ import { seedOrders } from './seed.js';
  * Integration test against the real `store_mgmt` Postgres database. Covers
  * the spec's demo-seed idempotency requirement: re-running never duplicates
  * the 4 demo orders (single-currency, mixed USD/MN, split-payment, credit
- * sale), and the set spans `creado`/`verificado`/`entregado` across itself.
+ * sale), and the set spans `created`/`verified`/`delivered` across itself.
  */
 describe('seedOrders', () => {
   let prisma: PrismaService;
@@ -22,7 +22,7 @@ describe('seedOrders', () => {
     await prisma.saleCredit.deleteMany({});
     await prisma.orderLine.deleteMany({});
     await prisma.order.deleteMany({});
-    await prisma.exchangeRate.deleteMany({ where: { channel: 'MN_TRANSFERENCIA' } });
+    await prisma.exchangeRate.deleteMany({ where: { channel: 'MN_TRANSFER' } });
     await prisma.stockMovement.deleteMany({});
     await prisma.stockLevel.deleteMany({});
     await prisma.product.deleteMany({ where: { name: { startsWith: 'Producto Demo' } } });
@@ -39,16 +39,16 @@ describe('seedOrders', () => {
     await prisma.$disconnect();
   });
 
-  it('creates the 4 demo orders spanning creado/verificado/entregado', async () => {
+  it('creates the 4 demo orders spanning created/verified/delivered', async () => {
     const result = await seedOrders(prisma);
 
     expect(result.ordersUpserted).toBe(4);
 
     const orders = await prisma.order.findMany({ where: { customerName: { not: '' } } });
     const statuses = new Set(orders.map((o) => o.status));
-    expect(statuses.has('creado')).toBe(true);
-    expect(statuses.has('verificado')).toBe(true);
-    expect(statuses.has('entregado')).toBe(true);
+    expect(statuses.has('created')).toBe(true);
+    expect(statuses.has('verified')).toBe(true);
+    expect(statuses.has('delivered')).toBe(true);
   });
 
   it('is idempotent: running twice never duplicates the demo orders', async () => {

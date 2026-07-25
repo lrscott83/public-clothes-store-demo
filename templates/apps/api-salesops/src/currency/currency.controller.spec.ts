@@ -105,14 +105,14 @@ describe('CurrencyController', () => {
     it('returns id: null when the resolved rate came from a synthetic pivot with no persisted row', async () => {
       service.getLatestRate.mockResolvedValue({
         id: null,
-        channel: 'USD_EFECTIVO',
+        channel: 'USD_CASH',
         rate: '1.000000',
         effectiveFrom: '2026-02-01T00:00:00.000Z',
       });
 
       const response = await request(app.getHttpServer())
         .get('/currency/rates')
-        .query({ channel: 'USD_EFECTIVO' });
+        .query({ channel: 'USD_CASH' });
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBeNull();

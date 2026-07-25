@@ -23,7 +23,7 @@ describe('buildOrderPayment — split multi-channel collection', () => {
   it('converts amount (in CHANNEL_CURRENCY[channel]) to amountInOrderCurrency via convertir, stamping the DEST-side rateApplied+rateEffectiveFrom', () => {
     const rates: ExchangeRate[] = [
       {
-        channel: 'MN_TRANSFERENCIA',
+        channel: 'MN_TRANSFER',
         rate: 300000000n, // 1 USD = 300.000000 MN
         effectiveFrom: new Date('2026-01-01T00:00:00Z'),
         id: 'rate-mn',

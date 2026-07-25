@@ -27,16 +27,16 @@ function deterministicId(key: string): string {
 const DEMO_CATEGORY_SLUG = 'ventas-seed-demo';
 const DEMO_PRODUCT_USD_ID = deterministicId('product:usd');
 const DEMO_PRODUCT_MN_ID = deterministicId('product:mn');
-const DEMO_MN_RATE_CHANNEL = 'MN_TRANSFERENCIA' as const;
+const DEMO_MN_RATE_CHANNEL = 'MN_TRANSFER' as const;
 
 export interface SeedOrdersResult {
   readonly ordersUpserted: number;
 }
 
 /**
- * Idempotent seed of 4 demo `Order`s — single-currency (USD, `creado`),
- * mixed USD/MN (`verificado`), split-payment (two channels, `entregado`),
- * and a credit sale (`creado`) — spanning `creado`/`verificado`/`entregado`
+ * Idempotent seed of 4 demo `Order`s — single-currency (USD, `created`),
+ * mixed USD/MN (`verified`), split-payment (two channels, `delivered`),
+ * and a credit sale (`created`) — spanning `created`/`verified`/`delivered`
  * across the set, keyed on deterministic ids (the "stable natural key",
  * mirroring `product/seed.ts`'s `deterministicProductId` pattern — `Order`
  * has no other natural unique key). Re-running never duplicates: each demo
@@ -138,7 +138,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
   const at = new Date('2026-07-22T00:00:00Z');
   let ordersUpserted = 0;
 
-  // 1. Single-currency (USD), stays `creado`.
+  // 1. Single-currency (USD), stays `created`.
   const singleCurrencyId = deterministicId('order:single-currency');
   if (!(await repository.findById(singleCurrencyId))) {
     const order = createOrder(
@@ -147,7 +147,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
         customerId: customer.id,
         customerName: customer.fullName,
         warehouseId: warehouse.id,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           {
             productId: productUsd.id,
@@ -166,7 +166,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
     ordersUpserted++;
   }
 
-  // 2. Mixed USD/MN, transitions to `verificado` (reserves stock).
+  // 2. Mixed USD/MN, transitions to `verified` (reserves stock).
   const mixedId = deterministicId('order:mixed-currency');
   if (!(await repository.findById(mixedId))) {
     await ensureStock(prisma, productUsd.id, warehouse.id, 10);
@@ -177,7 +177,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
         customerId: customer.id,
         customerName: customer.fullName,
         warehouseId: warehouse.id,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           {
             productId: productUsd.id,
@@ -204,7 +204,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
     ordersUpserted++;
   }
 
-  // 3. Split-payment (two channels), transitions through to `entregado`
+  // 3. Split-payment (two channels), transitions through to `delivered`
   //    (reserves then consumes stock).
   const splitPaymentId = deterministicId('order:split-payment');
   if (!(await repository.findById(splitPaymentId))) {
@@ -215,7 +215,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
         customerId: secondCustomer.id,
         customerName: secondCustomer.fullName,
         warehouseId: warehouse.id,
-        deliveryMode: 'recogida',
+        deliveryMode: 'pickup',
         lines: [
           {
             productId: productUsd.id,
@@ -227,7 +227,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
         ],
         payments: [
           { channel: 'ZELLE', amount: money(12000n, 'USD') },
-          { channel: 'MN_EFECTIVO', amount: money(2800000n, 'MN') }, // 80.00 USD @350
+          { channel: 'MN_CASH', amount: money(2800000n, 'MN') }, // 80.00 USD @350
         ],
       },
       rates,
@@ -239,7 +239,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
     ordersUpserted++;
   }
 
-  // 4. Credit sale, stays `creado` — see CREDIT-SALE INVARIANT TENSION above.
+  // 4. Credit sale, stays `created` — see CREDIT-SALE INVARIANT TENSION above.
   const creditSaleId = deterministicId('order:credit-sale');
   if (!(await repository.findById(creditSaleId))) {
     const order = createOrder(
@@ -248,7 +248,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
         customerId: secondCustomer.id,
         customerName: secondCustomer.fullName,
         warehouseId: warehouse.id,
-        deliveryMode: 'domicilio',
+        deliveryMode: 'delivery',
         lines: [
           {
             productId: productUsd.id,

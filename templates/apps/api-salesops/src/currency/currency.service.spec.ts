@@ -89,7 +89,7 @@ describe('CurrencyService', () => {
     it('resolves the synthetic USD identity pivot (no own row) with id: null — never a fabricated id', async () => {
       repo.ratesForChannel.mockResolvedValue([]);
 
-      const result = await service.getLatestRate('USD_EFECTIVO', '2026-02-01T00:00:00.000Z');
+      const result = await service.getLatestRate('USD_CASH', '2026-02-01T00:00:00.000Z');
 
       expect(result.id).toBeNull();
       expect(result.rate).toBe('1.000000');
@@ -99,7 +99,7 @@ describe('CurrencyService', () => {
       repo.ratesForChannel.mockResolvedValue([]);
 
       await expect(
-        service.getLatestRate('EUR_EFECTIVO', '2026-02-01T00:00:00.000Z'),
+        service.getLatestRate('EUR_CASH', '2026-02-01T00:00:00.000Z'),
       ).rejects.toBeInstanceOf(RateNotFoundError);
     });
   });
@@ -107,12 +107,12 @@ describe('CurrencyService', () => {
   describe('convert', () => {
     const at = new Date('2026-02-01T00:00:00.000Z');
     const eurRate: DomainExchangeRate = {
-      channel: 'EUR_EFECTIVO',
+      channel: 'EUR_CASH',
       rate: 920000n,
       effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
     };
     const mnRate: DomainExchangeRate = {
-      channel: 'MN_TRANSFERENCIA',
+      channel: 'MN_TRANSFER',
       rate: 350455000n,
       effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
     };
@@ -129,7 +129,7 @@ describe('CurrencyService', () => {
       const expected = convertir(
         [eurRate, mnRate],
         moneyFromDecimalString('100.00', 'EUR'),
-        'EUR_EFECTIVO',
+        'EUR_CASH',
         'MN',
         at,
       );
@@ -137,7 +137,7 @@ describe('CurrencyService', () => {
       const result = await service.convert({
         amount: '100.00',
         from: 'EUR',
-        channel: 'EUR_EFECTIVO',
+        channel: 'EUR_CASH',
         to: 'MN',
         at: at.toISOString(),
       });
@@ -157,7 +157,7 @@ describe('CurrencyService', () => {
         service.convert({
           amount: '100.00',
           from: 'EUR',
-          channel: 'EUR_EFECTIVO',
+          channel: 'EUR_CASH',
           to: 'MN',
           at: at.toISOString(),
         }),

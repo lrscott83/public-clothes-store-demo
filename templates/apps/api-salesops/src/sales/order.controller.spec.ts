@@ -34,9 +34,9 @@ const sampleResponse = {
   customerId: 'customer-uuid-1',
   customerName: 'Ana Torres',
   warehouseId: 'warehouse-uuid-1',
-  deliveryMode: 'recogida',
+  deliveryMode: 'pickup',
   currency: 'USD',
-  status: 'creado',
+  status: 'created',
   subtotal: '100.00',
   discountTotal: '0.00',
   total: '100.00',
@@ -54,7 +54,7 @@ const validCreateBody = {
   customerId: 'customer-uuid-1',
   customerName: 'Ana Torres',
   warehouseId: 'warehouse-uuid-1',
-  deliveryMode: 'recogida',
+  deliveryMode: 'pickup',
   lines: [
     {
       productId: 'product-uuid-1',
@@ -64,7 +64,7 @@ const validCreateBody = {
       quantity: 1,
     },
   ],
-  payments: [{ channel: 'USD_EFECTIVO', amount: { amount: '100.00', currency: 'USD' } }],
+  payments: [{ channel: 'USD_CASH', amount: { amount: '100.00', currency: 'USD' } }],
 };
 
 /** Builds a test app with `JwtAuthGuard` overridden to inject `req.user` with `roles` (`null` -> 401), keeping the REAL `RolesGuard`. `warehouseOperatorRepository.findByUserId` defaults to a row scoped to `OWN_WAREHOUSE_ID`. */
@@ -152,7 +152,7 @@ describe('OrderController', () => {
     });
 
     it('maps RateNotFoundError to 409', async () => {
-      service.create.mockRejectedValue(new RateNotFoundError('no rate for EUR_EFECTIVO'));
+      service.create.mockRejectedValue(new RateNotFoundError('no rate for EUR_CASH'));
 
       const response = await request(app.getHttpServer()).post('/orders').send(validCreateBody);
 
@@ -213,7 +213,7 @@ describe('OrderController', () => {
   });
 
   describe('PATCH /orders/:id', () => {
-    it('returns 200 with the updated order (creado only)', async () => {
+    it('returns 200 with the updated order (created only)', async () => {
       service.update.mockResolvedValue({ ...sampleResponse, customerName: 'New Name' });
 
       const response = await request(app.getHttpServer())
@@ -224,8 +224,8 @@ describe('OrderController', () => {
       expect(response.body.customerName).toBe('New Name');
     });
 
-    it('maps InvalidOrderStateError (not creado) to 409', async () => {
-      service.update.mockRejectedValue(new InvalidOrderStateError('order-uuid-1', 'creado', 'verificado'));
+    it('maps InvalidOrderStateError (not created) to 409', async () => {
+      service.update.mockRejectedValue(new InvalidOrderStateError('order-uuid-1', 'created', 'verified'));
 
       const response = await request(app.getHttpServer())
         .patch('/orders/order-uuid-1')
@@ -255,12 +255,12 @@ describe('OrderController', () => {
 
   describe('POST /orders/:id/confirm', () => {
     it('returns 200 with the frozen snapshot + reserved stock', async () => {
-      service.confirm.mockResolvedValue({ ...sampleResponse, status: 'verificado', verifiedAt: '2026-01-02T00:00:00.000Z' });
+      service.confirm.mockResolvedValue({ ...sampleResponse, status: 'verified', verifiedAt: '2026-01-02T00:00:00.000Z' });
 
       const response = await request(app.getHttpServer()).post('/orders/order-uuid-1/confirm');
 
       expect(response.status).toBe(200);
-      expect(response.body.status).toBe('verificado');
+      expect(response.body.status).toBe('verified');
     });
 
     it('maps InsufficientStockError to 409', async () => {
@@ -272,7 +272,7 @@ describe('OrderController', () => {
     });
 
     it('maps InvalidOrderStateError to 409', async () => {
-      service.confirm.mockRejectedValue(new InvalidOrderStateError('order-uuid-1', 'creado', 'entregado'));
+      service.confirm.mockRejectedValue(new InvalidOrderStateError('order-uuid-1', 'created', 'delivered'));
 
       const response = await request(app.getHttpServer()).post('/orders/order-uuid-1/confirm');
 
@@ -290,12 +290,12 @@ describe('OrderController', () => {
 
   describe('POST /orders/:id/deliver', () => {
     it('returns 200 with consumed stock + deliveredAt', async () => {
-      service.deliver.mockResolvedValue({ ...sampleResponse, status: 'entregado', deliveredAt: '2026-01-03T00:00:00.000Z' });
+      service.deliver.mockResolvedValue({ ...sampleResponse, status: 'delivered', deliveredAt: '2026-01-03T00:00:00.000Z' });
 
       const response = await request(app.getHttpServer()).post('/orders/order-uuid-1/deliver');
 
       expect(response.status).toBe(200);
-      expect(response.body.status).toBe('entregado');
+      expect(response.body.status).toBe('delivered');
     });
 
     it('maps NegativeStockError to 409', async () => {
@@ -309,16 +309,16 @@ describe('OrderController', () => {
 
   describe('POST /orders/:id/cancel', () => {
     it('returns 200', async () => {
-      service.cancel.mockResolvedValue({ ...sampleResponse, status: 'cancelado' });
+      service.cancel.mockResolvedValue({ ...sampleResponse, status: 'cancelled' });
 
       const response = await request(app.getHttpServer()).post('/orders/order-uuid-1/cancel');
 
       expect(response.status).toBe(200);
-      expect(response.body.status).toBe('cancelado');
+      expect(response.body.status).toBe('cancelled');
     });
 
-    it('maps InvalidOrderStateError (entregado terminal) to 409', async () => {
-      service.cancel.mockRejectedValue(new InvalidOrderStateError('order-uuid-1', 'creado|verificado', 'entregado'));
+    it('maps InvalidOrderStateError (delivered terminal) to 409', async () => {
+      service.cancel.mockRejectedValue(new InvalidOrderStateError('order-uuid-1', 'created|verified', 'delivered'));
 
       const response = await request(app.getHttpServer()).post('/orders/order-uuid-1/cancel');
 
@@ -419,7 +419,7 @@ describe('OrderController', () => {
     it('admits a "warehouse_operator" delivering an order in THEIR OWN warehouse -> 200', async () => {
       await app.close();
       service.findById.mockResolvedValue(sampleResponse);
-      service.deliver.mockResolvedValue({ ...sampleResponse, status: 'entregado' });
+      service.deliver.mockResolvedValue({ ...sampleResponse, status: 'delivered' });
       app = await buildApp(service, USER_ROLES.warehouse_operator);
 
       const response = await request(app.getHttpServer()).post('/orders/order-uuid-1/deliver');
