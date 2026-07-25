@@ -20,8 +20,10 @@ occurrence counts).
 per orchestrator direction this run, WU2's commit also absorbed WU3's literal-guard/seed-literal work
 (minus the seed namespace/slug/image renames, still open) and ALL of WU4. WU4 is DONE (no separate
 commit — see its section). WU3 DONE (`9ec2caa`) — seed namespace/slug/image/doc-rot remainder, incl.
-the required salt-stability comment and dev-DB idempotency proof (see apply-progress).
-Remaining open work: WU5, WU6, WU7.
+the required salt-stability comment and dev-DB idempotency proof (see apply-progress). WU5 DONE
+(`6d722f2`) — Currency fn/param rename, also renamed the previously-unitemized `tryResolverTasa`
+helper to `tryResolveRate` (see WU5 section for why).
+Remaining open work: WU6, WU7.
 
 ---
 
@@ -208,6 +210,22 @@ otherwise). No separate commit needed for this unit.
 ---
 
 ## WU5 — Currency function/param renames (block G)
+
+**Status: [x] DONE** — commit `6d722f2` (`refactor(currency): rename convertir/resolverTasa functions to
+English`). 12 files changed, 111 insertions / 111 deletions. All exported renames delivered
+(`resolverTasa`→`resolveRate`, `convertir`→`convert`, `convertirEntreMonedas`→`convertBetweenCurrencies`),
+plus params `origen`→`source`, `monedaDestino`→`targetCurrency`, local `destinoMinorUnits`→
+`targetMinorUnits`. **Scope addition beyond this section's original file list**: the private helper
+`tryResolverTasa` (line ~87, not itemized above) was also renamed to `tryResolveRate` — it directly named
+the renamed `resolverTasa` in its own identifier and doc comment, so leaving it would have both
+reintroduced Spanish residue and failed the mandatory zero-hit sweep (`resolverTasa` is a substring of
+`tryResolverTasa`). Updated every call site (`order.ts`, `order-payment.ts`, `order-line.ts` in domain;
+`currency.service.ts` in api-salesops) and every stale doc comment naming the old symbols (`pricing.ts`,
+`schema.prisma`, `rate-response.dto.ts`, `order-payment.test.ts`/`order-line.test.ts` test-description
+strings, and the full `rate-resolver.test.ts` — 20 tests). Verification ALL green: `pnpm -r build` exit 0,
+domain 230/230, infra-db 121/121 (real Postgres), api-salesops unit 180/180, api-salesops e2e 50/50
+(rebuilt dist first), residue sweep zero hits. See `sdd/ventas-english-rename/apply-progress` for full
+detail.
 
 **Size**: ~20–30 lines, 4 files. Pure TS, kept out of WU2 to keep the atomic commit focused.
 
