@@ -16,6 +16,12 @@ classes E) now runs FIRST, ahead of enum work, so every later unit operates on f
 Est. total: **~490–670 changed lines / ~45 files** (see per-unit sizing below, sourced from #1523
 occurrence counts).
 
+**Progress (2026-07-25)**: WU1 DONE (`b435452`). WU2 DONE (`df3fc7c`) — atomic enum-value rename;
+per orchestrator direction this run, WU2's commit also absorbed WU3's literal-guard/seed-literal work
+(minus the seed namespace/slug/image renames, still open) and ALL of WU4. WU3 scope is now reduced to
+just the seed namespace/slug/image/doc-rot remainder. WU4 is DONE (no separate commit — see its section).
+Remaining open work: WU3 (reduced), WU5, WU6, WU7.
+
 ---
 
 ## WU1 — Structural rename: `ventas/` → `sales/` folders, `Ventas*` → `Order*`/`SalesModule` classes (blocks D+E)
@@ -67,10 +73,27 @@ returned zero hits. See `sdd/ventas-english-rename/apply-progress` for full deta
 
 ## WU2 — ATOMIC: enum value rename (blocks A+B+C) + `schema.prisma` + hand-written migration
 
+**Status: [x] DONE** — commit `df3fc7c` (`feat(sales)!: rename OrderStatus/DeliveryMode/PaymentChannel
+values to English`). 26 files changed, 303 insertions / 267 deletions. All 8 verification commands green
+(domain 230/230, infra-db 121/121 real-Postgres, api-salesops unit 180/180, api-salesops e2e 50/50,
+`pnpm -r build` clean, `prisma migrate dev --create-only` confirmed NO-OP against the hand-written SQL,
+migration applied cleanly to both dev `store_mgmt` and test `store_mgmt_test`, full residue sweep zero
+hits outside old `*/migrations/*` files and the explicitly out-of-scope `apps/salesops-mvp` prototype).
+See `sdd/ventas-english-rename/apply-progress` for full detail.
+
+**Scope note (deviation from original per-WU split, orchestrator-directed for this run)**: to keep the
+whole workspace compiling and green in ONE atomic commit, this unit absorbed literal call-site updates
+that the original plan below had assigned to WU3 (infra-db repository guards + seed.ts literals, MINUS
+the `VENTAS_SEED_NAMESPACE`/slug/image-path renames — those remain WU3) and ALL of WU4 (api-salesops
+service guard, DTO comment, unit specs, e2e), plus Currency's infra-db/api-salesops specs
+(`prisma-currency.repository.spec.ts`, `currency.controller.spec.ts`, `currency.service.spec.ts`) which
+were not itemized in any WU below but contain `PaymentChannel` literals that would otherwise break the
+type. WU3 and WU4 sections below are updated accordingly — do not re-do this work.
+
 **Do not split.** `infra-db` cannot compile with only part of this done.
 
-**Size**: ~165–200 lines, ~9 files. Heaviest test file: `rate-resolver.test.ts` (37 hits, block C only —
-function names stay `convertir`/etc. until WU5).
+**Size**: ~165–200 lines, ~9 files (original estimate — actual delivered commit is larger, see Status
+note above for why).
 
 **Commit**: `feat(sales)!: rename OrderStatus/DeliveryMode/PaymentChannel enum values to English`
 (footer: `BREAKING CHANGE: /orders* wire format enum values changed from Spanish to English —
@@ -129,30 +152,42 @@ MN_TRANSFERENCIA→MN_TRANSFER.`)
 
 ---
 
-## WU3 — infra-db repository + seed (block F)
+## WU3 — infra-db seed source constant/slug/image renames (block F remainder)
 
-**Size**: ~60–80 lines, 4 files (first real proof of the migration against Postgres).
+**Status: partially absorbed into WU2** — the literal enum-value guards in `prisma-order.repository.ts`
++ `prisma-order.repository.spec.ts`, and the enum-value literals inside `seed.ts` (deliveryMode/status
+fixtures, `DEMO_MN_RATE_CHANNEL`) + `seed.spec.ts`, are DONE (see WU2 commit `df3fc7c`). Remaining scope
+below is ONLY what WU2 explicitly deferred per the naming-decisions "MUST NOT CHANGE in WU2" list.
 
-**Commit**: `refactor(infra-db): update sales repository and seed for English enum values`
+**Size**: small, 2 files (`seed.ts`, `packages/infra-db/src/customer/seed.ts` doc-rot fix).
+
+**Commit**: `refactor(infra-db): rename seed namespace constant and demo asset paths to English`
 
 **Files**:
-- `packages/infra-db/src/sales/prisma-order.repository.ts` (11 literal guards, ~L342-414, + doc comment)
-- `packages/infra-db/src/sales/prisma-order.repository.spec.ts` (25 hits — heaviest infra-db test file)
-- `packages/infra-db/src/sales/seed.ts` (block F: `VENTAS_SEED_NAMESPACE`→`SALES_SEED_NAMESPACE`,
-  `DEMO_CATEGORY_SLUG` `'ventas-seed-demo'`→`'sales-seed-demo'`, `deliveryMode`/status literals in the
-  4 seeded orders; keep display name `'Ventas Demo'` in Spanish)
-- `packages/infra-db/src/sales/seed.spec.ts` (6 hits)
+- `packages/infra-db/src/sales/seed.ts`:
+  - `VENTAS_SEED_NAMESPACE` → `SALES_SEED_NAMESPACE` (variable name ONLY — UUID value unchanged)
+  - `DEMO_CATEGORY_SLUG` value `'ventas-seed-demo'` → `'sales-seed-demo'` (must now match what the WU2
+    migration already renamed in the DB — until this lands, a manual seed run would upsert-miss and
+    duplicate the category; see `sdd/ventas-english-rename/seed-salt-correction` #1537)
+  - `image: 'ventas-seed/demo-usd.png'` / `'ventas-seed/demo-mn.png'` → `sales-seed/…` (cosmetic,
+    product upsert's update clause overwrites on next seed run — no migration statement needed)
+  - Add the required comment at `seed.ts:18` on the `` `ventas-seed:${key}` `` hash-salt string stating
+    it must NEVER change (stability is its only load-bearing property — renaming it re-derives every
+    seeded UUID and duplicates the demo dataset). **DO NOT rename the salt string itself.**
+- `packages/infra-db/src/customer/seed.ts:27` — fix doc-rot: comment references `` `ventas/seed.ts`'s
+  `VENTAS_SEED_NAMESPACE` `` , a path that no longer exists after WU1's folder rename → `sales/seed.ts`
+  / `SALES_SEED_NAMESPACE`.
 
 **Steps**:
-1. Update `prisma-order.repository.ts` literal guards + doc comment.
-2. Update `seed.ts`: rename the namespace constant and the demo category slug value (must match the
-   migration's `UPDATE` target from WU2), update literal order fixtures.
-3. Update both spec files' literals to match.
-4. Apply the WU2 migration to the test DB (`store_mgmt_test`) if not already applied.
+1. Rename `VENTAS_SEED_NAMESPACE` → `SALES_SEED_NAMESPACE` (all references in `seed.ts`).
+2. Rename `DEMO_CATEGORY_SLUG`'s value to `'sales-seed-demo'`; update `seed.spec.ts`'s cleanup filter
+   (`slug: 'ventas-seed-demo'`) to match.
+3. Rename the two image paths.
+4. Add the salt-stability comment at line 18; do not touch the salt string.
+5. Fix the doc-rot comment in `customer/seed.ts`.
 
 **Verification**:
-- `pnpm --filter @store-mgmt/infra-db test` (jest vs real Postgres — script sets
-  `NODE_OPTIONS=--experimental-vm-modules`; do not run bare `npx jest`)
+- `pnpm --filter @store-mgmt/infra-db test` (jest vs real Postgres)
 - `psql $DATABASE_URL -c "SELECT slug, count(*) FROM category GROUP BY slug"` after running the seed
   script once → still exactly one `sales-seed-demo` row (idempotency)
 
@@ -160,26 +195,10 @@ MN_TRANSFERENCIA→MN_TRANSFER.`)
 
 ## WU4 — api-salesops wiring (service guard, DTO comment, unit specs, e2e)
 
-**Size**: ~70–90 lines, 4 files (heaviest: `order.e2e-spec.ts`, 29 hits). **Requires `pnpm build` of
-domain + infra-db first** — e2e runs against built `dist`, stale dist silently tests old code.
-
-**Commit**: `refactor(api-salesops): update sales wiring for English enum values`
-
-**Files**:
-- `apps/api-salesops/src/sales/order.service.ts` (`existing.status !== 'creado'` guard, doc comments)
-- `apps/api-salesops/src/sales/dto/create-order.dto.ts` (doc comment quoting `"recogida"|"domicilio"`)
-- `apps/api-salesops/src/sales/order.controller.spec.ts` (18 hits), `order.service.spec.ts` (18 hits)
-- `apps/api-salesops/test/order.e2e-spec.ts` (29 hits)
-
-**Steps**:
-1. `pnpm --filter @store-mgmt/domain build && pnpm --filter @store-mgmt/infra-db build`.
-2. Update `order.service.ts` literal guard + comments; `create-order.dto.ts` doc comment.
-3. Update both unit specs' literals.
-4. Update `order.e2e-spec.ts` literals (requests + assertions).
-
-**Verification**:
-- `pnpm --filter @store-mgmt/api-salesops test`
-- `pnpm --filter @store-mgmt/api-salesops test:e2e`
+**Status: [x] DONE — absorbed into WU2** — `order.service.ts` guard, `create-order.dto.ts` doc comment,
+`order.controller.spec.ts`, `order.service.spec.ts`, `order.e2e-spec.ts` were all updated as part of the
+WU2 atomic commit `df3fc7c` (api-salesops cannot compile/pass tests against the renamed domain types
+otherwise). No separate commit needed for this unit.
 
 ---
 
