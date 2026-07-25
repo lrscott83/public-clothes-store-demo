@@ -46,7 +46,7 @@ describe('buildOrderLine — pricing snapshot', () => {
     expect(line.lineTotalNative.currency).toBe('USD');
   });
 
-  it('converts lineTotalNative into the order currency via convertirEntreMonedas, stamping the ORIGEN-side rateApplied+rateEffectiveFrom', () => {
+  it('converts lineTotalNative into the order currency via convertBetweenCurrencies, stamping the SOURCE-side rateApplied+rateEffectiveFrom', () => {
     const rates: ExchangeRate[] = [
       {
         channel: 'EUR_CASH',

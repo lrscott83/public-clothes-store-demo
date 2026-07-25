@@ -8,12 +8,12 @@ import type {
 import {
   CHANNEL_CURRENCY,
   CURRENCY_REPOSITORY,
-  convertir,
+  convert,
   moneyFromDecimalString,
   moneyToDecimalString,
   rateFromDecimalString,
   rateToDecimalString,
-  resolverTasa,
+  resolveRate,
 } from '@store-mgmt/domain';
 import type { ConvertQueryDto, ConvertResponseDto, CreateRateDto, RateResponseDto } from './dto/index.js';
 
@@ -22,7 +22,7 @@ const ALL_CHANNELS = Object.keys(CHANNEL_CURRENCY) as PaymentChannel[];
 
 /**
  * Orchestration layer: the only place with both I/O (via `CURRENCY_REPOSITORY`)
- * and domain logic (`resolverTasa`/`convertir`). Maps the domain's `bigint`
+ * and domain logic (`resolveRate`/`convert`). Maps the domain's `bigint`
  * `Money`/rate types to decimal strings for the API boundary.
  */
 @Injectable()
@@ -43,7 +43,7 @@ export class CurrencyService {
   async getLatestRate(channel: PaymentChannel, at?: string): Promise<RateResponseDto> {
     const atDate = at ? new Date(at) : new Date();
     const rates = await this.fetchAllRates(atDate);
-    const resolved = resolverTasa(rates, channel, atDate);
+    const resolved = resolveRate(rates, channel, atDate);
     return {
       // `resolved.source.id` is absent only for resolver-fabricated synthetic
       // pivot rows (e.g. the USD identity rate) — never fabricate an id here.
@@ -56,9 +56,9 @@ export class CurrencyService {
 
   async convert(input: ConvertQueryDto): Promise<ConvertResponseDto> {
     const atDate = input.at ? new Date(input.at) : new Date();
-    const origen = moneyFromDecimalString(input.amount, input.from);
+    const source = moneyFromDecimalString(input.amount, input.from);
     const rates = await this.fetchAllRates(atDate);
-    const result = convertir(rates, origen, input.channel, input.to, atDate);
+    const result = convert(rates, source, input.channel, input.to, atDate);
     return {
       amount: moneyToDecimalString(result.money),
       currency: result.money.currency as Currency,
@@ -68,7 +68,7 @@ export class CurrencyService {
   }
 
   /**
-   * `resolverTasa`/`convertir` need cross-channel rate history to resolve the
+   * `resolveRate`/`convert` need cross-channel rate history to resolve the
    * currency-fallback cascade (step 2), but the port only exposes
    * `ratesForChannel` for a single channel at a time. Since the channel set
    * is small and fixed (5 channels), fetch all of them and let the pure

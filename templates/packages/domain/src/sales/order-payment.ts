@@ -3,7 +3,7 @@ import type { Currency, Money } from '../currency/money.js';
 import type { PaymentChannel } from '../currency/payment-channel.js';
 import { CHANNEL_CURRENCY } from '../currency/payment-channel.js';
 import type { ExchangeRate } from '../currency/exchange-rate.js';
-import { convertir } from '../currency/rate-resolver.js';
+import { convert } from '../currency/rate-resolver.js';
 import { InvalidOrderError } from './errors.js';
 
 /**
@@ -30,7 +30,7 @@ export interface BuildOrderPaymentInput {
  * Builds a frozen `OrderPayment` snapshot. Throws `InvalidOrderError` when
  * `amount.currency` does not match the channel's fixed settlement currency,
  * or when `amount` is not strictly positive. Cross-currency conversion with
- * no resolvable rate propagates `RateNotFoundError` from `convertir`
+ * no resolvable rate propagates `RateNotFoundError` from `convert`
  * unchanged — this function never catches it.
  */
 export function buildOrderPayment(
@@ -48,7 +48,7 @@ export function buildOrderPayment(
     throw new InvalidOrderError('OrderPayment amount must be greater than 0');
   }
 
-  const { money: amountInOrderCurrency, rateApplied } = convertir(
+  const { money: amountInOrderCurrency, rateApplied } = convert(
     rates,
     input.amount,
     input.channel,

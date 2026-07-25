@@ -8,7 +8,7 @@ import type { PaymentChannel } from '@store-mgmt/domain';
  * `POST /currency/rates` (always a fresh insert) and for `GET /currency/rates`
  * when the resolved rate came from a real persisted row. It is `null` only
  * when `GET /currency/rates` resolves to a synthetic pivot row fabricated by
- * `resolverTasa`'s currency-fallback cascade (e.g. the USD identity rate,
+ * `resolveRate`'s currency-fallback cascade (e.g. the USD identity rate,
  * which was never persisted). Never a fabricated/fake UUID.
  */
 export class RateResponseDto {

@@ -20,7 +20,7 @@ describe('buildOrderPayment — split multi-channel collection', () => {
     expect(payment.rateEffectiveFrom).toEqual(AT);
   });
 
-  it('converts amount (in CHANNEL_CURRENCY[channel]) to amountInOrderCurrency via convertir, stamping the DEST-side rateApplied+rateEffectiveFrom', () => {
+  it('converts amount (in CHANNEL_CURRENCY[channel]) to amountInOrderCurrency via convert, stamping the DEST-side rateApplied+rateEffectiveFrom', () => {
     const rates: ExchangeRate[] = [
       {
         channel: 'MN_TRANSFER',

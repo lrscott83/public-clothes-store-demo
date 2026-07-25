@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Currency, Money } from '../currency/money.js';
 import { addMoney, money } from '../currency/money.js';
 import type { ExchangeRate } from '../currency/exchange-rate.js';
-import { convertirEntreMonedas } from '../currency/rate-resolver.js';
+import { convertBetweenCurrencies } from '../currency/rate-resolver.js';
 import type { OrderLine, BuildOrderLineInput } from './order-line.js';
 import { buildOrderLine } from './order-line.js';
 import type { OrderPayment, BuildOrderPaymentInput } from './order-payment.js';
@@ -122,7 +122,7 @@ export function createOrder(input: CreateOrderInput, rates: ExchangeRate[], at: 
     const discountNativeUnits = grossNativeUnits - line.lineTotalNative.minorUnits;
     if (discountNativeUnits === 0n) return acc;
     const discountNative: Money = { minorUnits: discountNativeUnits, currency: line.price.currency };
-    const { money: discountOrder } = convertirEntreMonedas(rates, discountNative, currency, at);
+    const { money: discountOrder } = convertBetweenCurrencies(rates, discountNative, currency, at);
     return addMoney(acc, discountOrder);
   }, money(0n, currency));
   const subtotal = addMoney(total, discountTotal);

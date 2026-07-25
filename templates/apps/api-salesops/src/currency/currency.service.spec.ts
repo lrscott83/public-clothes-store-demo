@@ -4,7 +4,7 @@ import {
   CURRENCY_REPOSITORY,
   InvalidMoneyError,
   RateNotFoundError,
-  convertir,
+  convert,
   moneyFromDecimalString,
   moneyToDecimalString,
   rateToDecimalString,
@@ -123,10 +123,10 @@ describe('CurrencyService', () => {
       );
     }
 
-    it('maps the pure resolverTasa/convertir result to decimal strings (matches direct domain call)', async () => {
+    it('maps the pure resolveRate/convert result to decimal strings (matches direct domain call)', async () => {
       mockRatesFor([eurRate, mnRate]);
 
-      const expected = convertir(
+      const expected = convert(
         [eurRate, mnRate],
         moneyFromDecimalString('100.00', 'EUR'),
         'EUR_CASH',

@@ -217,7 +217,7 @@ model Customer {
 // needs its own `rateChannel` column (design.md omitted it) to round-trip
 // losslessly, since a resolved rate's channel is NOT always the same as
 // `OrderPayment.channel` (cross-currency payments resolve the DEST-side
-// channel, per `convertir`). `SaleCredit` likewise needs its own
+// channel, per `convert`). `SaleCredit` likewise needs its own
 // `rateApplied`/`rateChannel`/`rateEffectiveFrom` — design.md's SaleCredit
 // block omitted them entirely, but the frozen `SaleCredit` domain
 // interface requires them. All additions below are ADDITIVE (new nullable

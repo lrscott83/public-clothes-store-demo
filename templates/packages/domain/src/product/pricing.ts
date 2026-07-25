@@ -80,7 +80,7 @@ export function discountPriceToDecimalString(value: bigint): string {
  * `divRoundHalfUp`, then the fixed `discountPrice` (already an exact
  * integer) is subtracted, and the result is clamped at 0 — in
  * `price.currency`. Same rounding discipline as the Currency module's
- * `convertir`.
+ * `convert`.
  */
 export function finalPrice(product: Product): Money {
   const discountFromPercent = divRoundHalfUp(

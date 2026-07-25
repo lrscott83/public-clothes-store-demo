@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Currency, Money } from '../currency/money.js';
 import type { ExchangeRate } from '../currency/exchange-rate.js';
-import { convertirEntreMonedas } from '../currency/rate-resolver.js';
+import { convertBetweenCurrencies } from '../currency/rate-resolver.js';
 import { finalPrice } from '../product/pricing.js';
 import type { Product } from '../product/product.js';
 import { InvalidOrderError } from './errors.js';
@@ -49,7 +49,7 @@ export interface BuildOrderLineInput {
 /**
  * Builds a frozen `OrderLine` snapshot. Throws `InvalidOrderError` when
  * `quantity` is not a positive integer. Cross-currency conversion with no
- * resolvable rate propagates `RateNotFoundError` from `convertirEntreMonedas`
+ * resolvable rate propagates `RateNotFoundError` from `convertBetweenCurrencies`
  * unchanged — this function never catches it (STOP, no partial line).
  */
 export function buildOrderLine(
@@ -75,7 +75,7 @@ export function buildOrderLine(
     currency: unitFinalPrice.currency,
   };
 
-  const { money: lineTotalOrder, rateApplied } = convertirEntreMonedas(
+  const { money: lineTotalOrder, rateApplied } = convertBetweenCurrencies(
     rates,
     lineTotalNative,
     orderCurrency,
