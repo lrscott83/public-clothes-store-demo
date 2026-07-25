@@ -22,8 +22,10 @@ per orchestrator direction this run, WU2's commit also absorbed WU3's literal-gu
 commit — see its section). WU3 DONE (`9ec2caa`) — seed namespace/slug/image/doc-rot remainder, incl.
 the required salt-stability comment and dev-DB idempotency proof (see apply-progress). WU5 DONE
 (`6d722f2`) — Currency fn/param rename, also renamed the previously-unitemized `tryResolverTasa`
-helper to `tryResolveRate` (see WU5 section for why).
-Remaining open work: WU6, WU7.
+helper to `tryResolveRate` (see WU5 section for why). WU6 DONE (`088f19d`) — Spanish display labels,
+additive, strict TDD RED→GREEN applied for real (see WU6 section for RED transcripts and the
+exhaustiveness compiler-error proof).
+Remaining open work: WU7.
 
 ---
 
@@ -254,6 +256,20 @@ detail.
 ---
 
 ## WU6 — Spanish labels (block H, additive — strict TDD RED→GREEN)
+
+**Status: [x] DONE** — commit `088f19d` (`feat(sales): add Spanish display labels for order and payment
+enums`). 8 files changed, 138 insertions / 1 deletion. Strict TDD genuinely applied (unlike WU1/WU2/WU3/WU5
+which were pure zero-behavior renames): 3 RED→GREEN cycles run in sequence — (1) `labels.test.ts` written
+before `labels.ts` existed, RED confirmed as `Error: Cannot find module './labels.js'`; (2)
+`payment-channel.test.ts` extended before `PAYMENT_CHANNEL_LABELS_ES`/`getPaymentChannelLabel` existed, RED
+confirmed as `Cannot read properties of undefined (reading 'ZELLE')` / `is not a function`; (3)
+`order.service.spec.ts` extended before the DTO fields/mapper wiring existed, RED confirmed as
+`Expected: "Verificado" — Received: undefined`. All three GREEN after minimal implementation. Exhaustiveness
+verified with real evidence: temporarily added a bogus `OrderStatus` member, `tsc --noEmit` failed with
+`TS2741: Property 'shipped_bogus' is missing in type '{...}' but required in type 'Record<OrderStatus,
+string>'` at `labels.ts(10,14)`, then reverted. Final verification all green: `pnpm -r build` exit 0, domain
+238/238 (230+8 new), infra-db 121/121, api-salesops unit 181/181 (180+1 new), api-salesops e2e 50/50
+(unchanged, out of WU6 scope). See `sdd/ventas-english-rename/apply-progress` for full detail.
 
 **Size**: ~40–60 lines, 4 files. No rename risk — purely additive.
 
