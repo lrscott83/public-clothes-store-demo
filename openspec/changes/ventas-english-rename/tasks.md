@@ -18,9 +18,10 @@ occurrence counts).
 
 **Progress (2026-07-25)**: WU1 DONE (`b435452`). WU2 DONE (`df3fc7c`) — atomic enum-value rename;
 per orchestrator direction this run, WU2's commit also absorbed WU3's literal-guard/seed-literal work
-(minus the seed namespace/slug/image renames, still open) and ALL of WU4. WU3 scope is now reduced to
-just the seed namespace/slug/image/doc-rot remainder. WU4 is DONE (no separate commit — see its section).
-Remaining open work: WU3 (reduced), WU5, WU6, WU7.
+(minus the seed namespace/slug/image renames, still open) and ALL of WU4. WU4 is DONE (no separate
+commit — see its section). WU3 DONE (`9ec2caa`) — seed namespace/slug/image/doc-rot remainder, incl.
+the required salt-stability comment and dev-DB idempotency proof (see apply-progress).
+Remaining open work: WU5, WU6, WU7.
 
 ---
 
@@ -154,10 +155,14 @@ MN_TRANSFERENCIA→MN_TRANSFER.`)
 
 ## WU3 — infra-db seed source constant/slug/image renames (block F remainder)
 
-**Status: partially absorbed into WU2** — the literal enum-value guards in `prisma-order.repository.ts`
+**Status: [x] DONE** — commit `9ec2caa`. The literal enum-value guards in `prisma-order.repository.ts`
 + `prisma-order.repository.spec.ts`, and the enum-value literals inside `seed.ts` (deliveryMode/status
-fixtures, `DEMO_MN_RATE_CHANNEL`) + `seed.spec.ts`, are DONE (see WU2 commit `df3fc7c`). Remaining scope
-below is ONLY what WU2 explicitly deferred per the naming-decisions "MUST NOT CHANGE in WU2" list.
+fixtures, `DEMO_MN_RATE_CHANNEL`) + `seed.spec.ts`, were already DONE in WU2 (commit `df3fc7c`). This
+commit closed the remaining scope: `VENTAS_SEED_NAMESPACE`→`SALES_SEED_NAMESPACE`, `DEMO_CATEGORY_SLUG`
+value `'ventas-seed-demo'`→`'sales-seed-demo'` (the fix that closes the duplicate-category window left
+open since WU2's migration), both seed image paths, the required salt-stability comment at `seed.ts:18`,
+`seed.spec.ts`'s cleanup-filter slug, and the `customer/seed.ts:27` doc-rot fix. Full detail, evidence,
+and dev-DB idempotency proof in `sdd/ventas-english-rename/apply-progress`.
 
 **Size**: small, 2 files (`seed.ts`, `packages/infra-db/src/customer/seed.ts` doc-rot fix).
 
