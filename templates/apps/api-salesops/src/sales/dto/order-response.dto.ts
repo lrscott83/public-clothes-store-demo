@@ -58,8 +58,12 @@ export class OrderResponseDto {
   customerName!: string;
   warehouseId!: string;
   deliveryMode!: string;
+  /** Spanish, UI-facing display label for `deliveryMode` (`OrderLabelHelpers.getDeliveryModeLabel`). */
+  deliveryModeLabel!: string;
   currency!: string;
   status!: string;
+  /** Spanish, UI-facing display label for `status` (`OrderLabelHelpers.getOrderStatusLabel`). */
+  statusLabel!: string;
   subtotal!: string;
   discountTotal!: string;
   total!: string;

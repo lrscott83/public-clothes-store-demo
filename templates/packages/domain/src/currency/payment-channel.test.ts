@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CHANNEL_CURRENCY } from './payment-channel.js';
+import { CHANNEL_CURRENCY, PAYMENT_CHANNEL_LABELS_ES, getPaymentChannelLabel } from './payment-channel.js';
 import type { PaymentChannel } from './payment-channel.js';
 
 describe('CHANNEL_CURRENCY', () => {
@@ -34,5 +34,20 @@ describe('CHANNEL_CURRENCY', () => {
     // this, proving unknown channels can never silently resolve to a default value.
     const invalid: PaymentChannel = 'BITCOIN';
     expect(invalid).toBe('BITCOIN');
+  });
+});
+
+describe('PAYMENT_CHANNEL_LABELS_ES / getPaymentChannelLabel', () => {
+  it('covers every PaymentChannel with the neutral LatAm Spanish label (owner-approved)', () => {
+    expect(PAYMENT_CHANNEL_LABELS_ES.ZELLE).toBe('Zelle');
+    expect(PAYMENT_CHANNEL_LABELS_ES.USD_CASH).toBe('USD en efectivo');
+    expect(PAYMENT_CHANNEL_LABELS_ES.EUR_CASH).toBe('EUR en efectivo');
+    expect(PAYMENT_CHANNEL_LABELS_ES.MN_CASH).toBe('MN en efectivo');
+    expect(PAYMENT_CHANNEL_LABELS_ES.MN_TRANSFER).toBe('Transferencia en MN');
+  });
+
+  it('getPaymentChannelLabel looks up the same map', () => {
+    expect(getPaymentChannelLabel('ZELLE')).toBe('Zelle');
+    expect(getPaymentChannelLabel('MN_TRANSFER')).toBe('Transferencia en MN');
   });
 });

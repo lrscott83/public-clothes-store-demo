@@ -249,6 +249,19 @@ describe('OrderService', () => {
 
       expect(result).toBeNull();
     });
+
+    it('computes statusLabel/deliveryModeLabel in neutral LatAm Spanish alongside the English keys', async () => {
+      orderRepo.findById.mockResolvedValue(
+        sampleOrder({ status: 'verified', deliveryMode: 'delivery' }),
+      );
+
+      const result = await service.findById('order-uuid-1');
+
+      expect(result?.status).toBe('verified');
+      expect(result?.statusLabel).toBe('Verificado');
+      expect(result?.deliveryMode).toBe('delivery');
+      expect(result?.deliveryModeLabel).toBe('Envío a domicilio');
+    });
   });
 
   describe('list', () => {
