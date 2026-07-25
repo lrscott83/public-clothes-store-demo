@@ -24,8 +24,10 @@ the required salt-stability comment and dev-DB idempotency proof (see apply-prog
 (`6d722f2`) — Currency fn/param rename, also renamed the previously-unitemized `tryResolverTasa`
 helper to `tryResolveRate` (see WU5 section for why). WU6 DONE (`088f19d`) — Spanish display labels,
 additive, strict TDD RED→GREEN applied for real (see WU6 section for RED transcripts and the
-exhaustiveness compiler-error proof).
-Remaining open work: WU7.
+exhaustiveness compiler-error proof). WU7 DONE (`16b4a26`) — spec + docs literal sweep, zero behavior
+change, all gates green.
+
+**Change implementation-complete.** All 7 work units DONE.
 
 ---
 
@@ -304,27 +306,80 @@ MN_TRANSFER=«Transferencia en MN».
 
 ## WU7 — OpenSpec spec + docs literal sweep
 
-**Size**: ~60–70 lines, 3 files. Final unit — spec should describe shipped behavior, not precede it.
+**Status: [x] DONE** — commit `16b4a26` (`docs(sales): update spec and e2e fixtures to the English enum
+values`). 5 files changed, 152 insertions / 152 deletions. Zero behavior change (docs + test-fixture
+strings only). All verification gates green: `pnpm -r build` exit 0, domain 238/238, infra-db 121/121
+(real Postgres), api-salesops unit 181/181, api-salesops e2e 50/50 (built dist first), `api-salesops`
+lint (`--max-warnings 0`, includes `backend-boundaries`) clean with zero auto-fix diffs, exhaustiveness
+switch-statement sweep zero hits. Full detail (including the two files added beyond the original
+3-file estimate, and the out-of-scope categories justified one by one) in
+`sdd/ventas-english-rename/apply-progress`.
 
-**Commit**: `docs(sales): update spec and plan docs for English enum literals`
+**Files** (actual, supersedes the original 3-file estimate below):
+- `openspec/specs/salesops-ventas/spec.md` — ~66 literal/symbol occurrences corrected; also fixed 2
+  redundant/grammar artifacts left by the mechanical rename (`` `created` (created) `` → `` `created` ``;
+  `an `delivered`` → `a `delivered``) and renamed the module-name references ("Ventas" → "Sales") that
+  denote the same renamed `SalesModule`/`sales/` entity.
+- `openspec/specs/salesops-currency/spec.md` — **added to scope beyond the original file list**: this is
+  the authoritative spec for the exact Currency module WU5 renamed (`resolverTasa`→`resolveRate`,
+  `convertir`→`convert`, `convertirEntreMonedas`→`convertBetweenCurrencies`, params
+  `origen`→`source`/`canal`→`channel`/`momento`→`at`/`monedaDestino`→`targetCurrency`,
+  `USD_EFECTIVO`→`USD_CASH`, `EUR_EFECTIVO`→`EUR_CASH`, `MN_EFECTIVO`→`MN_CASH`,
+  `MN_TRANSFERENCIA`→`MN_TRANSFER`) — it was not itemized in the original inventory but the final residue
+  sweep surfaced it, so it was fixed in-run rather than deferred. Left `efectivaDesde` (a field-name
+  reference, line 69) untouched — that was ALREADY stale before this SDD change (real column is
+  `effectiveFrom`) and isn't one of the renamed symbols in scope here; flagged as a pre-existing,
+  out-of-scope discrepancy rather than silently fixed.
+- `templates/apps/api-salesops/test/order.e2e-spec.ts` — ~34 fixture-string occurrences
+  (`describe('Ventas (e2e)')`→`'Sales (e2e)'`, `'Ventas E2E'`→`'Sales E2E'` (covers the `Cliente`/`Depósito`
+  compounds), slug `'ventas-e2e'`→`'sales-e2e'`, login prefix `` `ventas.e2e.` ``→`` `sales.e2e.` ``).
+- `docs/plans/ventas-follow-ups-pendientes.md` — 3 stale source-path references
+  (`domain/src/ventas/order.ts`→`sales/order.ts`, `infra-db/src/ventas/seed.ts`→`sales/seed.ts`,
+  `infra-db/src/ventas/prisma-order.repository.ts`→`sales/prisma-order.repository.ts`) + one
+  backtick-quoted enum-literal list (`` `creado/verificado/entregado/cancelado` ``→
+  `` `created/verified/delivered/cancelled` ``).
+- `docs/plans/ventas-devoluciones-flujo-diferido.md` — full state-machine diagram/table (backtick-quoted
+  `creado/verificado/entregado/cancelado` throughout) updated to English; `devuelto` (a PROPOSED future
+  state name, not yet implemented) and all "Ventas"/"módulo Ventas (`backend-ventas`)" prose left Spanish —
+  that doc explicitly ties its terminology to the archived `backend-ventas` change's own identity.
 
-**Files**:
-- `openspec/specs/salesops-ventas/spec.md` (66 quoted enum-literal occurrences — accuracy fix only,
-  requirement prose stays as-is)
-- `docs/plans/ventas-follow-ups-pendientes.md` (quoted literals only)
-- `docs/plans/ventas-devoluciones-flujo-diferido.md` (quoted literals only)
+**Deliberately left untouched (with justification)**:
+- `docs/plans/monedas-tasas-cambio-design.md` — despite containing the exact same stale Currency literals,
+  its own header (line 3) and code references (lines 117, 136) explicitly scope it to
+  `apps/salesops-mvp` (the disconnected prototype), which is out of scope for the whole change.
+- `openspec/specs/salesops-mvp/spec.md`, `openspec/changes/salesops-11-finanzas-dashboard/*`,
+  `docs/plans/mvp-sales-ops-cockpit.md`, `docs/plans/dashboard-decisiones*.md`,
+  `docs/plans/reference/*.md` — all describe the MVP prototype's own (richer, disconnected) domain model
+  or the owner's real manual business process, not the renamed backend.
+- `openspec/changes/archive/**` (backend-ventas and other archived changes) — historical record, must
+  never be rewritten.
+- `openspec/changes/ventas-english-rename/**` (this change's own proposal/tasks) — describes the
+  before/after mapping using the OLD names by design.
+- `openspec/changes/backend-users-roles/tasks.md` (one `VentasModule` hit) — a different, already-merged
+  SDD change's own historical tasks checklist, accurately describing the module name AS IT WAS at the
+  time that change shipped (before this rename). Left untouched to avoid revising another change's
+  historical record; not part of this change's file list.
+- `templates/packages/domain/src/sales/labels.ts`/`labels.test.ts`,
+  `apps/api-salesops/src/sales/order.service.spec.ts` — matches are the intentional Spanish DISPLAY LABEL
+  values from WU6 (block H, e.g. `'Envío a domicilio'`), not residue.
 
-**Steps**:
-1. `rg -n "creado|verificado|entregado|cancelado|recogida|domicilio|EFECTIVO|TRANSFERENCIA" openspec/specs/salesops-ventas/spec.md docs/plans/ventas-*.md`
-2. Replace each quoted literal with its English value. Do not translate surrounding Spanish prose.
+**Commit**: `docs(sales): update spec and e2e fixtures to the English enum values`
 
-**Verification**:
-- Full residue sweep: `rg -i "ventas|creado|verificado|entregado|cancelado|recogida|domicilio|EFECTIVO|TRANSFERENCIA" templates openspec/specs/salesops-ventas` — expected remaining hits ONLY: UI label VALUES (block H), `'Ventas Demo'` display name, applied-migration file comments (historical, do not edit), Spanish planning prose.
-- `pnpm -w build && pnpm -w test` (full workspace) from `templates/`
-- `pnpm --filter @store-mgmt/api-salesops` lint: `backend-boundaries` rule, `--max-warnings 0`
+**Verification (all real, all green)**:
+- `pnpm -r build` — exit 0.
+- `pnpm --filter @store-mgmt/domain test` — 238/238.
+- `pnpm --filter @store-mgmt/infra-db test` — 121/121 (real Postgres).
+- `pnpm --filter api-salesops test` — 181/181.
+- `pnpm --filter api-salesops test:e2e` — 50/50 (rebuilt dist first).
+- `pnpm --filter api-salesops lint` (`--max-warnings 0`, incl. `backend-boundaries`) — clean, zero
+  auto-fix diffs.
 - `rg -n "switch\s*\(\s*\w*(status|deliveryMode|channel)"` across `packages/domain/src`,
-  `packages/infra-db/src`, `apps/api-salesops/src` → confirm still zero (no exhaustiveness-check
-  switch statements were missed)
+  `packages/infra-db/src`, `apps/api-salesops/src` — zero hits, confirmed.
+- Full repo-root residue sweep (see apply-progress for the complete categorized breakdown) — every
+  surviving hit individually justified as one of: archived-change historical record, MUST-NEVER-RENAME
+  hash salt, out-of-scope `salesops-mvp` prototype surface, this change's own before/after planning
+  artifacts, a different change's already-shipped historical record, Spanish prose, or intentional
+  Spanish display-label values.
 
 ---
 
