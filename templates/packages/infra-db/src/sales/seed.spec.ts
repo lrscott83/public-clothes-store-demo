@@ -26,7 +26,7 @@ describe('seedOrders', () => {
     await prisma.stockMovement.deleteMany({});
     await prisma.stockLevel.deleteMany({});
     await prisma.product.deleteMany({ where: { name: { startsWith: 'Producto Demo' } } });
-    await prisma.category.deleteMany({ where: { slug: 'ventas-seed-demo' } });
+    await prisma.category.deleteMany({ where: { slug: 'sales-seed-demo' } });
     await prisma.customer.deleteMany({});
     // `seedOrders` -> `seedCustomers` mints/links an `app_user` per demo
     // customer (backend-users-roles, Customer.userId 1:1) — clean those up

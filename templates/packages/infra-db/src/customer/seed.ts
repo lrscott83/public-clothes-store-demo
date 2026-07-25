@@ -24,7 +24,7 @@ export interface SeedCustomerResult {
 /**
  * Fixed, arbitrary namespace UUID for deriving a stable per-name id used
  * ONLY as `deriveLogin`'s id-fragment input (RFC 4122 UUID v5) — mirrors
- * `ventas/seed.ts`'s `VENTAS_SEED_NAMESPACE` pattern, own namespace so the
+ * `sales/seed.ts`'s `SALES_SEED_NAMESPACE` pattern, own namespace so the
  * two never collide. This id is NOT the real `Customer.id` (Prisma still
  * DB-generates that) — it exists purely so the demo customers' derived
  * `login` stays stable/idempotent across re-seeds, keyed on `fullName`

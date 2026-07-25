@@ -6,15 +6,21 @@ import { seedCustomers } from '../customer/seed.js';
 import { PrismaOrderRepository } from './prisma-order.repository.js';
 
 /**
- * Fixed, arbitrary namespace UUID for deriving deterministic Ventas-seed ids
+ * Fixed, arbitrary namespace UUID for deriving deterministic Sales-seed ids
  * (RFC 4122 UUID v5) — mirrors `product/seed.ts`'s `PRODUCT_SEED_NAMESPACE`
  * pattern, own namespace so the two never collide. Never reused for any
  * other purpose.
  */
-const VENTAS_SEED_NAMESPACE = '3f0a6c9e-6e0a-4a7d-9a52-2c9d4a5f7b41';
+const SALES_SEED_NAMESPACE = '3f0a6c9e-6e0a-4a7d-9a52-2c9d4a5f7b41';
 
 function deterministicId(key: string): string {
-  const namespaceBytes = Buffer.from(VENTAS_SEED_NAMESPACE.replace(/-/g, ''), 'hex');
+  const namespaceBytes = Buffer.from(SALES_SEED_NAMESPACE.replace(/-/g, ''), 'hex');
+  // The 'ventas-seed:' prefix below is a fixed hash salt, not an identifier —
+  // it must NEVER change. It is concatenated with the namespace bytes and
+  // SHA-1'd to derive the RFC-4122 v5 UUID for every seeded demo order,
+  // product and sale-credit. Renaming it would re-derive every id, so the
+  // next seed run would upsert nothing and instead create a full duplicate
+  // of the demo dataset while orphaning the originals.
   const nameBytes = Buffer.from(`ventas-seed:${key}`, 'utf8');
   const hash = createHash('sha1').update(Buffer.concat([namespaceBytes, nameBytes])).digest();
   const bytes = Buffer.from(hash.subarray(0, 16));
@@ -24,7 +30,7 @@ function deterministicId(key: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-const DEMO_CATEGORY_SLUG = 'ventas-seed-demo';
+const DEMO_CATEGORY_SLUG = 'sales-seed-demo';
 const DEMO_PRODUCT_USD_ID = deterministicId('product:usd');
 const DEMO_PRODUCT_MN_ID = deterministicId('product:mn');
 const DEMO_MN_RATE_CHANNEL = 'MN_TRANSFER' as const;
@@ -90,7 +96,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
       cost: '60.00',
       costCurrency: 'USD',
       categoryId: category.id,
-      image: 'ventas-seed/demo-usd.png',
+      image: 'sales-seed/demo-usd.png',
       order: 1,
       active: true,
     },
@@ -107,7 +113,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
       cost: '21000.00',
       costCurrency: 'MN',
       categoryId: category.id,
-      image: 'ventas-seed/demo-mn.png',
+      image: 'sales-seed/demo-mn.png',
       order: 2,
       active: true,
     },
