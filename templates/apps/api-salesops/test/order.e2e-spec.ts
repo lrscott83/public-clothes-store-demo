@@ -20,7 +20,7 @@ const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
  * business-logic assertions stay focused; the dedicated `RolesGuard
  * enforcement` block at the bottom exercises the role matrix + scope itself.
  */
-describe('Ventas (e2e)', () => {
+describe('Sales (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let adminToken: string;
@@ -56,25 +56,25 @@ describe('Ventas (e2e)', () => {
     const category = await request(app.getHttpServer())
       .post('/categories')
       .set(...authHeader(adminToken))
-      .send({ name: 'Ventas E2E', slug: 'ventas-e2e', order: 1 });
+      .send({ name: 'Sales E2E', slug: 'sales-e2e', order: 1 });
     categoryId = category.body.id;
 
     const warehouse = await request(app.getHttpServer())
       .post('/warehouses')
       .set(...authHeader(adminToken))
-      .send({ name: 'Depósito Ventas E2E' });
+      .send({ name: 'Depósito Sales E2E' });
     warehouseId = warehouse.body.id;
 
     // Every Customer now requires an existing User (backend-users-roles,
     // Customer.userId 1:1) — mint one for this fixture, unique login per
     // run since `beforeEach` re-creates it every test.
     const user = await prisma.user.create({
-      data: { login: `ventas.e2e.${randomUUID()}`, passwordHash: VALID_HASH, fullName: 'Cliente Ventas E2E' },
+      data: { login: `sales.e2e.${randomUUID()}`, passwordHash: VALID_HASH, fullName: 'Cliente Sales E2E' },
     });
     const customer = await request(app.getHttpServer())
       .post('/customers')
       .set(...authHeader(adminToken))
-      .send({ fullName: 'Cliente Ventas E2E', userId: user.id });
+      .send({ fullName: 'Cliente Sales E2E', userId: user.id });
     customerId = customer.body.id;
 
     const usdProduct = await request(app.getHttpServer())
@@ -167,12 +167,12 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken))
       .send({
         customerId,
-        customerName: 'Cliente Ventas E2E',
+        customerName: 'Cliente Sales E2E',
         warehouseId,
         deliveryMode: 'pickup',
         lines: [
-          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
-          { productId: mnProductId, productName: 'Producto MN', categoryName: 'Ventas E2E', price: { amount: '350.00', currency: 'MN' }, quantity: 1 },
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+          { productId: mnProductId, productName: 'Producto MN', categoryName: 'Sales E2E', price: { amount: '350.00', currency: 'MN' }, quantity: 1 },
         ],
         payments: [{ channel: 'ZELLE', amount: { amount: '101.00', currency: 'USD' } }],
       });
@@ -192,11 +192,11 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken))
       .send({
         customerId,
-        customerName: 'Cliente Ventas E2E',
+        customerName: 'Cliente Sales E2E',
         warehouseId,
         deliveryMode: 'pickup',
         lines: [
-          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 2 },
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 2 },
         ],
         payments: [
           { channel: 'ZELLE', amount: { amount: '150.00', currency: 'USD' } },
@@ -222,11 +222,11 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken))
       .send({
         customerId,
-        customerName: 'Cliente Ventas E2E',
+        customerName: 'Cliente Sales E2E',
         warehouseId,
         deliveryMode: 'pickup',
         lines: [
-          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
@@ -253,11 +253,11 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken))
       .send({
         customerId,
-        customerName: 'Cliente Ventas E2E',
+        customerName: 'Cliente Sales E2E',
         warehouseId,
         deliveryMode: 'pickup',
         lines: [
-          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
@@ -288,11 +288,11 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken))
       .send({
         customerId,
-        customerName: 'Cliente Ventas E2E',
+        customerName: 'Cliente Sales E2E',
         warehouseId,
         deliveryMode: 'pickup',
         lines: [
-          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
@@ -321,11 +321,11 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken))
       .send({
         customerId,
-        customerName: 'Cliente Ventas E2E',
+        customerName: 'Cliente Sales E2E',
         warehouseId,
         deliveryMode: 'pickup',
         lines: [
-          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
@@ -351,11 +351,11 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken))
       .send({
         customerId,
-        customerName: 'Cliente Ventas E2E',
+        customerName: 'Cliente Sales E2E',
         warehouseId,
         deliveryMode: 'pickup',
         lines: [
-          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
@@ -384,11 +384,11 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken))
       .send({
         customerId,
-        customerName: 'Cliente Ventas E2E',
+        customerName: 'Cliente Sales E2E',
         warehouseId,
         deliveryMode: 'pickup',
         lines: [
-          { productId: eurProductId, productName: 'Producto EUR', categoryName: 'Ventas E2E', price: { amount: '50.00', currency: 'EUR' }, quantity: 1 },
+          { productId: eurProductId, productName: 'Producto EUR', categoryName: 'Sales E2E', price: { amount: '50.00', currency: 'EUR' }, quantity: 1 },
         ],
         payments: [{ channel: 'EUR_CASH', amount: { amount: '50.00', currency: 'EUR' } }],
       });
@@ -407,11 +407,11 @@ describe('Ventas (e2e)', () => {
       .set(...authHeader(adminToken))
       .send({
         customerId,
-        customerName: 'Cliente Ventas E2E',
+        customerName: 'Cliente Sales E2E',
         warehouseId,
         deliveryMode: 'pickup',
         lines: [
-          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
         ],
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
@@ -478,11 +478,11 @@ describe('Ventas (e2e)', () => {
         .set(...authHeader(salesToken))
         .send({
           customerId,
-          customerName: 'Cliente Ventas E2E',
+          customerName: 'Cliente Sales E2E',
           warehouseId,
           deliveryMode: 'pickup',
           lines: [
-            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
           ],
           payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
         });
@@ -503,11 +503,11 @@ describe('Ventas (e2e)', () => {
         .set(...authHeader(adminToken))
         .send({
           customerId,
-          customerName: 'Cliente Ventas E2E',
+          customerName: 'Cliente Sales E2E',
           warehouseId,
           deliveryMode: 'pickup',
           lines: [
-            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
           ],
           payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
         });
@@ -537,11 +537,11 @@ describe('Ventas (e2e)', () => {
         .set(...authHeader(adminToken))
         .send({
           customerId,
-          customerName: 'Cliente Ventas E2E',
+          customerName: 'Cliente Sales E2E',
           warehouseId,
           deliveryMode: 'pickup',
           lines: [
-            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
           ],
           payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
         });
@@ -568,11 +568,11 @@ describe('Ventas (e2e)', () => {
         .set(...authHeader(adminToken))
         .send({
           customerId,
-          customerName: 'Cliente Ventas E2E',
+          customerName: 'Cliente Sales E2E',
           warehouseId,
           deliveryMode: 'pickup',
           lines: [
-            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
           ],
           payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
         });
@@ -581,11 +581,11 @@ describe('Ventas (e2e)', () => {
         .set(...authHeader(adminToken))
         .send({
           customerId,
-          customerName: 'Cliente Ventas E2E',
+          customerName: 'Cliente Sales E2E',
           warehouseId: otherWarehouse.body.id,
           deliveryMode: 'pickup',
           lines: [
-            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Ventas E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+            { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
           ],
           payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
         });

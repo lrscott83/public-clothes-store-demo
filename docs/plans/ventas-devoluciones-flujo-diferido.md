@@ -9,21 +9,21 @@
 En el slice inicial de Ventas la máquina de estados del pedido es:
 
 ```
-creado ──▶ verificado ──▶ entregado        (verificado congela tasa + totales)
-   └──────────▶ cancelado ◀──────────┘
+created ──▶ verified ──▶ delivered        (verified congela tasa + totales)
+   └──────────▶ cancelled ◀──────────┘
 ```
 
-- `cancelado` es alcanzable **solo desde `creado` o `verificado`**.
-- `entregado` es **terminal**.
+- `cancelled` es alcanzable **solo desde `created` o `verified`**.
+- `delivered` es **terminal**.
 
 El puente con Inventario (Opción A — reservar y consumir) funciona así en este slice:
 
 | Transición | Efecto en Inventario |
 |---|---|
-| `verificado` | **reserva**: `reserved += qty` por línea |
-| `entregado` | **consume**: `sale_out` (`onHand −= qty`) + libera la reserva (`reserved −= qty`) |
-| cancelar desde `verificado` | **libera la reserva**: `reserved −= qty` |
-| cancelar desde `creado` | sin efecto (no se tocó stock) |
+| `verified` | **reserva**: `reserved += qty` por línea |
+| `delivered` | **consume**: `sale_out` (`onHand −= qty`) + libera la reserva (`reserved −= qty`) |
+| cancelar desde `verified` | **libera la reserva**: `reserved −= qty` |
+| cancelar desde `created` | sin efecto (no se tocó stock) |
 
 ## El flujo diferido: devolución de un pedido entregado
 
@@ -39,7 +39,7 @@ Cuando se implemente, debe cubrir:
    dedicado). Debe ser auditable, no un `onHand` mutado a mano.
 2. **Dinero:** revertir los pagos y/o la `SaleCredit` asociada (reembolso). Definir
    si es reembolso total o parcial, y por qué canal se devuelve.
-3. **Estado:** decidir si la transición es `entregado → cancelado` o un estado
+3. **Estado:** decidir si la transición es `delivered → cancelled` o un estado
    nuevo dedicado (`devuelto`), para no confundir una devolución con una
    cancelación temprana. Recomendación inicial: estado propio `devuelto`.
 4. **Tasas:** el reembolso usa las tasas **congeladas** del pedido original (mismo

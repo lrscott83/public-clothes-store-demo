@@ -45,16 +45,16 @@ Exactly five channels exist, each with a fixed settlement currency:
 | Channel | Currency |
 |---|---|
 | `ZELLE` | USD |
-| `USD_EFECTIVO` | USD |
-| `EUR_EFECTIVO` | EUR |
-| `MN_TRANSFERENCIA` | MN |
-| `MN_EFECTIVO` | MN |
+| `USD_CASH` | USD |
+| `EUR_CASH` | EUR |
+| `MN_TRANSFER` | MN |
+| `MN_CASH` | MN |
 
 No other channel MUST be accepted.
 
 #### Scenario: Channel determines settlement currency
 
-- GIVEN channel `MN_TRANSFERENCIA`
+- GIVEN channel `MN_TRANSFER`
 - WHEN a rate/conversion is resolved for it
 - THEN the settlement currency is MN
 
@@ -82,61 +82,61 @@ Rates MUST be append-only: every change is a new row (`channel`, `rate`, `efecti
 
 ### Requirement: Pure Rate Resolver with Cascade Fallback
 
-`resolverTasa(canal, momento)` MUST be a pure function (no I/O) resolving the current rate via cascade: (1) channel's own rate; (2) else its currency's rate (e.g. `USD_EFECTIVO` → USD=1); (3) else throw an explicit error. It MUST NEVER return 0 or null.
+`resolveRate(channel, at)` MUST be a pure function (no I/O) resolving the current rate via cascade: (1) channel's own rate; (2) else its currency's rate (e.g. `USD_CASH` → USD=1); (3) else throw an explicit error. It MUST NEVER return 0 or null.
 
 #### Scenario: Channel has its own rate
 
 - GIVEN `ZELLE` has a rate effective before the query moment
-- WHEN `resolverTasa(ZELLE, momento)` runs
+- WHEN `resolveRate(ZELLE, at)` runs
 - THEN it returns that channel-specific rate
 
 #### Scenario: Falls back to currency rate
 
-- GIVEN `USD_EFECTIVO` has no channel-specific rate
-- WHEN `resolverTasa` runs for it
+- GIVEN `USD_CASH` has no channel-specific rate
+- WHEN `resolveRate` runs for it
 - THEN it returns the USD pivot rate (1), not an error
 
 #### Scenario: No rate resolvable throws explicit error
 
 - GIVEN neither the channel nor its currency has a rate at that moment
-- WHEN `resolverTasa` runs
+- WHEN `resolveRate` runs
 - THEN it throws an explicit typed error — never 0 or null
 
 ### Requirement: Money Conversion via USD Pivot
 
-`convertir(Money origen, canal, monedaDestino, momento)` MUST be a pure function converting
-through USD (origin → USD → destination), using rates from `resolverTasa` at the given
-moment. When `origen.currency === monedaDestino` (same-currency), the function MUST consult
+`convert(Money source, channel, targetCurrency, at)` MUST be a pure function converting
+through USD (origin → USD → destination), using rates from `resolveRate` at the given
+moment. When `source.currency === targetCurrency` (same-currency), the function MUST consult
 a rate for that channel/currency first and apply it if one exists; only when NO rate exists
 MUST it fall back to 1×1 identity. It MUST NEVER short-circuit to identity without
 consulting a rate first.
-(Previously: same-currency short-circuited straight to `origen` unchanged, without
+(Previously: same-currency short-circuited straight to `source` unchanged, without
 consulting whether a channel/currency-specific rate existed.)
 
 #### Scenario: Convert between two non-pivot currencies
 
-- GIVEN a `Money` in EUR via `EUR_EFECTIVO`, target MN
-- WHEN `convertir` runs at a moment where both rates exist
+- GIVEN a `Money` in EUR via `EUR_CASH`, target MN
+- WHEN `convert` runs at a moment where both rates exist
 - THEN the result is `Money` in MN computed EUR→USD→MN
 
 #### Scenario: Same-currency with an existing rate is applied
 
-- GIVEN `origen.currency === monedaDestino` and a resolvable rate for that channel/currency
-- WHEN `convertir` runs
+- GIVEN `source.currency === targetCurrency` and a resolvable rate for that channel/currency
+- WHEN `convert` runs
 - THEN the resolved rate is applied to the conversion — it is not a blind passthrough of
-  `origen`
+  `source`
 
 #### Scenario: Same-currency with no rate falls back to 1×1
 
-- GIVEN `origen.currency === monedaDestino` and no rate resolvable for that channel/currency
-- WHEN `convertir` runs
-- THEN the result equals `origen` via 1×1 identity
+- GIVEN `source.currency === targetCurrency` and no rate resolvable for that channel/currency
+- WHEN `convert` runs
+- THEN the result equals `source` via 1×1 identity
 
 #### Scenario: Cross-currency with no rate throws, never defaults to 1×1
 
-- GIVEN `origen.currency !== monedaDestino` and no rate resolvable for the destination
+- GIVEN `source.currency !== targetCurrency` and no rate resolvable for the destination
   currency
-- WHEN `convertir` runs
+- WHEN `convert` runs
 - THEN it throws `RateNotFoundError` — it MUST NEVER return a 1×1 identity result for
   differing currencies
 
@@ -178,28 +178,28 @@ The domain MUST define an `ICurrencyRepository` port for reading/appending curre
 
 ### Requirement: Channel-less Currency-to-Currency Conversion
 
-The system MUST expose a pure `convertirEntreMonedas(rates, origen, monedaDestino, at)`
+The system MUST expose a pure `convertBetweenCurrencies(rates, source, targetCurrency, at)`
 helper for conversions with no `PaymentChannel` (e.g. `OrderLine` product-currency →
 order-currency). It MUST resolve both sides via the existing internal
 `resolveRateForCurrency`, convert origin → USD → destination as ONE exact bigint rational
 rounded HALF-UP exactly once, and follow the same same-currency/cross-currency rules as
-`convertir`: same-currency uses a rate if one exists else 1×1; cross-currency with no
+`convert`: same-currency uses a rate if one exists else 1×1; cross-currency with no
 resolvable rate raises `RateNotFoundError`.
 
 #### Scenario: Line conversion product-currency to order-currency
 
 - GIVEN a product priced in EUR and an order whose derived currency is USD
-- WHEN the line is frozen via `convertirEntreMonedas`
+- WHEN the line is frozen via `convertBetweenCurrencies`
 - THEN the result is `Money` in USD, converted EUR→USD with one HALF-UP rounding
 
 #### Scenario: No PaymentChannel is required
 
-- GIVEN a call to `convertirEntreMonedas`
+- GIVEN a call to `convertBetweenCurrencies`
 - WHEN inspected
 - THEN its signature carries no `PaymentChannel` parameter — only currencies
 
 #### Scenario: Missing cross-currency rate raises RateNotFoundError
 
 - GIVEN no rate resolvable for the destination currency
-- WHEN `convertirEntreMonedas` runs for two different currencies
+- WHEN `convertBetweenCurrencies` runs for two different currencies
 - THEN it throws `RateNotFoundError` — it MUST NEVER default to 1×1

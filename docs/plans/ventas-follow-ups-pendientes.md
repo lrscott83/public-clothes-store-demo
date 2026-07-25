@@ -24,7 +24,7 @@ crédito (`total > 0`, sin pago inicial) tira `InvalidOrderError` y **no se pued
 crear**. La entidad `SaleCredit` (FKs `orderId`/`customerId` + `isPaid`) SÍ está
 enviada y testeada; lo que falta es relajar el invariante del agregado para admitirla.
 
-- **Dónde:** `templates/packages/domain/src/ventas/order.ts:133-141` (el chequeo del
+- **Dónde:** `templates/packages/domain/src/sales/order.ts:133-141` (el chequeo del
   payment-sum). Tests: no hay ninguno que combine `SaleCredit` + `createOrder`.
 - **Spec:** ya enmendado honestamente como diferido en
   `openspec/specs/salesops-ventas/spec.md` → requisito "SaleCredit for Credit-Only
@@ -38,7 +38,7 @@ enviada y testeada; lo que falta es relajar el invariante del agregado para admi
 3. [GREEN] `order.ts`: relajar el invariante a `Σpagos <= total`; cuando
    `Σpagos < total`, **exigir** `SaleCredit` presente cubriendo el gap (si no hay
    `SaleCredit` y falta plata → `InvalidOrderError`). Congelar tasas igual que hoy.
-4. Propagar al seed (`infra-db/src/ventas/seed.ts` ya tiene un pedido "credit sale"
+4. Propagar al seed (`infra-db/src/sales/seed.ts` ya tiene un pedido "credit sale"
    con pago balanceador — ajustarlo a credit-only real) y a un caso e2e.
 5. Revertir la nota "Deferred" del spec al cerrar.
 
@@ -72,7 +72,7 @@ margen `onHand === reserved`). El código es correcto, pero **ningún test disti
 orden**: ambos UPDATE guardados comparten un `$transaction`, así que un rollback se ve
 igual sin importar el orden, y no hay test que pegue en el margen ajustado.
 
-- **Dónde:** `templates/packages/infra-db/src/ventas/prisma-order.repository.ts`
+- **Dónde:** `templates/packages/infra-db/src/sales/prisma-order.repository.ts`
   (transición `deliver`) + `apply-reservation.ts` / `apply-stock-movement.ts`.
 
 **Propuesta:**
@@ -119,8 +119,8 @@ agregado `Order` con `SaleCredit.customerId` como FK.
 
 Surgió de la auditoría de deletes. Decisión del owner: una `Order` (y sus hijos)
 es un **evento transaccional inmutable** — no se borra ni con soft-delete. Su
-ciclo de vida vive 100% en la máquina de estados (`creado/verificado/entregado/
-cancelado`); cancelar/devolver son ESTADOS, no borrados. Se alinea con
+ciclo de vida vive 100% en la máquina de estados (`created/verified/delivered/
+cancelled`); cancelar/devolver son ESTADOS, no borrados. Se alinea con
 `StockMovement`/`ExchangeRate` (append-only, sin `active`).
 
 Removido en las tres capas: `active` de la entidad `Order`/`CreateOrderInput`/
