@@ -20,6 +20,12 @@ occurrence counts).
 
 ## WU1 — Structural rename: `ventas/` → `sales/` folders, `Ventas*` → `Order*`/`SalesModule` classes (blocks D+E)
 
+**Status: [x] DONE** — commit `b435452` (`refactor(sales): rename ventas module to sales, Ventas* classes to
+Order*/SalesModule`), preceded by planning-artifact commit `0f5bb30`. All 5 verification commands green
+(domain 230/230, infra-db 121/121, api-salesops unit 180/180, api-salesops e2e 50/50, `pnpm -r build` clean)
+plus the residue-sweep regex `Ventas(Controller|Service|Module)|from '.*\/ventas\/|ventasService|ventasController`
+returned zero hits. See `sdd/ventas-english-rename/apply-progress` for full detail.
+
 **Size**: ~30–50 lines, 29 files (pure `git mv` + import path/identifier edits, no content change).
 
 **Commit**: `refactor(sales): rename ventas folder and classes to sales/order (D+E)`
