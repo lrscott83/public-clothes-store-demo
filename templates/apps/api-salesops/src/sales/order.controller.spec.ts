@@ -13,10 +13,10 @@ import {
 } from '@store-mgmt/domain';
 import request from 'supertest';
 import { overrideJwtAuth } from '../test-support/auth-test-helpers.js';
-import { VentasController } from './ventas.controller.js';
-import { VentasService } from './ventas.service.js';
+import { OrderController } from './order.controller.js';
+import { OrderService } from './order.service.js';
 
-type VentasServiceMock = {
+type OrderServiceMock = {
   create: jest.Mock;
   update: jest.Mock;
   findById: jest.Mock;
@@ -69,15 +69,15 @@ const validCreateBody = {
 
 /** Builds a test app with `JwtAuthGuard` overridden to inject `req.user` with `roles` (`null` -> 401), keeping the REAL `RolesGuard`. `warehouseOperatorRepository.findByUserId` defaults to a row scoped to `OWN_WAREHOUSE_ID`. */
 async function buildApp(
-  service: VentasServiceMock,
+  service: OrderServiceMock,
   roles: number | null,
   warehouseOperatorRepository: jest.Mocked<IWarehouseOperatorRepository> = buildOperatorRepoMock(),
 ): Promise<INestApplication> {
   const builder = overrideJwtAuth(
     Test.createTestingModule({
-      controllers: [VentasController],
+      controllers: [OrderController],
       providers: [
-        { provide: VentasService, useValue: service },
+        { provide: OrderService, useValue: service },
         { provide: WAREHOUSE_OPERATOR_REPOSITORY, useValue: warehouseOperatorRepository },
         RolesGuard,
       ],
@@ -103,9 +103,9 @@ function buildOperatorRepoMock(): jest.Mocked<IWarehouseOperatorRepository> {
   };
 }
 
-describe('VentasController', () => {
+describe('OrderController', () => {
   let app: INestApplication;
-  let service: VentasServiceMock;
+  let service: OrderServiceMock;
 
   beforeEach(async () => {
     service = {

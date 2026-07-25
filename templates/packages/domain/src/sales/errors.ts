@@ -37,7 +37,7 @@ export class InvalidOrderStateError extends Error {
  * order-line/order-payment building surface the SAME `RateNotFoundError`
  * the Currency module already throws (`currency/errors.ts`). No duplicate
  * class. Re-exporting the identical binding through both `currency/index.js`
- * and `ventas/index.js` is safe: ES module `export *` ambiguity only fires
+ * and `sales/index.js` is safe: ES module `export *` ambiguity only fires
  * when two DIFFERENT bindings share a name, not when both paths resolve to
  * the same original declaration.
  */

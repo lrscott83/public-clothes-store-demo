@@ -8,7 +8,7 @@ import {
   ORDER_REPOSITORY,
   RateNotFoundError,
 } from '@store-mgmt/domain';
-import { VentasService } from './ventas.service.js';
+import { OrderService } from './order.service.js';
 import type { CreateOrderDto } from './dto/index.js';
 
 function buildOrderRepoMock(): jest.Mocked<IOrderRepository> {
@@ -99,8 +99,8 @@ const sampleCreateDto: CreateOrderDto = {
   payments: [{ channel: 'USD_EFECTIVO', amount: { amount: '100.00', currency: 'USD' } }],
 };
 
-describe('VentasService', () => {
-  let service: VentasService;
+describe('OrderService', () => {
+  let service: OrderService;
   let orderRepo: jest.Mocked<IOrderRepository>;
   let currencyRepo: jest.Mocked<ICurrencyRepository>;
 
@@ -109,12 +109,12 @@ describe('VentasService', () => {
     currencyRepo = buildCurrencyRepoMock();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        VentasService,
+        OrderService,
         { provide: ORDER_REPOSITORY, useValue: orderRepo },
         { provide: CURRENCY_REPOSITORY, useValue: currencyRepo },
       ],
     }).compile();
-    service = module.get(VentasService);
+    service = module.get(OrderService);
   });
 
   describe('create', () => {

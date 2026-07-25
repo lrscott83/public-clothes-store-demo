@@ -6,18 +6,18 @@ import {
   PrismaOrderRepository,
   PrismaWarehouseOperatorRepository,
 } from '@store-mgmt/infra-db';
-import { VentasController } from './ventas.controller.js';
-import { VentasService } from './ventas.service.js';
+import { OrderController } from './order.controller.js';
+import { OrderService } from './order.service.js';
 
 @Module({
   imports: [InfraDbModule],
-  controllers: [VentasController],
+  controllers: [OrderController],
   providers: [
-    VentasService,
+    OrderService,
     { provide: ORDER_REPOSITORY, useClass: PrismaOrderRepository },
     { provide: CURRENCY_REPOSITORY, useClass: PrismaCurrencyRepository },
-    // `VentasController` uses this to enforce the `warehouse_operator` scope (backend-users-roles).
+    // `OrderController` uses this to enforce the `warehouse_operator` scope (backend-users-roles).
     { provide: WAREHOUSE_OPERATOR_REPOSITORY, useClass: PrismaWarehouseOperatorRepository },
   ],
 })
-export class VentasModule {}
+export class SalesModule {}

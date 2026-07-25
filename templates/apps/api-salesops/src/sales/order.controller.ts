@@ -29,7 +29,7 @@ import {
   WAREHOUSE_OPERATOR_REPOSITORY,
   type IWarehouseOperatorRepository,
 } from '@store-mgmt/domain';
-import { VentasService } from './ventas.service.js';
+import { OrderService } from './order.service.js';
 import type {
   CreateOrderDto,
   MoneyAmountDto,
@@ -58,7 +58,7 @@ function assertChannel(channel: string): void {
 }
 
 /**
- * REST delivery for the Ventas module (Order aggregate). Validates every
+ * REST delivery for the Sales module (Order aggregate). Validates every
  * `MoneyAmountDto.currency` and `OrderPayment.channel` at the boundary
  * BEFORE calling the service (mirrors `ProductController`/
  * `CurrencyController` — an unknown enum value would otherwise reach
@@ -70,7 +70,7 @@ function assertChannel(channel: string): void {
  * failure during a status transition, is a CONFLICT with the order's
  * current state, never a "resource not found" (design.md decision #4/#8).
  * Unknown `id` -> 404 on every id-scoped route, including the three action
- * endpoints (`VentasService.confirm/deliver/cancel/update` pre-check
+ * endpoints (`OrderService.confirm/deliver/cancel/update` pre-check
  * existence and resolve to `null`, mapped here the same way `findById`
  * already is). There is NO `DELETE` route: an Order is an immutable
  * transactional event — its lifecycle is the status machine
@@ -85,9 +85,9 @@ function assertChannel(channel: string): void {
 @Controller('orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator)
-export class VentasController {
+export class OrderController {
   constructor(
-    private readonly ventasService: VentasService,
+    private readonly orderService: OrderService,
     @Inject(WAREHOUSE_OPERATOR_REPOSITORY)
     private readonly warehouseOperatorRepository: IWarehouseOperatorRepository,
   ) {}
@@ -102,13 +102,13 @@ export class VentasController {
       assertChannel(payment.channel);
       assertCurrency(payment.amount);
     }
-    return this.withDomainErrorMapping(() => this.ventasService.create(body));
+    return this.withDomainErrorMapping(() => this.orderService.create(body));
   }
 
   @Get()
   @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.warehouse_operator)
   async list(@Req() req: AuthenticatedRequest): Promise<OrderResponseDto[]> {
-    const orders = await this.ventasService.list();
+    const orders = await this.orderService.list();
     return this.scopeToOperatorWarehouse(req.user, orders);
   }
 
@@ -118,7 +118,7 @@ export class VentasController {
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
   ): Promise<OrderResponseDto> {
-    const found = await this.ventasService.findById(id);
+    const found = await this.orderService.findById(id);
     if (!found) {
       throw new NotFoundException(`Order "${id}" not found`);
     }
@@ -132,7 +132,7 @@ export class VentasController {
     @Body() body: UpdateOrderDto,
   ): Promise<OrderResponseDto> {
     return this.withDomainErrorMapping(async () => {
-      const updated = await this.ventasService.update(id, body);
+      const updated = await this.orderService.update(id, body);
       if (!updated) {
         throw new NotFoundException(`Order "${id}" not found`);
       }
@@ -144,7 +144,7 @@ export class VentasController {
   @HttpCode(HttpStatus.OK)
   async confirm(@Param('id') id: string): Promise<OrderResponseDto> {
     return this.withDomainErrorMapping(async () => {
-      const confirmed = await this.ventasService.confirm(id);
+      const confirmed = await this.orderService.confirm(id);
       if (!confirmed) {
         throw new NotFoundException(`Order "${id}" not found`);
       }
@@ -160,12 +160,12 @@ export class VentasController {
     @Req() req: AuthenticatedRequest,
   ): Promise<OrderResponseDto> {
     return this.withDomainErrorMapping(async () => {
-      const existing = await this.ventasService.findById(id);
+      const existing = await this.orderService.findById(id);
       if (!existing) {
         throw new NotFoundException(`Order "${id}" not found`);
       }
       await this.assertOrderWarehouseScope(req.user, existing.warehouseId);
-      const delivered = await this.ventasService.deliver(id);
+      const delivered = await this.orderService.deliver(id);
       if (!delivered) {
         throw new NotFoundException(`Order "${id}" not found`);
       }
@@ -177,7 +177,7 @@ export class VentasController {
   @HttpCode(HttpStatus.OK)
   async cancel(@Param('id') id: string): Promise<OrderResponseDto> {
     return this.withDomainErrorMapping(async () => {
-      const cancelled = await this.ventasService.cancel(id);
+      const cancelled = await this.orderService.cancel(id);
       if (!cancelled) {
         throw new NotFoundException(`Order "${id}" not found`);
       }

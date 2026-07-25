@@ -7,5 +7,5 @@ export * from './currency/index.js';
 export * from './product/index.js';
 export * from './inventory/index.js';
 export * from './customer/index.js';
-export * from './ventas/index.js';
+export * from './sales/index.js';
 export * from './users/index.js';

@@ -8,7 +8,7 @@ export { PrismaWarehouseRepository } from './inventory/prisma-warehouse.reposito
 export { PrismaStockLevelRepository } from './inventory/prisma-stock-level.repository.js';
 export { PrismaStockMovementRepository } from './inventory/prisma-stock-movement.repository.js';
 export { PrismaCustomerRepository } from './customer/prisma-customer.repository.js';
-export { PrismaOrderRepository } from './ventas/prisma-order.repository.js';
+export { PrismaOrderRepository } from './sales/prisma-order.repository.js';
 export { PrismaUserRepository } from './users/prisma-user.repository.js';
 export { PrismaRefreshTokenRepository } from './users/prisma-refresh-token.repository.js';
 export { PrismaPasswordResetTokenRepository } from './users/prisma-password-reset-token.repository.js';

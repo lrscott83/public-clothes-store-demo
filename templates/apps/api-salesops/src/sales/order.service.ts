@@ -40,7 +40,7 @@ import type {
 const ALL_CHANNELS = Object.keys(CHANNEL_CURRENCY) as PaymentChannel[];
 
 /**
- * Orchestration layer for the Ventas module (Order aggregate): the only
+ * Orchestration layer for the Sales module (Order aggregate): the only
  * place with both I/O (`ORDER_REPOSITORY`+`CURRENCY_REPOSITORY`) and domain
  * logic (`createOrder`). `create` MUST, in order (design.md decision #3):
  * (1) load rates via `ICurrencyRepository`, (2) run the domain `createOrder`
@@ -50,7 +50,7 @@ const ALL_CHANNELS = Object.keys(CHANNEL_CURRENCY) as PaymentChannel[];
  * `cancel` delegate the actual status transition straight to the matching
  * repository method and propagate `InvalidOrderStateError`/
  * `InsufficientStockError`/`NegativeStockError`/`RateNotFoundError`
- * unmapped — `VentasController` maps them to HTTP. Each of those three (plus
+ * unmapped — `OrderController` maps them to HTTP. Each of those three (plus
  * `update`) first checks existence via `findById` and resolves to `null` on
  * a missing id: `IOrderRepository.confirm/deliver/cancel` use Prisma's
  * `findUniqueOrThrow` internally, which throws a raw (non-domain) Prisma
@@ -59,7 +59,7 @@ const ALL_CHANNELS = Object.keys(CHANNEL_CURRENCY) as PaymentChannel[];
  * way `findById`/`GET :id` already does.
  */
 @Injectable()
-export class VentasService {
+export class OrderService {
   constructor(
     @Inject(ORDER_REPOSITORY) private readonly orderRepository: IOrderRepository,
     @Inject(CURRENCY_REPOSITORY) private readonly currencyRepository: ICurrencyRepository,

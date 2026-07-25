@@ -21,7 +21,7 @@ import { LocalStrategy } from './local.strategy.js';
  * Wires the auth kit's shared `JwtStrategy` (from `@store-mgmt/api-common`,
  * ADR-3) alongside this app's OWN `LocalStrategy` (the only app with one,
  * ADR-1). Binds the three identity ports this module needs directly —
- * mirrors `VentasModule`'s per-module repository binding convention
+ * mirrors `SalesModule`'s per-module repository binding convention
  * (`UsersModule` binds `USER_REPOSITORY` again independently).
  */
 @Module({
