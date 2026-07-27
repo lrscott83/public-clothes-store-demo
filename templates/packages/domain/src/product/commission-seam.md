@@ -9,7 +9,7 @@ embedded in core master data.
 ## Why
 
 Product is CAPA BASE (base layer) master data referenced by Sales,
-Inventario and Finanzas. Coupling a commission amount directly onto
+Inventory and Finanzas. Coupling a commission amount directly onto
 `Product` would force every consumer of core product data to carry
 commission semantics, even when the Gestores/Comisiones module is absent
 or disabled. Option B keeps `Product` independent and lets commission be

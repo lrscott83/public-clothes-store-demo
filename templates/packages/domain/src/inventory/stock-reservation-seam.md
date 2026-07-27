@@ -1,6 +1,6 @@
 # Stock reservation seam — documented, NOT implemented
 
-`Inventario` (this change) owns physical `onHand` and its append-only
+`Inventory` (this change) owns physical `onHand` and its append-only
 `StockMovement` audit log, plus the plain `StockLevel.reserved` field. It
 does **not** own reservation/release/decrement semantics — that is the
 future **Sales** module's job (design.md decision, locked model
@@ -9,9 +9,9 @@ future **Sales** module's job (design.md decision, locked model
 ## Why
 
 Coupling reservation orchestration (hold stock for a pending order, release
-on cancel, decrement at fulfillment) onto Inventario would force every
+on cancel, decrement at fulfillment) onto Inventory would force every
 consumer of core stock data to carry Sales-specific order-lifecycle
-semantics, even when Sales is absent or disabled. Inventario stays a base
+semantics, even when Sales is absent or disabled. Inventory stays a base
 CAPA (like Product/Currency): it exposes `reserved` as a plain field and the
 atomic `record` movement primitive; Sales composes those into reservation
 behavior.
@@ -40,7 +40,7 @@ write.
 Availability-for-sale (`Product.active AND availableStock(level) > 0`) is
 also Sales' concern, computed there from `Product.active` (via
 `IProductRepository`) and `StockLevel.available` (via `availableStock`) —
-Inventario deliberately does not expose a combined flag (design.md: "the
+Inventory deliberately does not expose a combined flag (design.md: "the
 system MUST document but MUST NOT implement" this seam).
 
 ## Verification

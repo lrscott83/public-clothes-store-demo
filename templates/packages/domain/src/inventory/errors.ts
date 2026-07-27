@@ -1,5 +1,5 @@
 /**
- * Named domain errors for the Almacenes & Inventario module. Guards throw
+ * Named domain errors for the Warehouses & Inventory module. Guards throw
  * these explicitly instead of silently clamping/defaulting invalid input —
  * "grita, no adivina" (scream, not guess), matching the Products/Currency
  * modules' error discipline.

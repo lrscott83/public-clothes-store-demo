@@ -2,7 +2,7 @@
  * Named domain errors for the Sales module. Guards throw these explicitly
  * instead of silently clamping/defaulting invalid input — "grita, no
  * adivina" (scream, not guess), matching every other module's error
- * discipline (Currency/Products/Almacenes/Clientes).
+ * discipline (Currency/Products/Warehouses/Customers).
  */
 
 export class InvalidOrderError extends Error {

@@ -1,5 +1,5 @@
 /**
- * Named domain errors for the Clientes module. Guards throw these explicitly
+ * Named domain errors for the Customers module. Guards throw these explicitly
  * instead of silently clamping/defaulting invalid input — "grita, no
  * adivina" (scream, not guess), matching the Warehouse/Products/Currency
  * modules' error discipline.

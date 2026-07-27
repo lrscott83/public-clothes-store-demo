@@ -3,17 +3,17 @@
 `Product.cost` is currently seeded as a SYNTHETIC placeholder
 (`price * 0.6`, see `infra-db/src/product/seed.ts`) — there is no real
 supplier-cost source yet. Recomputing `Product.cost` from real purchase
-receipts is the future **Compras** module's job, not Inventario's
+receipts is the future **Compras** module's job, not Inventory's
 (design.md decision, locked model `sdd/backend-inventory/model` #1340).
 
 ## Why
 
-Inventario owns the physical stock ledger (`StockMovement`) but not
+Inventory owns the physical stock ledger (`StockMovement`) but not
 purchasing/procurement workflow (receipt headers, supplier lines, landed
 cost). A `purchase_in` movement records THAT stock arrived; it does not by
 itself justify recomputing `Product.cost` — that requires purchase-line
-`unitCost` data Inventario never receives. Keeping the recompute in Compras
-avoids forcing Inventario to understand weighted-average costing or carry
+`unitCost` data Inventory never receives. Keeping the recompute in Compras
+avoids forcing Inventory to understand weighted-average costing or carry
 purchasing-specific fields.
 
 ## The seam (future, NOT part of this change)
@@ -41,7 +41,7 @@ interface IPurchaseCostUpdater {
 2. Recomputes the real `Product.cost` by weighted average — the real source
    that replaces today's synthetic `price * 0.6` placeholder.
 
-Inventario exposes the movement seam Compras needs (`record` with type
+Inventory exposes the movement seam Compras needs (`record` with type
 `purchase_in`); the cost recompute itself is entirely Compras' concern and
 is never built here.
 
