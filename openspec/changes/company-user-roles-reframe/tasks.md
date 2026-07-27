@@ -26,27 +26,66 @@ Chain strategy: pending
 | 2 | api-common role resolution + api-idp writes + mapper fix + module bindings | PR2 | The behavioral cutover. Rollback: code revert; `app_user.roles` still populated. |
 | 3 | Test fixtures + migration 002 | PR3 | Only after PR2 verified + gate passes. Point of no cheap return. |
 
-## Phase 1: Foundation (PR1)
+## Phase 1: Foundation (PR1) — DONE
 
-- [ ] 1.1 Create `domain/src/company/{company,company-user}.ts` entities
-- [ ] 1.2 Create `domain/src/company/{company-,company-user-}repository.port.ts` + DI symbols
-- [ ] 1.3 Create `domain/src/company/errors.ts` (NoCompanyConfigured, AmbiguousCompany, MissingCompanyUser)
-- [ ] 1.4 RED: `resolve-sole-company.test.ts` — 1/0/>1 company scenarios
-- [ ] 1.5 GREEN: implement `domain/src/company/resolve-sole-company.ts`
-- [ ] 1.6 RED: `company-user.test.ts` — role non-negative int, status defaults ACTIVE, userId/companyId required
-- [ ] 1.7 GREEN: implement CompanyUser factory validation
-- [ ] 1.8 Update `domain/src/index.ts` barrel
-- [ ] 1.9 RED→GREEN: `domain/src/users/user.test.ts` + `user.ts` — drop `roles` field
-- [ ] 1.10 Add Prisma models `Company`/`CompanyUser`/`CompanyUserStatus` to `schema.prisma` (additive only)
-- [ ] 1.11 Write migration 001 SQL per design §7 (create tables, seed company, backfill roles verbatim)
-- [ ] 1.12 Create `infra-db/scripts/verify-company-user-backfill.ts` (5 SQL assertions)
-- [ ] 1.13 Create `infra-db/src/company/prisma-company.repository.ts` + spec
-- [ ] 1.14 Create `infra-db/src/company/prisma-company-user.repository.ts` + spec (findActiveByUserId, uniqueness, updateRole, listByCompany)
-- [ ] 1.15 Create `infra-db/src/company/seed.ts` + spec (single-company seed)
-- [ ] 1.16 Update `infra-db/src/index.ts` barrel
-- [ ] 1.17 Update `infra-db/src/users/prisma-user.repository.ts` (+spec) drop `roles` from UserRow/toDomain/create/update
-- [ ] 1.18 Run migration 001 vs `store_mgmt_test`; run verify script — all 5 assertions pass
-- [ ] 1.19 Verify: `pnpm -r build` + domain (238+N) + infra-db (121+N) green
+> **Sequencing correction applied during apply.** Tasks 1.9 (drop `roles` from the domain
+> `User`) and 1.17 (drop `roles` from `prisma-user.repository`) were moved OUT of Phase 1 to
+> Phase 3 (now 3.11/3.12). They contradicted this slice's own definition — design §10 says
+> slice 1 leaves "the app still reads `app_user.roles`" — and they are not implementable here:
+> `apps/api-idp/src/auth/mappers/user.mapper.ts:13` reads `roles` off the domain `User`, so
+> dropping the field breaks `pnpm -r build`, which task 1.19 requires to be green. Phase 1 is
+> therefore purely ADDITIVE and genuinely inert, which is what makes its rollback cheap.
+
+- [x] 1.1 Create `domain/src/company/{company,company-user}.ts` entities
+- [x] 1.2 Create `domain/src/company/{company-,company-user-}repository.port.ts` + DI symbols
+- [x] 1.3 Create `domain/src/company/errors.ts` (NoCompanyConfigured, AmbiguousCompany, MissingCompanyUser)
+- [x] 1.4 RED: `resolve-sole-company.test.ts` — 1/0/>1 company scenarios
+- [x] 1.5 GREEN: implement `domain/src/company/resolve-sole-company.ts`
+- [x] 1.6 RED: `company-user.test.ts` — role non-negative int, status defaults ACTIVE, userId/companyId required
+- [x] 1.7 GREEN: implement CompanyUser factory validation
+- [x] 1.8 Update `domain/src/index.ts` barrel
+- [~] 1.9 MOVED to 3.11 — see sequencing correction above
+- [x] 1.10 Add Prisma models `Company`/`CompanyUser`/`CompanyUserStatus` to `schema.prisma` (additive only)
+- [x] 1.11 Write migration 001 SQL per design §7 (create tables, seed company, backfill roles verbatim)
+- [x] 1.12 Create `infra-db/scripts/verify-company-user-backfill.ts` (5 SQL assertions)
+- [x] 1.13 Create `infra-db/src/company/prisma-company.repository.ts` + spec
+- [x] 1.14 Create `infra-db/src/company/prisma-company-user.repository.ts` + spec (findActiveByUserId, uniqueness, updateRole, listByCompany)
+- [x] 1.15 Create `infra-db/src/company/seed.ts` + spec (single-company seed)
+- [x] 1.16 Update `infra-db/src/index.ts` barrel
+- [~] 1.17 MOVED to 3.12 — see sequencing correction above
+- [x] 1.18 Run migration 001 vs `store_mgmt_test`; run verify script — all 5 assertions pass
+- [x] 1.19 Verify: `pnpm -r build` + domain (250) + infra-db (139) green
+
+### Phase 1 verification evidence (all real, all exit 0)
+
+| Gate | Result |
+|---|---|
+| `pnpm -r build` | exit 0 |
+| domain | 250/250 (22 suites) — baseline 238 + 12 new |
+| infra-db | 139/139 (21 suites, real Postgres) — baseline 121 + 18 new |
+| api-common | 24/24 unchanged |
+| api-idp | 50/50 + 11 e2e unchanged |
+| api-salesops | 181/181 + 50 e2e unchanged |
+| `api-salesops lint --max-warnings 0` | clean |
+
+Migration 001 applied to `store_mgmt_test` via `prisma migrate deploy`. The §7 gate was
+exercised on BOTH paths, not just the happy one: replaying the migration's backfill statement
+against users with bitmasks `1`, `8`, `24` (multi-bit) and `0` (zero-permission) copied every
+mask verbatim and the script exited 0; deliberately corrupting the result (mismatched role +
+orphan row) made it exit 1 with both violations named.
+
+**Gate weakness worth knowing**: the `company_user count == app_user count` assertion can be
+masked — a user missing its assignment plus one orphan row cancel out in the counts. The orphan
+assertion catches that case, and `companies = 1` prevents a user hiding behind a second
+company, so the five assertions ARE sound in combination. The count check alone is weaker than
+it looks.
+
+**Spec fix applied during apply**: all three `infra-db/src/company/*.spec.ts` files wiped the
+`company` table only in `afterEach`, so the first test against a freshly migrated database hit
+the `slug` unique index against migration 001's seeded `default` company. Added the same wipe to
+`beforeEach` so the suites no longer depend on whether the target database has been migrated.
+Consequence to know: running the infra-db suite leaves `store_mgmt_test` with zero companies, so
+the §7 gate must be run right after migrating, not after a test run.
 
 ## Phase 2: Behavioral Cutover (PR2)
 
@@ -81,3 +120,10 @@ Chain strategy: pending
 - [ ] 3.8 Update `schema.prisma` — remove `roles` from `User` model
 - [ ] 3.9 Verify: full matrix rerun post-drop — domain 238, infra-db 121+N, api-common 24+N, api-idp 50+11+N, api-salesops 181+50e2e green
 - [ ] 3.10 Compile-error sweep: confirm no remaining reference to `app_user.roles`
+- [ ] 3.11 RED→GREEN: `domain/src/users/user.test.ts` + `user.ts` — drop `roles` field (moved from 1.9)
+- [ ] 3.12 Update `infra-db/src/users/prisma-user.repository.ts` (+spec) drop `roles` from UserRow/toDomain/create/update (moved from 1.17)
+
+> 3.11 and 3.12 must land in the SAME commit as 3.7/3.8 (the column drop) and after 2.10-2.11
+> (the `user.mapper.ts` signature change). Dropping the domain field is what turns every stale
+> reader into a compile error instead of a silent `0` — that is the whole reason the field and
+> the column go together.
