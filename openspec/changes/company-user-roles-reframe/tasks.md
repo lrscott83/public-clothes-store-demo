@@ -87,26 +87,65 @@ the `slug` unique index against migration 001's seeded `default` company. Added 
 Consequence to know: running the infra-db suite leaves `store_mgmt_test` with zero companies, so
 the §7 gate must be run right after migrating, not after a test run.
 
-## Phase 2: Behavioral Cutover (PR2)
+## Phase 2: Behavioral Cutover (PR2) — DONE
 
-- [ ] 2.1 RED: `jwt.strategy.spec.ts` — roles sourced from CompanyUser.role, not User row; companyId exposed
-- [ ] 2.2 RED: same spec — missing/REVOKED/SUSPENDED CompanyUser → 403 `MISSING_COMPANY_USER` logged
-- [ ] 2.3 RED: same spec — cache hit skips both repositories
-- [ ] 2.4 GREEN: modify `api-common/src/auth/jwt.strategy.ts` — inject `COMPANY_USER_REPOSITORY`, resolve CompanyUser
-- [ ] 2.5 Update `SanitizedUser` type: `roles` non-optional, add `companyId`
-- [ ] 2.6 RED→mechanical: `roles.guard.spec.ts` regression — no `req.user` → 403 (guard-order invariant); doc-comment only, logic untouched
-- [ ] 2.7 Bind `COMPANY_USER_REPOSITORY` in `api-idp/src/auth/auth.module.ts` and `api-salesops/src/auth/auth.module.ts`
-- [ ] 2.8 RED: `auth.service.spec.ts` — signup assigns role 1 on exactly-one company; 0→500 `NO_COMPANY_CONFIGURED`; >1→409 `AMBIGUOUS_COMPANY`
-- [ ] 2.9 GREEN: modify `apps/api-idp/src/auth/auth.service.ts` signup() per design §6
-- [ ] 2.10 Modify `apps/api-idp/src/auth/mappers/user.mapper.ts` — `userToResponseDto(user, roles)` signature change
-- [ ] 2.11 Fix 6 call sites: `auth.service.ts:100`, `UsersService.{create,list,findById,update,deactivate}`
-- [ ] 2.12 Modify `apps/api-idp/src/users/users.service.ts` — persist via `companyUserRepository.create/updateRole`; `list()` via `listByCompany(req.user.companyId)`
-- [ ] 2.13 Modify `apps/api-idp/src/users/users.controller.ts` — add `@Req()` to `list()`; confirm `assertNoUnauthorizedAdminGrant` (lines 46,66) untouched
-- [ ] 2.14 Update `apps/api-idp/src/users/users.module.ts` bindings
-- [ ] 2.15 Confirm zero-edit readers unchanged: `api-salesops/src/sales/order.controller.ts:221-224`, `src/stock/stock.controller.ts:94-95`
-- [ ] 2.16 Regression: `auth.e2e-spec.ts:53` (`body.roles===1`), `users.controller.spec.ts:111,130` green
-- [ ] 2.17 GOTCHA: rebuild `dist` for domain/infra-db/api-common before any api-salesops run
-- [ ] 2.18 Verify: `pnpm -r build` + full matrix — api-common 24+N, api-idp 50+11+N, api-salesops 181+50e2e unchanged, all green
+> **Second sequencing correction.** Tasks 3.2 and 3.4 (e2e fixture migration) were pulled
+> FORWARD into this phase. Phase 2 makes an ACTIVE `CompanyUser` mandatory at authentication
+> time, so every e2e user without one 403s — 48 e2e failures. Task 2.18 requires the full
+> matrix green, which is unreachable while the fixtures live in Phase 3. Same class of bug as
+> the 1.9/1.17 correction: a phase cannot defer the work that its own gate depends on.
+
+- [x] 2.1 RED: `jwt.strategy.spec.ts` — roles sourced from CompanyUser.role, not User row; companyId exposed
+- [x] 2.2 RED: same spec — missing/REVOKED/SUSPENDED CompanyUser → 403 `MISSING_COMPANY_USER` logged
+- [x] 2.3 RED: same spec — cache hit skips both repositories
+- [x] 2.4 GREEN: modify `api-common/src/auth/jwt.strategy.ts` — inject `COMPANY_USER_REPOSITORY`, resolve CompanyUser
+- [x] 2.5 Update `SanitizedUser` type: `roles` non-optional, add `companyId`
+- [x] 2.6 RED→mechanical: `roles.guard.spec.ts` regression — no `req.user` → 403 (guard-order invariant); doc-comment only, logic untouched
+- [x] 2.7 Bind `COMPANY_USER_REPOSITORY` in `api-idp/src/auth/auth.module.ts` and `api-salesops/src/auth/auth.module.ts` (+ `COMPANY_REPOSITORY` in api-idp for signup)
+- [x] 2.8 RED: `auth.service.spec.ts` — signup assigns role 1 on exactly-one company; 0→500 `NO_COMPANY_CONFIGURED`; >1→409 `AMBIGUOUS_COMPANY`
+- [x] 2.9 GREEN: modify `apps/api-idp/src/auth/auth.service.ts` signup() per design §6
+- [x] 2.10 Modify `apps/api-idp/src/auth/mappers/user.mapper.ts` — `userToResponseDto(user, roles)` signature change
+- [x] 2.11 Fix call sites — **SEVEN, not six** (see finding below)
+- [x] 2.12 Modify `apps/api-idp/src/users/users.service.ts` — persist via `companyUserRepository.create/updateRole`; `list()` via `listByCompany(req.user.companyId)`
+- [x] 2.13 Modify `apps/api-idp/src/users/users.controller.ts` — `@Req()` on `list()`; `assertNoUnauthorizedAdminGrant` confirmed untouched
+- [x] 2.14 Update `apps/api-idp/src/users/users.module.ts` bindings
+- [x] 2.15 Confirm zero-edit readers unchanged — api-salesops 181/181 with ZERO controller edits
+- [x] 2.16 Regression: `auth.e2e-spec.ts` (`body.roles===1`) and `users.controller.spec.ts` green
+- [x] 2.17 GOTCHA: rebuild `dist` for domain/infra-db/api-common before any api-salesops run
+- [x] 2.18 Verify: `pnpm -r build` + full matrix, all green
+- [x] 2.19 (pulled from 3.2) `api-salesops/test/support/auth-e2e-helper.ts` — `createAuthedUser` seeds Company + assignment
+- [x] 2.20 (pulled from 3.4) api-idp e2e specs — seed the Company, assign directly-minted users, scope `company_user` cleanup
+
+### Two findings the design did not have
+
+**1. Seven `userToResponseDto` call sites, not six.** The design's inventory missed
+`apps/api-idp/src/auth/auth.service.ts` `issueTokens` — the LOGIN and REFRESH response DTOs
+also carry `roles`. Login therefore resolves the CompanyUser too (`AuthService.resolveRole`,
+same fail-closed 403 rule as `JwtStrategy`).
+
+**2. Role writes must DUAL-WRITE while `app_user.roles` still exists.** The §7 gate asserts
+`company_user.role == app_user.roles`. Had Phase 2 written only the assignment, every user
+created between Phase 2 and Phase 3 would have been a mismatch, and the gate guarding
+migration 002 would have failed — blocking Phase 3 entirely. `AuthService.signup` and
+`UsersService.create` therefore write BOTH until 002 drops the column. This is the ordinary
+expand/contract pattern, and it is the actual reason the column survives Phase 2.
+
+### Phase 2 verification evidence (all real, all exit 0)
+
+| Gate | Result |
+|---|---|
+| `pnpm -r build` | exit 0 |
+| domain | 250/250 |
+| infra-db | 139/139 (real Postgres) |
+| api-common | 31/31 — baseline 24 + 7 new |
+| api-idp | 54/54 (baseline 50 + 4 signup-policy) + 11/11 e2e |
+| api-salesops | 181/181 + 50/50 e2e — **zero controller edits** |
+| `api-salesops lint --max-warnings 0` | clean |
+
+api-salesops passing untouched IS the D4 verification: the bitmask stayed on `req.user.roles`,
+so all 7 guarded controllers and both `SanitizedUser` readers needed no change. The single
+compile error the change produced was `auth-test-helpers.ts` missing `companyId` — enforcement
+layer 2 (type-time) doing exactly its job.
 
 ## Phase 3: Test Fixtures + Migration 002 (PR3)
 
