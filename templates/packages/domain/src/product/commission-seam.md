@@ -8,7 +8,7 @@ embedded in core master data.
 
 ## Why
 
-Product is CAPA BASE (base layer) master data referenced by Ventas,
+Product is CAPA BASE (base layer) master data referenced by Sales,
 Inventario and Finanzas. Coupling a commission amount directly onto
 `Product` would force every consumer of core product data to carry
 commission semantics, even when the Gestores/Comisiones module is absent
@@ -37,7 +37,7 @@ interface ICommissionReferenceProvider {
 }
 ```
 
-Ventas (or any other consumer) would inject `ICommissionReferenceProvider`
+Sales (or any other consumer) would inject `ICommissionReferenceProvider`
 and call `commissionFor(productId)`. When the Gestores/Comisiones module is
 not enabled, the provider resolves to `undefined` (never a silent `0` that
 could be mistaken for "no commission configured" vs. "commission is

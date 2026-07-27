@@ -14,7 +14,7 @@ export type ProductUpdateInput = Partial<Omit<Product, 'id' | 'createdAt'>>;
  * Port for reading/writing products. Zero dependency on any persistence
  * technology — domain and application code import this interface, never a
  * concrete Prisma class. `softDelete` flips `active`, never a hard DELETE
- * (Ventas order-history FK would orphan otherwise).
+ * (Sales order-history FK would orphan otherwise).
  */
 export interface IProductRepository {
   create(input: CreateProductInput): Promise<Product>;

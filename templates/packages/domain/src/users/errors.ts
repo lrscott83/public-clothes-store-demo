@@ -1,7 +1,7 @@
 /**
  * Named domain errors for the Users/Identity module. Guards throw these
  * explicitly instead of silently clamping/defaulting invalid input — "grita,
- * no adivina" (scream, not guess), matching the Customer/Ventas modules'
+ * no adivina" (scream, not guess), matching the Customer/Sales modules'
  * error discipline.
  */
 

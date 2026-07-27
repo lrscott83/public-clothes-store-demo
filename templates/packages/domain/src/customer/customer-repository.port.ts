@@ -13,7 +13,7 @@ export type CustomerUpdateInput = Partial<Omit<Customer, 'id' | 'createdAt'>>;
  * Port for reading/writing customers. Zero dependency on any persistence
  * technology — domain and application code import this interface, never a
  * concrete Prisma class. `softDelete` flips `active`, never a hard DELETE
- * (a future Ventas `SaleCredit`/`Order` FK would orphan history, exactly
+ * (a future Sales `SaleCredit`/`Order` FK would orphan history, exactly
  * like `Warehouse`/`Product`).
  */
 export interface ICustomerRepository {

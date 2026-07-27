@@ -85,7 +85,7 @@ model Product {
   // packages/domain/src/product/ must stay 0).
   stockLevels StockLevel[]
   movements   StockMovement[]
-  // Inverse relation only — added by the Ventas module (backend-ventas).
+  // Inverse relation only — added by the Sales module (backend-ventas).
   orderLines  OrderLine[]
 
   @@index([categoryId])
@@ -117,7 +117,7 @@ model Warehouse {
 
   stockLevels StockLevel[]
   movements   StockMovement[]
-  // Inverse relation only — added by the Ventas module (backend-ventas).
+  // Inverse relation only — added by the Sales module (backend-ventas).
   orders      Order[]
   // Inverse relation only — added by the Users/Roles module (backend-users-roles).
   warehouseOperators WarehouseOperator[]
@@ -164,11 +164,11 @@ model StockMovement {
 
 // Fourth domain module: Clientes (SDD change backend-customers). Flat master
 // data -> BOTH created_at + updated_at. Soft-delete via `active`, never a
-// hard DELETE — a future Ventas SaleCredit/Order FK must never be orphaned.
+// hard DELETE — a future Sales SaleCredit/Order FK must never be orphaned.
 // `documentId` is optional and unique-when-present: a plain @unique on a
 // nullable column allows many NULLs (Postgres treats NULLs as distinct)
 // while rejecting duplicate non-null values — no partial index needed
-// (design.md). NO relations — the Ventas FK is a future change.
+// (design.md). NO relations — the Sales FK is a future change.
 // MODIFIED by the Users/Roles module (backend-users-roles): added the
 // REQUIRED, UNIQUE `userId` FK (1:1 with `User`) — every Customer now
 // references exactly one login identity. See the migration in
@@ -189,15 +189,15 @@ model Customer {
 
   user User @relation(fields: [userId], references: [id])
 
-  // Inverse relations only — added by the Ventas module (SDD change
-  // backend-ventas). Customer carries zero Ventas scalar fields.
+  // Inverse relations only — added by the Sales module (SDD change
+  // backend-ventas). Customer carries zero Sales scalar fields.
   orders      Order[]
   saleCredits SaleCredit[]
 
   @@map("customer")
 }
 
-// Fifth domain module: Ventas (SDD change backend-ventas). `Order` is the
+// Fifth domain module: Sales (SDD change backend-ventas). `Order` is the
 // aggregate root — persists/loads with `OrderLine[]`/`OrderPayment[]`/an
 // optional `SaleCredit` as ONE unit (design.md decision #1). Mutable ->
 // created_at + updated_at. An Order is an immutable transactional EVENT: it
