@@ -27,7 +27,25 @@ describe('Users (e2e) — mass-assignment guard', () => {
     prisma = moduleFixture.get(PrismaService);
   });
 
+  /** Every authenticated caller needs an ACTIVE assignment — `JwtStrategy` 403s without one. */
+  async function assignToCompany(userId: string, role: number): Promise<void> {
+    const company = await prisma.company.upsert({
+      where: { slug: 'default' },
+      update: {},
+      create: { name: 'Tienda Principal', slug: 'default' },
+    });
+    await prisma.companyUser.create({
+      data: { userId, companyId: company.id, role, status: 'ACTIVE' },
+    });
+  }
+
   afterEach(async () => {
+    // `company_user` has NO FK to `app_user` (soft FK by design).
+    const stale = await prisma.user.findMany({
+      where: { login: { startsWith: 'e2e.massassign.' } },
+      select: { id: true },
+    });
+    await prisma.companyUser.deleteMany({ where: { userId: { in: stale.map((u) => u.id) } } });
     await prisma.user.deleteMany({ where: { login: { startsWith: 'e2e.massassign.' } } });
   });
 
@@ -47,9 +65,10 @@ describe('Users (e2e) — mass-assignment guard', () => {
   async function loginAsAdmin(): Promise<string> {
     const login = uniqueLogin('admin');
     const passwordHash = await hashDevPassword('AdminPass1!');
-    await prisma.user.create({
+    const admin = await prisma.user.create({
       data: { login, passwordHash, fullName: 'E2E Admin', roles: USER_ROLES.admin },
     });
+    await assignToCompany(admin.id, USER_ROLES.admin);
     const loginResponse = await request(app.getHttpServer())
       .post('/auth/login')
       .send({ login, password: 'AdminPass1!' });
@@ -64,6 +83,7 @@ describe('Users (e2e) — mass-assignment guard', () => {
     const target = await prisma.user.create({
       data: { login: targetLogin, passwordHash: originalHash, fullName: 'Target User', roles: USER_ROLES.user },
     });
+    await assignToCompany(target.id, USER_ROLES.user);
 
     const evilHash = '$2b$10$evilInjectedHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
     const response = await request(app.getHttpServer())

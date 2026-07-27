@@ -10,6 +10,10 @@ export const SAMPLE_AUTH_USER: Omit<SanitizedUser, 'roles'> = {
   email: null,
   cellPhone: null,
   isActive: true,
+  // Present because `JwtStrategy` always resolves a CompanyUser assignment
+  // before it will hand back a `req.user` at all — a fixture without it would
+  // model a state the real strategy cannot produce.
+  companyId: 'test-company-1',
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 };

@@ -5,10 +5,18 @@ import { ROLES_KEY } from './roles.decorator.js';
 import type { SanitizedUser } from './jwt.strategy.js';
 
 /**
- * Enforces `@Roles(...)` metadata against `req.user.roles` (the bitmask
- * attached by `JwtStrategy`). Must run AFTER `JwtAuthGuard` in the guard
- * chain (`@UseGuards(JwtAuthGuard, RolesGuard)`) — an unauthenticated request
- * is rejected with 401 by `JwtAuthGuard` before this guard ever runs.
+ * Enforces `@Roles(...)` metadata against `req.user.roles` — the COMPANY-SCOPED
+ * bitmask that `JwtStrategy` reads off the user's `CompanyUser` assignment and
+ * attaches to `req.user`. Must run AFTER `JwtAuthGuard` in the guard chain
+ * (`@UseGuards(JwtAuthGuard, RolesGuard)`) — an unauthenticated request is
+ * rejected with 401 by `JwtAuthGuard` before this guard ever runs.
+ *
+ * GUARD-ORDER INVARIANT (design §0.1): the bitmask MUST reach this guard as a
+ * property of `req.user`, never as a sibling field on `req`, and no third
+ * guard may populate it. That is what makes a wrong guard order fail loudly
+ * here (`req.user` absent → explicit 403) instead of silently — an `undefined`
+ * bitmask would make `can()` evaluate to `0` and lock every user out with no
+ * explanation. Regression test: `roles.guard.spec.ts`, "guard-order invariant".
  *
  * - No `@Roles()` metadata on the route → allow (no restriction).
  * - `admin` bit held → allow regardless of the required mask (super-root).

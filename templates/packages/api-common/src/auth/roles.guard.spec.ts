@@ -57,7 +57,14 @@ describe('RolesGuard', () => {
     expect(() => guard.canActivate(makeContext({ roles: USER_ROLES.user }))).toThrow(ForbiddenException);
   });
 
-  it('no req.user when a role IS required → ForbiddenException (defensive; JwtAuthGuard normally 401s first)', () => {
+  // GUARD-ORDER INVARIANT REGRESSION — this is not merely a defensive case.
+  // It is what makes a wrong `@UseGuards(RolesGuard, JwtAuthGuard)` order fail
+  // LOUDLY. Because the role bitmask lives on `req.user` (never on a sibling
+  // `req` field), a guard running before `JwtAuthGuard` sees no user at all and
+  // throws here. Were the bitmask a sibling field instead, it would arrive
+  // `undefined`, `can(undefined, mask)` would evaluate to `0`, and every
+  // request would 403 with nothing explaining why. Do not weaken this.
+  it('no req.user when a role IS required → ForbiddenException (guard-order invariant)', () => {
     const guard = makeGuard([USER_ROLES.owner]);
 
     expect(() => guard.canActivate(makeContext(undefined))).toThrow(ForbiddenException);

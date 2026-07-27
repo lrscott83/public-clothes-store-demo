@@ -27,9 +27,41 @@ describe('Auth (e2e)', () => {
     prisma = moduleFixture.get(PrismaService);
   });
 
+  /**
+   * `AuthService.signup` auto-assigns to the SOLE Company and fails loudly
+   * when none exists, so every spec here needs exactly one. Upserted by slug
+   * rather than created, because the row survives the per-test user cleanup.
+   */
+  async function ensureCompany(): Promise<string> {
+    const company = await prisma.company.upsert({
+      where: { slug: 'default' },
+      update: {},
+      create: { name: 'Tienda Principal', slug: 'default' },
+    });
+    return company.id;
+  }
+
+  /** Assigns a directly-minted user (one that did not go through signup). */
+  async function assignToCompany(userId: string, role: number): Promise<void> {
+    await prisma.companyUser.create({
+      data: { userId, companyId: await ensureCompany(), role, status: 'ACTIVE' },
+    });
+  }
+
+  beforeEach(async () => {
+    await ensureCompany();
+  });
+
   afterEach(async () => {
     await prisma.refreshToken.deleteMany({});
     await prisma.passwordResetToken.deleteMany({});
+    // `company_user` has NO FK to `app_user` (soft FK by design) — without
+    // this, every run leaves orphan assignments behind.
+    const stale = await prisma.user.findMany({
+      where: { login: { startsWith: 'e2e.' } },
+      select: { id: true },
+    });
+    await prisma.companyUser.deleteMany({ where: { userId: { in: stale.map((u) => u.id) } } });
     await prisma.user.deleteMany({ where: { login: { startsWith: 'e2e.' } } });
   });
 
@@ -241,9 +273,10 @@ describe('Auth (e2e)', () => {
     it('admits an admin/owner caller -> 200', async () => {
       const login = uniqueLogin('owner');
       const passwordHash = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
-      await prisma.user.create({
+      const owner = await prisma.user.create({
         data: { login, passwordHash, fullName: 'E2E Owner User', roles: 8 },
       });
+      await assignToCompany(owner.id, 8);
       // Sign in via bcrypt-verified login requires the REAL password, not
       // the sentinel hash above — mint the user directly with a known
       // password hash instead, then log in with that plaintext.

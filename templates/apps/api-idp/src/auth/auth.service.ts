@@ -1,20 +1,37 @@
 import { randomBytes } from 'node:crypto';
-import { ConflictException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService, type JwtSignOptions, type JwtVerifyOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import type {
   CreateUserInput,
+  ICompanyRepository,
+  ICompanyUserRepository,
   IPasswordResetTokenRepository,
   IRefreshTokenRepository,
   IUserRepository,
   User as DomainUser,
+  UserRoleValue,
 } from '@store-mgmt/domain';
 import {
+  AmbiguousCompanyError,
+  COMPANY_REPOSITORY,
+  COMPANY_USER_REPOSITORY,
   DuplicateLoginError,
+  NoCompanyConfiguredError,
   PASSWORD_RESET_TOKEN_REPOSITORY,
   REFRESH_TOKEN_REPOSITORY,
   USER_REPOSITORY,
+  USER_ROLES,
   createUser,
+  resolveSoleCompany,
 } from '@store-mgmt/domain';
 import { REFRESH_TOKEN_CONFIG, type JwtAccessPayload } from '@store-mgmt/api-common';
 import type { LoginResponseDto } from './dto/login-response.dto.js';
@@ -45,12 +62,16 @@ interface RefreshTokenPayload {
  */
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly jwtService: JwtService,
     @Inject(USER_REPOSITORY) private readonly userRepository: IUserRepository,
     @Inject(REFRESH_TOKEN_REPOSITORY) private readonly refreshTokenRepository: IRefreshTokenRepository,
     @Inject(PASSWORD_RESET_TOKEN_REPOSITORY)
     private readonly passwordResetTokenRepository: IPasswordResetTokenRepository,
+    @Inject(COMPANY_REPOSITORY) private readonly companyRepository: ICompanyRepository,
+    @Inject(COMPANY_USER_REPOSITORY) private readonly companyUserRepository: ICompanyUserRepository,
   ) {}
 
   /**
@@ -80,8 +101,17 @@ export class AuthService {
    * Public self-registration. Always defaults to the `user` role (`roles`
    * is NOT accepted here) — privilege assignment is an admin/owner-only
    * action via the Users module. Duplicate `login` -> `ConflictException` (409).
+   *
+   * The signup's Company is resolved BEFORE any write (design A5): with zero
+   * or several Companies the request fails having created nothing. The two
+   * writes that follow are deliberately NOT transactional — a cross-aggregate
+   * transaction port is out of scope — so a failure between them leaves a user
+   * who cannot log in LOUDLY (`MISSING_COMPANY_USER` 403), recoverable by an
+   * admin, never a user with silently zero permissions.
    */
   async signup(dto: SignupDto): Promise<UserResponseDto> {
+    const company = this.resolveSignupCompany(await this.companyRepository.list());
+
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
     const input: CreateUserInput = {
       login: dto.login,
@@ -89,21 +119,74 @@ export class AuthService {
       fullName: dto.fullName,
       email: dto.email,
       cellPhone: dto.cellPhone,
+      // Dual-write while `app_user.roles` still exists: the column stays the
+      // §7 verification gate's comparison basis until migration 002 drops it,
+      // so it must not drift from the assignment below. Phase 3 removes both
+      // this field and the column in one commit.
+      roles: USER_ROLES.user,
     };
     // Invariant check ONLY (mirrors CustomerService/createCustomer) — the
     // built entity is discarded; the repository/DB remains the single
     // source of truth for `id`/timestamps.
     createUser(input);
 
+    let created: DomainUser;
     try {
-      const created = await this.userRepository.create(input);
-      return userToResponseDto(created);
+      created = await this.userRepository.create(input);
     } catch (err) {
       if (err instanceof DuplicateLoginError) {
         throw new ConflictException(err.message);
       }
       throw err;
     }
+
+    const assignment = await this.companyUserRepository.create({
+      userId: created.id,
+      companyId: company.id,
+      role: USER_ROLES.user,
+      status: 'ACTIVE',
+    });
+
+    return userToResponseDto(created, assignment.role);
+  }
+
+  /**
+   * Maps `resolveSoleCompany`'s pure-domain failures onto HTTP. Zero Companies
+   * is a MISCONFIGURED DEPLOYMENT, not a client error, so it is a 500 and is
+   * logged. More than one is a 409 rather than an arbitrary pick — it forces
+   * the Invitation flow to be designed deliberately instead of signups
+   * silently landing in whichever Company happened to sort first.
+   */
+  private resolveSignupCompany(companies: Awaited<ReturnType<ICompanyRepository['list']>>) {
+    try {
+      return resolveSoleCompany(companies);
+    } catch (err) {
+      if (err instanceof NoCompanyConfiguredError) {
+        this.logger.error(`NO_COMPANY_CONFIGURED: signup attempted with zero Companies configured`);
+        throw new InternalServerErrorException('No hay una empresa configurada');
+      }
+      if (err instanceof AmbiguousCompanyError) {
+        this.logger.error(`AMBIGUOUS_COMPANY: ${companies.length} Companies exist, cannot auto-assign a signup`);
+        throw new ConflictException('No se puede asignar automáticamente: hay más de una empresa');
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Resolves the role bitmask backing a login/refresh response DTO. Same
+   * fail-closed rule as `JwtStrategy`: a user with no ACTIVE assignment is
+   * authenticated but not provisioned, which is a 403 and never a silent zero.
+   */
+  private async resolveRole(user: DomainUser): Promise<UserRoleValue> {
+    const assignment = await this.companyUserRepository.findActiveByUserId(user.id);
+    if (!assignment || assignment.status !== 'ACTIVE') {
+      this.logger.error(
+        `MISSING_COMPANY_USER: user ${user.id} has no ACTIVE CompanyUser assignment (status: ${assignment?.status ?? 'none'})`,
+      );
+      throw new ForbiddenException('User is not assigned to any company');
+    }
+    return assignment.role;
   }
 
   /**
@@ -245,7 +328,12 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + parseRefreshTtlMs());
     await this.refreshTokenRepository.create({ token: rtid, userId: user.id, expiresAt });
 
-    return { accessToken, refreshToken, user: userToResponseDto(user) };
+    // The login/refresh response carries the same `roles` field the rest of the
+    // API reports, so it must come from the CompanyUser assignment too — this
+    // call site was NOT in the design's inventory of six, it is the seventh.
+    const roles = await this.resolveRole(user);
+
+    return { accessToken, refreshToken, user: userToResponseDto(user, roles) };
   }
 }
 

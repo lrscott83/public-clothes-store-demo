@@ -1,12 +1,35 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { USER_REPOSITORY, type IUserRepository, type User } from '@store-mgmt/domain';
+import {
+  COMPANY_USER_REPOSITORY,
+  USER_REPOSITORY,
+  type ICompanyUserRepository,
+  type IUserRepository,
+  type User,
+  type UserRoleValue,
+} from '@store-mgmt/domain';
 import { TtlCache } from '../cache/ttl-cache.js';
 import { JWT_CONFIG, type JwtAccessPayload } from './jwt.config.js';
 
-/** `req.user` shape after `JwtStrategy.validate` — never carries `passwordHash`. */
-export type SanitizedUser = Omit<User, 'passwordHash'>;
+/**
+ * `req.user` shape after `JwtStrategy.validate` — never carries
+ * `passwordHash`.
+ *
+ * GUARD-ORDER INVARIANT (design §0.1) — do NOT break this: the company-scoped
+ * role bitmask MUST stay a property of `req.user`, it must NEVER be attached
+ * to `req` as a sibling field, and no third guard may be introduced to
+ * populate it. `RolesGuard` null-checks `req.user` and throws a LOUD
+ * `ForbiddenException('Authentication required')`; a bitmask living on a
+ * sibling field would instead arrive as `undefined`, and `can(undefined, mask)`
+ * silently evaluates to `0` — a 403 for every user, with nothing in the logs
+ * saying why. `roles` is therefore declared REQUIRED here so the compiler
+ * refuses any path that would leave it unset.
+ */
+export type SanitizedUser = Omit<User, 'passwordHash' | 'roles'> & {
+  readonly roles: UserRoleValue;
+  readonly companyId: string;
+};
 
 /**
  * Bounds how often `findById` is re-queried per authenticated user. The JWT
@@ -17,7 +40,7 @@ export type SanitizedUser = Omit<User, 'passwordHash'>;
  */
 const USER_CACHE_TTL_MS = 30_000;
 
-function sanitize(user: User): SanitizedUser {
+function sanitize(user: User, role: UserRoleValue, companyId: string): SanitizedUser {
   return {
     id: user.id,
     login: user.login,
@@ -25,7 +48,8 @@ function sanitize(user: User): SanitizedUser {
     email: user.email,
     cellPhone: user.cellPhone,
     isActive: user.isActive,
-    roles: user.roles,
+    roles: role,
+    companyId,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -33,16 +57,23 @@ function sanitize(user: User): SanitizedUser {
 
 /**
  * Validates the HS256 access token and resolves `req.user` FRESH per-request
- * via `IUserRepository.findById` (ADR-2) — roles are never baked into the
- * token, so a deactivation or role change takes effect within
- * `USER_CACHE_TTL_MS` at most. Rejects when the user no longer exists or is
- * inactive.
+ * (ADR-2) — roles are never baked into the token, so a deactivation or role
+ * change takes effect within `USER_CACHE_TTL_MS` at most. Rejects when the
+ * user no longer exists or is inactive.
+ *
+ * The role bitmask comes from the user's `CompanyUser` assignment, NOT from
+ * the `User` row. A user with no ACTIVE assignment is authenticated but not
+ * provisioned: that is a 403, never a silent zero-permission session.
  */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
+  private readonly logger = new Logger(JwtStrategy.name);
   private readonly userCache = new TtlCache<string, SanitizedUser>(USER_CACHE_TTL_MS);
 
-  constructor(@Inject(USER_REPOSITORY) private readonly userRepository: IUserRepository) {
+  constructor(
+    @Inject(USER_REPOSITORY) private readonly userRepository: IUserRepository,
+    @Inject(COMPANY_USER_REPOSITORY) private readonly companyUserRepository: ICompanyUserRepository,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -51,6 +82,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtAccessPayload): Promise<SanitizedUser> {
+    // One cache entry holds the JOINED User+CompanyUser projection (A7), so a
+    // hit skips BOTH repositories and there is a single invalidation window.
     const cached = this.userCache.get(payload.sub);
     if (cached) return cached;
 
@@ -59,7 +92,21 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found or inactive');
     }
 
-    const sanitized = sanitize(user);
+    const assignment = await this.companyUserRepository.findActiveByUserId(user.id);
+    // A non-ACTIVE assignment is rejected identically to a missing one. The
+    // status is re-checked here rather than trusted from the query so that a
+    // repository regression cannot quietly widen access.
+    if (!assignment || assignment.status !== 'ACTIVE') {
+      // 403, not 401: the token is valid and the account is live — the user is
+      // authenticated but NOT provisioned for any company. Logged because it
+      // means data is inconsistent, not that the caller did something wrong.
+      this.logger.error(
+        `MISSING_COMPANY_USER: user ${user.id} has no ACTIVE CompanyUser assignment (status: ${assignment?.status ?? 'none'})`,
+      );
+      throw new ForbiddenException('User is not assigned to any company');
+    }
+
+    const sanitized = sanitize(user, assignment.role, assignment.companyId);
     this.userCache.set(payload.sub, sanitized);
     return sanitized;
   }

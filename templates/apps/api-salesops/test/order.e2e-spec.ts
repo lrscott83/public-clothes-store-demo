@@ -141,6 +141,9 @@ describe('Sales (e2e)', () => {
     await prisma.warehouseOperator.deleteMany({});
     await prisma.warehouse.deleteMany({});
     await prisma.customer.deleteMany({});
+    // `company_user` has NO FK to `app_user` (soft FK by design), so deleting
+    // users without this leaves orphan assignments accumulating across runs.
+    await prisma.companyUser.deleteMany({});
     await prisma.user.deleteMany({});
     await prisma.exchangeRate.deleteMany({});
   });

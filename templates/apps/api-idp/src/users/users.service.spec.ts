@@ -1,6 +1,11 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import type { IUserRepository, User as DomainUser } from '@store-mgmt/domain';
+import type {
+  CompanyUser,
+  ICompanyUserRepository,
+  IUserRepository,
+  User as DomainUser,
+} from '@store-mgmt/domain';
 import { UsersService } from './users.service.js';
 
 jest.mock('bcrypt');
@@ -20,6 +25,20 @@ const baseUser: DomainUser = {
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 };
 
+const TEST_COMPANY_ID = 'company-1';
+
+function companyUser(role: number): CompanyUser {
+  return {
+    id: 'cu-1',
+    userId: 'user-1',
+    companyId: TEST_COMPANY_ID,
+    role,
+    status: 'ACTIVE',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+}
+
 function buildRepoMock(): jest.Mocked<IUserRepository> {
   return {
     create: jest.fn(),
@@ -31,14 +50,31 @@ function buildRepoMock(): jest.Mocked<IUserRepository> {
   };
 }
 
+// `create`/`updateRole` echo the role they were asked to persist: the
+// assignment is now the authoritative source of the response DTO's `roles`, so
+// a mock returning a fixed value would hide a service that ignored its input.
+function buildCompanyUserRepoMock(): jest.Mocked<ICompanyUserRepository> {
+  return {
+    create: jest.fn().mockImplementation(({ role }: { role: number }) => Promise.resolve(companyUser(role))),
+    findActiveByUserId: jest.fn().mockResolvedValue(companyUser(1)),
+    findByUserAndCompany: jest.fn(),
+    updateRole: jest.fn().mockImplementation((_u: string, _c: string, role: number) =>
+      Promise.resolve(companyUser(role)),
+    ),
+    listByCompany: jest.fn().mockResolvedValue([companyUser(1)]),
+  };
+}
+
 describe('UsersService', () => {
   let repo: jest.Mocked<IUserRepository>;
+  let companyUserRepo: jest.Mocked<ICompanyUserRepository>;
   let service: UsersService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     repo = buildRepoMock();
-    service = new UsersService(repo);
+    companyUserRepo = buildCompanyUserRepoMock();
+    service = new UsersService(repo, companyUserRepo);
   });
 
   describe('create', () => {
@@ -46,7 +82,7 @@ describe('UsersService', () => {
       (bcrypt.hash as jest.Mock).mockResolvedValue(VALID_HASH);
       repo.create.mockResolvedValue({ ...baseUser, roles: 8 });
 
-      const result = await service.create({
+      const result = await service.create(TEST_COMPANY_ID, {
         login: 'jdoe',
         password: 'plaintext',
         fullName: 'John Doe',
@@ -64,7 +100,7 @@ describe('UsersService', () => {
       repo.create.mockRejectedValue(new DuplicateLoginError('login "jdoe" is already in use'));
 
       await expect(
-        service.create({ login: 'jdoe', password: 'plaintext', fullName: 'John Doe' }),
+        service.create(TEST_COMPANY_ID, { login: 'jdoe', password: 'plaintext', fullName: 'John Doe' }),
       ).rejects.toBeInstanceOf(ConflictException);
     });
   });
@@ -73,7 +109,7 @@ describe('UsersService', () => {
     it('maps every row, never leaking passwordHash', async () => {
       repo.list.mockResolvedValue([baseUser]);
 
-      const result = await service.list();
+      const result = await service.list(TEST_COMPANY_ID);
 
       expect(result).toHaveLength(1);
       expect(result[0]).not.toHaveProperty('passwordHash');
@@ -98,7 +134,7 @@ describe('UsersService', () => {
       repo.findById.mockResolvedValue(baseUser);
       repo.update.mockResolvedValue({ ...baseUser, roles: 2 });
 
-      const result = await service.update('user-1', { roles: 2 });
+      const result = await service.update(TEST_COMPANY_ID, 'user-1', { roles: 2 });
 
       expect(repo.update).toHaveBeenCalledWith('user-1', { roles: 2 });
       expect(result.roles).toBe(2);
@@ -106,7 +142,7 @@ describe('UsersService', () => {
 
     it('throws NotFoundException for an unknown id, without calling update', async () => {
       repo.findById.mockResolvedValue(null);
-      await expect(service.update('ghost', { roles: 2 })).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.update(TEST_COMPANY_ID, 'ghost', { roles: 2 })).rejects.toBeInstanceOf(NotFoundException);
       expect(repo.update).not.toHaveBeenCalled();
     });
   });

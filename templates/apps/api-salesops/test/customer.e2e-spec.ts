@@ -42,6 +42,9 @@ describe('Customer (e2e)', () => {
 
   afterEach(async () => {
     await prisma.customer.deleteMany({});
+    // `company_user` has NO FK to `app_user` (soft FK by design), so deleting
+    // users without this leaves orphan assignments accumulating across runs.
+    await prisma.companyUser.deleteMany({});
     await prisma.user.deleteMany({});
   });
 

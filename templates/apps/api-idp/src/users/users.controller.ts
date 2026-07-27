@@ -44,12 +44,15 @@ export class UsersController {
   @HttpCode(HttpStatus.CREATED)
   async create(@Req() req: AuthenticatedRequest, @Body() body: CreateUserDto): Promise<UserResponseDto> {
     assertNoUnauthorizedAdminGrant(req.user.roles, body.roles);
-    return this.usersService.create(body);
+    // Role writes are scoped to the CALLER's company — never to a company id
+    // taken from the request body, which would let an admin of one company
+    // write assignments into another.
+    return this.usersService.create(req.user.companyId, body);
   }
 
   @Get()
-  async list(): Promise<UserResponseDto[]> {
-    return this.usersService.list();
+  async list(@Req() req: AuthenticatedRequest): Promise<UserResponseDto[]> {
+    return this.usersService.list(req.user.companyId);
   }
 
   @Get(':id')
@@ -64,7 +67,7 @@ export class UsersController {
     @Body() body: UpdateUserDto,
   ): Promise<UserResponseDto> {
     assertNoUnauthorizedAdminGrant(req.user.roles, body.roles);
-    return this.usersService.update(id, body);
+    return this.usersService.update(req.user.companyId, id, body);
   }
 
   @Delete(':id')

@@ -29,6 +29,19 @@ export async function createAuthedUser(
     },
   });
 
+  // `JwtStrategy` resolves the role bitmask from the user's ACTIVE
+  // `CompanyUser` assignment and 403s without one, so an e2e user is only
+  // usable once it has been assigned. The Company is upserted by slug because
+  // specs wipe users between tests but not necessarily the company row.
+  const company = await prisma.company.upsert({
+    where: { slug: 'default' },
+    update: {},
+    create: { name: 'Tienda Principal', slug: 'default' },
+  });
+  await prisma.companyUser.create({
+    data: { userId: user.id, companyId: company.id, role: roles, status: 'ACTIVE' },
+  });
+
   // `JWT_CONFIG.signOptions.expiresIn` is a plain `string` in api-common
   // (env-var friendly); `jsonwebtoken`'s `SignOptions` types it against the
   // stricter `StringValue` template-literal type. The runtime value

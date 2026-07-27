@@ -1,5 +1,5 @@
-import { UnauthorizedException } from '@nestjs/common';
-import type { IUserRepository, User } from '@store-mgmt/domain';
+import { ForbiddenException, Logger, UnauthorizedException } from '@nestjs/common';
+import type { CompanyUser, ICompanyUserRepository, IUserRepository, User } from '@store-mgmt/domain';
 import { USER_ROLES } from '@store-mgmt/domain';
 import { JwtStrategy } from './jwt.strategy.js';
 
@@ -19,10 +19,29 @@ function activeUser(overrides: Partial<User> = {}): User {
   };
 }
 
+function companyUser(overrides: Partial<CompanyUser> = {}): CompanyUser {
+  return {
+    id: 'cu-1',
+    userId: 'user-1',
+    companyId: 'company-1',
+    role: USER_ROLES.owner,
+    status: 'ACTIVE',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
 function makeStrategy() {
   const findById = jest.fn();
+  const findActiveByUserId = jest.fn().mockResolvedValue(companyUser());
   const userRepository = { findById } as unknown as IUserRepository;
-  return { strategy: new JwtStrategy(userRepository), findById };
+  const companyUserRepository = { findActiveByUserId } as unknown as ICompanyUserRepository;
+  return {
+    strategy: new JwtStrategy(userRepository, companyUserRepository),
+    findById,
+    findActiveByUserId,
+  };
 }
 
 describe('JwtStrategy.validate', () => {
@@ -88,5 +107,77 @@ describe('JwtStrategy.validate', () => {
     await expect(strategy.validate({ sub: 'user-1', login: 'juan.perez' })).rejects.toThrow(UnauthorizedException);
 
     expect(findById).toHaveBeenCalledTimes(2);
+  });
+
+  // --- CompanyUser role resolution (Phase 2 cutover) ---
+
+  it('sources `roles` from CompanyUser.role, NEVER from the User row, and exposes companyId', async () => {
+    const { strategy, findById, findActiveByUserId } = makeStrategy();
+    // The User row still carries a DIFFERENT bitmask — if resolution ever reads
+    // it instead of the assignment, this assertion is what catches it.
+    findById.mockResolvedValue(activeUser({ roles: USER_ROLES.user }));
+    findActiveByUserId.mockResolvedValue(companyUser({ role: USER_ROLES.admin }));
+
+    const result = await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
+
+    expect(findActiveByUserId).toHaveBeenCalledWith('user-1');
+    expect(result.roles).toBe(USER_ROLES.admin);
+    expect(result.companyId).toBe('company-1');
+  });
+
+  it('role bitmask 0 is a VALID zero-permission assignment, not a missing one', async () => {
+    const { strategy, findById, findActiveByUserId } = makeStrategy();
+    findById.mockResolvedValue(activeUser());
+    findActiveByUserId.mockResolvedValue(companyUser({ role: 0 }));
+
+    const result = await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
+
+    expect(result.roles).toBe(0);
+  });
+
+  it('missing CompanyUser → ForbiddenException (403, NOT 401) and logs MISSING_COMPANY_USER', async () => {
+    const { strategy, findById, findActiveByUserId } = makeStrategy();
+    findById.mockResolvedValue(activeUser());
+    findActiveByUserId.mockResolvedValue(null);
+    const logged: string[] = [];
+    jest.spyOn(Logger.prototype, 'error').mockImplementation((msg: unknown) => {
+      logged.push(String(msg));
+    });
+
+    await expect(strategy.validate({ sub: 'user-1', login: 'juan.perez' })).rejects.toThrow(ForbiddenException);
+    expect(logged.join('\n')).toContain('MISSING_COMPANY_USER');
+  });
+
+  it.each(['REVOKED', 'SUSPENDED'] as const)(
+    'a %s CompanyUser is treated exactly like a missing one → ForbiddenException',
+    async (status) => {
+      const { strategy, findById, findActiveByUserId } = makeStrategy();
+      findById.mockResolvedValue(activeUser());
+      findActiveByUserId.mockResolvedValue(companyUser({ status }));
+
+      await expect(strategy.validate({ sub: 'user-1', login: 'juan.perez' })).rejects.toThrow(ForbiddenException);
+    },
+  );
+
+  it('does NOT cache a rejected (missing CompanyUser) resolution → re-queries each time', async () => {
+    const { strategy, findById, findActiveByUserId } = makeStrategy();
+    findById.mockResolvedValue(activeUser());
+    findActiveByUserId.mockResolvedValue(null);
+
+    await expect(strategy.validate({ sub: 'user-1', login: 'juan.perez' })).rejects.toThrow(ForbiddenException);
+    await expect(strategy.validate({ sub: 'user-1', login: 'juan.perez' })).rejects.toThrow(ForbiddenException);
+
+    expect(findActiveByUserId).toHaveBeenCalledTimes(2);
+  });
+
+  it('cache hit skips BOTH repositories — one joined projection, one invalidation window (A7)', async () => {
+    const { strategy, findById, findActiveByUserId } = makeStrategy();
+    findById.mockResolvedValue(activeUser());
+
+    await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
+    await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
+
+    expect(findById).toHaveBeenCalledTimes(1);
+    expect(findActiveByUserId).toHaveBeenCalledTimes(1);
   });
 });

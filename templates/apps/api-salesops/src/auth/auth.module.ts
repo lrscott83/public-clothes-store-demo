@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from '@store-mgmt/api-common';
-import { USER_REPOSITORY } from '@store-mgmt/domain';
-import { InfraDbModule, PrismaUserRepository } from '@store-mgmt/infra-db';
+import { COMPANY_USER_REPOSITORY, USER_REPOSITORY } from '@store-mgmt/domain';
+import { InfraDbModule, PrismaCompanyUserRepository, PrismaUserRepository } from '@store-mgmt/infra-db';
 
 /**
  * Wires the shared auth kit's `JwtStrategy` (from `@store-mgmt/api-common`,
@@ -15,9 +15,19 @@ import { InfraDbModule, PrismaUserRepository } from '@store-mgmt/infra-db';
  * controller in the app, because Passport strategy registration is a side
  * effect of the provider's construction at bootstrap, not of per-module DI
  * scoping (mirrors `apps/api-idp`'s `AuthModule` precedent).
+ *
+ * `COMPANY_USER_REPOSITORY` is what `JwtStrategy` resolves the role bitmask
+ * from. Forgetting this binding fails Nest DI AT BOOTSTRAP rather than
+ * per-request — that is deliberate (design §0.1, enforcement layer 1): an app
+ * that cannot resolve roles must refuse to start, not serve traffic that
+ * silently 403s.
  */
 @Module({
   imports: [PassportModule, InfraDbModule],
-  providers: [JwtStrategy, { provide: USER_REPOSITORY, useClass: PrismaUserRepository }],
+  providers: [
+    JwtStrategy,
+    { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
+    { provide: COMPANY_USER_REPOSITORY, useClass: PrismaCompanyUserRepository },
+  ],
 })
 export class AuthModule {}
