@@ -398,3 +398,51 @@ model WarehouseOperator {
   @@index([warehouseId])
   @@map("warehouse_operator")
 }
+
+// Seventh domain module: Companies / CompanyUser role reframe (SDD change
+// company-user-roles-reframe, Phase 1 — additive only, INERT: nothing reads
+// these tables yet, `app_user.roles` remains the live source of authz until
+// the Phase 2 behavioral cutover). Single schema-per-tenant (design.md D1/D3):
+// exactly one `Company` row exists in production today.
+
+enum CompanyUserStatus {
+  ACTIVE
+  REVOKED
+  SUSPENDED
+}
+
+model Company {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  /// Reserved hook for the deferred schema-per-tenant change (D3). ALWAYS null today — no code path may read it.
+  schemaName String? @map("schema_name")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  companyUsers CompanyUser[]
+
+  @@map("company")
+}
+
+model CompanyUser {
+  id        String            @id @default(uuid()) @db.Uuid
+  /// SOFT FK to `app_user.id` — deliberately NOT a Prisma `@relation` (D1): this table is
+  /// the one the deferred schema-per-tenant change moves tenant-side, where a relation to
+  /// the master `User` cannot be expressed. Integrity is an APPLICATION invariant.
+  /// If a hard user-delete path is ever added it MUST delete `company_user` rows in the
+  /// same transaction. Today `User` is soft-delete-only (`UsersService.deactivate`).
+  userId    String            @db.Uuid @map("user_id")
+  companyId String            @db.Uuid @map("company_id")
+  role      Int
+  status    CompanyUserStatus @default(ACTIVE)
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([userId, companyId])
+  @@index([userId])
+  @@map("company_user")
+}

@@ -13,3 +13,6 @@ export { PrismaUserRepository } from './users/prisma-user.repository.js';
 export { PrismaRefreshTokenRepository } from './users/prisma-refresh-token.repository.js';
 export { PrismaPasswordResetTokenRepository } from './users/prisma-password-reset-token.repository.js';
 export { PrismaWarehouseOperatorRepository } from './users/prisma-warehouse-operator.repository.js';
+export { PrismaCompanyRepository } from './company/prisma-company.repository.js';
+export { PrismaCompanyUserRepository } from './company/prisma-company-user.repository.js';
+export { seedCompany, DEFAULT_COMPANY_SLUG } from './company/seed.js';
