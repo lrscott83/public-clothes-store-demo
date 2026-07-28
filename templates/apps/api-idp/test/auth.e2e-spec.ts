@@ -90,6 +90,20 @@ describe('Auth (e2e)', () => {
     expect(loginResponse.status).toBe(200);
     expect(loginResponse.body.accessToken).toEqual(expect.any(String));
     expect(loginResponse.body.refreshToken).toEqual(expect.any(String));
+
+    // The access token carries identity ONLY. `companyId` is resolved per
+    // request from the ACTIVE `CompanyUser`, never minted into the token —
+    // a token outliving a revoked assignment must not keep granting access.
+    // Enforced by the `JwtAccessPayload` type; asserted here at runtime,
+    // because a type cannot stop a `sign()` call from being handed extra
+    // claims at some later point.
+    const accessPayload: Record<string, unknown> = JSON.parse(
+      Buffer.from(loginResponse.body.accessToken.split('.')[1], 'base64url').toString('utf8'),
+    );
+    expect(accessPayload).not.toHaveProperty('companyId');
+    expect(accessPayload).not.toHaveProperty('roles');
+    expect(accessPayload.sub).toEqual(expect.any(String));
+
     const firstRefreshToken: string = loginResponse.body.refreshToken;
 
     const refreshResponse = await request(app.getHttpServer())

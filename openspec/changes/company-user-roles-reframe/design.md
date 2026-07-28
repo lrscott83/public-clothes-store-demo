@@ -406,7 +406,16 @@ Test DB `store_mgmt_test` (`TEST_URL` in `.env`, forced by `jest.setup.js` in `i
 | 8 | `signup` auto-assigns `CompanyUser` role `1`; 0 companies → 500; >1 → 409; response DTO shape unchanged | Unit + e2e | `api-idp/src/auth/*.spec.ts`, `test/auth.e2e-spec.ts` |
 | 9 | `POST /users` / `PATCH /users/:id` persist to `company_user.role`, not `app_user` | Integration + e2e | `api-idp/test/users.e2e-spec.ts` |
 | 10 | Adapter contracts: `findActiveByUserId`, `create` uniqueness on `(userId, companyId)`, `updateRole`, `listByCompany` | Integration vs `store_mgmt_test` | `infra-db/src/company/*.spec.ts` (mirror `prisma-user.repository.spec.ts`) |
-| 11 | Backfill gate: post-001 the 5 assertions of §7 hold | Integration | spec around `verify-company-user-backfill.ts` |
+| 11 | Backfill gate: post-001 the 5 assertions of §7 hold | Integration | ~~spec around `verify-company-user-backfill.ts`~~ — **ACCEPTED DEVIATION**, see below |
+
+> **Row 11 deviation (accepted 2026-07-28, recorded by `sdd-verify`).** No permanent spec was
+> written. The gate compares `company_user.role` to `app_user.roles`, so a suite running against
+> any post-002 database would always fail it — the assertion is only meaningful inside the
+> 001→002 window, which is not a state a test suite can rely on. The gate was instead exercised
+> by hand against real seeded data before 002 was authored (1 company / 9 users / 9 assignments /
+> 0 mismatches / 0 orphans) and the result recorded in `tasks.md`. The script's post-002 branch
+> (it detects the dropped column and reports that the gate no longer applies) IS cheaply
+> testable and remains uncovered — a real, accepted gap, not an oversight.
 
 ### Mechanical (no RED→GREEN — the compiler and existing suites are the gate)
 

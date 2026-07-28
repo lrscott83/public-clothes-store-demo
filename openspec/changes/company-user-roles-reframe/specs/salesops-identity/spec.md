@@ -43,7 +43,7 @@ zero source changes.
 
 #### Scenario: Existing @Roles() decorators need no source changes
 
-- GIVEN the 9 `api-salesops` controllers using `@UseGuards(JwtAuthGuard,
+- GIVEN the 7 `api-salesops` controllers using `@UseGuards(JwtAuthGuard,
   RolesGuard)` and `@Roles(...)`
 - WHEN this change ships
 - THEN all pass their existing tests with zero edits to controller source

@@ -112,9 +112,10 @@ describe('JwtStrategy.validate', () => {
 
   it('sources `roles` from CompanyUser.role, NEVER from the User row, and exposes companyId', async () => {
     const { strategy, findById, findActiveByUserId } = makeStrategy();
-    // The User row still carries a DIFFERENT bitmask — if resolution ever reads
-    // it instead of the assignment, this assertion is what catches it.
-    findById.mockResolvedValue(activeUser({ roles: USER_ROLES.user }));
+    // Since migration 002 the User row cannot carry a bitmask at all — the
+    // assignment is the only possible source, and this asserts it is the one
+    // actually read.
+    findById.mockResolvedValue(activeUser());
     findActiveByUserId.mockResolvedValue(companyUser({ role: USER_ROLES.admin }));
 
     const result = await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
