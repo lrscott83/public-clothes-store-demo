@@ -331,8 +331,9 @@ model SaleCredit {
 // backend-users-roles). Isolated identity module, api-idp pattern — see
 // design.md. `User` maps to table "app_user", NOT "user" (USER is a Postgres
 // reserved word, same reason `Order` maps to "sales_order"). `login` (NOT
-// `email`) is the unique, required authentication identifier. `roles` is an
-// Int bitmask (see `packages/domain/src/users/roles.ts`).
+// `email`) is the unique, required authentication identifier. `User` carries
+// NO role bitmask — migration 002 dropped `app_user.roles`; authorization is
+// a property of the `(user, company)` pair and lives on `CompanyUser`.
 
 model User {
   id           String   @id @default(uuid()) @db.Uuid
@@ -342,7 +343,6 @@ model User {
   email        String?
   cellPhone    String?  @map("cell_phone")
   isActive     Boolean  @default(true) @map("is_active")
-  roles        Int      @default(1) // bitmask; default = user(1)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

@@ -66,7 +66,7 @@ describe('Users (e2e) — mass-assignment guard', () => {
     const login = uniqueLogin('admin');
     const passwordHash = await hashDevPassword('AdminPass1!');
     const admin = await prisma.user.create({
-      data: { login, passwordHash, fullName: 'E2E Admin', roles: USER_ROLES.admin },
+      data: { login, passwordHash, fullName: 'E2E Admin' },
     });
     await assignToCompany(admin.id, USER_ROLES.admin);
     const loginResponse = await request(app.getHttpServer())
@@ -81,7 +81,7 @@ describe('Users (e2e) — mass-assignment guard', () => {
     const targetLogin = uniqueLogin('target');
     const originalHash = await hashDevPassword('OriginalPass1!');
     const target = await prisma.user.create({
-      data: { login: targetLogin, passwordHash: originalHash, fullName: 'Target User', roles: USER_ROLES.user },
+      data: { login: targetLogin, passwordHash: originalHash, fullName: 'Target User' },
     });
     await assignToCompany(target.id, USER_ROLES.user);
 
@@ -105,7 +105,7 @@ describe('Users (e2e) — mass-assignment guard', () => {
     const targetLogin = uniqueLogin('target2');
     const originalHash = await hashDevPassword('OriginalPass1!');
     const target = await prisma.user.create({
-      data: { login: targetLogin, passwordHash: originalHash, fullName: 'Old Name', roles: USER_ROLES.user },
+      data: { login: targetLogin, passwordHash: originalHash, fullName: 'Old Name' },
     });
 
     const response = await request(app.getHttpServer())

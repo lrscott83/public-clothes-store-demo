@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { InvalidUserError } from './errors.js';
-import { USER_ROLES, type UserRoleValue } from './roles.js';
 
 /** Bcrypt hash shape (`$2a$`/`$2b$`/`$2y$` prefix) — the "never store plaintext" guarantee at the domain boundary. */
 const BCRYPT_HASH_SHAPE = /^\$2[aby]\$/;
@@ -9,8 +8,10 @@ const BCRYPT_HASH_SHAPE = /^\$2[aby]\$/;
  * User identity + credentials entity. `login` (NOT `email`) is the unique,
  * required authentication identifier. `email`/`cellPhone` are OPTIONAL.
  * `passwordHash` is required and must be bcrypt-shaped — plaintext passwords
- * never reach this entity. `roles` is an Int bitmask (see `roles.ts`). No
- * `isEmailVerified` field exists (owner-locked non-goal).
+ * never reach this entity. Carries NO role bitmask: authorization is a
+ * property of the `(user, company)` pair and lives on `CompanyUser` (see
+ * `company/company-user.ts`). No `isEmailVerified` field exists
+ * (owner-locked non-goal).
  */
 export interface User {
   readonly id: string;
@@ -20,7 +21,6 @@ export interface User {
   readonly email: string | null;
   readonly cellPhone: string | null;
   readonly isActive: boolean;
-  readonly roles: UserRoleValue;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -38,7 +38,6 @@ export interface CreateUserInput {
   readonly email?: string | null;
   readonly cellPhone?: string | null;
   readonly isActive?: boolean;
-  readonly roles?: UserRoleValue;
   readonly createdAt?: Date;
   readonly updatedAt?: Date;
 }
@@ -73,7 +72,6 @@ export function createUser(input: CreateUserInput): User {
     email: input.email ?? null,
     cellPhone: input.cellPhone ?? null,
     isActive: input.isActive ?? true,
-    roles: input.roles ?? USER_ROLES.user,
     createdAt: input.createdAt ?? now,
     updatedAt: input.updatedAt ?? now,
   };

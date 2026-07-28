@@ -40,7 +40,7 @@ describe('PrismaUserRepository', () => {
     expect(created.email).toBeNull();
     expect(created.cellPhone).toBeNull();
     expect(created.isActive).toBe(true);
-    expect(created.roles).toBe(1);
+    expect(created).not.toHaveProperty('roles');
   });
 
   it('rejects a duplicate login on create with DuplicateLoginError', async () => {

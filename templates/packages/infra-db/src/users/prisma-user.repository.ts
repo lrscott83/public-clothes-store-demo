@@ -13,7 +13,6 @@ interface UserRow {
   readonly email: string | null;
   readonly cellPhone: string | null;
   readonly isActive: boolean;
-  readonly roles: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -27,7 +26,6 @@ function toDomain(row: UserRow): DomainUser {
     email: row.email,
     cellPhone: row.cellPhone,
     isActive: row.isActive,
-    roles: row.roles,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -83,7 +81,6 @@ export class PrismaUserRepository implements IUserRepository {
           email: input.email ?? null,
           cellPhone: input.cellPhone ?? null,
           isActive: input.isActive ?? true,
-          roles: input.roles ?? 1,
         },
       });
       return toDomain(row);
@@ -112,7 +109,6 @@ export class PrismaUserRepository implements IUserRepository {
           ...(patch.email !== undefined ? { email: patch.email } : {}),
           ...(patch.cellPhone !== undefined ? { cellPhone: patch.cellPhone } : {}),
           ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
-          ...(patch.roles !== undefined ? { roles: patch.roles } : {}),
         },
       });
       return toDomain(row);

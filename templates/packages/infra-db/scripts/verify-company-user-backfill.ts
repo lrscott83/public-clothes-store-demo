@@ -67,6 +67,21 @@ export async function verifyCompanyUserBackfill(connectionString: string): Promi
   await client.connect();
 
   try {
+    // The gate compares `company_user.role` to `app_user.roles`, so it is
+    // only meaningful in the window between migrations 001 and 002. This
+    // script stays in the tree because environments roll out on their own
+    // schedule — a database that has 001 but not 002 still needs it.
+    const { rows: columns } = await client.query<{ n: string }>(`
+      SELECT count(*) AS n FROM information_schema.columns
+      WHERE table_name = 'app_user' AND column_name = 'roles';
+    `);
+    if (Number(columns[0].n) === 0) {
+      return [
+        'app_user.roles no longer exists — migration 002 has already run against this database, ' +
+          'so there is nothing left to compare. This gate only applies between migrations 001 and 002.',
+      ];
+    }
+
     const { rows } = await client.query<VerificationRow>(`
       SELECT
         (SELECT count(*) FROM "company")                                      AS companies,

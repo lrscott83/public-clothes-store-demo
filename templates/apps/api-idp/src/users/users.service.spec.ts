@@ -20,7 +20,6 @@ const baseUser: DomainUser = {
   email: null,
   cellPhone: null,
   isActive: true,
-  roles: 1,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 };
@@ -78,9 +77,9 @@ describe('UsersService', () => {
   });
 
   describe('create', () => {
-    it('hashes the password and persists an explicit roles bitmask', async () => {
+    it('hashes the password and persists the explicit bitmask on the assignment, not on the user', async () => {
       (bcrypt.hash as jest.Mock).mockResolvedValue(VALID_HASH);
-      repo.create.mockResolvedValue({ ...baseUser, roles: 8 });
+      repo.create.mockResolvedValue(baseUser);
 
       const result = await service.create(TEST_COMPANY_ID, {
         login: 'jdoe',
@@ -90,7 +89,8 @@ describe('UsersService', () => {
       });
 
       expect(bcrypt.hash).toHaveBeenCalledWith('plaintext', 10);
-      expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ roles: 8 }));
+      expect(repo.create).toHaveBeenCalledWith(expect.not.objectContaining({ roles: expect.anything() }));
+      expect(companyUserRepo.create).toHaveBeenCalledWith(expect.objectContaining({ role: 8 }));
       expect(result.roles).toBe(8);
     });
 
@@ -130,13 +130,16 @@ describe('UsersService', () => {
   });
 
   describe('update', () => {
-    it('updates roles for an existing user', async () => {
+    it('routes a role change to the assignment and never to the user row', async () => {
       repo.findById.mockResolvedValue(baseUser);
-      repo.update.mockResolvedValue({ ...baseUser, roles: 2 });
+      repo.update.mockResolvedValue(baseUser);
 
       const result = await service.update(TEST_COMPANY_ID, 'user-1', { roles: 2 });
 
-      expect(repo.update).toHaveBeenCalledWith('user-1', { roles: 2 });
+      // The profile patch reaches `userRepository` stripped of `roles` —
+      // `app_user` has no such column since migration 002.
+      expect(repo.update).toHaveBeenCalledWith('user-1', {});
+      expect(companyUserRepo.updateRole).toHaveBeenCalledWith('user-1', TEST_COMPANY_ID, 2);
       expect(result.roles).toBe(2);
     });
 

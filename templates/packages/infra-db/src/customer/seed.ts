@@ -54,11 +54,11 @@ function deterministicSeedId(fullName: string): string {
  * find-then-create-or-update, not a native Prisma `upsert`). Since
  * `backend-users-roles`, EVERY `Customer` requires a `User` — this finds or
  * creates a matching `app_user` (`login` = `deriveLogin(fullName, ...)`,
- * bcrypt-hashed dev password, `roles=user`) per demo customer, keyed on the
+ * bcrypt-hashed dev password) per demo customer, keyed on the
  * User's own `login` (upsert), then links `userId` and gives that User an
  * ACTIVE `CompanyUser` in the implicit company with the `user` bit —
- * without it the account has no persisted authorization once migration 002
- * drops `app_user.roles`, and every login is rejected. Idempotent on all
+ * without it the account has no persisted authorization at all (migration
+ * 002 dropped `app_user.roles`) and every login is rejected. Idempotent on all
  * sides. Re-running never duplicates rows. All other contact fields stay
  * empty/null.
  */
@@ -71,7 +71,7 @@ export async function seedCustomers(prisma: PrismaService): Promise<SeedCustomer
     const user = await prisma.user.upsert({
       where: { login },
       update: {},
-      create: { login, passwordHash, fullName, roles: USER_ROLE_BIT },
+      create: { login, passwordHash, fullName },
     });
     await seedCompanyUser(prisma, user.id, companyId, USER_ROLE_BIT);
 

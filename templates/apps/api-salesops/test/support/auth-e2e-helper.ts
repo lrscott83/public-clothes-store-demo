@@ -25,7 +25,6 @@ export async function createAuthedUser(
       login: `e2e.${randomUUID()}`,
       passwordHash: VALID_HASH,
       fullName: 'E2E Test User',
-      roles,
     },
   });
 

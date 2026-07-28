@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createUser } from './user.js';
 import { InvalidUserError } from './errors.js';
-import { USER_ROLES } from './roles.js';
 
 const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
@@ -19,9 +18,9 @@ describe('createUser — invariants', () => {
     expect(user.isActive).toBe(true);
   });
 
-  it('defaults roles to the "user" bit', () => {
+  it('produces a User with no roles field — authorization lives in CompanyUser', () => {
     const user = createUser({ login: 'jdoe', passwordHash: VALID_HASH, fullName: 'Jane Doe' });
-    expect(user.roles).toBe(USER_ROLES.user);
+    expect(Object.keys(user)).not.toContain('roles');
   });
 
   it('produces a User with no isEmailVerified field', () => {
@@ -71,11 +70,5 @@ describe('createUser — invariants', () => {
     });
     expect(user.email).toBe('jane@example.com');
     expect(user.cellPhone).toBe('555-1234');
-  });
-
-  it('accepts an explicit roles bitmask', () => {
-    const roles = USER_ROLES.owner | USER_ROLES.warehouse_operator;
-    const user = createUser({ login: 'jdoe', passwordHash: VALID_HASH, fullName: 'Jane Doe', roles });
-    expect(user.roles).toBe(roles);
   });
 });

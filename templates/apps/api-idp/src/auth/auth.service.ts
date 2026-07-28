@@ -119,11 +119,6 @@ export class AuthService {
       fullName: dto.fullName,
       email: dto.email,
       cellPhone: dto.cellPhone,
-      // Dual-write while `app_user.roles` still exists: the column stays the
-      // §7 verification gate's comparison basis until migration 002 drops it,
-      // so it must not drift from the assignment below. Phase 3 removes both
-      // this field and the column in one commit.
-      roles: USER_ROLES.user,
     };
     // Invariant check ONLY (mirrors CustomerService/createCustomer) — the
     // built entity is discarded; the repository/DB remains the single

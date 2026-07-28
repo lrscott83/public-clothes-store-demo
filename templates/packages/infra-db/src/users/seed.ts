@@ -78,7 +78,6 @@ export async function seedUsers(prisma: PrismaService): Promise<SeedUsersResult>
         login: account.login,
         passwordHash,
         fullName: account.fullName,
-        roles: account.roles,
       },
     });
     await seedCompanyUser(prisma, user.id, companyId, account.roles);

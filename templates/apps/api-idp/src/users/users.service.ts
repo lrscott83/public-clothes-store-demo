@@ -26,10 +26,9 @@ const SALT_ROUNDS = 10;
  * `@Roles(admin, owner)` is enforced at the controller (`UsersController`),
  * NOT here — this service is the orchestration layer only.
  *
- * Role writes go to `CompanyUser`, scoped to the CALLER's `companyId`. While
- * `app_user.roles` still exists (it is dropped in Phase 3) every write updates
- * BOTH, because that column is what the §7 verification gate compares against
- * — letting the two drift would fail the gate that guards migration 002.
+ * Role writes go to `CompanyUser`, scoped to the CALLER's `companyId`, and
+ * nowhere else — migration 002 dropped `app_user.roles`, so the assignment is
+ * the single persisted authorization source.
  */
 @Injectable()
 export class UsersService {
@@ -50,7 +49,6 @@ export class UsersService {
       fullName: dto.fullName,
       email: dto.email,
       cellPhone: dto.cellPhone,
-      roles: role, // dual-write — see the class doc comment
     };
     createUser(input); // invariant check only, discarded (mirrors AuthService.signup / CustomerService)
 
@@ -102,7 +100,15 @@ export class UsersService {
       throw new NotFoundException(`User "${id}" not found`);
     }
 
-    const updated = await this.userRepository.update(id, patch);
+    // `roles` is deliberately NOT forwarded: it is not part of
+    // `UserUpdateInput` since migration 002, and the assignment below is the
+    // only place a role change is persisted.
+    const updated = await this.userRepository.update(id, {
+      ...(patch.fullName !== undefined ? { fullName: patch.fullName } : {}),
+      ...(patch.email !== undefined ? { email: patch.email } : {}),
+      ...(patch.cellPhone !== undefined ? { cellPhone: patch.cellPhone } : {}),
+      ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+    });
 
     // `roles` is optional on the patch — only touch the assignment when the
     // caller actually asked to change it.

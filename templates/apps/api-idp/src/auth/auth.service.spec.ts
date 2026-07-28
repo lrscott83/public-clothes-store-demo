@@ -26,7 +26,6 @@ const baseUser: DomainUser = {
   email: null,
   cellPhone: null,
   isActive: true,
-  roles: 1,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 };
@@ -270,15 +269,16 @@ describe('AuthService', () => {
       expect(companyUserRepo.create).not.toHaveBeenCalled();
     });
 
-    it('dual-writes the bitmask to `app_user.roles` too, so the §7 gate stays satisfiable', async () => {
+    it('writes the bitmask ONLY to the assignment — the `app_user` payload carries no role', async () => {
       (bcrypt.hash as jest.Mock).mockResolvedValue(VALID_HASH);
       userRepo.create.mockResolvedValue(baseUser);
 
       await service.signup({ login: 'jdoe', password: 'plaintext', fullName: 'John Doe' });
 
-      // Until migration 002 drops the column it remains the gate's comparison
-      // basis — letting it drift from the assignment would block Phase 3.
-      expect(userRepo.create).toHaveBeenCalledWith(expect.objectContaining({ roles: 1 }));
+      // Migration 002 dropped `app_user.roles`; a second write path here would
+      // reintroduce exactly the drift the reframe exists to remove.
+      expect(userRepo.create).toHaveBeenCalledWith(expect.not.objectContaining({ roles: expect.anything() }));
+      expect(companyUserRepo.create).toHaveBeenCalledWith(expect.objectContaining({ role: 1 }));
     });
   });
 

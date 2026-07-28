@@ -47,15 +47,6 @@ describe('seedUsers', () => {
     }
   });
 
-  it('assigns admin the admin bit and owner the owner bit', async () => {
-    await seedUsers(prisma);
-
-    const admin = await prisma.user.findUniqueOrThrow({ where: { login: 'admin' } });
-    const owner = await prisma.user.findUniqueOrThrow({ where: { login: 'owner' } });
-    expect(admin.roles & 16).toBe(16);
-    expect(owner.roles & 8).toBe(8);
-  });
-
   it('links warehouse.operator to a WarehouseOperator row scoped to a warehouse', async () => {
     await seedUsers(prisma);
 

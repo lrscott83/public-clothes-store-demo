@@ -6,10 +6,10 @@ import type { UserResponseDto } from '../dto/user-response.dto.js';
  * `passwordHash`.
  *
  * `roles` is an EXPLICIT parameter rather than a field read off `user`: the
- * authoritative bitmask lives on the caller's `CompanyUser` assignment, not on
- * the `User` row (which loses its `roles` column in Phase 3). Passing it in is
- * what turns every caller that has not been migrated into a compile error
- * instead of a response that silently reports a stale role.
+ * authoritative bitmask lives on the caller's `CompanyUser` assignment, and
+ * the `User` row no longer carries one at all (migration 002 dropped the
+ * column). Passing it in is what turned every unmigrated caller into a compile
+ * error instead of a response that silently reported a stale role.
  *
  * `UserResponseDto.roles`/`roleLabels` keep their exact previous shape, so
  * this is not a client-visible change.

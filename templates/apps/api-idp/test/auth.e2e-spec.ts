@@ -274,7 +274,7 @@ describe('Auth (e2e)', () => {
       const login = uniqueLogin('owner');
       const passwordHash = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
       const owner = await prisma.user.create({
-        data: { login, passwordHash, fullName: 'E2E Owner User', roles: 8 },
+        data: { login, passwordHash, fullName: 'E2E Owner User' },
       });
       await assignToCompany(owner.id, 8);
       // Sign in via bcrypt-verified login requires the REAL password, not
