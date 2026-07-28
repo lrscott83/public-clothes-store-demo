@@ -147,22 +147,66 @@ so all 7 guarded controllers and both `SanitizedUser` readers needed no change. 
 compile error the change produced was `auth-test-helpers.ts` missing `companyId` — enforcement
 layer 2 (type-time) doing exactly its job.
 
-## Phase 3: Test Fixtures + Migration 002 (PR3)
+## Phase 3: Test Fixtures + Migration 002 (PR3) — DONE
 
-- [ ] 3.1 Update `infra-db/src/users/seed.ts` (+spec) — cockpit roles → `company_user` row
-- [ ] 3.2 Update `api-salesops/test/support/auth-e2e-helper.ts` `createAuthedUser` to also seed `company_user`
-- [ ] 3.3 Update ~8 infra-db spec cleanup blocks: add `companyUser.deleteMany` alongside `user.deleteMany({})`
-- [ ] 3.4 Update `api-idp/test/auth.e2e-spec.ts:33` and `users.e2e-spec.ts:31` cleanup to also delete `company_user` rows
-- [ ] 3.5 Optionally add `companyId` to `api-salesops/src/test-support/auth-test-helpers.ts`
-- [ ] 3.6 Re-run `verify-company-user-backfill.ts` against test DB — reconfirm gate before authoring 002
-- [ ] 3.7 Write migration 002: `ALTER TABLE "app_user" DROP COLUMN "roles"`
-- [ ] 3.8 Update `schema.prisma` — remove `roles` from `User` model
-- [ ] 3.9 Verify: full matrix rerun post-drop — domain 238, infra-db 121+N, api-common 24+N, api-idp 50+11+N, api-salesops 181+50e2e green
-- [ ] 3.10 Compile-error sweep: confirm no remaining reference to `app_user.roles`
-- [ ] 3.11 RED→GREEN: `domain/src/users/user.test.ts` + `user.ts` — drop `roles` field (moved from 1.9)
-- [ ] 3.12 Update `infra-db/src/users/prisma-user.repository.ts` (+spec) drop `roles` from UserRow/toDomain/create/update (moved from 1.17)
+- [x] 3.1 Update `infra-db/src/users/seed.ts` (+spec) — cockpit roles → `company_user` row
+- [x] 3.2 Update `api-salesops/test/support/auth-e2e-helper.ts` `createAuthedUser` to also seed `company_user`
+- [x] 3.3 Update ~8 infra-db spec cleanup blocks: add `companyUser.deleteMany` alongside `user.deleteMany({})`
+- [x] 3.4 Update `api-idp/test/auth.e2e-spec.ts:33` and `users.e2e-spec.ts:31` cleanup to also delete `company_user` rows
+- [x] 3.5 Optionally add `companyId` to `api-salesops/src/test-support/auth-test-helpers.ts`
+- [x] 3.6 Re-run `verify-company-user-backfill.ts` against test DB — reconfirm gate before authoring 002
+- [x] 3.7 Write migration 002: `ALTER TABLE "app_user" DROP COLUMN "roles"`
+- [x] 3.8 Update `schema.prisma` — remove `roles` from `User` model
+- [x] 3.9 Verify: full matrix rerun post-drop
+- [x] 3.10 Compile-error sweep: confirm no remaining reference to `app_user.roles`
+- [x] 3.11 RED→GREEN: `domain/src/users/user.test.ts` + `user.ts` — drop `roles` field (moved from 1.9)
+- [x] 3.12 Update `infra-db/src/users/prisma-user.repository.ts` (+spec) drop `roles` from UserRow/toDomain/create/update (moved from 1.17)
 
 > 3.11 and 3.12 must land in the SAME commit as 3.7/3.8 (the column drop) and after 2.10-2.11
 > (the `user.mapper.ts` signature change). Dropping the domain field is what turns every stale
 > reader into a compile error instead of a silent `0` — that is the whole reason the field and
-> the column go together.
+> the column go together. **Honoured: `fd0a44c` carries all four.**
+
+### Sequencing correction #4 — task 3.1 named only ONE of the two user-minting seeds
+
+Same defect class as the three corrections already recorded above: a phase deferring work its
+own gate depends on. `customer/seed.ts` mints five demo-customer `app_user` rows of its own
+(`roles: 1`, since `backend-users-roles` made `Customer.userId` mandatory) and task 3.1 does
+not mention it. Left alone it would have been a compile error at 3.10 AND — worse — five
+seeded accounts with no `CompanyUser`, i.e. five demo logins returning 403 in a fresh
+environment. Fixed in `93f6814` alongside 3.1 rather than deferred.
+
+`ensureDefaultCompanyId` + `seedCompanyUser` were extracted into `company/seed.ts` so both
+seeds share one idempotent assignment path.
+
+### Phase 3 verification evidence
+
+| Check | Result |
+|---|---|
+| `pnpm -r build` | clean |
+| domain | 249/249 |
+| infra-db | 142/142 (real Postgres) |
+| api-common | 31/31 |
+| api-idp | 54/54 + 11/11 e2e |
+| api-salesops | 181/181 + 50/50 e2e — **still zero controller edits** |
+| lint `--max-warnings 0` | clean in domain, infra-db, api-idp, api-salesops |
+
+§7 gate before 002 (against real seeded data, run immediately after `migrate deploy` per the
+recorded gotcha): 1 company, 9 users, 9 assignments, 0 role mismatches, 0 orphans — PASSED.
+
+Migration 002 rehearsal on a throwaway `TEMPLATE store_mgmt_test` clone: forward drop clean,
+`company_user` rows intact, and the design §7 compensating rollback restored every bitmask
+with zero drift. Clone dropped afterwards.
+
+Compile sweep found exactly the two Phase 2 dual-write sites (`AuthService.signup`,
+`UsersService.create`) — the expand/contract phase ending on schedule, not a surprise.
+
+### Carried forward — NOT fixed here
+
+- `api-common` lint reports 4 pre-existing `turbo/no-undeclared-env-vars` warnings for
+  `SOME_SECRET`. Verified present at `8340071` (pre-Phase-3) by stashing and re-running.
+  Unrelated to this change; left for a separate cleanup.
+- Design §9 test-plan row 11 calls for a spec "around `verify-company-user-backfill.ts`".
+  No such spec exists — Phase 1 exercised the gate by hand instead. A permanent spec is
+  arguably wrong anyway: the gate is only meaningful between 001 and 002, so a suite running
+  against a post-002 database would always fail it. Flagged for `sdd-verify` to rule on.
