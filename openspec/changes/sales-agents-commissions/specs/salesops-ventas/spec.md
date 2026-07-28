@@ -34,6 +34,60 @@ REJECTED (mirrors the retired MVP rule,
 - WHEN order creation is attempted against any warehouse
 - THEN it MUST be rejected regardless of which warehouse was chosen
 
+### Requirement: Every Order Line Is a Snapshot OF THE CATALOG
+
+An order line's `productName`, `categoryName`, `price`, `percentDiscountPrice`
+and `discountPrice` MUST be resolved from the product catalog at creation
+time. They MUST NOT be accepted from the request. The caller supplies only
+WHICH product and HOW MANY. `customerName` MUST likewise be snapshot from the
+`Customer` record, never accepted from the request.
+
+A price accepted from the caller flows into the line total, the order total,
+the payment sum and the credit balance — a caller could name its own price for
+a real product. This is the same rule the capability already applies to
+`total` and `currency`: derived, never accepted as input. "Snapshot" means a
+frozen copy of something authoritative, not a copy of the request.
+
+The referenced product MUST exist and be active, and its category MUST
+resolve; the referenced customer MUST exist and be active. Each failure is an
+invalid REQUEST, reported distinctly from a stock shortage.
+
+#### Scenario: A price supplied by the caller is ignored
+
+- GIVEN a create request whose line carries a `price` differing from the
+  catalog price
+- WHEN the order is created
+- THEN the persisted line, and every total derived from it, use the CATALOG
+  price — the supplied value has no effect
+
+#### Scenario: Product name and category come from the catalog
+
+- GIVEN a create request whose line carries a `productName`/`categoryName`
+  that do not match the catalog
+- WHEN the order is created
+- THEN the persisted line carries the catalog's values
+
+#### Scenario: customerName comes from the customer record
+
+- GIVEN a create request carrying a `customerName` that differs from the
+  stored customer's name
+- WHEN the order is created
+- THEN the persisted order carries the stored customer's name
+
+#### Scenario: Unknown or inactive product is rejected
+
+- GIVEN a line referencing a product that does not exist, or one that is
+  soft-deleted
+- WHEN order creation is attempted
+- THEN it MUST be rejected as an invalid request and no order row is written
+
+#### Scenario: Unknown or inactive customer is rejected
+
+- GIVEN a create request referencing a customer that does not exist, or one
+  that is soft-deleted
+- WHEN order creation is attempted
+- THEN it MUST be rejected as an invalid request and no order row is written
+
 ### Requirement: The Target Warehouse Must Be a Real, Active Warehouse
 
 Order creation, and any change of an order's warehouse, MUST reject a

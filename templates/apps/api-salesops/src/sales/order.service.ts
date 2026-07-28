@@ -5,10 +5,14 @@ import type {
   Currency,
   DeliveryMode,
   ExchangeRate as DomainExchangeRate,
+  ICategoryRepository,
   ICurrencyRepository,
+  ICustomerRepository,
   IOrderRepository,
+  IProductRepository,
   IStockLevelRepository,
   IWarehouseRepository,
+  Product as DomainProduct,
   Order as DomainOrder,
   OrderLine as DomainOrderLine,
   OrderListFilter,
@@ -23,21 +27,23 @@ import {
   InvalidOrderStateError,
   ORDER_REPOSITORY,
   OrderLabelHelpers,
+  CATEGORY_REPOSITORY,
+  CUSTOMER_REPOSITORY,
+  PRODUCT_REPOSITORY,
   STOCK_LEVEL_REPOSITORY,
+  UnsellableOrderReferenceError,
   WAREHOUSE_REPOSITORY,
-  WarehouseNotSellableError,
   assertWarehouseCoversBasket,
   createOrder,
-  discountPriceFromDecimalString,
   discountPriceToDecimalString,
   moneyFromDecimalString,
   moneyToDecimalString,
-  percentFromDecimalString,
   percentToDecimalString,
   rateToDecimalString,
 } from '@store-mgmt/domain';
 import type {
   CreateOrderDto,
+  CreateOrderLineDto,
   OrderLineResponseDto,
   OrderPaymentResponseDto,
   OrderResponseDto,
@@ -74,6 +80,9 @@ export class OrderService {
     @Inject(CURRENCY_REPOSITORY) private readonly currencyRepository: ICurrencyRepository,
     @Inject(STOCK_LEVEL_REPOSITORY) private readonly stockLevelRepository: IStockLevelRepository,
     @Inject(WAREHOUSE_REPOSITORY) private readonly warehouseRepository: IWarehouseRepository,
+    @Inject(PRODUCT_REPOSITORY) private readonly productRepository: IProductRepository,
+    @Inject(CATEGORY_REPOSITORY) private readonly categoryRepository: ICategoryRepository,
+    @Inject(CUSTOMER_REPOSITORY) private readonly customerRepository: ICustomerRepository,
   ) {}
 
   /**
@@ -87,11 +96,81 @@ export class OrderService {
   private async assertWarehouseSellable(warehouseId: string): Promise<void> {
     const found = await this.warehouseRepository.findById(warehouseId);
     if (!found) {
-      throw new WarehouseNotSellableError(warehouseId, 'not found');
+      throw new UnsellableOrderReferenceError('warehouse', warehouseId, 'not found');
     }
     if (!found.active) {
-      throw new WarehouseNotSellableError(warehouseId, 'inactive');
+      throw new UnsellableOrderReferenceError('warehouse', warehouseId, 'inactive');
     }
+  }
+
+  /**
+   * Resolves the CATALOG data every order line is a snapshot OF. The caller
+   * supplies `productId` and `quantity` and nothing else that reaches money:
+   * a price accepted from the request would flow into the line total, the
+   * order total, the payment sum and the credit balance, which means the
+   * caller could name its own price for a real product.
+   *
+   * "Snapshot" has always meant a copy of something authoritative, frozen at
+   * sale time. It never meant "whatever the request said".
+   */
+  private async resolveLineSnapshots(
+    lines: readonly CreateOrderLineDto[],
+  ): Promise<CreateOrderInput['lines']> {
+    const productIds = [...new Set(lines.map((line) => line.productId))];
+    const products = new Map(
+      await Promise.all(
+        productIds.map(async (id): Promise<[string, DomainProduct]> => {
+          const found = await this.productRepository.findById(id);
+          if (!found) {
+            throw new UnsellableOrderReferenceError('product', id, 'not found');
+          }
+          if (!found.active) {
+            throw new UnsellableOrderReferenceError('product', id, 'inactive');
+          }
+          return [id, found];
+        }),
+      ),
+    );
+
+    const categoryIds = [...new Set([...products.values()].map((p) => p.categoryId))];
+    const categoryNames = new Map(
+      await Promise.all(
+        categoryIds.map(async (id): Promise<[string, string]> => {
+          const found = await this.categoryRepository.findById(id);
+          if (!found) {
+            throw new UnsellableOrderReferenceError('category', id, 'not found');
+          }
+          return [id, found.name];
+        }),
+      ),
+    );
+
+    return lines.map((line) => {
+      // Non-null: every id was resolved above or the whole call threw.
+      const product = products.get(line.productId)!;
+      return {
+        productId: product.id,
+        productName: product.name,
+        categoryName: categoryNames.get(product.categoryId)!,
+        price: product.price,
+        percentDiscountPrice: product.percentDiscountPrice,
+        discountPrice: product.discountPrice,
+        quantity: line.quantity,
+      };
+    });
+  }
+
+  /** The customer must exist and be active; its name is snapshot from the record, never from the request. */
+  private async resolveCustomerName(customerId: string): Promise<string> {
+    const found = await this.customerRepository.findById(customerId);
+    if (!found) {
+      throw new UnsellableOrderReferenceError('customer', customerId, 'not found');
+    }
+    if (!found.active) {
+      throw new UnsellableOrderReferenceError('customer', customerId, 'inactive');
+    }
+
+    return found.fullName;
   }
 
   async create(input: CreateOrderDto): Promise<OrderResponseDto> {
@@ -99,26 +178,15 @@ export class OrderService {
     const rates = await this.fetchAllRates(at);
 
 
+    // Everything that reaches money is resolved server-side, BEFORE the
+    // aggregate is built. The request contributes only what to sell, how many,
+    // to whom, from where, and how it is paid.
     const buildInput: CreateOrderInput = {
       customerId: input.customerId,
-      customerName: input.customerName,
+      customerName: await this.resolveCustomerName(input.customerId),
       warehouseId: input.warehouseId,
       deliveryMode: input.deliveryMode as DeliveryMode,
-      lines: input.lines.map((line) => ({
-        productId: line.productId,
-        productName: line.productName,
-        categoryName: line.categoryName,
-        price: moneyFromDecimalString(line.price.amount, line.price.currency as Currency),
-        percentDiscountPrice:
-          line.percentDiscountPrice !== undefined
-            ? percentFromDecimalString(line.percentDiscountPrice)
-            : undefined,
-        discountPrice:
-          line.discountPrice !== undefined
-            ? discountPriceFromDecimalString(line.discountPrice)
-            : undefined,
-        quantity: line.quantity,
-      })),
+      lines: await this.resolveLineSnapshots(input.lines),
       payments: (input.payments ?? []).map((payment) => ({
         channel: payment.channel as PaymentChannel,
         amount: moneyFromDecimalString(payment.amount.amount, payment.amount.currency as Currency),
@@ -129,11 +197,8 @@ export class OrderService {
     // never the other way around (design.md decision #1/#3).
     const order = createOrder(buildInput, rates, at);
 
-    // Availability is checked AFTER the aggregate validates and BEFORE it is
-    // persisted. Order matters: a malformed order must report why it is
-    // malformed, not "this warehouse is short" — the aggregate's own
-    // invariants are the more fundamental failure. The basket comes from the
-    // built order, so this measures what will actually be persisted.
+    // Availability is checked once the aggregate is built, so the basket
+    // measured is exactly what would be persisted.
     //
     // Fast-fail only: nothing is reserved here, so a warehouse reported able
     // can still lose the stock before `confirm`, which reserves for real and

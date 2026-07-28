@@ -2,9 +2,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import type {
   ICurrencyRepository,
   IOrderRepository,
+  ICategoryRepository,
+  ICustomerRepository,
+  IProductRepository,
   IStockLevelRepository,
   IWarehouseRepository,
+  Customer,
+  Money,
   Order as DomainOrder,
+  Product,
   StockLevel,
   Warehouse,
 } from '@store-mgmt/domain';
@@ -15,10 +21,13 @@ import {
   NegativeStockError,
   ORDER_REPOSITORY,
   RateNotFoundError,
+  CATEGORY_REPOSITORY,
+  CUSTOMER_REPOSITORY,
+  PRODUCT_REPOSITORY,
   STOCK_LEVEL_REPOSITORY,
+  UnsellableOrderReferenceError,
   WAREHOUSE_REPOSITORY,
   WarehouseCannotFulfillOrderError,
-  WarehouseNotSellableError,
 } from '@store-mgmt/domain';
 import { OrderService } from './order.service.js';
 import type { CreateOrderDto } from './dto/index.js';
@@ -89,6 +98,81 @@ function buildWarehouseRepoMock(): jest.Mocked<IWarehouseRepository> {
     list: jest.fn().mockResolvedValue([]),
     softDelete: jest.fn(),
   } as unknown as jest.Mocked<IWarehouseRepository>;
+}
+
+function product(id: string, price: Money, active = true): Product {
+  return {
+    id,
+    name: 'Producto Catálogo',
+    description: '',
+    price,
+    percentDiscountPrice: 0n,
+    discountPrice: 0n,
+    cost: { minorUnits: 0n, currency: price.currency },
+    categoryId: 'category-uuid-1',
+    image: '',
+    isNew: false,
+    order: 1,
+    active,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  } as Product;
+}
+
+function buildProductRepoMock(): jest.Mocked<IProductRepository> {
+  return {
+    create: jest.fn(),
+    update: jest.fn(),
+    findById: jest
+      .fn()
+      .mockImplementation(async (id: string) => product(id, { minorUnits: 10000n, currency: 'USD' })),
+    list: jest.fn().mockResolvedValue([]),
+    softDelete: jest.fn(),
+  } as unknown as jest.Mocked<IProductRepository>;
+}
+
+function buildCategoryRepoMock(): jest.Mocked<ICategoryRepository> {
+  return {
+    create: jest.fn(),
+    update: jest.fn(),
+    findById: jest.fn().mockImplementation(async (id: string) => ({
+      id,
+      name: 'Categoría Catálogo',
+      slug: 'categoria-catalogo',
+      order: 1,
+      active: true,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    })),
+    list: jest.fn().mockResolvedValue([]),
+    softDelete: jest.fn(),
+  } as unknown as jest.Mocked<ICategoryRepository>;
+}
+
+function customer(id: string, active = true): Customer {
+  return {
+    id,
+    userId: 'user-uuid-1',
+    fullName: 'Ana Torres',
+    documentId: null,
+    cellPhone: null,
+    email: null,
+    address: null,
+    note: null,
+    active,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  } as Customer;
+}
+
+function buildCustomerRepoMock(): jest.Mocked<ICustomerRepository> {
+  return {
+    create: jest.fn(),
+    update: jest.fn(),
+    findById: jest.fn().mockImplementation(async (id: string) => customer(id)),
+    list: jest.fn().mockResolvedValue([]),
+    softDelete: jest.fn(),
+  } as unknown as jest.Mocked<ICustomerRepository>;
 }
 
 const at = new Date('2026-01-01T00:00:00.000Z');
@@ -165,12 +249,18 @@ describe('OrderService', () => {
   let currencyRepo: jest.Mocked<ICurrencyRepository>;
   let stockRepo: jest.Mocked<IStockLevelRepository>;
   let warehouseRepo: jest.Mocked<IWarehouseRepository>;
+  let productRepo: jest.Mocked<IProductRepository>;
+  let categoryRepo: jest.Mocked<ICategoryRepository>;
+  let customerRepo: jest.Mocked<ICustomerRepository>;
 
   beforeEach(async () => {
     orderRepo = buildOrderRepoMock();
     currencyRepo = buildCurrencyRepoMock();
     stockRepo = buildStockLevelRepoMock();
     warehouseRepo = buildWarehouseRepoMock();
+    productRepo = buildProductRepoMock();
+    categoryRepo = buildCategoryRepoMock();
+    customerRepo = buildCustomerRepoMock();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrderService,
@@ -178,6 +268,9 @@ describe('OrderService', () => {
         { provide: CURRENCY_REPOSITORY, useValue: currencyRepo },
         { provide: STOCK_LEVEL_REPOSITORY, useValue: stockRepo },
         { provide: WAREHOUSE_REPOSITORY, useValue: warehouseRepo },
+        { provide: PRODUCT_REPOSITORY, useValue: productRepo },
+        { provide: CATEGORY_REPOSITORY, useValue: categoryRepo },
+        { provide: CUSTOMER_REPOSITORY, useValue: customerRepo },
       ],
     }).compile();
     service = module.get(OrderService);
@@ -268,6 +361,76 @@ describe('OrderService', () => {
     });
   });
 
+  describe('create — the line snapshot comes from the CATALOG, never from the caller', () => {
+    it('prices the line from the product, ignoring anything price-like the caller sent', async () => {
+      // The caller controls only WHAT and HOW MANY. A price accepted from the
+      // request would flow straight into the total, the payments and the
+      // credit balance — the caller could name its own price.
+      productRepo.findById.mockResolvedValue(
+        product('product-uuid-1', { minorUnits: 10000n, currency: 'USD' }),
+      );
+      orderRepo.create.mockResolvedValue(sampleOrder());
+
+      await service.create({
+        ...sampleCreateDto,
+        lines: [
+          {
+            productId: 'product-uuid-1',
+            quantity: 1,
+            // A caller that smuggles these in must not be believed.
+            price: { amount: '0.01', currency: 'USD' },
+            productName: 'Nombre inventado',
+            categoryName: 'Categoría inventada',
+          } as never,
+        ],
+      });
+
+      const persisted = orderRepo.create.mock.calls[0]?.[0] as DomainOrder;
+      expect(persisted.lines[0]?.price.minorUnits).toBe(10000n);
+      expect(persisted.lines[0]?.productName).toBe('Producto Catálogo');
+      expect(persisted.lines[0]?.categoryName).toBe('Categoría Catálogo');
+    });
+
+    it('rejects a product that does not exist', async () => {
+      productRepo.findById.mockResolvedValue(null);
+
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(UnsellableOrderReferenceError);
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a soft-deleted product', async () => {
+      productRepo.findById.mockResolvedValue(
+        product('product-uuid-1', { minorUnits: 10000n, currency: 'USD' }, false),
+      );
+
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(/inactive/i);
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown customer, and takes customerName from the customer record', async () => {
+      customerRepo.findById.mockResolvedValue(null);
+
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(UnsellableOrderReferenceError);
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a soft-deleted customer', async () => {
+      customerRepo.findById.mockResolvedValue(customer('customer-uuid-1', false));
+
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(/inactive/i);
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('snapshots customerName from the customer record, not from the request', async () => {
+      orderRepo.create.mockResolvedValue(sampleOrder());
+
+      await service.create({ ...sampleCreateDto, customerName: 'Nombre inventado' } as never);
+
+      const persisted = orderRepo.create.mock.calls[0]?.[0] as DomainOrder;
+      expect(persisted.customerName).toBe('Ana Torres');
+    });
+  });
+
   describe('create — the target warehouse must be a real, active warehouse', () => {
     it('rejects an unknown warehouseId as a BAD REQUEST, not as a stock shortage', async () => {
       // Reporting "cannot fulfill every line" for a warehouse that does not
@@ -275,7 +438,7 @@ describe('OrderService', () => {
       // error — and the DB FK must never be what catches this.
       warehouseRepo.findById.mockResolvedValue(null);
 
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(WarehouseNotSellableError);
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(UnsellableOrderReferenceError);
       await expect(service.create(sampleCreateDto)).rejects.toThrow(/not found/i);
       expect(orderRepo.create).not.toHaveBeenCalled();
     });
@@ -287,7 +450,7 @@ describe('OrderService', () => {
       warehouseRepo.findById.mockResolvedValue(warehouse('warehouse-uuid-1', false));
       stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-1', 'product-uuid-1', 999)]);
 
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(WarehouseNotSellableError);
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(UnsellableOrderReferenceError);
       await expect(service.create(sampleCreateDto)).rejects.toThrow(/inactive/i);
       expect(orderRepo.create).not.toHaveBeenCalled();
     });
@@ -356,7 +519,7 @@ describe('OrderService', () => {
 
       await expect(
         service.update('order-uuid-1', { warehouseId: 'ghost-warehouse' }),
-      ).rejects.toThrow(WarehouseNotSellableError);
+      ).rejects.toThrow(UnsellableOrderReferenceError);
       expect(orderRepo.update).not.toHaveBeenCalled();
     });
 
@@ -367,7 +530,7 @@ describe('OrderService', () => {
 
       await expect(
         service.update('order-uuid-1', { warehouseId: 'warehouse-uuid-2' }),
-      ).rejects.toThrow(WarehouseNotSellableError);
+      ).rejects.toThrow(UnsellableOrderReferenceError);
       expect(orderRepo.update).not.toHaveBeenCalled();
     });
 

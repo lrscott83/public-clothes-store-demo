@@ -32,24 +32,32 @@ export class InvalidOrderStateError extends Error {
   }
 }
 
+/** What an order points at and must be able to resolve before it can exist. */
+export type OrderReferenceKind = 'warehouse' | 'product' | 'category' | 'customer';
+
 /**
- * Thrown when the warehouse an order names is not a valid sales target at
- * all — it does not exist, or it has been soft-deleted (`active=false`).
+ * Thrown when something an order REFERENCES is not usable: it does not exist,
+ * or it has been soft-deleted (`active=false`).
  *
  * Deliberately NOT the same error as `WarehouseCannotFulfillOrderError`.
- * Reporting a shortage for a warehouse that does not exist would blame the
- * stock for a typo, and a soft-deleted warehouse is not "short" — it is not
- * for sale. The eligibility query lists ACTIVE warehouses only, so accepting
- * an inactive one at creation would let the write take what the read says
- * does not qualify.
+ * A shortage means the world cannot satisfy the request right now; an
+ * unresolvable reference means the request itself is wrong and no change in
+ * stock would ever make it succeed. Reporting a shortage for a warehouse that
+ * does not exist would blame the stock for a typo.
+ *
+ * `inactive` matters as much as `not found`: soft-deleted rows are still
+ * readable, and every listing endpoint hides them by default. Accepting one
+ * here would let a write take exactly what the corresponding read says does
+ * not qualify.
  */
-export class WarehouseNotSellableError extends Error {
+export class UnsellableOrderReferenceError extends Error {
   constructor(
-    public readonly warehouseId: string,
+    public readonly kind: OrderReferenceKind,
+    public readonly referenceId: string,
     public readonly reason: 'not found' | 'inactive',
   ) {
-    super(`Warehouse "${warehouseId}" cannot receive orders — ${reason}`);
-    this.name = 'WarehouseNotSellableError';
+    super(`${kind} "${referenceId}" cannot be used on an order — ${reason}`);
+    this.name = 'UnsellableOrderReferenceError';
   }
 }
 

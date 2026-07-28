@@ -51,20 +51,13 @@ const sampleResponse = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+// WHAT to sell and HOW MANY. Name, category, price and discounts are resolved
+// from the catalog by the service; `customerName` from the customer record.
 const validCreateBody = {
   customerId: 'customer-uuid-1',
-  customerName: 'Ana Torres',
   warehouseId: 'warehouse-uuid-1',
   deliveryMode: 'pickup',
-  lines: [
-    {
-      productId: 'product-uuid-1',
-      productName: 'Cafetera Express',
-      categoryName: 'Cafeteras',
-      price: { amount: '100.00', currency: 'USD' },
-      quantity: 1,
-    },
-  ],
+  lines: [{ productId: 'product-uuid-1', quantity: 1 }],
   payments: [{ channel: 'USD_CASH', amount: { amount: '100.00', currency: 'USD' } }],
 };
 
@@ -170,15 +163,35 @@ describe('OrderController', () => {
       expect(response.body.message).toContain('warehouse-uuid-1');
     });
 
-    it('rejects an unknown line currency with 400 before reaching the service', async () => {
-      const response = await request(app.getHttpServer())
+    it('rejects an empty or missing lines array with 400 before reaching the service', async () => {
+      await request(app.getHttpServer())
         .post('/orders')
-        .send({
-          ...validCreateBody,
-          lines: [{ ...validCreateBody.lines[0], price: { amount: '100.00', currency: 'XYZ' } }],
-        });
+        .send({ ...validCreateBody, lines: [] })
+        .expect(400);
+      await request(app.getHttpServer())
+        .post('/orders')
+        .send({ ...validCreateBody, lines: undefined })
+        .expect(400);
+      expect(service.create).not.toHaveBeenCalled();
+    });
 
-      expect(response.status).toBe(400);
+    it('rejects a line without a productId, or with a non-positive/non-integer quantity, with 400', async () => {
+      // No global ValidationPipe here and the DTOs are erased at runtime, so
+      // the controller is the only thing standing between a malformed body and
+      // the domain.
+      for (const bad of [
+        { quantity: 1 },
+        { productId: '   ', quantity: 1 },
+        { productId: 'product-uuid-1', quantity: 0 },
+        { productId: 'product-uuid-1', quantity: -1 },
+        { productId: 'product-uuid-1', quantity: 1.5 },
+        { productId: 'product-uuid-1', quantity: '2' },
+      ]) {
+        await request(app.getHttpServer())
+          .post('/orders')
+          .send({ ...validCreateBody, lines: [bad] })
+          .expect(400);
+      }
       expect(service.create).not.toHaveBeenCalled();
     });
 

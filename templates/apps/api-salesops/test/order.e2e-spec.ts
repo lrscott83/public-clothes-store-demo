@@ -361,6 +361,79 @@ describe('Sales (e2e)', () => {
     expect(level.reserved).toBe('0');
   });
 
+  it('prices the line from the CATALOG and ignores a price smuggled into the request', async () => {
+    // The whole point: a caller could otherwise name its own price for a real
+    // product, and that number flows into the line total, the order total, the
+    // payment sum and the credit balance.
+    await stockIn(usdProductId, '10');
+
+    const response = await request(app.getHttpServer())
+      .post('/orders')
+      .set(...authHeader(adminToken))
+      .send({
+        customerId,
+        customerName: 'Nombre Falsificado',
+        warehouseId,
+        deliveryMode: 'pickup',
+        lines: [
+          {
+            productId: usdProductId,
+            quantity: 1,
+            price: { amount: '0.01', currency: 'USD' },
+            productName: 'Producto Falsificado',
+            categoryName: 'Categoría Falsificada',
+          },
+        ],
+        payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+      });
+
+    expect(response.status).toBe(201);
+    // Catalog price is 100.00 USD — not the 0.01 that was sent.
+    expect(response.body.total).toBe('100.00');
+    expect(response.body.lines[0].price).toEqual({ amount: '100.00', currency: 'USD' });
+    expect(response.body.lines[0].productName).toBe('Producto USD');
+    expect(response.body.customerName).not.toBe('Nombre Falsificado');
+  });
+
+  it('creation referencing an unknown product -> 400, no order written', async () => {
+    const beforeCount = await prisma.order.count();
+
+    const response = await request(app.getHttpServer())
+      .post('/orders')
+      .set(...authHeader(adminToken))
+      .send({
+        customerId,
+        warehouseId,
+        deliveryMode: 'pickup',
+        lines: [{ productId: '22222222-2222-4222-8222-222222222222', quantity: 1 }],
+        payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/product .* not found/i);
+    expect(await prisma.order.count()).toBe(beforeCount);
+  });
+
+  it('creation for an unknown customer -> 400, no order written', async () => {
+    await stockIn(usdProductId, '10');
+    const beforeCount = await prisma.order.count();
+
+    const response = await request(app.getHttpServer())
+      .post('/orders')
+      .set(...authHeader(adminToken))
+      .send({
+        customerId: '33333333-3333-4333-8333-333333333333',
+        warehouseId,
+        deliveryMode: 'pickup',
+        lines: [{ productId: usdProductId, quantity: 1 }],
+        payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/customer .* not found/i);
+    expect(await prisma.order.count()).toBe(beforeCount);
+  });
+
   it('creation against a soft-deleted warehouse -> 400, even though it still holds stock', async () => {
     // The eligibility query lists ACTIVE warehouses only. If creation accepted
     // an inactive one, the write would take exactly what the read says does

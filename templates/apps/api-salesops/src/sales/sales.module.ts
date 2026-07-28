@@ -1,14 +1,20 @@
 import { Module } from '@nestjs/common';
 import {
+  CATEGORY_REPOSITORY,
   CURRENCY_REPOSITORY,
+  CUSTOMER_REPOSITORY,
   ORDER_REPOSITORY,
+  PRODUCT_REPOSITORY,
   STOCK_LEVEL_REPOSITORY,
   WAREHOUSE_OPERATOR_REPOSITORY,
   WAREHOUSE_REPOSITORY,
 } from '@store-mgmt/domain';
 import {
   InfraDbModule,
+  PrismaCategoryRepository,
   PrismaCurrencyRepository,
+  PrismaCustomerRepository,
+  PrismaProductRepository,
   PrismaOrderRepository,
   PrismaStockLevelRepository,
   PrismaWarehouseOperatorRepository,
@@ -33,6 +39,11 @@ import { OrderService } from './order.service.js';
     // Sales reaches Inventory only through the composition layer.
     { provide: STOCK_LEVEL_REPOSITORY, useClass: PrismaStockLevelRepository },
     { provide: WAREHOUSE_REPOSITORY, useClass: PrismaWarehouseRepository },
+    // Catalog + customer resolution: every field of an order line that reaches
+    // money is read from here, never from the request body.
+    { provide: PRODUCT_REPOSITORY, useClass: PrismaProductRepository },
+    { provide: CATEGORY_REPOSITORY, useClass: PrismaCategoryRepository },
+    { provide: CUSTOMER_REPOSITORY, useClass: PrismaCustomerRepository },
   ],
 })
 export class SalesModule {}

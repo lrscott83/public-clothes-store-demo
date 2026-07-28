@@ -28,7 +28,7 @@ import {
   USER_ROLES,
   WAREHOUSE_OPERATOR_REPOSITORY,
   WarehouseCannotFulfillOrderError,
-  WarehouseNotSellableError,
+  UnsellableOrderReferenceError,
   type IWarehouseOperatorRepository,
 } from '@store-mgmt/domain';
 import { OrderService } from './order.service.js';
@@ -97,8 +97,23 @@ export class OrderController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() body: CreateOrderDto): Promise<OrderResponseDto> {
-    for (const line of body.lines ?? []) {
-      assertCurrency(line.price);
+    // A line's currency is no longer checkable here — price comes from the
+    // catalog, whose currency is already valid. What DOES need checking is the
+    // shape, because this app installs no global ValidationPipe and its DTOs
+    // are erased at runtime: without this, `quantity: "3"` or a missing
+    // `productId` reaches the domain as `undefined`.
+    if (!Array.isArray(body.lines) || body.lines.length === 0) {
+      throw new BadRequestException('lines must be a non-empty array');
+    }
+    for (const line of body.lines) {
+      if (typeof line?.productId !== 'string' || line.productId.trim().length === 0) {
+        throw new BadRequestException('each line requires a non-empty productId');
+      }
+      if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
+        throw new BadRequestException(
+          `line "${line.productId}" requires a positive integer quantity`,
+        );
+      }
     }
     for (const payment of body.payments ?? []) {
       assertChannel(payment.channel);
@@ -234,10 +249,10 @@ export class OrderController {
       if (err instanceof InvalidOrderError) {
         throw new BadRequestException(err.message);
       }
-      // 400, not 409: the caller named a warehouse that is not a valid sales
-      // target at all. Nothing about the world changing would make this
-      // request succeed. Mirrors `CustomerUserNotFoundError` -> 400.
-      if (err instanceof WarehouseNotSellableError) {
+      // 400, not 409: the caller referenced something that is not usable at
+      // all — unknown or retired. Nothing about the world changing would make
+      // this request succeed. Mirrors `CustomerUserNotFoundError` -> 400.
+      if (err instanceof UnsellableOrderReferenceError) {
         throw new BadRequestException(err.message);
       }
       if (
