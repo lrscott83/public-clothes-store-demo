@@ -1,3 +1,11 @@
+/* eslint-disable turbo/no-undeclared-env-vars --
+ * `SOME_SECRET` is not configuration: it is a deliberately fake variable NAME
+ * passed as `resolveSecret`'s first argument, so the tests exercise the
+ * resolution rule itself rather than any real secret. Declaring it in
+ * `turbo.json` would advertise a config input that does not exist and would
+ * add a phantom variable to turbo's cache key. The secrets this package
+ * actually reads (`JWT_SECRET`, `REFRESH_TOKEN_SECRET`) are declared there.
+ */
 import { resolveSecret } from './jwt.config.js';
 
 /**
