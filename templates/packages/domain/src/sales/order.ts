@@ -30,6 +30,19 @@ export type OrderStatus = 'created' | 'verified' | 'delivered' | 'cancelled';
 const VALID_DELIVERY_MODES: readonly DeliveryMode[] = ['pickup', 'delivery'];
 
 /**
+ * The ONE `deliveryMode` guard. Exported because the update path does not run
+ * `createOrder` and so cannot inherit its checks — a second, hand-copied list
+ * of valid modes would be a second source of truth, and the two would drift.
+ */
+export function assertDeliveryMode(value: unknown): asserts value is DeliveryMode {
+  if (!value || !VALID_DELIVERY_MODES.includes(value as DeliveryMode)) {
+    throw new InvalidOrderError(
+      `Order deliveryMode must be one of ${VALID_DELIVERY_MODES.join('|')}, got "${String(value)}"`,
+    );
+  }
+}
+
+/**
  * `Order` aggregate root — owns `OrderLine[]` + `OrderPayment[]` + an
  * optional `SaleCredit`. `currency` is DERIVED (never selected): any line
  * priced in USD forces `USD`, otherwise `MN` (EUR never becomes the order
@@ -93,11 +106,7 @@ export function createOrder(input: CreateOrderInput, rates: ExchangeRate[], at: 
   if (!input.lines || input.lines.length === 0) {
     throw new InvalidOrderError('Order requires at least one OrderLine');
   }
-  if (!input.deliveryMode || !VALID_DELIVERY_MODES.includes(input.deliveryMode)) {
-    throw new InvalidOrderError(
-      `Order deliveryMode must be one of ${VALID_DELIVERY_MODES.join('|')}, got "${String(input.deliveryMode)}"`,
-    );
-  }
+  assertDeliveryMode(input.deliveryMode);
 
   const currency: Currency = input.lines.some((line) => line.price.currency === 'USD')
     ? 'USD'

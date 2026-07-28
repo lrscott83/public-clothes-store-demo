@@ -17,6 +17,7 @@ import type {
 import {
   CURRENCY_REPOSITORY,
   InsufficientStockError,
+  InvalidOrderError,
   InvalidOrderStateError,
   NegativeStockError,
   ORDER_REPOSITORY,
@@ -226,20 +227,14 @@ function sampleOrder(overrides: Partial<DomainOrder> = {}): DomainOrder {
   };
 }
 
+// WHAT and HOW MANY only. Everything that reaches money — name, category,
+// price, discounts, customer name — is resolved from the catalog and the
+// customer record by the service.
 const sampleCreateDto: CreateOrderDto = {
   customerId: 'customer-uuid-1',
-  customerName: 'Ana Torres',
   warehouseId: 'warehouse-uuid-1',
   deliveryMode: 'pickup',
-  lines: [
-    {
-      productId: 'product-uuid-1',
-      productName: 'Cafetera Express',
-      categoryName: 'Cafeteras',
-      price: { amount: '100.00', currency: 'USD' },
-      quantity: 1,
-    },
-  ],
+  lines: [{ productId: 'product-uuid-1', quantity: 1 }],
   payments: [{ channel: 'USD_CASH', amount: { amount: '100.00', currency: 'USD' } }],
 };
 
@@ -513,6 +508,24 @@ describe('OrderService', () => {
       expect(orderRepo.update).not.toHaveBeenCalled();
     });
 
+    it('rejects an invalid deliveryMode instead of casting it through to the repository', async () => {
+      orderRepo.findById.mockResolvedValue(sampleOrder());
+
+      await expect(
+        service.update('order-uuid-1', { deliveryMode: 'banana' } as never),
+      ).rejects.toThrow(InvalidOrderError);
+      expect(orderRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('accepts the two valid delivery modes', async () => {
+      orderRepo.findById.mockResolvedValue(sampleOrder());
+      orderRepo.update.mockResolvedValue(sampleOrder({ deliveryMode: 'delivery' }));
+
+      await expect(
+        service.update('order-uuid-1', { deliveryMode: 'delivery' }),
+      ).resolves.toMatchObject({ deliveryMode: 'delivery' });
+    });
+
     it('rejects moving an order to an unknown warehouse', async () => {
       orderRepo.findById.mockResolvedValue(sampleOrder());
       warehouseRepo.findById.mockResolvedValue(null);
@@ -546,9 +559,9 @@ describe('OrderService', () => {
 
     it('reads no stock at all when the patch does not touch warehouseId', async () => {
       orderRepo.findById.mockResolvedValue(sampleOrder());
-      orderRepo.update.mockResolvedValue(sampleOrder({ customerName: 'New Name' }));
+      orderRepo.update.mockResolvedValue(sampleOrder());
 
-      await service.update('order-uuid-1', { customerName: 'New Name' });
+      await service.update('order-uuid-1', { deliveryMode: 'delivery' });
 
       expect(stockRepo.list).not.toHaveBeenCalled();
     });
@@ -564,18 +577,18 @@ describe('OrderService', () => {
 
     it('updates while status is created', async () => {
       orderRepo.findById.mockResolvedValue(sampleOrder());
-      orderRepo.update.mockResolvedValue(sampleOrder({ customerName: 'New Name' }));
+      orderRepo.update.mockResolvedValue(sampleOrder({ deliveryMode: 'delivery' }));
 
-      const result = await service.update('order-uuid-1', { customerName: 'New Name' });
+      const result = await service.update('order-uuid-1', { deliveryMode: 'delivery' });
 
-      expect(result?.customerName).toBe('New Name');
+      expect(result?.deliveryMode).toBe('delivery');
     });
 
     it('rejects updating a verified order with InvalidOrderStateError, WITHOUT calling repo.update', async () => {
       orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verified' }));
 
       await expect(
-        service.update('order-uuid-1', { customerName: 'New Name' }),
+        service.update('order-uuid-1', { deliveryMode: 'delivery' }),
       ).rejects.toThrow(InvalidOrderStateError);
       expect(orderRepo.update).not.toHaveBeenCalled();
     });

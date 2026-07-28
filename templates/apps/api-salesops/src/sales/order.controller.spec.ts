@@ -238,14 +238,14 @@ describe('OrderController', () => {
 
   describe('PATCH /orders/:id', () => {
     it('returns 200 with the updated order (created only)', async () => {
-      service.update.mockResolvedValue({ ...sampleResponse, customerName: 'New Name' });
+      service.update.mockResolvedValue({ ...sampleResponse, deliveryMode: 'delivery' });
 
       const response = await request(app.getHttpServer())
         .patch('/orders/order-uuid-1')
-        .send({ customerName: 'New Name' });
+        .send({ deliveryMode: 'delivery' });
 
       expect(response.status).toBe(200);
-      expect(response.body.customerName).toBe('New Name');
+      expect(response.body.deliveryMode).toBe('delivery');
     });
 
     it('maps WarehouseCannotFulfillOrderError to 409 on a warehouse change', async () => {
@@ -263,7 +263,7 @@ describe('OrderController', () => {
 
       const response = await request(app.getHttpServer())
         .patch('/orders/order-uuid-1')
-        .send({ customerName: 'New Name' });
+        .send({ deliveryMode: 'delivery' });
 
       expect(response.status).toBe(409);
     });
@@ -273,7 +273,7 @@ describe('OrderController', () => {
 
       const response = await request(app.getHttpServer())
         .patch('/orders/unknown-id')
-        .send({ customerName: 'X' });
+        .send({ deliveryMode: 'pickup' });
 
       expect(response.status).toBe(404);
     });

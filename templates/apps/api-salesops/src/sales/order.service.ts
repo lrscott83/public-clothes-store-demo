@@ -33,6 +33,7 @@ import {
   STOCK_LEVEL_REPOSITORY,
   UnsellableOrderReferenceError,
   WAREHOUSE_REPOSITORY,
+  assertDeliveryMode,
   assertWarehouseCoversBasket,
   createOrder,
   discountPriceToDecimalString,
@@ -236,8 +237,15 @@ export class OrderService {
       assertWarehouseCoversBasket(patch.warehouseId, basket, await this.fetchStockLevels(basket));
     }
 
+    // `deliveryMode` was previously cast straight through to the repository,
+    // so `PATCH { deliveryMode: "banana" }` was persisted verbatim. `create`
+    // has always validated it inside `createOrder`; the update path skipped
+    // the factory entirely and therefore skipped the guard with it.
+    if (patch.deliveryMode !== undefined) {
+      assertDeliveryMode(patch.deliveryMode);
+    }
+
     const updated = await this.orderRepository.update(id, {
-      ...(patch.customerName !== undefined ? { customerName: patch.customerName } : {}),
       ...(patch.warehouseId !== undefined ? { warehouseId: patch.warehouseId } : {}),
       ...(patch.deliveryMode !== undefined
         ? { deliveryMode: patch.deliveryMode as DeliveryMode }

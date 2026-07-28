@@ -361,6 +361,58 @@ describe('Sales (e2e)', () => {
     expect(level.reserved).toBe('0');
   });
 
+  it('PATCH cannot rename the buyer — customerName is not patchable', async () => {
+    await stockIn(usdProductId, '10');
+
+    const created = await request(app.getHttpServer())
+      .post('/orders')
+      .set(...authHeader(adminToken))
+      .send({
+        customerId,
+        warehouseId,
+        deliveryMode: 'pickup',
+        lines: [{ productId: usdProductId, quantity: 1 }],
+        payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+      });
+    expect(created.status).toBe(201);
+    const originalName = created.body.customerName;
+
+    const patched = await request(app.getHttpServer())
+      .patch(`/orders/${created.body.id}`)
+      .set(...authHeader(adminToken))
+      .send({ customerName: 'Nombre Falsificado' });
+
+    expect(patched.status).toBe(200);
+    expect(patched.body.customerName).toBe(originalName);
+  });
+
+  it('PATCH rejects an invalid deliveryMode instead of persisting it verbatim', async () => {
+    await stockIn(usdProductId, '10');
+
+    const created = await request(app.getHttpServer())
+      .post('/orders')
+      .set(...authHeader(adminToken))
+      .send({
+        customerId,
+        warehouseId,
+        deliveryMode: 'pickup',
+        lines: [{ productId: usdProductId, quantity: 1 }],
+        payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+      });
+
+    const patched = await request(app.getHttpServer())
+      .patch(`/orders/${created.body.id}`)
+      .set(...authHeader(adminToken))
+      .send({ deliveryMode: 'banana' });
+
+    expect(patched.status).toBe(400);
+
+    const found = await request(app.getHttpServer())
+      .get(`/orders/${created.body.id}`)
+      .set(...authHeader(adminToken));
+    expect(found.body.deliveryMode).toBe('pickup');
+  });
+
   it('prices the line from the CATALOG and ignores a price smuggled into the request', async () => {
     // The whole point: a caller could otherwise name its own price for a real
     // product, and that number flows into the line total, the order total, the
