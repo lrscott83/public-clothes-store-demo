@@ -44,8 +44,7 @@ describe('warehouseCoversBasket', () => {
   it('measures AVAILABLE (onHand - reserved), not onHand', () => {
     // `onHand` alone would accept this basket against stock already committed
     // to a verified order — producing exactly the 409-at-confirm this
-    // invariant exists to prevent. The MVP's rule read a single `quantity`
-    // field and does NOT port verbatim.
+    // invariant exists to prevent.
     const levels = [level('w-1', 'p-1', 5, 4), level('w-1', 'p-2', 3)];
     expect(warehouseCoversBasket('w-1', basket, levels)).toBe(false);
   });

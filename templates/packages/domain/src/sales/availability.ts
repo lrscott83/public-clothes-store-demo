@@ -11,11 +11,11 @@ import { WarehouseCannotFulfillOrderError } from './errors.js';
  * is Ventas' responsibility and MUST NOT live in Inventory. Inventory owns the
  * stock numbers; Sales owns what "can I sell this" means.
  *
- * Ported from the MVP's `app/domain/availability.ts`, but NOT verbatim: the
- * MVP read a single `quantity` per inventory entry, while the real backend
- * splits `onHand`/`reserved`. Comparing against `onHand` would accept a basket
- * against stock already committed to a `verified` order — producing exactly
- * the `InsufficientStockError` at confirm that this check exists to prevent.
+ * Coverage is measured against AVAILABLE stock (`onHand - reserved`), never
+ * `onHand`. `reserved` is exactly the quantity already committed to verified
+ * orders, so counting it as sellable would admit a basket that `confirmOrder`
+ * must then reject — producing the `InsufficientStockError` this check exists
+ * to prevent.
  *
  * This is a FAST-FAIL, not a hold. Nothing is reserved here; `confirmOrder`
  * still reserves and still rejects on insufficient stock. The read-then-create
