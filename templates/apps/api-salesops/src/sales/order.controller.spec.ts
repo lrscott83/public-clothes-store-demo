@@ -9,6 +9,7 @@ import {
   RateNotFoundError,
   USER_ROLES,
   WAREHOUSE_OPERATOR_REPOSITORY,
+  WarehouseCannotFulfillOrderError,
   type IWarehouseOperatorRepository,
 } from '@store-mgmt/domain';
 import request from 'supertest';
@@ -159,6 +160,16 @@ describe('OrderController', () => {
       expect(response.status).toBe(409);
     });
 
+    it('maps WarehouseCannotFulfillOrderError to 409, naming the warehouse', async () => {
+      // 409, not 400: the request is well-formed, the world cannot satisfy it.
+      service.create.mockRejectedValue(new WarehouseCannotFulfillOrderError('warehouse-uuid-1'));
+
+      const response = await request(app.getHttpServer()).post('/orders').send(validCreateBody);
+
+      expect(response.status).toBe(409);
+      expect(response.body.message).toContain('warehouse-uuid-1');
+    });
+
     it('rejects an unknown line currency with 400 before reaching the service', async () => {
       const response = await request(app.getHttpServer())
         .post('/orders')
@@ -222,6 +233,16 @@ describe('OrderController', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.customerName).toBe('New Name');
+    });
+
+    it('maps WarehouseCannotFulfillOrderError to 409 on a warehouse change', async () => {
+      service.update.mockRejectedValue(new WarehouseCannotFulfillOrderError('warehouse-uuid-2'));
+
+      const response = await request(app.getHttpServer())
+        .patch('/orders/order-uuid-1')
+        .send({ warehouseId: 'warehouse-uuid-2' });
+
+      expect(response.status).toBe(409);
     });
 
     it('maps InvalidOrderStateError (not created) to 409', async () => {

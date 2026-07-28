@@ -27,6 +27,7 @@ import {
   RoleHelpers,
   USER_ROLES,
   WAREHOUSE_OPERATOR_REPOSITORY,
+  WarehouseCannotFulfillOrderError,
   type IWarehouseOperatorRepository,
 } from '@store-mgmt/domain';
 import { OrderService } from './order.service.js';
@@ -236,7 +237,11 @@ export class OrderController {
         err instanceof InvalidOrderStateError ||
         err instanceof RateNotFoundError ||
         err instanceof InsufficientStockError ||
-        err instanceof NegativeStockError
+        err instanceof NegativeStockError ||
+        // 409, not 400: the request is well-formed, the world just cannot
+        // satisfy it right now. Same class as `InsufficientStockError`, which
+        // is the later, reserving form of the same conflict.
+        err instanceof WarehouseCannotFulfillOrderError
       ) {
         throw new ConflictException(err.message);
       }

@@ -148,11 +148,21 @@ describe('Sales (e2e)', () => {
     await prisma.exchangeRate.deleteMany({});
   });
 
-  async function stockIn(productId: string, quantity: string): Promise<void> {
+  /**
+   * Seeds stock so an order can be CREATED at all: since the availability
+   * invariant, `POST /orders` rejects a warehouse that cannot cover the whole
+   * basket. Defaults to the suite's main warehouse; pass `intoWarehouseId`
+   * for the multi-warehouse cases.
+   */
+  async function stockIn(
+    productId: string,
+    quantity: string,
+    intoWarehouseId: string = warehouseId,
+  ): Promise<void> {
     await request(app.getHttpServer())
       .post('/stock/movements')
       .set(...authHeader(adminToken))
-      .send({ productId, warehouseId, type: 'purchase_in', quantity })
+      .send({ productId, warehouseId: intoWarehouseId, type: 'purchase_in', quantity })
       .expect(201);
   }
 
@@ -165,6 +175,9 @@ describe('Sales (e2e)', () => {
   }
 
   it('creates a mixed USD/MN order -> derives USD, converting the MN line', async () => {
+    await stockIn(usdProductId, '10');
+    await stockIn(mnProductId, '10');
+
     const response = await request(app.getHttpServer())
       .post('/orders')
       .set(...authHeader(adminToken))
@@ -190,6 +203,8 @@ describe('Sales (e2e)', () => {
   });
 
   it('creates a split-payment order that sums exactly to total', async () => {
+    await stockIn(usdProductId, '10');
+
     const response = await request(app.getHttpServer())
       .post('/orders')
       .set(...authHeader(adminToken))
@@ -346,10 +361,11 @@ describe('Sales (e2e)', () => {
     expect(level.reserved).toBe('0');
   });
 
-  it('confirm with insufficient stock -> 409, order stays created, no partial reservation', async () => {
+  it('creation against a warehouse that cannot cover the basket -> 409, no order written', async () => {
     await stockIn(usdProductId, '2');
+    const beforeCount = await prisma.order.count();
 
-    const created = await request(app.getHttpServer())
+    const response = await request(app.getHttpServer())
       .post('/orders')
       .set(...authHeader(adminToken))
       .send({
@@ -363,20 +379,69 @@ describe('Sales (e2e)', () => {
         payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
       });
 
-    const response = await request(app.getHttpServer())
-      .post(`/orders/${created.body.id}/confirm`)
-      .set(...authHeader(adminToken));
-
     expect(response.status).toBe(409);
+    expect(await prisma.order.count()).toBe(beforeCount);
+
+    // Nothing was held while checking.
+    const level = await getStockLevel(usdProductId);
+    expect(level.onHand).toBe('2');
+    expect(level.reserved).toBe('0');
+  });
+
+  it('creation checks availability but RESERVES nothing — two orders may be created against the same stock, and confirm is the real gate', async () => {
+    // Pins the accepted race deliberately. The creation-time check is a
+    // fast-fail so an order is never written against a warehouse that plainly
+    // cannot fill it — it is NOT a hold. Both orders below are created
+    // legitimately; whoever confirms first gets the stock, and the loser gets
+    // a 409 at confirm with its order untouched. If someone later "fixes"
+    // this into a reservation at creation, this test is what should stop them.
+    await stockIn(usdProductId, '5');
+
+    const body = {
+      customerId,
+      customerName: 'Cliente Sales E2E',
+      warehouseId,
+      deliveryMode: 'pickup',
+      lines: [
+        { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 5 },
+      ],
+      payments: [{ channel: 'ZELLE', amount: { amount: '500.00', currency: 'USD' } }],
+    };
+
+    const first = await request(app.getHttpServer())
+      .post('/orders')
+      .set(...authHeader(adminToken))
+      .send(body);
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set(...authHeader(adminToken))
+      .send(body);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect((await getStockLevel(usdProductId)).reserved).toBe('0');
+
+    // The winner reserves for real.
+    await request(app.getHttpServer())
+      .post(`/orders/${first.body.id}/confirm`)
+      .set(...authHeader(adminToken))
+      .expect(200);
+    expect((await getStockLevel(usdProductId)).reserved).toBe('5');
+
+    // The loser is rejected at confirm, stays `created`, and reserves nothing.
+    const loser = await request(app.getHttpServer())
+      .post(`/orders/${second.body.id}/confirm`)
+      .set(...authHeader(adminToken));
+    expect(loser.status).toBe(409);
 
     const found = await request(app.getHttpServer())
-      .get(`/orders/${created.body.id}`)
+      .get(`/orders/${second.body.id}`)
       .set(...authHeader(adminToken));
     expect(found.body.status).toBe('created');
 
     const level = await getStockLevel(usdProductId);
-    expect(level.onHand).toBe('2');
-    expect(level.reserved).toBe('0');
+    expect(level.onHand).toBe('5');
+    expect(level.reserved).toBe('5');
   });
 
   it('cross-currency line/payment with no resolvable rate -> 409 RateNotFoundError, no partial commit', async () => {
@@ -474,6 +539,7 @@ describe('Sales (e2e)', () => {
     });
 
     it('a "sales_operator" caller creates an order -> 201, but cannot deliver it (403 — warehouse-floor action)', async () => {
+      await stockIn(usdProductId, '10');
       const { token: salesToken } = await createAuthedUser(prisma, USER_ROLES.sales_operator);
 
       const created = await request(app.getHttpServer())
@@ -565,6 +631,9 @@ describe('Sales (e2e)', () => {
         .post('/warehouses')
         .set(...authHeader(adminToken))
         .send({ name: 'Otro Depósito Lista E2E' });
+
+      await stockIn(usdProductId, '10');
+      await stockIn(usdProductId, '10', otherWarehouse.body.id);
 
       const ownOrder = await request(app.getHttpServer())
         .post('/orders')

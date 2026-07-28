@@ -1,14 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  BasketLine,
   CreateOrderInput,
   Currency,
   DeliveryMode,
   ExchangeRate as DomainExchangeRate,
   ICurrencyRepository,
   IOrderRepository,
+  IStockLevelRepository,
   Order as DomainOrder,
   OrderLine as DomainOrderLine,
   OrderListFilter,
+  StockLevel,
   OrderPayment as DomainOrderPayment,
   PaymentChannel,
   SaleCredit as DomainSaleCredit,
@@ -19,6 +22,8 @@ import {
   InvalidOrderStateError,
   ORDER_REPOSITORY,
   OrderLabelHelpers,
+  STOCK_LEVEL_REPOSITORY,
+  assertWarehouseCoversBasket,
   createOrder,
   discountPriceFromDecimalString,
   discountPriceToDecimalString,
@@ -64,11 +69,13 @@ export class OrderService {
   constructor(
     @Inject(ORDER_REPOSITORY) private readonly orderRepository: IOrderRepository,
     @Inject(CURRENCY_REPOSITORY) private readonly currencyRepository: ICurrencyRepository,
+    @Inject(STOCK_LEVEL_REPOSITORY) private readonly stockLevelRepository: IStockLevelRepository,
   ) {}
 
   async create(input: CreateOrderDto): Promise<OrderResponseDto> {
     const at = new Date();
     const rates = await this.fetchAllRates(at);
+
 
     const buildInput: CreateOrderInput = {
       customerId: input.customerId,
@@ -99,6 +106,24 @@ export class OrderService {
     // (2) build the WHOLE aggregate in memory first, (3) only then persist —
     // never the other way around (design.md decision #1/#3).
     const order = createOrder(buildInput, rates, at);
+
+    // Availability is checked AFTER the aggregate validates and BEFORE it is
+    // persisted. Order matters: a malformed order must report why it is
+    // malformed, not "this warehouse is short" — the aggregate's own
+    // invariants are the more fundamental failure. The basket comes from the
+    // built order, so this measures what will actually be persisted.
+    //
+    // Fast-fail only: nothing is reserved here, so a warehouse reported able
+    // can still lose the stock before `confirm`, which reserves for real and
+    // rejects on its own. That race is accepted deliberately — the point is
+    // to stop an order being written against a warehouse that plainly cannot
+    // fill it, not to hold stock at creation.
+    const basket = order.lines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+    }));
+    assertWarehouseCoversBasket(order.warehouseId, basket, await this.fetchStockLevels(basket));
+
     const created = await this.orderRepository.create(order);
     return this.toResponse(created);
   }
@@ -108,6 +133,18 @@ export class OrderService {
     if (!existing) return null;
     if (existing.status !== 'created') {
       throw new InvalidOrderStateError(id, 'created', existing.status);
+    }
+
+    // Re-validate ONLY when the warehouse actually MOVES. A patch that omits
+    // `warehouseId`, or restates the current one, must not pay for a stock
+    // read — and must not be able to fail on stock that drifted since the
+    // order was created.
+    if (patch.warehouseId !== undefined && patch.warehouseId !== existing.warehouseId) {
+      const basket = existing.lines.map((line) => ({
+        productId: line.productId,
+        quantity: line.quantity,
+      }));
+      assertWarehouseCoversBasket(patch.warehouseId, basket, await this.fetchStockLevels(basket));
     }
 
     const updated = await this.orderRepository.update(id, {
@@ -162,6 +199,20 @@ export class OrderService {
       ALL_CHANNELS.map((channel) => this.currencyRepository.ratesForChannel(channel, at)),
     );
     return perChannel.flat();
+  }
+
+  /**
+   * `IStockLevelRepository.list`'s filter is SINGULAR (`productId?`), so a
+   * basket needs a fan-out — same shape as `fetchAllRates`. Deduped first:
+   * two lines of the same product must not cost two queries.
+   */
+  private async fetchStockLevels(basket: readonly BasketLine[]): Promise<StockLevel[]> {
+    const productIds = [...new Set(basket.map((line) => line.productId))];
+    const perProduct = await Promise.all(
+      productIds.map((productId) => this.stockLevelRepository.list({ productId })),
+    );
+
+    return perProduct.flat();
   }
 
   private toResponse(order: DomainOrder): OrderResponseDto {

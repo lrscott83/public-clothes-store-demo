@@ -1,5 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import type { ICurrencyRepository, IOrderRepository, Order as DomainOrder } from '@store-mgmt/domain';
+import type {
+  ICurrencyRepository,
+  IOrderRepository,
+  IStockLevelRepository,
+  Order as DomainOrder,
+  StockLevel,
+} from '@store-mgmt/domain';
 import {
   CURRENCY_REPOSITORY,
   InsufficientStockError,
@@ -7,6 +13,8 @@ import {
   NegativeStockError,
   ORDER_REPOSITORY,
   RateNotFoundError,
+  STOCK_LEVEL_REPOSITORY,
+  WarehouseCannotFulfillOrderError,
 } from '@store-mgmt/domain';
 import { OrderService } from './order.service.js';
 import type { CreateOrderDto } from './dto/index.js';
@@ -29,6 +37,33 @@ function buildCurrencyRepoMock(): jest.Mocked<ICurrencyRepository> {
     ratesForChannel: jest.fn().mockResolvedValue([]),
     latestRate: jest.fn(),
   };
+}
+
+function stockLevel(warehouseId: string, productId: string, onHand: number, reserved = 0): StockLevel {
+  return {
+    id: `sl-${warehouseId}-${productId}`,
+    productId,
+    warehouseId,
+    onHand,
+    reserved,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+}
+
+/**
+ * Defaults to AMPLE stock for the sample basket, so the availability
+ * invariant is satisfied everywhere it is not the thing under test. Cases
+ * that exercise the invariant override `list` explicitly.
+ */
+function buildStockLevelRepoMock(): jest.Mocked<IStockLevelRepository> {
+  return {
+    findById: jest.fn(),
+    findByProductAndWarehouse: jest.fn(),
+    list: jest.fn().mockResolvedValue([stockLevel('warehouse-uuid-1', 'product-uuid-1', 999)]),
+    reserve: jest.fn(),
+    release: jest.fn(),
+  } as unknown as jest.Mocked<IStockLevelRepository>;
 }
 
 const at = new Date('2026-01-01T00:00:00.000Z');
@@ -103,15 +138,18 @@ describe('OrderService', () => {
   let service: OrderService;
   let orderRepo: jest.Mocked<IOrderRepository>;
   let currencyRepo: jest.Mocked<ICurrencyRepository>;
+  let stockRepo: jest.Mocked<IStockLevelRepository>;
 
   beforeEach(async () => {
     orderRepo = buildOrderRepoMock();
     currencyRepo = buildCurrencyRepoMock();
+    stockRepo = buildStockLevelRepoMock();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrderService,
         { provide: ORDER_REPOSITORY, useValue: orderRepo },
         { provide: CURRENCY_REPOSITORY, useValue: currencyRepo },
+        { provide: STOCK_LEVEL_REPOSITORY, useValue: stockRepo },
       ],
     }).compile();
     service = module.get(OrderService);
@@ -202,7 +240,91 @@ describe('OrderService', () => {
     });
   });
 
+  describe('create — availability invariant', () => {
+    it('rejects a warehouse that cannot cover the basket, WITHOUT writing an order', async () => {
+      stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-1', 'product-uuid-1', 0)]);
+
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(
+        WarehouseCannotFulfillOrderError,
+      );
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects when onHand looks sufficient but the stock is already reserved', async () => {
+      stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-1', 'product-uuid-1', 1, 1)]);
+
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(
+        WarehouseCannotFulfillOrderError,
+      );
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the warehouse has no stock row for a requested product at all', async () => {
+      stockRepo.list.mockResolvedValue([stockLevel('some-other-warehouse', 'product-uuid-1', 999)]);
+
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(
+        WarehouseCannotFulfillOrderError,
+      );
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('creates normally when the warehouse covers the basket', async () => {
+      stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-1', 'product-uuid-1', 1)]);
+      orderRepo.create.mockResolvedValue(sampleOrder());
+
+      await expect(service.create(sampleCreateDto)).resolves.toMatchObject({ id: 'order-uuid-1' });
+      expect(orderRepo.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('reserves nothing at creation — this is a fast-fail, not a hold', async () => {
+      orderRepo.create.mockResolvedValue(sampleOrder());
+
+      await service.create(sampleCreateDto);
+
+      expect(stockRepo.reserve).not.toHaveBeenCalled();
+      expect(stockRepo.release).not.toHaveBeenCalled();
+    });
+  });
+
   describe('update', () => {
+    it('re-validates availability when warehouseId actually changes, and rejects a short one', async () => {
+      orderRepo.findById.mockResolvedValue(sampleOrder());
+      stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-2', 'product-uuid-1', 0)]);
+
+      await expect(
+        service.update('order-uuid-1', { warehouseId: 'warehouse-uuid-2' }),
+      ).rejects.toThrow(WarehouseCannotFulfillOrderError);
+      expect(orderRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('allows a warehouse change to one that covers the basket', async () => {
+      orderRepo.findById.mockResolvedValue(sampleOrder());
+      stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-2', 'product-uuid-1', 5)]);
+      orderRepo.update.mockResolvedValue(sampleOrder({ warehouseId: 'warehouse-uuid-2' }));
+
+      const result = await service.update('order-uuid-1', { warehouseId: 'warehouse-uuid-2' });
+
+      expect(result?.warehouseId).toBe('warehouse-uuid-2');
+    });
+
+    it('reads no stock at all when the patch does not touch warehouseId', async () => {
+      orderRepo.findById.mockResolvedValue(sampleOrder());
+      orderRepo.update.mockResolvedValue(sampleOrder({ customerName: 'New Name' }));
+
+      await service.update('order-uuid-1', { customerName: 'New Name' });
+
+      expect(stockRepo.list).not.toHaveBeenCalled();
+    });
+
+    it('reads no stock when warehouseId is present but unchanged', async () => {
+      orderRepo.findById.mockResolvedValue(sampleOrder());
+      orderRepo.update.mockResolvedValue(sampleOrder());
+
+      await service.update('order-uuid-1', { warehouseId: 'warehouse-uuid-1' });
+
+      expect(stockRepo.list).not.toHaveBeenCalled();
+    });
+
     it('updates while status is created', async () => {
       orderRepo.findById.mockResolvedValue(sampleOrder());
       orderRepo.update.mockResolvedValue(sampleOrder({ customerName: 'New Name' }));
