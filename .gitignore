@@ -31,3 +31,5 @@ dist-pages
 
 # Playwright MCP artifacts
 .playwright-mcp/
+# Test coverage output
+coverage/
