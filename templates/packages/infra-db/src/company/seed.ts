@@ -30,3 +30,37 @@ export async function seedCompany(prisma: PrismaService): Promise<SeedCompanyRes
 
   return { companiesUpserted: 1 };
 }
+
+/**
+ * Ensures the implicit tenant exists and returns its id. Every seed that
+ * mints an `app_user` MUST call this and assign the resulting company —
+ * since migration 002 drops `app_user.roles`, a user without an ACTIVE
+ * `CompanyUser` has no persisted authorization at all and is rejected at
+ * authentication time.
+ */
+export async function ensureDefaultCompanyId(prisma: PrismaService): Promise<string> {
+  await seedCompany(prisma);
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { slug: DEFAULT_COMPANY_SLUG },
+  });
+
+  return company.id;
+}
+
+/**
+ * Idempotent upsert of one `(userId, companyId)` assignment, keyed on the
+ * pair's UNIQUE constraint. Re-running a seed re-asserts the role bitmask
+ * rather than duplicating the row.
+ */
+export async function seedCompanyUser(
+  prisma: PrismaService,
+  userId: string,
+  companyId: string,
+  role: number,
+): Promise<void> {
+  await prisma.companyUser.upsert({
+    where: { userId_companyId: { userId, companyId } },
+    update: { role, status: 'ACTIVE' },
+    create: { userId, companyId, role, status: 'ACTIVE' },
+  });
+}

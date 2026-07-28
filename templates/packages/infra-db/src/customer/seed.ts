@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import type { PrismaService } from '../prisma-client.js';
 import { DEV_PASSWORD, SALT_ROUNDS, deriveLogin } from '../users/seed.js';
+import { ensureDefaultCompanyId, seedCompanyUser } from '../company/seed.js';
 
 /**
  * The 5 seeded demo customers, sourced from the MVP's
@@ -20,6 +21,9 @@ export const CUSTOMER_NAMES = [
 export interface SeedCustomerResult {
   readonly customersUpserted: number;
 }
+
+/** The `user` bit — mirrors `packages/domain/src/users/roles.ts` `USER_ROLES.user`. */
+const USER_ROLE_BIT = 1;
 
 /**
  * Fixed, arbitrary namespace UUID for deriving a stable per-name id used
@@ -51,11 +55,15 @@ function deterministicSeedId(fullName: string): string {
  * `backend-users-roles`, EVERY `Customer` requires a `User` — this finds or
  * creates a matching `app_user` (`login` = `deriveLogin(fullName, ...)`,
  * bcrypt-hashed dev password, `roles=user`) per demo customer, keyed on the
- * User's own `login` (upsert), then links `userId`. Idempotent on both
+ * User's own `login` (upsert), then links `userId` and gives that User an
+ * ACTIVE `CompanyUser` in the implicit company with the `user` bit —
+ * without it the account has no persisted authorization once migration 002
+ * drops `app_user.roles`, and every login is rejected. Idempotent on all
  * sides. Re-running never duplicates rows. All other contact fields stay
  * empty/null.
  */
 export async function seedCustomers(prisma: PrismaService): Promise<SeedCustomerResult> {
+  const companyId = await ensureDefaultCompanyId(prisma);
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, SALT_ROUNDS);
 
   for (const fullName of CUSTOMER_NAMES) {
@@ -63,8 +71,9 @@ export async function seedCustomers(prisma: PrismaService): Promise<SeedCustomer
     const user = await prisma.user.upsert({
       where: { login },
       update: {},
-      create: { login, passwordHash, fullName, roles: 1 },
+      create: { login, passwordHash, fullName, roles: USER_ROLE_BIT },
     });
+    await seedCompanyUser(prisma, user.id, companyId, USER_ROLE_BIT);
 
     const existing = await prisma.customer.findFirst({ where: { fullName } });
     if (existing) {

@@ -1,4 +1,5 @@
 import { PrismaService } from '../prisma-client.js';
+import { DEFAULT_COMPANY_SLUG } from '../company/seed.js';
 import { CUSTOMER_NAMES, seedCustomers } from './seed.js';
 
 /**
@@ -15,8 +16,18 @@ describe('seedCustomers', () => {
     prisma = new PrismaService();
   });
 
+  // Wipe before AND after: migration 001 already seeds a `default`-slug
+  // Company, so the single-company assertion below must not inherit it.
+  // `company_user` goes first — `company` is its only hard FK parent.
+  beforeEach(async () => {
+    await prisma.companyUser.deleteMany({});
+    await prisma.company.deleteMany({});
+  });
+
   afterEach(async () => {
     await prisma.customer.deleteMany({});
+    await prisma.companyUser.deleteMany({});
+    await prisma.company.deleteMany({});
     await prisma.user.deleteMany({});
   });
 
@@ -47,6 +58,35 @@ describe('seedCustomers', () => {
     const users = await prisma.user.findMany();
     expect(customers).toHaveLength(5);
     expect(users).toHaveLength(5);
+  });
+
+  it('gives every demo customer User an ACTIVE CompanyUser in the implicit company with the `user` bit', async () => {
+    await seedCustomers(prisma);
+
+    const company = await prisma.company.findUniqueOrThrow({
+      where: { slug: DEFAULT_COMPANY_SLUG },
+    });
+    const users = await prisma.user.findMany();
+    const assignments = await prisma.companyUser.findMany();
+
+    expect(assignments).toHaveLength(5);
+    for (const user of users) {
+      const assignment = assignments.find((a) => a.userId === user.id);
+      expect(assignment).toBeDefined();
+      expect(assignment?.companyId).toBe(company.id);
+      expect(assignment?.status).toBe('ACTIVE');
+      expect(assignment?.role).toBe(1);
+    }
+  });
+
+  it('is idempotent on the assignment side: running the seed twice yields exactly 5 CompanyUser rows', async () => {
+    await seedCustomers(prisma);
+    await seedCustomers(prisma);
+
+    const assignments = await prisma.companyUser.findMany();
+    const companies = await prisma.company.findMany();
+    expect(assignments).toHaveLength(5);
+    expect(companies).toHaveLength(1);
   });
 
   it('re-links the same Customer to the same User across re-seeds (stable derived login)', async () => {

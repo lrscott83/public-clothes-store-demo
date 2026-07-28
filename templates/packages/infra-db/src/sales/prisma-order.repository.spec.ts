@@ -51,6 +51,10 @@ describe('PrismaOrderRepository', () => {
     await prisma.category.deleteMany({});
     await prisma.warehouse.deleteMany({});
     await prisma.customer.deleteMany({});
+    // `company_user` has NO FK to `app_user` (soft FK by design) — deleting
+    // users alone would leave orphan assignments behind and trip the §7
+    // backfill gate.
+    await prisma.companyUser.deleteMany({});
     await prisma.user.deleteMany({});
     await prisma.exchangeRate.deleteMany({});
   });

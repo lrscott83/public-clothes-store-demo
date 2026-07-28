@@ -19,6 +19,10 @@ describe('PrismaUserRepository', () => {
   });
 
   afterEach(async () => {
+    // `company_user` has NO FK to `app_user` (soft FK by design) — deleting
+    // users alone would leave orphan assignments behind and trip the §7
+    // backfill gate.
+    await prisma.companyUser.deleteMany({});
     await prisma.user.deleteMany({});
   });
 

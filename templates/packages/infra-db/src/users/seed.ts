@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import type { PrismaService } from '../prisma-client.js';
 import { seedWarehouses } from '../inventory/seed.js';
+import { ensureDefaultCompanyId, seedCompanyUser } from '../company/seed.js';
 
 /**
  * DEV-only known password for every seeded account (cockpit accounts here
@@ -58,15 +59,19 @@ export const COCKPIT_LOGINS: readonly string[] = COCKPIT_ACCOUNTS.map((account) 
  * Passwords are the known DEV default, bcrypt-hashed at seed time — never a
  * plaintext column. The `warehouse.operator` account additionally gets a
  * `WarehouseOperator` row scoped to the first seeded warehouse (by name,
- * asc). Re-running never duplicates rows.
+ * asc). Each account also gets an ACTIVE `CompanyUser` in the implicit
+ * company carrying its role bitmask — that assignment, not
+ * `app_user.roles`, is what authentication reads. Re-running never
+ * duplicates rows.
  */
 export async function seedUsers(prisma: PrismaService): Promise<SeedUsersResult> {
   await seedWarehouses(prisma);
   const warehouse = await prisma.warehouse.findFirstOrThrow({ orderBy: { name: 'asc' } });
+  const companyId = await ensureDefaultCompanyId(prisma);
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, SALT_ROUNDS);
 
   for (const account of COCKPIT_ACCOUNTS) {
-    await prisma.user.upsert({
+    const user = await prisma.user.upsert({
       where: { login: account.login },
       update: {},
       create: {
@@ -76,6 +81,7 @@ export async function seedUsers(prisma: PrismaService): Promise<SeedUsersResult>
         roles: account.roles,
       },
     });
+    await seedCompanyUser(prisma, user.id, companyId, account.roles);
   }
 
   const warehouseOperatorUser = await prisma.user.findUniqueOrThrow({

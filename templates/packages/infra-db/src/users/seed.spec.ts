@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma-client.js';
+import { DEFAULT_COMPANY_SLUG } from '../company/seed.js';
 import { COCKPIT_LOGINS, deriveLogin, seedUsers } from './seed.js';
 
 /**
@@ -14,8 +15,18 @@ describe('seedUsers', () => {
     prisma = new PrismaService();
   });
 
+  // Wipe before AND after: migration 001 already seeds a `default`-slug
+  // Company, so the single-company assertions below must not inherit it.
+  // `company_user` goes first — `company` is its only hard FK parent.
+  beforeEach(async () => {
+    await prisma.companyUser.deleteMany({});
+    await prisma.company.deleteMany({});
+  });
+
   afterEach(async () => {
     await prisma.warehouseOperator.deleteMany({});
+    await prisma.companyUser.deleteMany({});
+    await prisma.company.deleteMany({});
     await prisma.user.deleteMany({});
     await prisma.warehouse.deleteMany({});
   });
@@ -61,6 +72,44 @@ describe('seedUsers', () => {
 
     const users = await prisma.user.findMany();
     expect(users).toHaveLength(4);
+  });
+
+  it('assigns every cockpit account an ACTIVE CompanyUser in the implicit company carrying its role bitmask', async () => {
+    // Literal expectations, not `app_user.roles`: after migration 002 that
+    // column is gone and `company_user.role` is the only source of truth.
+    const expectedRoleByLogin: Record<string, number> = {
+      admin: 16,
+      owner: 8,
+      'warehouse.operator': 2,
+      'sales.operator': 4,
+    };
+
+    await seedUsers(prisma);
+
+    const company = await prisma.company.findUniqueOrThrow({
+      where: { slug: DEFAULT_COMPANY_SLUG },
+    });
+    const users = await prisma.user.findMany();
+    const assignments = await prisma.companyUser.findMany();
+
+    expect(assignments).toHaveLength(4);
+    for (const user of users) {
+      const assignment = assignments.find((a) => a.userId === user.id);
+      expect(assignment).toBeDefined();
+      expect(assignment?.companyId).toBe(company.id);
+      expect(assignment?.status).toBe('ACTIVE');
+      expect(assignment?.role).toBe(expectedRoleByLogin[user.login]);
+    }
+  });
+
+  it('is idempotent on the assignment side: running the seed twice yields exactly 4 CompanyUser rows', async () => {
+    await seedUsers(prisma);
+    await seedUsers(prisma);
+
+    const assignments = await prisma.companyUser.findMany();
+    const companies = await prisma.company.findMany();
+    expect(assignments).toHaveLength(4);
+    expect(companies).toHaveLength(1);
   });
 });
 
