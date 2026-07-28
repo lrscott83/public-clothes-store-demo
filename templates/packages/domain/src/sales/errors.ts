@@ -33,6 +33,27 @@ export class InvalidOrderStateError extends Error {
 }
 
 /**
+ * Thrown when the warehouse an order names is not a valid sales target at
+ * all — it does not exist, or it has been soft-deleted (`active=false`).
+ *
+ * Deliberately NOT the same error as `WarehouseCannotFulfillOrderError`.
+ * Reporting a shortage for a warehouse that does not exist would blame the
+ * stock for a typo, and a soft-deleted warehouse is not "short" — it is not
+ * for sale. The eligibility query lists ACTIVE warehouses only, so accepting
+ * an inactive one at creation would let the write take what the read says
+ * does not qualify.
+ */
+export class WarehouseNotSellableError extends Error {
+  constructor(
+    public readonly warehouseId: string,
+    public readonly reason: 'not found' | 'inactive',
+  ) {
+    super(`Warehouse "${warehouseId}" cannot receive orders — ${reason}`);
+    this.name = 'WarehouseNotSellableError';
+  }
+}
+
+/**
  * Thrown when the warehouse an order names cannot cover the whole basket from
  * its own available stock (`onHand - reserved`) at creation time, or when a
  * warehouse change would move an order to one that cannot.

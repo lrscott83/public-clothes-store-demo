@@ -34,6 +34,44 @@ REJECTED (mirrors the retired MVP rule,
 - WHEN order creation is attempted against any warehouse
 - THEN it MUST be rejected regardless of which warehouse was chosen
 
+### Requirement: The Target Warehouse Must Be a Real, Active Warehouse
+
+Order creation, and any change of an order's warehouse, MUST reject a
+`warehouseId` that does not exist or that names a soft-deleted
+(`active=false`) warehouse — BEFORE and INDEPENDENTLY of any stock check.
+Holding stock MUST NOT make an inactive warehouse acceptable.
+
+This is a DIFFERENT failure from a stock shortage and MUST be reported as
+one: a shortage says the world cannot satisfy the request right now, whereas
+an unknown or retired warehouse means the request itself names an invalid
+target and no change in stock would ever make it succeed. Reporting a
+shortage for a warehouse that does not exist blames the stock for a typo.
+A database foreign key MUST NOT be what catches this.
+
+The eligibility query lists ACTIVE warehouses only, so without this
+requirement order creation would accept precisely what that query says does
+not qualify.
+
+#### Scenario: Unknown warehouse is rejected as an invalid request
+
+- GIVEN a `warehouseId` that matches no warehouse
+- WHEN order creation is attempted
+- THEN it MUST be rejected as an invalid request, distinctly from a stock
+  shortage, and no order row is written
+
+#### Scenario: Soft-deleted warehouse is rejected even when it holds stock
+
+- GIVEN a warehouse with `active=false` that still has ample stock for the
+  whole basket
+- WHEN order creation is attempted against it
+- THEN it MUST be rejected — stock does not resurrect a retired warehouse
+
+#### Scenario: Moving an order to an invalid warehouse is rejected
+
+- GIVEN an order in `created` status
+- WHEN its `warehouseId` is changed to one that is unknown or inactive
+- THEN the change MUST be rejected and the order's warehouse is unchanged
+
 ### Requirement: Warehouse Change on a Created Order Re-Validates Availability
 
 A `PATCH` that changes `warehouseId` on a `created` order MUST re-run the

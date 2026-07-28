@@ -361,6 +361,62 @@ describe('Sales (e2e)', () => {
     expect(level.reserved).toBe('0');
   });
 
+  it('creation against a soft-deleted warehouse -> 400, even though it still holds stock', async () => {
+    // The eligibility query lists ACTIVE warehouses only. If creation accepted
+    // an inactive one, the write would take exactly what the read says does
+    // not qualify — and the stock still sitting there would make it look fine.
+    const retired = await request(app.getHttpServer())
+      .post('/warehouses')
+      .set(...authHeader(adminToken))
+      .send({ name: 'Depósito Retirado E2E' });
+    await stockIn(usdProductId, '10', retired.body.id);
+    await request(app.getHttpServer())
+      .delete(`/warehouses/${retired.body.id}`)
+      .set(...authHeader(adminToken))
+      .expect(200);
+
+    const beforeCount = await prisma.order.count();
+    const response = await request(app.getHttpServer())
+      .post('/orders')
+      .set(...authHeader(adminToken))
+      .send({
+        customerId,
+        customerName: 'Cliente Sales E2E',
+        warehouseId: retired.body.id,
+        deliveryMode: 'pickup',
+        lines: [
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+        ],
+        payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/inactive/i);
+    expect(await prisma.order.count()).toBe(beforeCount);
+  });
+
+  it('creation against an unknown warehouse -> 400 naming the warehouse, never a stock shortage', async () => {
+    const beforeCount = await prisma.order.count();
+
+    const response = await request(app.getHttpServer())
+      .post('/orders')
+      .set(...authHeader(adminToken))
+      .send({
+        customerId,
+        customerName: 'Cliente Sales E2E',
+        warehouseId: '11111111-1111-4111-8111-111111111111',
+        deliveryMode: 'pickup',
+        lines: [
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 1 },
+        ],
+        payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/not found/i);
+    expect(await prisma.order.count()).toBe(beforeCount);
+  });
+
   it('creation against a warehouse that cannot cover the basket -> 409, no order written', async () => {
     await stockIn(usdProductId, '2');
     const beforeCount = await prisma.order.count();

@@ -28,6 +28,7 @@ import {
   USER_ROLES,
   WAREHOUSE_OPERATOR_REPOSITORY,
   WarehouseCannotFulfillOrderError,
+  WarehouseNotSellableError,
   type IWarehouseOperatorRepository,
 } from '@store-mgmt/domain';
 import { OrderService } from './order.service.js';
@@ -231,6 +232,12 @@ export class OrderController {
       return await fn();
     } catch (err) {
       if (err instanceof InvalidOrderError) {
+        throw new BadRequestException(err.message);
+      }
+      // 400, not 409: the caller named a warehouse that is not a valid sales
+      // target at all. Nothing about the world changing would make this
+      // request succeed. Mirrors `CustomerUserNotFoundError` -> 400.
+      if (err instanceof WarehouseNotSellableError) {
         throw new BadRequestException(err.message);
       }
       if (

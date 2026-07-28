@@ -8,6 +8,7 @@ import type {
   ICurrencyRepository,
   IOrderRepository,
   IStockLevelRepository,
+  IWarehouseRepository,
   Order as DomainOrder,
   OrderLine as DomainOrderLine,
   OrderListFilter,
@@ -23,6 +24,8 @@ import {
   ORDER_REPOSITORY,
   OrderLabelHelpers,
   STOCK_LEVEL_REPOSITORY,
+  WAREHOUSE_REPOSITORY,
+  WarehouseNotSellableError,
   assertWarehouseCoversBasket,
   createOrder,
   discountPriceFromDecimalString,
@@ -70,7 +73,26 @@ export class OrderService {
     @Inject(ORDER_REPOSITORY) private readonly orderRepository: IOrderRepository,
     @Inject(CURRENCY_REPOSITORY) private readonly currencyRepository: ICurrencyRepository,
     @Inject(STOCK_LEVEL_REPOSITORY) private readonly stockLevelRepository: IStockLevelRepository,
+    @Inject(WAREHOUSE_REPOSITORY) private readonly warehouseRepository: IWarehouseRepository,
   ) {}
+
+  /**
+   * A warehouse must EXIST and be ACTIVE before it can receive an order.
+   * Stock alone is not enough: a soft-deleted warehouse can still hold rows,
+   * and the eligibility query lists active warehouses only — without this the
+   * write would accept what the read says does not qualify. An unknown id
+   * must also fail here rather than as a shortage or, worse, as a raw FK
+   * error from the repository.
+   */
+  private async assertWarehouseSellable(warehouseId: string): Promise<void> {
+    const found = await this.warehouseRepository.findById(warehouseId);
+    if (!found) {
+      throw new WarehouseNotSellableError(warehouseId, 'not found');
+    }
+    if (!found.active) {
+      throw new WarehouseNotSellableError(warehouseId, 'inactive');
+    }
+  }
 
   async create(input: CreateOrderDto): Promise<OrderResponseDto> {
     const at = new Date();
@@ -118,6 +140,7 @@ export class OrderService {
     // rejects on its own. That race is accepted deliberately — the point is
     // to stop an order being written against a warehouse that plainly cannot
     // fill it, not to hold stock at creation.
+    await this.assertWarehouseSellable(order.warehouseId);
     const basket = order.lines.map((line) => ({
       productId: line.productId,
       quantity: line.quantity,
@@ -140,6 +163,7 @@ export class OrderService {
     // read — and must not be able to fail on stock that drifted since the
     // order was created.
     if (patch.warehouseId !== undefined && patch.warehouseId !== existing.warehouseId) {
+      await this.assertWarehouseSellable(patch.warehouseId);
       const basket = existing.lines.map((line) => ({
         productId: line.productId,
         quantity: line.quantity,

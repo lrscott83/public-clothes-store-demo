@@ -3,8 +3,10 @@ import type {
   ICurrencyRepository,
   IOrderRepository,
   IStockLevelRepository,
+  IWarehouseRepository,
   Order as DomainOrder,
   StockLevel,
+  Warehouse,
 } from '@store-mgmt/domain';
 import {
   CURRENCY_REPOSITORY,
@@ -14,7 +16,9 @@ import {
   ORDER_REPOSITORY,
   RateNotFoundError,
   STOCK_LEVEL_REPOSITORY,
+  WAREHOUSE_REPOSITORY,
   WarehouseCannotFulfillOrderError,
+  WarehouseNotSellableError,
 } from '@store-mgmt/domain';
 import { OrderService } from './order.service.js';
 import type { CreateOrderDto } from './dto/index.js';
@@ -64,6 +68,27 @@ function buildStockLevelRepoMock(): jest.Mocked<IStockLevelRepository> {
     reserve: jest.fn(),
     release: jest.fn(),
   } as unknown as jest.Mocked<IStockLevelRepository>;
+}
+
+function warehouse(id: string, active = true): Warehouse {
+  return {
+    id,
+    name: `Depósito ${id}`,
+    active,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  } as Warehouse;
+}
+
+/** Defaults to a real, ACTIVE warehouse — the uninteresting case everywhere it is not under test. */
+function buildWarehouseRepoMock(): jest.Mocked<IWarehouseRepository> {
+  return {
+    create: jest.fn(),
+    update: jest.fn(),
+    findById: jest.fn().mockImplementation(async (id: string) => warehouse(id)),
+    list: jest.fn().mockResolvedValue([]),
+    softDelete: jest.fn(),
+  } as unknown as jest.Mocked<IWarehouseRepository>;
 }
 
 const at = new Date('2026-01-01T00:00:00.000Z');
@@ -139,17 +164,20 @@ describe('OrderService', () => {
   let orderRepo: jest.Mocked<IOrderRepository>;
   let currencyRepo: jest.Mocked<ICurrencyRepository>;
   let stockRepo: jest.Mocked<IStockLevelRepository>;
+  let warehouseRepo: jest.Mocked<IWarehouseRepository>;
 
   beforeEach(async () => {
     orderRepo = buildOrderRepoMock();
     currencyRepo = buildCurrencyRepoMock();
     stockRepo = buildStockLevelRepoMock();
+    warehouseRepo = buildWarehouseRepoMock();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrderService,
         { provide: ORDER_REPOSITORY, useValue: orderRepo },
         { provide: CURRENCY_REPOSITORY, useValue: currencyRepo },
         { provide: STOCK_LEVEL_REPOSITORY, useValue: stockRepo },
+        { provide: WAREHOUSE_REPOSITORY, useValue: warehouseRepo },
       ],
     }).compile();
     service = module.get(OrderService);
@@ -240,6 +268,31 @@ describe('OrderService', () => {
     });
   });
 
+  describe('create — the target warehouse must be a real, active warehouse', () => {
+    it('rejects an unknown warehouseId as a BAD REQUEST, not as a stock shortage', async () => {
+      // Reporting "cannot fulfill every line" for a warehouse that does not
+      // exist would blame the stock for a typo. Different failure, different
+      // error — and the DB FK must never be what catches this.
+      warehouseRepo.findById.mockResolvedValue(null);
+
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(WarehouseNotSellableError);
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(/not found/i);
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a soft-deleted (inactive) warehouse even when it still holds stock', async () => {
+      // The eligibility read lists ACTIVE warehouses only. If creation
+      // accepted an inactive one, the write would take what the read says
+      // does not qualify.
+      warehouseRepo.findById.mockResolvedValue(warehouse('warehouse-uuid-1', false));
+      stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-1', 'product-uuid-1', 999)]);
+
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(WarehouseNotSellableError);
+      await expect(service.create(sampleCreateDto)).rejects.toThrow(/inactive/i);
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('create — availability invariant', () => {
     it('rejects a warehouse that cannot cover the basket, WITHOUT writing an order', async () => {
       stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-1', 'product-uuid-1', 0)]);
@@ -294,6 +347,27 @@ describe('OrderService', () => {
       await expect(
         service.update('order-uuid-1', { warehouseId: 'warehouse-uuid-2' }),
       ).rejects.toThrow(WarehouseCannotFulfillOrderError);
+      expect(orderRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects moving an order to an unknown warehouse', async () => {
+      orderRepo.findById.mockResolvedValue(sampleOrder());
+      warehouseRepo.findById.mockResolvedValue(null);
+
+      await expect(
+        service.update('order-uuid-1', { warehouseId: 'ghost-warehouse' }),
+      ).rejects.toThrow(WarehouseNotSellableError);
+      expect(orderRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects moving an order to a soft-deleted warehouse that still holds stock', async () => {
+      orderRepo.findById.mockResolvedValue(sampleOrder());
+      warehouseRepo.findById.mockResolvedValue(warehouse('warehouse-uuid-2', false));
+      stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-2', 'product-uuid-1', 999)]);
+
+      await expect(
+        service.update('order-uuid-1', { warehouseId: 'warehouse-uuid-2' }),
+      ).rejects.toThrow(WarehouseNotSellableError);
       expect(orderRepo.update).not.toHaveBeenCalled();
     });
 
