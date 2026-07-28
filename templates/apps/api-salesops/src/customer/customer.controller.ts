@@ -32,9 +32,16 @@ import type { CreateCustomerDto, CustomerResponseDto, UpdateCustomerDto } from '
  * `DuplicateCustomerDocumentError`/`DuplicateCustomerUserError` -> 409
  * (backend-users-roles: `userId` is a required, unique 1:1 link). `DELETE`
  * always soft-deletes (`active=false`) — never a hard DELETE. Mirrors
- * `WarehouseController`. Every route (read + write) is `owner`/`admin`/
- * `sales_operator`-only (backend-users-roles permission matrix) — customer
- * master data is cockpit-internal, never exposed to a plain `user`.
+ * `WarehouseController`. Every route is `owner`/`admin`/`sales_operator`-only
+ * (backend-users-roles permission matrix) — customer master data is
+ * cockpit-internal, never exposed to a plain `user`.
+ *
+ * `sales_agent` is added to the two READ routes ONLY, per method. An agent
+ * books orders for customers, so it must be able to find one — but `POST`
+ * here accepts an arbitrary existing `userId`, so granting it would let an
+ * agent bind a customer record to ANY identity, the owner's included. The
+ * agent's own creation path is a separate endpoint that mints the identity
+ * itself and never honours a caller-supplied `userId`.
  */
 @Controller('customers')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -49,11 +56,13 @@ export class CustomerController {
   }
 
   @Get()
+  @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.sales_agent)
   async list(@Query('includeInactive') includeInactive?: string): Promise<CustomerResponseDto[]> {
     return this.customerService.list(includeInactive === 'true');
   }
 
   @Get(':id')
+  @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.sales_agent)
   async findById(@Param('id') id: string): Promise<CustomerResponseDto> {
     const found = await this.customerService.findById(id);
     if (!found) {

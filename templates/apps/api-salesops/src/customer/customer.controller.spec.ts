@@ -229,4 +229,54 @@ describe('CustomerController', () => {
       expect(response.status).toBe(200);
     });
   });
+
+  describe('sales_agent — READ only', () => {
+    // A sales agent books orders for customers, so it must be able to find
+    // one. The WRITE routes stay closed here on purpose: `POST /customers`
+    // takes an arbitrary existing `userId`, so granting it would let an agent
+    // bind a customer record to ANY identity, the owner's included. The
+    // agent's own create path is a separate endpoint that mints the identity
+    // itself and never accepts a caller-supplied `userId`.
+    it('admits a sales_agent on GET /customers -> 200', async () => {
+      await app.close();
+      service.list.mockResolvedValue([sampleResponse]);
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer()).get('/customers');
+      expect(response.status).toBe(200);
+    });
+
+    it('admits a sales_agent on GET /customers/:id -> 200', async () => {
+      await app.close();
+      service.findById.mockResolvedValue(sampleResponse);
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer()).get('/customers/customer-1');
+      expect(response.status).toBe(200);
+    });
+
+    it('DENIES a sales_agent on POST /customers -> 403 (attach-to-existing-identity path)', async () => {
+      await app.close();
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer())
+        .post('/customers')
+        .send({ fullName: 'Ana Torres', userId: 'someone-elses-user-id' });
+      expect(response.status).toBe(403);
+      expect(service.create).not.toHaveBeenCalled();
+    });
+
+    it('DENIES a sales_agent on PATCH and DELETE -> 403', async () => {
+      await app.close();
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      await request(app.getHttpServer())
+        .patch('/customers/customer-1')
+        .send({ fullName: 'Nuevo' })
+        .expect(403);
+      await request(app.getHttpServer()).delete('/customers/customer-1').expect(403);
+      expect(service.update).not.toHaveBeenCalled();
+      expect(service.softDelete).not.toHaveBeenCalled();
+    });
+  });
 });

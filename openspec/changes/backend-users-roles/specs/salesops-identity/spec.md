@@ -70,15 +70,32 @@ field moves to `CompanyUser.role`.)
 ### Requirement: Bitmask Multi-Role with Union Permissions
 
 The effective role bitmask MUST support simultaneous multi-role membership:
-`user | operador_almacen | operador_gestores | owner | admin`, now sourced
-from `CompanyUser.role` instead of `User.roles`. Effective permissions MUST
-be the UNION of all held bits. `admin` is the system super-root. `owner`
-holds full power within its business. A bitmask value of `0` MUST be a valid
-state meaning zero permissions — not an error.
+`user | warehouse_operator | sales_operator | owner | admin | sales_agent`,
+sourced from `CompanyUser.role` instead of `User.roles`. Effective permissions
+MUST be the UNION of all held bits. `admin` is the system super-root. `owner`
+holds full power within its business, and that expansion MUST include
+`sales_agent`. A bitmask value of `0` MUST be a valid state meaning zero
+permissions — not an error.
 
 (Previously: bitmask was read directly from `User.roles`; helper semantics
 `hasRole`/`addRole`/`removeRole`/`getRoles` are unchanged — only the storage
 location moved.)
+
+(Previously the enumeration read `user | operador_almacen | operador_gestores
+| owner | admin`. AMENDED by `sales-agents-commissions` on two counts: it adds
+`sales_agent`, and it corrects the legacy Spanish bit names to the English
+keys the code has used since `ventas-english-rename` — `operador_almacen` is
+`warehouse_operator`, `operador_gestores` is `sales_operator`. The scenarios
+below still carry the old Spanish names; that drift predates this change and
+is left alone rather than widened into an unrelated rename.)
+
+#### Scenario: owner's effective mask includes sales_agent, but its stored bitmask does not
+
+- GIVEN a `CompanyUser` whose stored `role` is exactly `owner`
+- WHEN the effective mask is resolved
+- THEN it includes `sales_agent` — while a direct check against the STORED
+  bitmask still reports `false`, because the inheritance is a property of the
+  resolution, not of the persisted value
 
 #### Scenario: hasRole checks a single bit
 
@@ -286,15 +303,21 @@ filtered to that `warehouseId`.
 
 ### Requirement: Deferred / Non-Goals
 
-The following MUST NOT be implemented in this capability: the `gestor` role,
-fine-grained owner-finance permissions (owner remains coarse full-business
-power), and email verification. `Company`/`CompanyUser` tables NOW EXIST
-(this change's own scope) but `Membership`, tenant-context resolution, and
-schema-routing machinery remain deferred to the schema-per-tenant change.
+The following MUST NOT be implemented in this capability: fine-grained
+owner-finance permissions (owner remains coarse full-business power), and
+email verification. `Company`/`CompanyUser` tables NOW EXIST (the
+`company-user-roles-reframe` change's scope) but `Membership`, tenant-context
+resolution, and schema-routing machinery remain deferred to the
+schema-per-tenant change.
 
 (Previously: asserted NO `Company`/`Membership`/tenant-context tables existed
-at all; superseded because `Company`/`CompanyUser` are this change's explicit
+at all; superseded because `Company`/`CompanyUser` are the reframe's explicit
 deliverable. `Membership` and tenant-context machinery remain deferred.)
+
+(Previously this list also began with "the `gestor` role". SUPERSEDED by
+`sales-agents-commissions`, which delivers that role as `sales_agent = 32`.
+The deferral is spent, not broken — this capability deferred the role, and a
+later change implemented it.)
 
 #### Scenario: Company/CompanyUser exist, tenant-context machinery does not
 
@@ -303,8 +326,14 @@ deliverable. `Membership` and tenant-context machinery remain deferred.)
 - THEN `company` and `company_user` tables exist, but no `Membership` table,
   tenant-context service, or schema-routing exists
 
-#### Scenario: gestor role does not exist
+#### Scenario: the sales_agent (gestor) role exists and is distinct from sales_operator
+
+(Previously: "Scenario: gestor role does not exist — GIVEN the roles bitmask
+enum, WHEN inspected, THEN no `gestor` role bit is defined." SUPERSEDED by
+`sales-agents-commissions`. Quoted verbatim so the reversal is auditable.)
 
 - GIVEN the roles bitmask enum
 - WHEN inspected
-- THEN no `gestor` role bit is defined
+- THEN `sales_agent = 32` is defined, and it is a DIFFERENT bit from
+  `sales_operator` — the latter supervises agents ("Operador de gestores"),
+  the former is the field salesperson

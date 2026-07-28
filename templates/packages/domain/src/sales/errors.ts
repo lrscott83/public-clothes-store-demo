@@ -33,6 +33,23 @@ export class InvalidOrderStateError extends Error {
 }
 
 /**
+ * Thrown when the warehouse an order names cannot cover the whole basket from
+ * its own available stock (`onHand - reserved`) at creation time, or when a
+ * warehouse change would move an order to one that cannot.
+ *
+ * Distinct from `InsufficientStockError`, which fires later at `confirmOrder`
+ * when stock is actually RESERVED. This one is a fast-fail on a read snapshot
+ * and holds nothing — both can legitimately fire for the same order if stock
+ * is taken in between.
+ */
+export class WarehouseCannotFulfillOrderError extends Error {
+  constructor(public readonly warehouseId: string) {
+    super(`Warehouse "${warehouseId}" cannot fulfill every line of this order from available stock`);
+    this.name = 'WarehouseCannotFulfillOrderError';
+  }
+}
+
+/**
  * Re-exported, NOT redefined — cross-currency conversion failures during
  * order-line/order-payment building surface the SAME `RateNotFoundError`
  * the Currency module already throws (`currency/errors.ts`). No duplicate

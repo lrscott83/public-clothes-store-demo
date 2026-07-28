@@ -28,9 +28,20 @@ describe('RoleHelpers — bit ops', () => {
   it('getRoleLabel returns the Spanish display label for a role KEY (keys stay English)', () => {
     expect(RoleHelpers.getRoleLabel('warehouse_operator')).toBe('Operador de almacén');
     expect(RoleHelpers.getRoleLabel('sales_operator')).toBe('Operador de gestores');
+    expect(RoleHelpers.getRoleLabel('sales_agent')).toBe('Gestor de ventas');
     expect(RoleHelpers.getRoleLabel('owner')).toBe('Dueño');
     expect(RoleHelpers.getRoleLabel('admin')).toBe('Administrador');
     expect(RoleHelpers.getRoleLabel('user')).toBe('Cliente');
+  });
+
+  it('sales_agent is a distinct bit — it is NOT sales_operator', () => {
+    // `sales_operator`'s label is literally "Operador de gestores": it is the
+    // role that SUPERVISES agents. Conflating the two would silently grant
+    // every supervisor the field-sales surface, and vice versa.
+    expect(USER_ROLES.sales_agent).toBe(32);
+    expect(USER_ROLES.sales_agent).not.toBe(USER_ROLES.sales_operator);
+    expect(RoleHelpers.hasRole(USER_ROLES.sales_operator, USER_ROLES.sales_agent)).toBe(false);
+    expect(RoleHelpers.hasRole(USER_ROLES.sales_agent, USER_ROLES.sales_operator)).toBe(false);
   });
 
   it('getRoleLabels returns Spanish labels for every bit held by roles', () => {
@@ -49,9 +60,21 @@ describe('effectiveRoles / can — permission union + super-root precedence', ()
 
   it('owner returns union of business bits, NOT admin', () => {
     const businessBits =
-      USER_ROLES.user | USER_ROLES.warehouse_operator | USER_ROLES.sales_operator | USER_ROLES.owner;
+      USER_ROLES.user |
+      USER_ROLES.warehouse_operator |
+      USER_ROLES.sales_operator |
+      USER_ROLES.sales_agent |
+      USER_ROLES.owner;
     expect(effectiveRoles(USER_ROLES.owner)).toBe(businessBits);
     expect(RoleHelpers.hasRole(effectiveRoles(USER_ROLES.owner), USER_ROLES.admin)).toBe(false);
+  });
+
+  it('owner INHERITS sales_agent, but a raw owner bitmask does not hold it (D8)', () => {
+    // The inheritance is a property of `effectiveRoles`, not of the stored
+    // bitmask — every `RoleHelpers.hasRole` call site that reads the raw value
+    // still sees `false`. Pinned so the distinction cannot rot silently.
+    expect(RoleHelpers.hasRole(effectiveRoles(USER_ROLES.owner), USER_ROLES.sales_agent)).toBe(true);
+    expect(RoleHelpers.hasRole(USER_ROLES.owner, USER_ROLES.sales_agent)).toBe(false);
   });
 
   it('a plain role (no admin/owner) resolves unchanged', () => {

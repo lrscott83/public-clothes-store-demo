@@ -5,16 +5,28 @@
 export const USER_ROLES = {
   user: 1, // 0b00001 — buyer / base
   warehouse_operator: 2, // 0b00010
-  sales_operator: 4, // 0b00100
-  owner: 8, // 0b01000 — full business power
-  admin: 16, // 0b10000 — system super-root
+  sales_operator: 4, // 0b000100 — SUPERVISES sales agents ("Operador de gestores")
+  owner: 8, // 0b001000 — full business power
+  admin: 16, // 0b010000 — system super-root
+  sales_agent: 32, // 0b100000 — field salesperson; books sales, bound to NO warehouse
 } as const;
 
 export type UserRoleName = keyof typeof USER_ROLES;
 export type UserRoleValue = number; // stored bitmask
 
+/**
+ * Hand-maintained union — deliberately NOT "everything except admin", so a new
+ * bit stays OFF for `owner` until someone decides otherwise. `sales_agent` was
+ * added here on purpose (D8): an owner may book a sale directly. Consequence
+ * to keep in mind — an owner who does so accrues commission to themselves and
+ * appears in per-agent reporting.
+ */
 const BUSINESS_ROLES_MASK =
-  USER_ROLES.user | USER_ROLES.warehouse_operator | USER_ROLES.sales_operator | USER_ROLES.owner;
+  USER_ROLES.user |
+  USER_ROLES.warehouse_operator |
+  USER_ROLES.sales_operator |
+  USER_ROLES.sales_agent |
+  USER_ROLES.owner;
 
 const ALL_ROLES_MASK = BUSINESS_ROLES_MASK | USER_ROLES.admin;
 
@@ -28,6 +40,7 @@ const ROLE_LABELS_ES: Record<UserRoleName, string> = {
   sales_operator: 'Operador de gestores',
   owner: 'Dueño',
   admin: 'Administrador',
+  sales_agent: 'Gestor de ventas',
 };
 
 export const RoleHelpers = {
