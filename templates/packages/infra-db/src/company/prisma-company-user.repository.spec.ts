@@ -28,7 +28,7 @@ describe('PrismaCompanyUserRepository', () => {
     // first test against a freshly migrated database.
     await prisma.companyUser.deleteMany({});
     await prisma.company.deleteMany({});
-    const company = await prisma.company.create({ data: { name: 'Tienda Principal', slug: 'default' } });
+    const company = await prisma.company.create({ data: { name: 'Tienda Prueba', slug: 'default' } });
     companyId = company.id;
   });
 

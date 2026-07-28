@@ -36,7 +36,7 @@ describe('Auth (e2e)', () => {
     const company = await prisma.company.upsert({
       where: { slug: 'default' },
       update: {},
-      create: { name: 'Tienda Principal', slug: 'default' },
+      create: { name: 'Tienda Prueba', slug: 'default' },
     });
     return company.id;
   }

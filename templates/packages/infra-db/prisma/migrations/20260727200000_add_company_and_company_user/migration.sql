@@ -65,7 +65,7 @@ ALTER TABLE "company_user" ADD CONSTRAINT "company_user_company_id_fkey" FOREIGN
 -- script, which is the gate before migration 002 may be authored or run.
 WITH seeded_company AS (
   INSERT INTO "company" ("id", "name", "slug", "is_active", "created_at", "updated_at")
-  VALUES (gen_random_uuid(), 'Tienda Principal', 'default', true, now(), now())
+  VALUES (gen_random_uuid(), 'Tienda Prueba', 'default', true, now(), now())
   RETURNING "id"
 )
 INSERT INTO "company_user" ("id", "user_id", "company_id", "role", "status", "created_at", "updated_at")

@@ -35,7 +35,7 @@ export async function createAuthedUser(
   const company = await prisma.company.upsert({
     where: { slug: 'default' },
     update: {},
-    create: { name: 'Tienda Principal', slug: 'default' },
+    create: { name: 'Tienda Prueba', slug: 'default' },
   });
   await prisma.companyUser.create({
     data: { userId: user.id, companyId: company.id, role: roles, status: 'ACTIVE' },

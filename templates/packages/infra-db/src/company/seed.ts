@@ -5,12 +5,11 @@ import type { PrismaService } from '../prisma-client.js';
  * with migration 001's seed row (`prisma/migrations/*_add_company_and_company_user`)
  * so a fresh DB (seeded via this script) and an existing DB (backfilled via
  * the migration) converge on the same row instead of ending up with two
- * `Company` rows. The name/slug pair is a PLACEHOLDER (design.md §11 open
- * question) — the owner must confirm before this runs against a real
- * environment.
+ * `Company` rows. Name owner-confirmed 2026-07-28 (design.md §11); the slug
+ * stays `default` — it is the lookup key, not display text.
  */
 export const DEFAULT_COMPANY_SLUG = 'default';
-const DEFAULT_COMPANY_NAME = 'Tienda Principal';
+const DEFAULT_COMPANY_NAME = 'Tienda Prueba';
 
 export interface SeedCompanyResult {
   readonly companiesUpserted: number;

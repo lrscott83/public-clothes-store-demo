@@ -35,12 +35,12 @@ describe('PrismaCompanyRepository', () => {
   });
 
   it('list() returns every persisted Company with schemaName null', async () => {
-    await prisma.company.create({ data: { name: 'Tienda Principal', slug: 'default' } });
+    await prisma.company.create({ data: { name: 'Tienda Prueba', slug: 'default' } });
 
     const companies = await repository.list();
 
     expect(companies).toHaveLength(1);
-    expect(companies[0]?.name).toBe('Tienda Principal');
+    expect(companies[0]?.name).toBe('Tienda Prueba');
     expect(companies[0]?.schemaName).toBeNull();
     expect(companies[0]?.isActive).toBe(true);
   });
@@ -51,7 +51,7 @@ describe('PrismaCompanyRepository', () => {
   });
 
   it('findById() round-trips a persisted Company', async () => {
-    const created = await prisma.company.create({ data: { name: 'Tienda Principal', slug: 'default' } });
+    const created = await prisma.company.create({ data: { name: 'Tienda Prueba', slug: 'default' } });
 
     const found = await repository.findById(created.id);
 

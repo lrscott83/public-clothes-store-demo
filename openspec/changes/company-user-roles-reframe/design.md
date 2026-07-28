@@ -308,7 +308,7 @@ CREATE INDEX "company_user_user_id_idx" ON "company_user"("user_id");
 -- `role` is a VERBATIM bitmask copy so `can()` evaluates bit-for-bit identically.
 WITH seeded_company AS (
   INSERT INTO "company" ("id","name","slug","is_active","created_at","updated_at")
-  VALUES (gen_random_uuid(), 'Tienda Principal', 'default', true, now(), now())
+  VALUES (gen_random_uuid(), 'Tienda Prueba', 'default', true, now(), now())
   RETURNING "id"
 )
 INSERT INTO "company_user" ("id","user_id","company_id","role","status","created_at","updated_at")
@@ -433,8 +433,13 @@ Test DB `store_mgmt_test` (`TEST_URL` in `.env`, forced by `jest.setup.js` in `i
 - [ ] **Doc debt (separate change)**: `docs/system/architecture.md:67,143-152` is stale —
       it lists `infra-db` as "(future)" and the HTTP backend as non-existent while
       `api-idp`/`api-salesops`/`infra-db`/`api-common` are all shipped. Out of scope here.
-- [ ] `Company` seed name/slug (`'Tienda Principal'` / `'default'`) is a placeholder — owner
-      should confirm before migration 001 runs against a real environment.
+- [x] `Company` seed name/slug — RESOLVED 2026-07-28. Owner confirmed the name `Tienda Prueba`;
+      the slug stays `'default'` (lookup key, not display text). Applied in lockstep to
+      `infra-db/src/company/seed.ts` and migration 001's `INSERT`, which changed 001's
+      checksum — acceptable because 001 has only ever run against `store_mgmt_test`, never a
+      real environment. Any database that already applied the old 001 needs a manual
+      `UPDATE "company" SET "name" = 'Tienda Prueba' WHERE "slug" = 'default';` rather than a
+      re-run.
 - [ ] `UsersService.list()` uses `listByCompany(req.user.companyId)`; `UsersController.list()`
       therefore needs `@Req()`. Confirm during `sdd-tasks` that no other `UsersService` method
       needs the same plumbing.

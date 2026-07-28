@@ -70,7 +70,7 @@ function buildJwtServiceMock(): jest.Mocked<Pick<JwtService, 'sign' | 'verify'>>
 
 const TEST_COMPANY: Company = {
   id: 'company-1',
-  name: 'Tienda Principal',
+  name: 'Tienda Prueba',
   slug: 'default',
   isActive: true,
   schemaName: null,

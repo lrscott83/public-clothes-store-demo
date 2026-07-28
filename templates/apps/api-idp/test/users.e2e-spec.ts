@@ -32,7 +32,7 @@ describe('Users (e2e) — mass-assignment guard', () => {
     const company = await prisma.company.upsert({
       where: { slug: 'default' },
       update: {},
-      create: { name: 'Tienda Principal', slug: 'default' },
+      create: { name: 'Tienda Prueba', slug: 'default' },
     });
     await prisma.companyUser.create({
       data: { userId, companyId: company.id, role, status: 'ACTIVE' },

@@ -7,7 +7,7 @@ function makeCompany(overrides: Partial<Company> = {}): Company {
   const now = new Date();
   return {
     id: 'company-1',
-    name: 'Tienda Principal',
+    name: 'Tienda Prueba',
     slug: 'default',
     isActive: true,
     schemaName: null,
