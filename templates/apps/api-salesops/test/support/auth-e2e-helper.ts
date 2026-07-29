@@ -19,7 +19,7 @@ const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 export async function createAuthedUser(
   prisma: PrismaService,
   roles: number,
-): Promise<{ userId: string; token: string }> {
+): Promise<{ userId: string; companyUserId: string; token: string }> {
   const user = await prisma.user.create({
     data: {
       login: `e2e.${randomUUID()}`,
@@ -37,7 +37,10 @@ export async function createAuthedUser(
     update: {},
     create: { name: 'Tienda Prueba', slug: 'default' },
   });
-  await prisma.companyUser.create({
+  // Returned alongside the user id because sales attribution is recorded
+  // against THIS id, not the User id — an e2e spec asserting attribution has
+  // no other way to know the expected value.
+  const assignment = await prisma.companyUser.create({
     data: { userId: user.id, companyId: company.id, role: roles, status: 'ACTIVE' },
   });
 
@@ -50,7 +53,7 @@ export async function createAuthedUser(
     expiresIn: JWT_CONFIG.signOptions.expiresIn,
   } as SignOptions);
 
-  return { userId: user.id, token };
+  return { userId: user.id, companyUserId: assignment.id, token };
 }
 
 /** `supertest`'s `.set(...authHeader(token))` — a valid `Authorization: Bearer <token>` header pair. */
@@ -67,8 +70,8 @@ export function authHeader(token: string): [string, string] {
 export async function createAuthedWarehouseOperator(
   prisma: PrismaService,
   warehouseId: string,
-): Promise<{ userId: string; token: string }> {
-  const { userId, token } = await createAuthedUser(prisma, USER_ROLES.warehouse_operator);
+): Promise<{ userId: string; companyUserId: string; token: string }> {
+  const { userId, companyUserId, token } = await createAuthedUser(prisma, USER_ROLES.warehouse_operator);
   await prisma.warehouseOperator.create({ data: { userId, warehouseId } });
-  return { userId, token };
+  return { userId, companyUserId, token };
 }

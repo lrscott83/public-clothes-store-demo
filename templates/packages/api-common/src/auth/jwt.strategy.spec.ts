@@ -125,6 +125,19 @@ describe('JwtStrategy.validate', () => {
     expect(result.companyId).toBe('company-1');
   });
 
+  it('exposes `companyUserId` from CompanyUser.id — the stable attribution identity (A7)', async () => {
+    const { strategy, findById, findActiveByUserId } = makeStrategy();
+    findById.mockResolvedValue(activeUser());
+    findActiveByUserId.mockResolvedValue(companyUser({ id: 'cu-7' }));
+
+    const result = await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
+
+    // The assignment id, NOT the User id: attribution is recorded against the
+    // company-scoped assignment, so the two must never be conflated.
+    expect(result.companyUserId).toBe('cu-7');
+    expect(result.companyUserId).not.toBe(result.id);
+  });
+
   it('role bitmask 0 is a VALID zero-permission assignment, not a missing one', async () => {
     const { strategy, findById, findActiveByUserId } = makeStrategy();
     findById.mockResolvedValue(activeUser());
@@ -156,6 +169,26 @@ describe('JwtStrategy.validate', () => {
       findActiveByUserId.mockResolvedValue(companyUser({ status }));
 
       await expect(strategy.validate({ sub: 'user-1', login: 'juan.perez' })).rejects.toThrow(ForbiddenException);
+    },
+  );
+
+  it.each(['REVOKED', 'SUSPENDED'] as const)(
+    'a %s CompanyUser yields NO req.user at all — so nothing downstream can be attributed to it',
+    async (status) => {
+      // The attribution guarantee upstream of every sales route: a revoked or
+      // suspended agent never reaches order creation, because `validate`
+      // throws instead of returning a `SanitizedUser`. There is therefore no
+      // `companyUserId` in existence to stamp a sale with, which is a stronger
+      // guarantee than any check the sales layer could make for itself.
+      const { strategy, findById, findActiveByUserId } = makeStrategy();
+      findById.mockResolvedValue(activeUser());
+      findActiveByUserId.mockResolvedValue(companyUser({ id: 'cu-revoked', status }));
+
+      const resolved = await strategy
+        .validate({ sub: 'user-1', login: 'juan.perez' })
+        .catch(() => null);
+
+      expect(resolved).toBeNull();
     },
   );
 

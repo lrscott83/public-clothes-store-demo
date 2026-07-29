@@ -14,6 +14,10 @@ export const SAMPLE_AUTH_USER: Omit<SanitizedUser, 'roles'> = {
   // before it will hand back a `req.user` at all — a fixture without it would
   // model a state the real strategy cannot produce.
   companyId: 'test-company-1',
+  // The `CompanyUser.id` of that same assignment — the identity sales
+  // attribution is stamped from. Deliberately unlike `id` so a spec that
+  // confuses the User id with the assignment id fails instead of passing.
+  companyUserId: 'test-company-user-1',
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 };

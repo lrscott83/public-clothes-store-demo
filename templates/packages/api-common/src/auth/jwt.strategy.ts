@@ -4,6 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import {
   COMPANY_USER_REPOSITORY,
   USER_REPOSITORY,
+  type CompanyUser,
   type ICompanyUserRepository,
   type IUserRepository,
   type User,
@@ -29,6 +30,14 @@ import { JWT_CONFIG, type JwtAccessPayload } from './jwt.config.js';
 export type SanitizedUser = Omit<User, 'passwordHash' | 'roles'> & {
   readonly roles: UserRoleValue;
   readonly companyId: string;
+  /**
+   * `CompanyUser.id` — the stable attribution identity (design A7). REQUIRED
+   * for the same reason `roles` is: sales attribution is stamped from this
+   * field, and an `undefined` slipping through would write an unattributed
+   * order instead of failing loudly. Attributing by the `(id, companyId)` pair
+   * instead was rejected — the assignment id is the single stable key.
+   */
+  readonly companyUserId: string;
 };
 
 /**
@@ -40,7 +49,7 @@ export type SanitizedUser = Omit<User, 'passwordHash' | 'roles'> & {
  */
 const USER_CACHE_TTL_MS = 30_000;
 
-function sanitize(user: User, role: UserRoleValue, companyId: string): SanitizedUser {
+function sanitize(user: User, assignment: CompanyUser): SanitizedUser {
   return {
     id: user.id,
     login: user.login,
@@ -48,8 +57,9 @@ function sanitize(user: User, role: UserRoleValue, companyId: string): Sanitized
     email: user.email,
     cellPhone: user.cellPhone,
     isActive: user.isActive,
-    roles: role,
-    companyId,
+    roles: assignment.role,
+    companyId: assignment.companyId,
+    companyUserId: assignment.id,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -106,7 +116,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new ForbiddenException('User is not assigned to any company');
     }
 
-    const sanitized = sanitize(user, assignment.role, assignment.companyId);
+    // The whole assignment is passed rather than three loose strings: `id` and
+    // `companyId` are both opaque uuids, and a positional swap between them
+    // would misattribute every order without failing any type check.
+    const sanitized = sanitize(user, assignment);
     this.userCache.set(payload.sub, sanitized);
     return sanitized;
   }
