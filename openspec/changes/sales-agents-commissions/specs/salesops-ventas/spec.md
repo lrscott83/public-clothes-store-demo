@@ -216,3 +216,57 @@ is the sole input to commission accrual (`salesops-commissions`).
 - THEN the request is denied before order creation runs — the same failure
   class as any non-active `CompanyUser` (`salesops-companies`); no order is
   ever attributed to an inactive account
+
+### Requirement: A Sales Agent Reads Only Their Own Attributed Orders
+
+A caller whose access to the order endpoints comes SOLELY from `sales_agent`
+MUST see and modify only the orders attributed to them. `GET /orders` MUST be
+filtered to their own attributions, and `GET /orders/:id` and
+`PATCH /orders/:id` MUST deny an order attributed to anyone else.
+
+The scope covers the write path and not only the read path. An order's lines
+are the sole input to commission accrual, so an agent able to edit a
+colleague's order is an agent able to change what that colleague gets paid.
+
+This mirrors the existing `warehouse_operator` scoping rule and its
+"solely" qualifier: a caller who ALSO holds `owner`, `admin` or
+`sales_operator` is not scoped, because those roles supervise agents and
+must see the whole book. A sale carries what the customer bought, at what
+price, on what credit terms — an agent has no business reading a colleague's.
+
+This closes design Q1.
+
+#### Scenario: The list is filtered to the caller's own attributions
+
+- GIVEN a caller whose only role is `sales_agent`
+- AND orders exist attributed to them AND to another agent
+- WHEN they request `GET /orders`
+- THEN only the orders attributed to them are returned
+
+#### Scenario: Reading another agent's order is denied
+
+- GIVEN a caller whose only role is `sales_agent`
+- WHEN they request `GET /orders/:id` for an order attributed to a different
+  `CompanyUser`
+- THEN the request is denied
+
+#### Scenario: Editing another agent's order is denied and writes nothing
+
+- GIVEN a caller whose only role is `sales_agent`
+- WHEN they send `PATCH /orders/:id` for an order attributed to a different
+  `CompanyUser`
+- THEN the request is denied AND the order is left unchanged
+
+#### Scenario: A supervising role is never scoped
+
+- GIVEN a caller holding `sales_agent` AND `sales_operator`
+- WHEN they request `GET /orders`
+- THEN every order is returned, unfiltered
+
+#### Scenario: A legacy unattributed order is invisible to every agent
+
+- GIVEN an order created before attribution existed, carrying no attributed
+  `CompanyUser`
+- WHEN a caller whose only role is `sales_agent` requests `GET /orders`
+- THEN that order is NOT returned — an absent attribution matches nobody,
+  rather than matching everybody
