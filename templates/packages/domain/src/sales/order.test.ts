@@ -33,6 +33,7 @@ function baseInput(overrides: Partial<CreateOrderInput> = {}): CreateOrderInput 
     deliveryMode: 'pickup',
     lines: [usdLine()],
     payments: [usdPayment()],
+    attributedCompanyUserId: 'cu-agent-1',
     ...overrides,
   };
 }
@@ -133,6 +134,21 @@ describe('createOrder — currency derivation, deliveryMode, initial status (3.7
     expect(order.status).toBe('created');
     expect(order.verifiedAt).toBeNull();
     expect(order.deliveredAt).toBeNull();
+  });
+
+  it('stamps attributedCompanyUserId from the input and never nulls it', () => {
+    const order = createOrder(baseInput({ attributedCompanyUserId: 'cu-agent-9' }), [], AT);
+    expect(order.attributedCompanyUserId).toBe('cu-agent-9');
+  });
+
+  it('carries attribution unchanged through verify, deliver and cancel', () => {
+    // The transitions are pure spreads today, but attribution is financial
+    // evidence: if a future edit ever recomputes the aggregate on transition,
+    // this fails instead of silently re-crediting the sale to nobody.
+    const order = createOrder(baseInput({ attributedCompanyUserId: 'cu-agent-9' }), [], AT);
+    expect(confirmOrder(order, AT).attributedCompanyUserId).toBe('cu-agent-9');
+    expect(deliverOrder(confirmOrder(order, AT), AT).attributedCompanyUserId).toBe('cu-agent-9');
+    expect(cancelOrder(order, AT).attributedCompanyUserId).toBe('cu-agent-9');
   });
 });
 

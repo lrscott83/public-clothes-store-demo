@@ -63,6 +63,16 @@ export interface Order {
   readonly lines: readonly OrderLine[];
   readonly payments: readonly OrderPayment[];
   readonly saleCredit: SaleCredit | null;
+  /**
+   * `CompanyUser.id` of the agent the sale is credited to, stamped at
+   * creation from the authenticated actor and NEVER from client input.
+   *
+   * `null` ONLY for orders that predate the attribution migration — the
+   * migration deliberately does not backfill, because inventing an agent for
+   * a historical sale would fabricate financial evidence. `createOrder` can
+   * never produce `null`: the input field is required on purpose.
+   */
+  readonly attributedCompanyUserId: string | null;
   readonly orderDate: Date;
   readonly verifiedAt: Date | null;
   readonly deliveredAt: Date | null;
@@ -85,6 +95,13 @@ export interface CreateOrderInput {
   readonly lines: readonly BuildOrderLineInput[];
   readonly payments?: readonly BuildOrderPaymentInput[];
   readonly saleCredit?: SaleCredit | null;
+  /**
+   * REQUIRED, non-optional on purpose: an optional field would let any caller
+   * that simply forgot it mint an unattributable sale, and the omission would
+   * only surface much later as a missing commission. The compiler refuses
+   * instead.
+   */
+  readonly attributedCompanyUserId: string;
   readonly total?: Money;
   readonly orderDate?: Date;
   readonly createdAt?: Date;
@@ -167,6 +184,7 @@ export function createOrder(input: CreateOrderInput, rates: ExchangeRate[], at: 
     lines,
     payments,
     saleCredit: input.saleCredit ?? null,
+    attributedCompanyUserId: input.attributedCompanyUserId,
     orderDate: input.orderDate ?? at,
     verifiedAt: null,
     deliveredAt: null,

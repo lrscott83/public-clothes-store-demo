@@ -18,6 +18,7 @@ const USER_ROLES = {
   sales_operator: 4,
   owner: 8,
   admin: 16,
+  sales_agent: 32,
 } as const;
 
 /**
@@ -43,19 +44,27 @@ interface CockpitAccount {
   readonly roles: number;
 }
 
-/** The 4 cockpit accounts (design.md §3 seed plan) — data, not an enum. */
+/** The cockpit accounts (design.md §3 seed plan) — data, not an enum. */
 const COCKPIT_ACCOUNTS: readonly CockpitAccount[] = [
   { login: 'admin', fullName: 'Administrador', roles: USER_ROLES.admin },
   { login: 'owner', fullName: 'Dueño', roles: USER_ROLES.owner },
   { login: 'warehouse.operator', fullName: 'Operador de Almacén', roles: USER_ROLES.warehouse_operator },
   { login: 'sales.operator', fullName: 'Operador de Gestores', roles: USER_ROLES.sales_operator },
+  { login: 'sales.agent', fullName: 'Gestor de Ventas', roles: USER_ROLES.sales_agent },
 ];
 
-/** Logins of the 4 cockpit accounts — exported for test assertions. */
+/**
+ * The cockpit `sales_agent`. Demo orders are attributed to THIS account's
+ * assignment, so the seeded data exercises the same attribution path a real
+ * sale takes instead of leaving the column null everywhere.
+ */
+export const SALES_AGENT_LOGIN = 'sales.agent';
+
+/** Logins of the cockpit accounts — exported for test assertions. */
 export const COCKPIT_LOGINS: readonly string[] = COCKPIT_ACCOUNTS.map((account) => account.login);
 
 /**
- * Idempotent seed of the 4 cockpit accounts, keyed on `login` (upsert).
+ * Idempotent seed of the cockpit accounts, keyed on `login` (upsert).
  * Passwords are the known DEV default, bcrypt-hashed at seed time — never a
  * plaintext column. The `warehouse.operator` account additionally gets a
  * `WarehouseOperator` row scoped to the first seeded warehouse (by name,

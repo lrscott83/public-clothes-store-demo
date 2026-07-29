@@ -67,11 +67,11 @@ model Product {
   barcode              String?
   price                Decimal  @db.Decimal(18, 2) // NUMERIC — never float
   priceCurrency        String   @map("price_currency")
-  percentDiscountPrice Decimal  @default(0) @db.Decimal(5, 2) @map("percent_discount_price")
-  discountPrice        Decimal  @default(0) @db.Decimal(18, 2) @map("discount_price")
+  percentDiscountPrice Decimal  @default(0) @map("percent_discount_price") @db.Decimal(5, 2)
+  discountPrice        Decimal  @default(0) @map("discount_price") @db.Decimal(18, 2)
   cost                 Decimal  @db.Decimal(18, 2)
   costCurrency         String   @map("cost_currency")
-  categoryId           String   @db.Uuid @map("category_id")
+  categoryId           String   @map("category_id") @db.Uuid
   image                String
   isNew                Boolean  @default(false) @map("is_new")
   order                Int
@@ -79,7 +79,7 @@ model Product {
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
-  category Category @relation(fields: [categoryId], references: [id])
+  category    Category        @relation(fields: [categoryId], references: [id])
   // Inverse relations only — Product carries ZERO inventory scalar fields
   // (see design.md decision #10; `rg -i "stock|warehouse"` under
   // packages/domain/src/product/ must stay 0).
@@ -115,10 +115,10 @@ model Warehouse {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  stockLevels StockLevel[]
-  movements   StockMovement[]
+  stockLevels        StockLevel[]
+  movements          StockMovement[]
   // Inverse relation only — added by the Sales module (backend-ventas).
-  orders      Order[]
+  orders             Order[]
   // Inverse relation only — added by the Users/Roles module (backend-users-roles).
   warehouseOperators WarehouseOperator[]
 
@@ -127,8 +127,8 @@ model Warehouse {
 
 model StockLevel {
   id          String   @id @default(uuid()) @db.Uuid
-  productId   String   @db.Uuid @map("product_id")
-  warehouseId String   @db.Uuid @map("warehouse_id")
+  productId   String   @map("product_id") @db.Uuid
+  warehouseId String   @map("warehouse_id") @db.Uuid
   onHand      Int      @default(0) @map("on_hand")
   reserved    Int      @default(0)
   createdAt   DateTime @default(now()) @map("created_at")
@@ -136,19 +136,19 @@ model StockLevel {
 
   product   Product   @relation(fields: [productId], references: [id])
   warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  // DB backstop (raw SQL in migration): CHECK (on_hand >= 0 AND reserved >= 0)
+  // DB backstop (raw SQL in migration, W4): CHECK (reserved <= on_hand) —
+  // IMMEDIATE, makes deliver's release-before-sale_out ordering load-bearing.
 
   @@unique([productId, warehouseId])
   @@index([warehouseId])
   @@map("stock_level")
-  // DB backstop (raw SQL in migration): CHECK (on_hand >= 0 AND reserved >= 0)
-  // DB backstop (raw SQL in migration, W4): CHECK (reserved <= on_hand) —
-  // IMMEDIATE, makes deliver's release-before-sale_out ordering load-bearing.
 }
 
 model StockMovement {
   id          String            @id @default(uuid()) @db.Uuid
-  productId   String            @db.Uuid @map("product_id")
-  warehouseId String            @db.Uuid @map("warehouse_id")
+  productId   String            @map("product_id") @db.Uuid
+  warehouseId String            @map("warehouse_id") @db.Uuid
   type        StockMovementType
   quantity    Int // positive magnitude; type implies direction
   reason      String?
@@ -176,7 +176,7 @@ model StockMovement {
 // made this NOT NULL against pre-existing rows.
 model Customer {
   id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @unique @db.Uuid @map("user_id")
+  userId     String   @unique @map("user_id") @db.Uuid
   fullName   String   @map("full_name")
   documentId String?  @unique @map("document_id")
   cellPhone  String?  @map("cell_phone")
@@ -237,49 +237,59 @@ enum DeliveryMode {
 }
 
 model Order {
-  id            String       @id @default(uuid()) @db.Uuid
-  customerId    String       @db.Uuid @map("customer_id")
-  customerName  String       @map("customer_name") // snapshot
-  warehouseId   String       @db.Uuid @map("warehouse_id")
-  deliveryMode  DeliveryMode @map("delivery_mode") // REQUIRED; delivery engages future Delivery module
-  currency      String // derived USD|MN
-  status        OrderStatus  @default(created)
-  subtotal      Decimal      @db.Decimal(18, 2) // Money in `currency`
-  discountTotal Decimal      @db.Decimal(18, 2) @map("discount_total")
-  total         Decimal      @db.Decimal(18, 2)
-  orderDate     DateTime     @map("order_date")
-  verifiedAt    DateTime?    @map("verified_at") // freeze stamp (rate+totals, NO commission)
-  deliveredAt   DateTime?    @map("delivered_at") // stamped at verified->delivered
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
+  id                      String       @id @default(uuid()) @db.Uuid
+  customerId              String       @map("customer_id") @db.Uuid
+  customerName            String       @map("customer_name") // snapshot
+  warehouseId             String       @map("warehouse_id") @db.Uuid
+  deliveryMode            DeliveryMode @map("delivery_mode") // REQUIRED; delivery engages future Delivery module
+  currency                String // derived USD|MN
+  status                  OrderStatus  @default(created)
+  subtotal                Decimal      @db.Decimal(18, 2) // Money in `currency`
+  discountTotal           Decimal      @map("discount_total") @db.Decimal(18, 2)
+  total                   Decimal      @db.Decimal(18, 2)
+  /// `CompanyUser.id` of the sales agent this sale is credited to. NULLABLE only because
+  /// orders predating this column exist and are deliberately NOT backfilled — inventing an
+  /// agent for a historical sale would fabricate financial evidence. Every order written
+  /// after the cutover carries it (the domain input is required, not optional).
+  attributedCompanyUserId String?      @map("attributed_company_user_id") @db.Uuid
+  orderDate               DateTime     @map("order_date")
+  verifiedAt              DateTime?    @map("verified_at") // freeze stamp (rate+totals, NO commission)
+  deliveredAt             DateTime?    @map("delivered_at") // stamped at verified->delivered
+  createdAt               DateTime     @default(now()) @map("created_at")
+  updatedAt               DateTime     @updatedAt @map("updated_at")
 
-  customer   Customer       @relation(fields: [customerId], references: [id])
-  warehouse  Warehouse      @relation(fields: [warehouseId], references: [id])
-  lines      OrderLine[]
-  payments   OrderPayment[]
-  saleCredit SaleCredit?
+  customer              Customer       @relation(fields: [customerId], references: [id])
+  warehouse             Warehouse      @relation(fields: [warehouseId], references: [id])
+  lines                 OrderLine[]
+  payments              OrderPayment[]
+  saleCredit            SaleCredit?
+  /// RESTRICT, not SET NULL: an assignment that has sales against it must not be deletable,
+  /// because nulling the column would silently erase who earned the commission. Retiring an
+  /// agent is a `status` change on `company_user`, never a delete.
+  attributedCompanyUser CompanyUser?   @relation(fields: [attributedCompanyUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([customerId])
+  @@index([attributedCompanyUserId])
   @@map("sales_order") // "order" is a SQL reserved word
 }
 
 model OrderLine {
   id                   String         @id @default(uuid()) @db.Uuid
-  orderId              String         @db.Uuid @map("order_id")
-  productId            String         @db.Uuid @map("product_id")
+  orderId              String         @map("order_id") @db.Uuid
+  productId            String         @map("product_id") @db.Uuid
   productName          String         @map("product_name") // snapshot
   categoryName         String         @map("category_name") // snapshot
   price                Decimal        @db.Decimal(18, 2) // native
   priceCurrency        String         @map("price_currency") // native currency
-  percentDiscountPrice Decimal        @default(0) @db.Decimal(5, 2) @map("percent_discount_price")
-  discountPrice        Decimal        @default(0) @db.Decimal(18, 2) @map("discount_price")
+  percentDiscountPrice Decimal        @default(0) @map("percent_discount_price") @db.Decimal(5, 2)
+  discountPrice        Decimal        @default(0) @map("discount_price") @db.Decimal(18, 2)
   quantity             Int
-  unitFinalPrice       Decimal        @db.Decimal(18, 2) @map("unit_final_price") // native
-  lineTotalNative      Decimal        @db.Decimal(18, 2) @map("line_total_native") // native
-  rateApplied          Decimal        @db.Decimal(18, 6) @map("rate_applied") // scale-6
+  unitFinalPrice       Decimal        @map("unit_final_price") @db.Decimal(18, 2) // native
+  lineTotalNative      Decimal        @map("line_total_native") @db.Decimal(18, 2) // native
+  rateApplied          Decimal        @map("rate_applied") @db.Decimal(18, 6) // scale-6
   rateChannel          PaymentChannel @map("rate_channel") // see module-level DEVIATION note
   rateEffectiveFrom    DateTime       @map("rate_effective_from")
-  lineTotalOrder       Decimal        @db.Decimal(18, 2) @map("line_total_order") // in Order.currency, frozen
+  lineTotalOrder       Decimal        @map("line_total_order") @db.Decimal(18, 2) // in Order.currency, frozen
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
 
@@ -292,13 +302,13 @@ model OrderLine {
 
 model OrderPayment {
   id                    String         @id @default(uuid()) @db.Uuid
-  orderId               String         @db.Uuid @map("order_id")
+  orderId               String         @map("order_id") @db.Uuid
   channel               PaymentChannel
   amount                Decimal        @db.Decimal(18, 2) // in CHANNEL_CURRENCY[channel]
-  rateApplied           Decimal        @db.Decimal(18, 6) @map("rate_applied")
+  rateApplied           Decimal        @map("rate_applied") @db.Decimal(18, 6)
   rateChannel           PaymentChannel @map("rate_channel") // see module-level DEVIATION note
   rateEffectiveFrom     DateTime       @map("rate_effective_from")
-  amountInOrderCurrency Decimal        @db.Decimal(18, 2) @map("amount_in_order_currency") // Order.currency
+  amountInOrderCurrency Decimal        @map("amount_in_order_currency") @db.Decimal(18, 2) // Order.currency
   createdAt             DateTime       @default(now()) @map("created_at")
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -309,11 +319,11 @@ model OrderPayment {
 
 model SaleCredit {
   id                String         @id @default(uuid()) @db.Uuid
-  orderId           String         @unique @db.Uuid @map("order_id") // 0..1
-  customerId        String         @db.Uuid @map("customer_id") // FK, replaces legacy `client: string`
+  orderId           String         @unique @map("order_id") @db.Uuid // 0..1
+  customerId        String         @map("customer_id") @db.Uuid // FK, replaces legacy `client: string`
   total             Decimal        @db.Decimal(18, 2) // Order.currency
   paid              Decimal        @default(0) @db.Decimal(18, 2) // Order.currency
-  rateApplied       Decimal        @db.Decimal(18, 6) @map("rate_applied") // see module-level DEVIATION note
+  rateApplied       Decimal        @map("rate_applied") @db.Decimal(18, 6) // see module-level DEVIATION note
   rateChannel       PaymentChannel @map("rate_channel")
   rateEffectiveFrom DateTime       @map("rate_effective_from")
   paidDate          DateTime?      @map("paid_date")
@@ -357,7 +367,7 @@ model User {
 model RefreshToken {
   id        String   @id @default(uuid()) @db.Uuid
   token     String   @unique // opaque rtid (crypto.randomBytes hex)
-  userId    String   @db.Uuid @map("user_id")
+  userId    String   @map("user_id") @db.Uuid
   expiresAt DateTime @map("expires_at")
   isRevoked Boolean  @default(false) @map("is_revoked")
   createdAt DateTime @default(now()) @map("created_at")
@@ -372,7 +382,7 @@ model RefreshToken {
 model PasswordResetToken {
   id        String   @id @default(uuid()) @db.Uuid
   token     String   @unique // opaque single-use token
-  userId    String   @db.Uuid @map("user_id")
+  userId    String   @map("user_id") @db.Uuid
   expiresAt DateTime @map("expires_at")
   isUsed    Boolean  @default(false) @map("is_used")
   createdAt DateTime @default(now()) @map("created_at")
@@ -387,8 +397,8 @@ model PasswordResetToken {
 // role. `userId` is both PK and FK (1:1 with `User`). `warehouseId` is
 // deliberately NOT unique — a single `Warehouse` MAY have many operators.
 model WarehouseOperator {
-  userId      String   @id @db.Uuid @map("user_id")
-  warehouseId String   @db.Uuid @map("warehouse_id")
+  userId      String   @id @map("user_id") @db.Uuid
+  warehouseId String   @map("warehouse_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -412,14 +422,14 @@ enum CompanyUserStatus {
 }
 
 model Company {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String   @unique
-  isActive  Boolean  @default(true) @map("is_active")
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  slug       String   @unique
+  isActive   Boolean  @default(true) @map("is_active")
   /// Reserved hook for the deferred schema-per-tenant change (D3). ALWAYS null today — no code path may read it.
-  schemaName String? @map("schema_name")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  schemaName String?  @map("schema_name")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   companyUsers CompanyUser[]
 
@@ -433,14 +443,15 @@ model CompanyUser {
   /// the master `User` cannot be expressed. Integrity is an APPLICATION invariant.
   /// If a hard user-delete path is ever added it MUST delete `company_user` rows in the
   /// same transaction. Today `User` is soft-delete-only (`UsersService.deactivate`).
-  userId    String            @db.Uuid @map("user_id")
-  companyId String            @db.Uuid @map("company_id")
+  userId    String            @map("user_id") @db.Uuid
+  companyId String            @map("company_id") @db.Uuid
   role      Int
   status    CompanyUserStatus @default(ACTIVE)
   createdAt DateTime          @default(now()) @map("created_at")
   updatedAt DateTime          @updatedAt @map("updated_at")
 
-  company Company @relation(fields: [companyId], references: [id])
+  company          Company @relation(fields: [companyId], references: [id])
+  attributedOrders Order[]
 
   @@unique([userId, companyId])
   @@index([userId])

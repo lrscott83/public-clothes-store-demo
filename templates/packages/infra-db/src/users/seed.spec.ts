@@ -35,11 +35,11 @@ describe('seedUsers', () => {
     await prisma.$disconnect();
   });
 
-  it('produces the 4 cockpit accounts with bcrypt-hashed dev passwords', async () => {
+  it('produces every cockpit account with bcrypt-hashed dev passwords', async () => {
     await seedUsers(prisma);
 
     const users = await prisma.user.findMany();
-    expect(users).toHaveLength(4);
+    expect(users).toHaveLength(COCKPIT_LOGINS.length);
     expect(users.map((u) => u.login).sort()).toEqual([...COCKPIT_LOGINS].sort());
     for (const user of users) {
       expect(user.passwordHash).toMatch(/^\$2[aby]\$/);
@@ -57,12 +57,12 @@ describe('seedUsers', () => {
     expect(link?.warehouseId).toEqual(expect.any(String));
   });
 
-  it('is idempotent: running the seed twice yields exactly 4 users, never duplicates', async () => {
+  it('is idempotent: running the seed twice yields exactly one user per cockpit account, never duplicates', async () => {
     await seedUsers(prisma);
     await seedUsers(prisma);
 
     const users = await prisma.user.findMany();
-    expect(users).toHaveLength(4);
+    expect(users).toHaveLength(COCKPIT_LOGINS.length);
   });
 
   it('assigns every cockpit account an ACTIVE CompanyUser in the implicit company carrying its role bitmask', async () => {
@@ -73,6 +73,7 @@ describe('seedUsers', () => {
       owner: 8,
       'warehouse.operator': 2,
       'sales.operator': 4,
+      'sales.agent': 32,
     };
 
     await seedUsers(prisma);
@@ -83,7 +84,7 @@ describe('seedUsers', () => {
     const users = await prisma.user.findMany();
     const assignments = await prisma.companyUser.findMany();
 
-    expect(assignments).toHaveLength(4);
+    expect(assignments).toHaveLength(COCKPIT_LOGINS.length);
     for (const user of users) {
       const assignment = assignments.find((a) => a.userId === user.id);
       expect(assignment).toBeDefined();
@@ -93,13 +94,13 @@ describe('seedUsers', () => {
     }
   });
 
-  it('is idempotent on the assignment side: running the seed twice yields exactly 4 CompanyUser rows', async () => {
+  it('is idempotent on the assignment side: running the seed twice yields exactly one CompanyUser row per account', async () => {
     await seedUsers(prisma);
     await seedUsers(prisma);
 
     const assignments = await prisma.companyUser.findMany();
     const companies = await prisma.company.findMany();
-    expect(assignments).toHaveLength(4);
+    expect(assignments).toHaveLength(COCKPIT_LOGINS.length);
     expect(companies).toHaveLength(1);
   });
 });

@@ -67,6 +67,23 @@ describe('seedOrders', () => {
     expect(first.ordersUpserted).toBe(4);
   });
 
+  it('attributes EVERY demo order to the cockpit sales agent — none left unattributed', async () => {
+    await seedOrders(prisma);
+
+    const orders = await prisma.order.findMany();
+    const agentUser = await prisma.user.findUniqueOrThrow({ where: { login: 'sales.agent' } });
+    const assignment = await prisma.companyUser.findFirstOrThrow({
+      where: { userId: agentUser.id, status: 'ACTIVE' },
+    });
+
+    // "Every", not "at least one": a seed that leaves some orders null would
+    // still look healthy here while failing Phase 5's accrual gate later.
+    expect(orders.length).toBeGreaterThan(0);
+    for (const order of orders) {
+      expect(order.attributedCompanyUserId).toBe(assignment.id);
+    }
+  });
+
   it('the credit-sale demo order carries an attached SaleCredit', async () => {
     await seedOrders(prisma);
 

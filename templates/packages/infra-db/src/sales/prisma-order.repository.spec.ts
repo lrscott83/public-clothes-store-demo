@@ -65,6 +65,14 @@ describe('PrismaOrderRepository', () => {
 
   const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
+  /**
+   * The `CompanyUser.id` every fixture order is attributed to. Set by
+   * `seedFixtures` and read by `buildSingleLineOrder`, which has too many
+   * positional parameters already to take another one. The FK is
+   * ON DELETE RESTRICT, so this must be a row that really exists.
+   */
+  let attributedCompanyUserId: string;
+
   async function seedFixtures() {
     const category = await categoryRepository.create({ name: 'Cafeteras', slug: 'cafeteras', order: 1 });
     const product = await productRepository.create({
@@ -83,7 +91,21 @@ describe('PrismaOrderRepository', () => {
       data: { login: 'ana.torres.spec', passwordHash: VALID_HASH, fullName: 'Ana Torres' },
     });
     const customer = await customerRepository.create({ fullName: 'Ana Torres', userId: user.id });
-    return { category, product, warehouse, customer };
+
+    const company = await prisma.company.upsert({
+      where: { slug: 'default' },
+      update: {},
+      create: { name: 'Tienda Prueba', slug: 'default' },
+    });
+    const agentUser = await prisma.user.create({
+      data: { login: 'sales.agent.spec', passwordHash: VALID_HASH, fullName: 'Gestor Spec' },
+    });
+    const assignment = await prisma.companyUser.create({
+      data: { userId: agentUser.id, companyId: company.id, role: 32, status: 'ACTIVE' },
+    });
+    attributedCompanyUserId = assignment.id;
+
+    return { category, product, warehouse, customer, assignment };
   }
 
   async function stockIn(productId: string, warehouseId: string, quantity: number) {
@@ -111,6 +133,7 @@ describe('PrismaOrderRepository', () => {
         customerName,
         warehouseId,
         deliveryMode: 'pickup',
+        attributedCompanyUserId,
         lines: [
           {
             productId,
@@ -146,6 +169,45 @@ describe('PrismaOrderRepository', () => {
       expect(created.lines).toHaveLength(1);
       expect(created.payments).toHaveLength(1);
       expect(created.currency).toBe('USD');
+    });
+
+    it('round-trips attributedCompanyUserId through create and findById', async () => {
+      const { product, warehouse, customer, assignment } = await seedFixtures();
+      const order = buildSingleLineOrder(
+        product.id,
+        product.name,
+        'Cafeteras',
+        warehouse.id,
+        customer.id,
+        customer.fullName,
+      );
+
+      const created = await repository.create(order);
+      const reloaded = await repository.findById(created.id);
+
+      // Write AND read, not just write: a column mapped on the way in but
+      // dropped in `toDomain` would leave every loaded order looking
+      // unattributed, and the commission ledger reads through this path.
+      expect(created.attributedCompanyUserId).toBe(assignment.id);
+      expect(reloaded?.attributedCompanyUserId).toBe(assignment.id);
+    });
+
+    it('refuses to delete a CompanyUser that has sales attributed to it (ON DELETE RESTRICT)', async () => {
+      const { product, warehouse, customer, assignment } = await seedFixtures();
+      await repository.create(
+        buildSingleLineOrder(
+          product.id,
+          product.name,
+          'Cafeteras',
+          warehouse.id,
+          customer.id,
+          customer.fullName,
+        ),
+      );
+
+      // SET NULL here would silently erase who earned the commission, so the
+      // FK restricts instead. Retiring an agent is a `status` change.
+      await expect(prisma.companyUser.delete({ where: { id: assignment.id } })).rejects.toThrow();
     });
 
     it('findById returns the full aggregate via one include; FK relations resolve both sides', async () => {

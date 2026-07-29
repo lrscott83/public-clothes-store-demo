@@ -3,6 +3,7 @@ import { createOrder, money, rateFromDecimalString, type ExchangeRate } from '@s
 import type { PrismaService } from '../prisma-client.js';
 import { seedWarehouses } from '../inventory/seed.js';
 import { seedCustomers } from '../customer/seed.js';
+import { seedUsers, SALES_AGENT_LOGIN } from '../users/seed.js';
 import { PrismaOrderRepository } from './prisma-order.repository.js';
 
 /**
@@ -72,6 +73,17 @@ export interface SeedOrdersResult {
 export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResult> {
   await seedWarehouses(prisma);
   await seedCustomers(prisma);
+  // Demo orders are attributed to the cockpit `sales_agent`, so the seeded
+  // dataset carries the same attribution a real sale would. `findFirstOrThrow`
+  // rather than a null-tolerant lookup on purpose: a seed that silently wrote
+  // unattributed orders would look fine and then fail Phase 5's accrual gate
+  // with no clue why.
+  await seedUsers(prisma);
+  const salesAgentUser = await prisma.user.findUniqueOrThrow({ where: { login: SALES_AGENT_LOGIN } });
+  const salesAgentAssignment = await prisma.companyUser.findFirstOrThrow({
+    where: { userId: salesAgentUser.id, status: 'ACTIVE' },
+  });
+  const salesAgentCompanyUserId = salesAgentAssignment.id;
 
   const warehouse = await prisma.warehouse.findFirstOrThrow({ orderBy: { name: 'asc' } });
   const customers = await prisma.customer.findMany({ orderBy: { fullName: 'asc' }, take: 2 });
@@ -152,6 +164,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
         id: singleCurrencyId,
         customerId: customer.id,
         customerName: customer.fullName,
+        attributedCompanyUserId: salesAgentCompanyUserId,
         warehouseId: warehouse.id,
         deliveryMode: 'pickup',
         lines: [
@@ -182,6 +195,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
         id: mixedId,
         customerId: customer.id,
         customerName: customer.fullName,
+        attributedCompanyUserId: salesAgentCompanyUserId,
         warehouseId: warehouse.id,
         deliveryMode: 'pickup',
         lines: [
@@ -220,6 +234,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
         id: splitPaymentId,
         customerId: secondCustomer.id,
         customerName: secondCustomer.fullName,
+        attributedCompanyUserId: salesAgentCompanyUserId,
         warehouseId: warehouse.id,
         deliveryMode: 'pickup',
         lines: [
@@ -253,6 +268,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
         id: creditSaleId,
         customerId: secondCustomer.id,
         customerName: secondCustomer.fullName,
+        attributedCompanyUserId: salesAgentCompanyUserId,
         warehouseId: warehouse.id,
         deliveryMode: 'delivery',
         lines: [

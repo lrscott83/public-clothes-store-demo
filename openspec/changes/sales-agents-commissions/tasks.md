@@ -70,46 +70,46 @@ sequencing bug.
 
 ## Phase 0: Branch + Environment Setup
 
-- [ ] 0.1 Cut branch `salesops-sales-agents-commissions` from `main` @ `f014296`.
-- [ ] 0.2 Resolve `store_mgmt_test` URL: `node -e "process.loadEnvFile('<abs>/packages/infra-db/.env'); process.stdout.write(process.env.TEST_URL ?? '')"`. ALWAYS guard destructive DB commands with a check that the resolved URL contains `store_mgmt_test`. NEVER run migrate/reset against `store_mgmt`.
-- [ ] 0.3 Baseline gate: `pnpm -r build` clean; record current suite counts (domain, infra-db, api-common, api-idp unit+e2e, api-salesops unit+e2e) as the reference every later phase's exit criteria diffs against.
+- [x] 0.1 Cut branch `salesops-sales-agents-commissions` from `main` @ `f014296`.
+- [x] 0.2 Resolve `store_mgmt_test` URL: `node -e "process.loadEnvFile('<abs>/packages/infra-db/.env'); process.stdout.write(process.env.TEST_URL ?? '')"`. ALWAYS guard destructive DB commands with a check that the resolved URL contains `store_mgmt_test`. NEVER run migrate/reset against `store_mgmt`.
+- [x] 0.3 Baseline gate: `pnpm -r build` clean; record current suite counts (domain, infra-db, api-common, api-idp unit+e2e, api-salesops unit+e2e) as the reference every later phase's exit criteria diffs against.
 
 ## Phase 1: Identity + Availability Read Path (Slice 1 — no schema)
 
-- [ ] 1.1 RED: `domain/src/users/roles.test.ts` — `sales_agent=32` distinct; `effectiveRoles(owner)` includes it; raw `hasRole(owner_raw, sales_agent)` is `false` (R1). Fix `:50-55` hand-enumerated `businessBits` (§0.6) to include `sales_agent`.
-- [ ] 1.2 GREEN: `domain/src/users/roles.ts` — add `sales_agent: 32`, extend `BUSINESS_ROLES_MASK` (D8), add `'Gestor de ventas'` label.
-- [ ] 1.3 RED: `domain/src/sales/availability.test.ts` — `warehouseCoversBasket`: covers; short line -> false; `onHand` sufficient but `available` short -> false (A4); missing `StockLevel` row -> false; duplicate product ids summed (R2).
-- [ ] 1.4 RED: same file — `eligibleWarehouses`: only fully-covering ids; zero eligible -> `[]`; unaffected by warehouse scope (R3).
-- [ ] 1.5 GREEN: create `domain/src/sales/availability.ts` — `BasketLine`, `warehouseCoversBasket`, `eligibleWarehouses`, `assertWarehouseCoversBasket` (A2/A3/A4).
-- [ ] 1.6 GREEN: `domain/src/sales/errors.ts` — add `WarehouseCannotFulfillOrderError`.
-- [ ] 1.7 Update `domain/src/sales/index.ts` barrel exports.
-- [ ] 1.8 RED: `apps/api-salesops/src/sales/availability.{controller,service}.spec.ts` — `sales_agent` admitted; only covering warehouses returned; empty basket -> 400; zero eligible -> 200 `{warehouses:[]}` (R4).
-- [ ] 1.9 GREEN: create `apps/api-salesops/src/sales/availability.{controller,service}.ts` + `dto/` — own `@Controller('orders/availability')` (no route collision with `OrderController`, §9); fan-out `Promise.all(list({productId}))` per A5.
-- [ ] 1.10 Wire `sales.module.ts`: bind `STOCK_LEVEL_REPOSITORY`, `WAREHOUSE_REPOSITORY` (port symbols, A6).
-- [ ] 1.11 RED: `customer.controller.spec.ts` — `sales_agent` admitted on the two READ handlers only.
-- [ ] 1.12 GREEN: `customer.controller.ts` — add `sales_agent` to `@Roles` on `GET /customers`, `GET /customers/:id` only (method-level; A14 keeps `POST`/`PATCH`/`DELETE` closed).
-- [ ] 1.13 Amend `openspec/changes/backend-users-roles/specs/salesops-identity/spec.md` (merge target, never archived) — apply the 3 superseded passages (role enumeration, MUST-NOT list, "no gestor bit" scenario) per the already-drafted delta at `specs/salesops-identity/spec.md`, quoting superseded text verbatim. Do NOT touch/archive `backend-users-roles`.
+- [x] 1.1 RED: `domain/src/users/roles.test.ts` — `sales_agent=32` distinct; `effectiveRoles(owner)` includes it; raw `hasRole(owner_raw, sales_agent)` is `false` (R1). Fix `:50-55` hand-enumerated `businessBits` (§0.6) to include `sales_agent`.
+- [x] 1.2 GREEN: `domain/src/users/roles.ts` — add `sales_agent: 32`, extend `BUSINESS_ROLES_MASK` (D8), add `'Gestor de ventas'` label.
+- [x] 1.3 RED: `domain/src/sales/availability.test.ts` — `warehouseCoversBasket`: covers; short line -> false; `onHand` sufficient but `available` short -> false (A4); missing `StockLevel` row -> false; duplicate product ids summed (R2).
+- [x] 1.4 RED: same file — `eligibleWarehouses`: only fully-covering ids; zero eligible -> `[]`; unaffected by warehouse scope (R3).
+- [x] 1.5 GREEN: create `domain/src/sales/availability.ts` — `BasketLine`, `warehouseCoversBasket`, `eligibleWarehouses`, `assertWarehouseCoversBasket` (A2/A3/A4).
+- [x] 1.6 GREEN: `domain/src/sales/errors.ts` — add `WarehouseCannotFulfillOrderError`.
+- [x] 1.7 Update `domain/src/sales/index.ts` barrel exports.
+- [x] 1.8 RED: `apps/api-salesops/src/sales/availability.{controller,service}.spec.ts` — `sales_agent` admitted; only covering warehouses returned; empty basket -> 400; zero eligible -> 200 `{warehouses:[]}` (R4).
+- [x] 1.9 GREEN: create `apps/api-salesops/src/sales/availability.{controller,service}.ts` + `dto/` — own `@Controller('orders/availability')` (no route collision with `OrderController`, §9); fan-out `Promise.all(list({productId}))` per A5.
+- [x] 1.10 Wire `sales.module.ts`: bind `STOCK_LEVEL_REPOSITORY`, `WAREHOUSE_REPOSITORY` (port symbols, A6).
+- [x] 1.11 RED: `customer.controller.spec.ts` — `sales_agent` admitted on the two READ handlers only.
+- [x] 1.12 GREEN: `customer.controller.ts` — add `sales_agent` to `@Roles` on `GET /customers`, `GET /customers/:id` only (method-level; A14 keeps `POST`/`PATCH`/`DELETE` closed).
+- [x] 1.13 Amend `openspec/changes/backend-users-roles/specs/salesops-identity/spec.md` (merge target, never archived) — apply the 3 superseded passages (role enumeration, MUST-NOT list, "no gestor bit" scenario) per the already-drafted delta at `specs/salesops-identity/spec.md`, quoting superseded text verbatim. Do NOT touch/archive `backend-users-roles`.
 
 **Exit criteria**: R1-R4 green. Full matrix green vs Phase 0 baseline (no regressions expected — slice is additive). `pnpm -r build` clean. `pnpm --filter api-salesops lint --max-warnings 0` clean. Commit.
 
 ## Phase 2a: D4 Invariant Wiring (Slice 2, part 1 — no schema)
 
-- [ ] 2.1 RED: `order.service.spec.ts` — `create` against non-covering warehouse -> 409 `WarehouseCannotFulfillOrderError`, no order row written; covering -> succeeds (R5). Add `STOCK_LEVEL_REPOSITORY` mock to the test module's provider list — this is DI-wave 1 of 2 (see forecast note).
-- [ ] 2.2 GREEN: `order.service.ts` — inject `STOCK_LEVEL_REPOSITORY`, add `fetchStockLevels(basket)` fan-out (mirrors `fetchAllRates`), call `assertWarehouseCoversBasket` in `create`.
-- [ ] 2.3 RED: same spec — `PATCH` re-validation: non-covering -> 409, `warehouseId` unchanged; covering -> 200; a patch not touching `warehouseId` issues zero stock reads (R7).
-- [ ] 2.4 GREEN: `OrderService.update` — re-validate ONLY when `warehouseId` actually changes (design §10 shape).
-- [ ] 2.5 GREEN: `order.controller.ts` `withDomainErrorMapping` — add `WarehouseCannotFulfillOrderError` -> 409 branch.
-- [ ] 2.6 RED: `test/order.e2e-spec.ts` — creation performs zero stock mutation; a competing order between create and verify still 409s at verify — race PINNED, not fixed (R6).
+- [x] 2.1 RED: `order.service.spec.ts` — `create` against non-covering warehouse -> 409 `WarehouseCannotFulfillOrderError`, no order row written; covering -> succeeds (R5). Add `STOCK_LEVEL_REPOSITORY` mock to the test module's provider list — this is DI-wave 1 of 2 (see forecast note).
+- [x] 2.2 GREEN: `order.service.ts` — inject `STOCK_LEVEL_REPOSITORY`, add `fetchStockLevels(basket)` fan-out (mirrors `fetchAllRates`), call `assertWarehouseCoversBasket` in `create`.
+- [x] 2.3 RED: same spec — `PATCH` re-validation: non-covering -> 409, `warehouseId` unchanged; covering -> 200; a patch not touching `warehouseId` issues zero stock reads (R7).
+- [x] 2.4 GREEN: `OrderService.update` — re-validate ONLY when `warehouseId` actually changes (design §10 shape).
+- [x] 2.5 GREEN: `order.controller.ts` `withDomainErrorMapping` — add `WarehouseCannotFulfillOrderError` -> 409 branch.
+- [x] 2.6 RED: `test/order.e2e-spec.ts` — creation performs zero stock mutation; a competing order between create and verify still 409s at verify — race PINNED, not fixed (R6).
 
 **Exit criteria**: R5-R7 green for the newly-written cases. `pnpm -r build` clean.
 
 ## Phase 2b: Blast-Radius Fixture Repair (Slice 2, part 2)
 
-- [ ] 2.7 Fix the remaining ~13 of 14 `order.service.spec.ts` cases: add a `StockLevel[]` stub covering the basket to each `create`-path test's setup (mechanical, gate = suite green).
-- [ ] 2.8 Fix `order.controller.spec.ts`'s ~2 broken cases via the (already-existing) `auth-test-helpers.ts` — no new `companyUserId` requirement yet (that's Phase 3); confirm these break only for unrelated reasons if any, else this task is a no-op verification.
-- [ ] 2.9 Create ONE `test/support/seedStockForBasket(...)` e2e helper — do NOT inline stock-seeding across all 16 `order.e2e-spec.ts` fixtures individually.
-- [ ] 2.10 Apply the helper to all 16 `test/order.e2e-spec.ts` order-creating fixtures (mechanical once the helper exists; gate = suite green).
-- [ ] 2.11 Confirm zero unintended breakage: `src/stock/*.spec.ts` (17 tests, §0.4 — `StockController` unchanged) and both customer suites remain untouched by this phase.
+- [x] 2.7 Fix the remaining ~13 of 14 `order.service.spec.ts` cases: add a `StockLevel[]` stub covering the basket to each `create`-path test's setup (mechanical, gate = suite green).
+- [x] 2.8 Fix `order.controller.spec.ts`'s ~2 broken cases via the (already-existing) `auth-test-helpers.ts` — no new `companyUserId` requirement yet (that's Phase 3); confirm these break only for unrelated reasons if any, else this task is a no-op verification.
+- [x] 2.9 Create ONE `test/support/seedStockForBasket(...)` e2e helper — do NOT inline stock-seeding across all 16 `order.e2e-spec.ts` fixtures individually.
+- [x] 2.10 Apply the helper to all 16 `test/order.e2e-spec.ts` order-creating fixtures (mechanical once the helper exists; gate = suite green).
+- [x] 2.11 Confirm zero unintended breakage: `src/stock/*.spec.ts` (17 tests, §0.4 — `StockController` unchanged) and both customer suites remain untouched by this phase.
 
 **Exit criteria (Phase 2 overall)**: `order.service.spec.ts` 14/14 restored. `order.controller.spec.ts` back to its baseline +1 new 409 case. `test/order.e2e-spec.ts` 16/16 restored. Full matrix green vs baseline, `pnpm -r build` clean, lint clean. Commit (2a and 2b may be one or two commits; either way this is ONE verified slice before Phase 3 starts).
 
@@ -120,22 +120,24 @@ change — no prior verification script is required before authoring/applying mi
 the first schema change here); the required gate is the standard round-trip-on-a-clone
 rehearsal (task 3.11), not an automated script.
 
-- [ ] 3.1 RED: `packages/api-common/src/auth/jwt.strategy.spec.ts` — `companyUserId` populated from `assignment.id` (currently discarded at `:109`).
-- [ ] 3.2 GREEN: `jwt.strategy.ts` — add required `companyUserId: string` to `SanitizedUser` (A7).
-- [ ] 3.3 Mechanical: fix the 2 compile-error fixtures — `apps/api-salesops/src/test-support/auth-test-helpers.ts`, `apps/api-salesops/test/support/auth-e2e-helper.ts` — add `companyUserId`.
-- [ ] 3.4 GREEN: `domain/src/sales/order.ts` — add `attributedCompanyUserId: string | null` to `Order`; **required** on `CreateOrderInput` (A8). Fix all 20 `order.test.ts` call sites (mechanical compile-break repair, R-independent).
-- [ ] 3.5 RED: `order.controller.spec.ts` + e2e — attribution sourced from `req.user.companyUserId`; a client-supplied agent field in the payload is ignored; unchanged across verify/deliver transitions (R8).
-- [ ] 3.6 GREEN: `order.controller.ts` — stamp `attributedCompanyUserId` from `req.user`, never from the DTO; confirm `UpdateOrderDto` does NOT declare it.
-- [ ] 3.7 Pin: `jwt.strategy.spec.ts` — a non-ACTIVE `CompanyUser` is denied before order creation runs (asserts the existing 403, no new code) (R9).
-- [ ] 3.8 Author Prisma schema: `Order.attributedCompanyUserId String?` + FK + index.
-- [ ] 3.9 Author migration A `..._add_order_sales_attribution` per design §8.2 (`ADD COLUMN`, FK `ON DELETE RESTRICT`, index; **NO BACKFILL**).
-- [ ] 3.10 **GATE before applying A**: round-trip migration A forward + Rollback A (§8.2 SQL) on a throwaway clone of `store_mgmt_test`; confirm clean revert. Only then apply forward for real via `prisma migrate deploy`, using the guarded URL check from 0.2. **Rollback A is safe only while `commission_accrual` has zero rows** — true throughout this phase since migration B has not shipped yet; this stops being true the moment Phase 5 writes its first accrual.
-- [ ] 3.11 Update `packages/infra-db/src/sales/prisma-order.repository.ts` (+spec) — map `attributedCompanyUserId` in `toDomain`/`create`.
-- [ ] 3.12 Update `packages/infra-db/src/sales/seed.ts` (+spec) — attribute all 5 `createOrder` call sites.
-- [ ] 3.13 Create `packages/infra-db/scripts/verify-order-attribution.ts` per design §8.3 (`orphans=0`, `post_cutover_nulls=0` assertions; `legacy_unattributed` reported, not asserted). **Authored here; its PASS is the entry gate for Phase 5 (migration B), not required to pass to close this phase.**
-- [ ] 3.14 Closes design's Q1 (open question, explicitly assigned to `sdd-tasks`): add a `salesops-ventas` requirement to `specs/salesops-ventas/spec.md` (file twin) — "a caller whose only role is `sales_agent` sees `GET /orders`/`GET /orders/:id` scoped to their own attributions."
-- [ ] 3.15 RED: `order.controller.spec.ts` — `isScopedSalesAgent(user)` (mirrors `isScopedWarehouseOperator`, uses `hasRole` per §0.5) scopes list/read to own attributions for a caller solely `sales_agent`.
-- [ ] 3.16 GREEN: implement `isScopedSalesAgent` in `order.controller.ts`; grant `sales_agent` on `GET /orders`, `GET /orders/:id` at method level. **This predicate is built here, ready for Phase 5's `GET /commissions/accruals` to reuse without any forward reference** — the exact class of deferral bug the precedent change hit four times, avoided by building the shared predicate where its data dependency (attribution) actually lives.
+- [x] 3.1 RED: `packages/api-common/src/auth/jwt.strategy.spec.ts` — `companyUserId` populated from `assignment.id` (currently discarded at `:109`).
+- [x] 3.2 GREEN: `jwt.strategy.ts` — add required `companyUserId: string` to `SanitizedUser` (A7).
+- [x] 3.3 Mechanical: fix the 2 compile-error fixtures — `apps/api-salesops/src/test-support/auth-test-helpers.ts`, `apps/api-salesops/test/support/auth-e2e-helper.ts` — add `companyUserId`.
+- [x] 3.4 GREEN: `domain/src/sales/order.ts` — add `attributedCompanyUserId: string | null` to `Order`; **required** on `CreateOrderInput` (A8). Fix all 20 `order.test.ts` call sites (mechanical compile-break repair, R-independent).
+- [x] 3.5 RED: `order.controller.spec.ts` + e2e — attribution sourced from `req.user.companyUserId`; a client-supplied agent field in the payload is ignored; unchanged across verify/deliver transitions (R8).
+- [x] 3.6 GREEN: `order.controller.ts` — stamp `attributedCompanyUserId` from `req.user`, never from the DTO; confirm `UpdateOrderDto` does NOT declare it.
+- [x] 3.7 Pin: `jwt.strategy.spec.ts` — a non-ACTIVE `CompanyUser` is denied before order creation runs (asserts the existing 403, no new code) (R9).
+- [x] 3.8 Author Prisma schema: `Order.attributedCompanyUserId String?` + FK + index.
+- [x] 3.9 Author migration A `..._add_order_sales_attribution` per design §8.2 (`ADD COLUMN`, FK `ON DELETE RESTRICT`, index; **NO BACKFILL**).
+- [x] 3.10 **GATE before applying A**: round-trip migration A forward + Rollback A (§8.2 SQL) on a throwaway clone of `store_mgmt_test`; confirm clean revert. Only then apply forward for real via `prisma migrate deploy`, using the guarded URL check from 0.2. **Rollback A is safe only while `commission_accrual` has zero rows** — true throughout this phase since migration B has not shipped yet; this stops being true the moment Phase 5 writes its first accrual.
+- [x] 3.11 Update `packages/infra-db/src/sales/prisma-order.repository.ts` (+spec) — map `attributedCompanyUserId` in `toDomain`/`create`.
+- [x] 3.12 Update `packages/infra-db/src/sales/seed.ts` (+spec) — attribute all 5 `createOrder` call sites.
+- [x] 3.13 Create `packages/infra-db/scripts/verify-order-attribution.ts` per design §8.3 (`orphans=0`, `post_cutover_nulls=0` assertions; `legacy_unattributed` reported, not asserted). **Authored here; its PASS is the entry gate for Phase 5 (migration B), not required to pass to close this phase.**
+- [x] 3.14 Closes design's Q1 (open question, explicitly assigned to `sdd-tasks`): add a `salesops-ventas` requirement to `specs/salesops-ventas/spec.md` (file twin) — "a caller whose only role is `sales_agent` sees `GET /orders`/`GET /orders/:id` scoped to their own attributions."
+- [x] 3.15 RED: `order.controller.spec.ts` — `isScopedSalesAgent(user)` (mirrors `isScopedWarehouseOperator`, uses `hasRole` per §0.5) scopes list/read to own attributions for a caller solely `sales_agent`.
+- [x] 3.16 GREEN: implement `isScopedSalesAgent` in `order.controller.ts`; grant `sales_agent` on `GET /orders`, `GET /orders/:id` at method level. **This predicate is built here, ready for Phase 5's `GET /commissions/accruals` to reuse without any forward reference** — the exact class of deferral bug the precedent change hit four times, avoided by building the shared predicate where its data dependency (attribution) actually lives.
+
+- [x] 3.17 NOT PLANNED, found while closing the phase: design §9 grants `sales_agent` on `PATCH /orders/:id` but scopes only the READ path, leaving an agent able to rewrite a colleague's order — and the lines are the sole input to commission accrual, so that is a path to changing what someone else gets paid. `update` now applies `assertOrderAttributionScope` (lookup issued ONLY for a scoped agent, mirroring `assertOrderWarehouseScope` — supervising callers pay no extra read). Requirement + 2 scenarios added to `specs/salesops-ventas/spec.md`; 4 unit cases + 1 e2e case.
 
 **Exit criteria**: R8-R9 green. `order.test.ts` 20/20 restored. `order.service.spec.ts`/`order.controller.spec.ts` no new breaks. `prisma-order.repository.spec.ts` and `sales/seed.spec.ts` green post-fixture-fix. `pnpm -r build` clean, lint clean. Migration A applied to `store_mgmt_test`, structurally verified (column/FK/index present). Commit.
 

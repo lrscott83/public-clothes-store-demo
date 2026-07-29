@@ -719,6 +719,80 @@ describe('Sales (e2e)', () => {
       expect(response.status).toBe(403);
     });
 
+    it('stamps the REAL authenticated agent as the attribution, ignoring the payload', async () => {
+      await stockIn(usdProductId, '10');
+      const agent = await createAuthedUser(prisma, USER_ROLES.sales_agent);
+      const impostor = await createAuthedUser(prisma, USER_ROLES.sales_agent);
+
+      const created = await request(app.getHttpServer())
+        .post('/orders')
+        .set(...authHeader(agent.token))
+        .send({
+          customerId,
+          warehouseId,
+          deliveryMode: 'pickup',
+          // A real, well-formed CompanyUser id belonging to someone else — the
+          // most convincing form the attack takes. It must still be ignored.
+          attributedCompanyUserId: impostor.companyUserId,
+          lines: [{ productId: usdProductId, quantity: 1 }],
+          payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+        });
+
+      expect(created.status).toBe(201);
+      expect(created.body.attributedCompanyUserId).toBe(agent.companyUserId);
+
+      // Persisted, not just echoed back.
+      const row = await prisma.order.findUniqueOrThrow({ where: { id: created.body.id } });
+      expect(row.attributedCompanyUserId).toBe(agent.companyUserId);
+    });
+
+    it('a sales_agent sees only their OWN orders on GET /orders, and 403s on another agent\'s', async () => {
+      await stockIn(usdProductId, '10');
+      const mine = await createAuthedUser(prisma, USER_ROLES.sales_agent);
+      const theirs = await createAuthedUser(prisma, USER_ROLES.sales_agent);
+
+      const orderBody = {
+        customerId,
+        warehouseId,
+        deliveryMode: 'pickup',
+        lines: [{ productId: usdProductId, quantity: 1 }],
+        payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
+      };
+      const myOrder = await request(app.getHttpServer())
+        .post('/orders')
+        .set(...authHeader(mine.token))
+        .send(orderBody)
+        .expect(201);
+      const theirOrder = await request(app.getHttpServer())
+        .post('/orders')
+        .set(...authHeader(theirs.token))
+        .send(orderBody)
+        .expect(201);
+
+      const list = await request(app.getHttpServer()).get('/orders').set(...authHeader(mine.token));
+      expect(list.status).toBe(200);
+      const ids = (list.body as { id: string }[]).map((o) => o.id);
+      expect(ids).toContain(myOrder.body.id);
+      expect(ids).not.toContain(theirOrder.body.id);
+
+      const forbidden = await request(app.getHttpServer())
+        .get(`/orders/${theirOrder.body.id}`)
+        .set(...authHeader(mine.token));
+      expect(forbidden.status).toBe(403);
+
+      // The write path is scoped with the read path, and nothing is written.
+      const forbiddenPatch = await request(app.getHttpServer())
+        .patch(`/orders/${theirOrder.body.id}`)
+        .set(...authHeader(mine.token))
+        .send({ deliveryMode: 'delivery' });
+      expect(forbiddenPatch.status).toBe(403);
+
+      const untouched = await prisma.order.findUniqueOrThrow({
+        where: { id: theirOrder.body.id },
+      });
+      expect(untouched.deliveryMode).toBe('pickup');
+    });
+
     it('a "sales_operator" caller creates an order -> 201, but cannot deliver it (403 — warehouse-floor action)', async () => {
       await stockIn(usdProductId, '10');
       const { token: salesToken } = await createAuthedUser(prisma, USER_ROLES.sales_operator);

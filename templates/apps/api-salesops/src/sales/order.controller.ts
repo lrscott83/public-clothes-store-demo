@@ -77,9 +77,13 @@ function assertChannel(channel: string): void {
  * already is). There is NO `DELETE` route: an Order is an immutable
  * transactional event — its lifecycle is the status machine
  * (created/verified/delivered/cancelled), never a deletion. `create`/
- * `update`/`confirm`/`cancel` are `owner`/`admin`/`sales_operator`-only.
- * `list`/`findById` ALSO admit `warehouse_operator`, scoped to their OWN
- * `warehouseId`. `deliver` is `owner`/`admin`/`warehouse_operator`-only
+ * `update` ALSO admit `sales_agent`; `confirm`/`cancel` are
+ * `owner`/`admin`/`sales_operator`-only (reserving and releasing stock is not
+ * the agent's job). `list`/`findById` ALSO admit `warehouse_operator`, scoped
+ * to their OWN `warehouseId`, and `sales_agent`, scoped to their OWN
+ * attributions — the same attribution scope gates `update`, so an agent can
+ * never read nor rewrite a colleague's sale.
+ * `deliver` is `owner`/`admin`/`warehouse_operator`-only
  * (NOT `sales_operator` — delivery is a warehouse-floor action), likewise
  * scoped to the operator's own warehouse (backend-users-roles permission
  * matrix / OperadorAlmacen Warehouse Scope requirement).
@@ -96,7 +100,15 @@ export class OrderController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() body: CreateOrderDto): Promise<OrderResponseDto> {
+  // Method-level, so `confirm`/`cancel` do NOT widen with it: booking a sale is
+  // the agent's job, reserving and consuming stock is not. Without this grant
+  // attribution would have no writer at all — the agent could never create the
+  // order it exists to credit them for.
+  @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.sales_agent)
+  async create(
+    @Body() body: CreateOrderDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<OrderResponseDto> {
     // A line's currency is no longer checkable here — price comes from the
     // catalog, whose currency is already valid. What DOES need checking is the
     // shape, because this app installs no global ValidationPipe and its DTOs
@@ -119,18 +131,38 @@ export class OrderController {
       assertChannel(payment.channel);
       assertCurrency(payment.amount);
     }
-    return this.withDomainErrorMapping(() => this.orderService.create(body));
+    // Attribution comes from the authenticated actor and ONLY from there.
+    // `req.user.companyUserId` is guaranteed present: `JwtStrategy` refuses to
+    // hand back a `req.user` at all without an ACTIVE `CompanyUser`.
+    return this.withDomainErrorMapping(() =>
+      this.orderService.create(body, req.user.companyUserId),
+    );
   }
 
   @Get()
-  @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.warehouse_operator)
+  @Roles(
+    USER_ROLES.owner,
+    USER_ROLES.admin,
+    USER_ROLES.sales_operator,
+    USER_ROLES.warehouse_operator,
+    USER_ROLES.sales_agent,
+  )
   async list(@Req() req: AuthenticatedRequest): Promise<OrderResponseDto[]> {
     const orders = await this.orderService.list();
-    return this.scopeToOperatorWarehouse(req.user, orders);
+    return this.scopeToOwnAttributions(
+      req.user,
+      await this.scopeToOperatorWarehouse(req.user, orders),
+    );
   }
 
   @Get(':id')
-  @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.warehouse_operator)
+  @Roles(
+    USER_ROLES.owner,
+    USER_ROLES.admin,
+    USER_ROLES.sales_operator,
+    USER_ROLES.warehouse_operator,
+    USER_ROLES.sales_agent,
+  )
   async findById(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
@@ -140,15 +172,34 @@ export class OrderController {
       throw new NotFoundException(`Order "${id}" not found`);
     }
     await this.assertOrderWarehouseScope(req.user, found.warehouseId);
+    this.assertOrderAttributionScope(req.user, found.attributedCompanyUserId);
     return found;
   }
 
   @Patch(':id')
+  @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.sales_agent)
   async update(
     @Param('id') id: string,
     @Body() body: UpdateOrderDto,
+    @Req() req: AuthenticatedRequest,
   ): Promise<OrderResponseDto> {
     return this.withDomainErrorMapping(async () => {
+      // The write path is scoped exactly like the read path. Skipping this
+      // would leave an agent able to rewrite a colleague's order — and since
+      // the lines are what the commission accrual is computed from, that is a
+      // way to change what someone else gets paid. Read-scoped and
+      // write-unscoped on the same rows is not a narrower grant, it's a hole.
+      //
+      // The lookup runs ONLY for a scoped agent, mirroring
+      // `assertOrderWarehouseScope`: an `owner`/`admin`/`sales_operator` patch
+      // issues no extra read.
+      if (this.isScopedSalesAgent(req.user)) {
+        const existing = await this.orderService.findById(id);
+        if (!existing) {
+          throw new NotFoundException(`Order "${id}" not found`);
+        }
+        this.assertOrderAttributionScope(req.user, existing.attributedCompanyUserId);
+      }
       const updated = await this.orderService.update(id, body);
       if (!updated) {
         throw new NotFoundException(`Order "${id}" not found`);
@@ -230,6 +281,58 @@ export class OrderController {
       return [];
     }
     return orders.filter((order) => order.warehouseId === operator.warehouseId);
+  }
+
+  /**
+   * A sales agent sees only their OWN sales. A sale carries what the customer
+   * bought, at what price, on what credit terms — an agent has no business
+   * reading a colleague's.
+   *
+   * Note the comparison is "attribution EQUALS mine", never "attribution is
+   * not someone else's": a legacy order carrying `null` must match NOBODY.
+   * Written the other way it would match everybody, leaking every
+   * pre-attribution order to every agent.
+   */
+  private scopeToOwnAttributions(
+    user: SanitizedUser,
+    orders: OrderResponseDto[],
+  ): OrderResponseDto[] {
+    if (!this.isScopedSalesAgent(user)) {
+      return orders;
+    }
+    return orders.filter((order) => order.attributedCompanyUserId === user.companyUserId);
+  }
+
+  /** The `findById` counterpart of `scopeToOwnAttributions` — 403 rather than a filtered list. */
+  private assertOrderAttributionScope(
+    user: SanitizedUser,
+    attributedCompanyUserId: string | null,
+  ): void {
+    if (!this.isScopedSalesAgent(user)) {
+      return;
+    }
+    if (attributedCompanyUserId !== user.companyUserId) {
+      throw new ForbiddenException('Not attributed to this order');
+    }
+  }
+
+  /**
+   * `true` only for a caller whose access comes SOLELY from `sales_agent`.
+   * Mirrors `isScopedWarehouseOperator`: `owner`/`admin`/`sales_operator`
+   * supervise agents and must see the whole book, so holding any of them
+   * removes the scoping.
+   *
+   * Phase 5's `GET /commissions/accruals` reuses THIS predicate — it is built
+   * here, where its data dependency (attribution) actually lives, rather than
+   * being deferred to the phase that needs it second.
+   */
+  private isScopedSalesAgent(user: SanitizedUser): boolean {
+    return (
+      RoleHelpers.hasRole(user.roles, USER_ROLES.sales_agent) &&
+      !RoleHelpers.hasRole(user.roles, USER_ROLES.owner) &&
+      !RoleHelpers.hasRole(user.roles, USER_ROLES.admin) &&
+      !RoleHelpers.hasRole(user.roles, USER_ROLES.sales_operator)
+    );
   }
 
   /** `true` only for a caller whose access to this endpoint comes SOLELY from `warehouse_operator` (not owner/admin/sales_operator). */

@@ -1,4 +1,4 @@
-import type { CreateOrderInput, Order, OrderStatus } from './order.js';
+import type { Order, OrderStatus } from './order.js';
 
 /** Optional filter for `IOrderRepository.list`. */
 export interface OrderListFilter {
@@ -23,7 +23,15 @@ export type OrderUpdateInput = Partial<Omit<Order, 'id' | 'createdAt'>>;
  * append-only `StockMovement`/`ExchangeRate` records.
  */
 export interface IOrderRepository {
-  create(input: CreateOrderInput): Promise<Order>;
+  /**
+   * Takes the BUILT aggregate, not `CreateOrderInput`. It was typed as the
+   * latter, which is why the Prisma adapter had to open with
+   * `input as unknown as Order` — every caller has always passed `createOrder`
+   * output, and the doc comment above already said so. Attribution made the
+   * mismatch a compile error (`Order` allows `null` there, `CreateOrderInput`
+   * does not), so the signature now states what the contract always was.
+   */
+  create(order: Order): Promise<Order>;
   update(id: string, patch: OrderUpdateInput): Promise<Order>;
   findById(id: string): Promise<Order | null>;
   list(filter?: OrderListFilter): Promise<Order[]>;

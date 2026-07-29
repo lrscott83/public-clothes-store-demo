@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import type {
-  CreateOrderInput,
   Currency,
   DeliveryMode,
   IOrderRepository,
@@ -79,6 +78,8 @@ interface OrderRow {
   readonly deliveryMode: string;
   readonly currency: string;
   readonly status: string;
+  /** `null` only for rows predating the attribution migration — never backfilled. */
+  readonly attributedCompanyUserId: string | null;
   readonly subtotal: { toString(): string };
   readonly discountTotal: { toString(): string };
   readonly total: { toString(): string };
@@ -174,6 +175,7 @@ function orderToDomain(row: OrderRow): DomainOrder {
     lines: row.lines.map((line) => lineToDomain(line, currency)),
     payments: row.payments.map((payment) => paymentToDomain(payment, currency)),
     saleCredit: row.saleCredit ? saleCreditToDomain(row.saleCredit, currency) : null,
+    attributedCompanyUserId: row.attributedCompanyUserId,
     orderDate: row.orderDate,
     verifiedAt: row.verifiedAt,
     deliveredAt: row.deliveredAt,
@@ -186,10 +188,9 @@ function orderToDomain(row: OrderRow): DomainOrder {
  * Prisma adapter for `IOrderRepository`. `create()` is a DUMB PERSISTER
  * (design.md decision #1/#3): the caller (service layer, Phase 5) MUST run
  * the payload through the domain factory `createOrder()` first — the
- * resulting fully-validated `Order` is what actually arrives here, even
- * though the port's static type is the looser `CreateOrderInput` (an
- * `Order` structurally satisfies it — TS elides the extra computed fields on
- * a non-literal argument). This repository never recomputes currency,
+ * resulting fully-validated `Order` is what arrives here, and since the
+ * attribution work the port says so directly rather than typing the parameter
+ * as the looser `CreateOrderInput`. This repository never recomputes currency,
  * totals, or per-line/payment conversions — it persists exactly what it is
  * given and reconstructs the identical shape on every read (`findById`
  * never re-resolves rates, `verified` snapshots stay read-only, see
@@ -210,13 +211,10 @@ function orderToDomain(row: OrderRow): DomainOrder {
 export class PrismaOrderRepository implements IOrderRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(input: CreateOrderInput): Promise<DomainOrder> {
-    // See class doc — `input` is expected to already be a factory-built
-    // `Order` (currency/status/totals/per-line+payment conversions already
-    // computed); the cast below is the adapter-boundary acknowledgment of
-    // that contract, not a domain change.
-    const order = input as unknown as DomainOrder;
-
+  async create(order: DomainOrder): Promise<DomainOrder> {
+    // The `input as unknown as Order` cast that used to open this method is
+    // gone: the port now types `create` as taking the factory-built aggregate,
+    // which is what every caller has always passed.
     const row = await this.prisma.$transaction(async (tx) => {
       const orderRow = await tx.order.create({
         data: {
@@ -227,6 +225,7 @@ export class PrismaOrderRepository implements IOrderRepository {
           deliveryMode: order.deliveryMode,
           currency: order.currency,
           status: order.status,
+          attributedCompanyUserId: order.attributedCompanyUserId,
           subtotal: moneyToDecimalString(order.subtotal),
           discountTotal: moneyToDecimalString(order.discountTotal),
           total: moneyToDecimalString(order.total),
@@ -300,6 +299,11 @@ export class PrismaOrderRepository implements IOrderRepository {
   async update(id: string, patch: OrderUpdateInput): Promise<DomainOrder> {
     const row = await this.prisma.order.update({
       where: { id },
+      // `attributedCompanyUserId` is ABSENT from this allow-list on purpose,
+      // even though `OrderUpdateInput` is a `Partial<Order>` and so nominally
+      // carries it. A sale is credited once, at creation; re-attributing it
+      // later would move a commission from one agent to another with no trace.
+      // Do not add it here.
       data: {
         ...(patch.customerName !== undefined ? { customerName: patch.customerName } : {}),
         ...(patch.warehouseId !== undefined ? { warehouseId: patch.warehouseId } : {}),

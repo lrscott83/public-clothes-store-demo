@@ -70,6 +70,13 @@ export class OrderResponseDto {
   lines!: OrderLineResponseDto[];
   payments!: OrderPaymentResponseDto[];
   saleCredit!: SaleCreditResponseDto | null;
+  /**
+   * `CompanyUser.id` of the agent credited with the sale. `null` only for
+   * orders predating attribution. Exposed on the READ side (never accepted on
+   * the write side) because supervisors need to see who sold what, and because
+   * agent-scoped reads are filtered on exactly this value.
+   */
+  attributedCompanyUserId!: string | null;
   orderDate!: string;
   verifiedAt!: string | null;
   deliveredAt!: string | null;

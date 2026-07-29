@@ -13,7 +13,7 @@ import {
   type IWarehouseOperatorRepository,
 } from '@store-mgmt/domain';
 import request from 'supertest';
-import { overrideJwtAuth } from '../test-support/auth-test-helpers.js';
+import { overrideJwtAuth, SAMPLE_AUTH_USER } from '../test-support/auth-test-helpers.js';
 import { OrderController } from './order.controller.js';
 import { OrderService } from './order.service.js';
 
@@ -44,6 +44,7 @@ const sampleResponse = {
   lines: [],
   payments: [],
   saleCredit: null,
+  attributedCompanyUserId: 'test-company-user-1',
   orderDate: '2026-01-01T00:00:00.000Z',
   verifiedAt: null,
   deliveredAt: null,
@@ -133,6 +134,39 @@ describe('OrderController', () => {
 
       expect(response.status).toBe(201);
       expect(response.body).toEqual(sampleResponse);
+    });
+
+    it('attributes the sale to the authenticated actor, sourced from req.user.companyUserId', async () => {
+      service.create.mockResolvedValue(sampleResponse);
+
+      await request(app.getHttpServer()).post('/orders').send(validCreateBody);
+
+      // The assignment id, passed OUT OF BAND of the DTO — the second argument
+      // exists precisely so the request body has no channel to reach it.
+      expect(service.create).toHaveBeenCalledWith(expect.anything(), SAMPLE_AUTH_USER.companyUserId);
+    });
+
+    it('IGNORES any client-supplied attribution in the payload', async () => {
+      service.create.mockResolvedValue(sampleResponse);
+
+      await request(app.getHttpServer())
+        .post('/orders')
+        .send({
+          ...validCreateBody,
+          attributedCompanyUserId: 'cu-someone-else',
+          companyUserId: 'cu-someone-else',
+        });
+
+      // Commission is money. A caller who could name the beneficiary could
+      // credit another agent's sale to themselves, so the payload must never
+      // be a source — not even when the field happens to be well-formed.
+      //
+      // The stray keys DO ride along inside the body object (this app installs
+      // no ValidationPipe, so nothing strips them), which is exactly why the
+      // attribution travels as a separate argument: `OrderService.create`
+      // reads the argument and never the body. That the body copy is inert is
+      // proven against the real implementation in `order.service.spec.ts`.
+      expect(service.create).toHaveBeenCalledWith(expect.anything(), SAMPLE_AUTH_USER.companyUserId);
     });
 
     it('maps InvalidOrderError to 400', async () => {
@@ -386,6 +420,31 @@ describe('OrderController', () => {
       expect(response.status).toBe(201);
     });
 
+    it('admits a "sales_agent" caller creating an order -> 201', async () => {
+      // The agent is the reason attribution exists. If this route were closed
+      // to them, no order could ever be attributed to an agent at all.
+      await app.close();
+      service.create.mockResolvedValue(sampleResponse);
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer()).post('/orders').send(validCreateBody);
+      expect(response.status).toBe(201);
+    });
+
+    it.each([
+      ['confirm', '/orders/order-uuid-1/confirm'],
+      ['cancel', '/orders/order-uuid-1/cancel'],
+      ['deliver', '/orders/order-uuid-1/deliver'],
+    ])('rejects a "sales_agent" caller on %s with 403 — booking a sale is not moving stock', async (_name, route) => {
+      // The grants above are method-level precisely so these three do NOT
+      // widen along with them.
+      await app.close();
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer()).post(route);
+      expect(response.status).toBe(403);
+    });
+
     it('rejects a "warehouse_operator" caller creating an order with 403 — not a sales role', async () => {
       await app.close();
       app = await buildApp(service, USER_ROLES.warehouse_operator);
@@ -438,6 +497,139 @@ describe('OrderController', () => {
 
       const response = await request(app.getHttpServer()).get('/orders/order-uuid-1');
       expect(response.status).toBe(403);
+    });
+  });
+
+  describe('sales_agent scope on GET /orders (list)', () => {
+    const OTHER_AGENT_ORDER = {
+      ...sampleResponse,
+      id: 'order-uuid-2',
+      attributedCompanyUserId: 'cu-other-agent',
+    };
+
+    it("filters the list to the agent's OWN attributions", async () => {
+      await app.close();
+      service.list.mockResolvedValue([sampleResponse, OTHER_AGENT_ORDER]);
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer()).get('/orders');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([sampleResponse]);
+    });
+
+    it('hides a legacy unattributed order from every agent', async () => {
+      // `null` must match NOBODY. A predicate written as "not someone else's"
+      // rather than "mine" would leak every pre-attribution order to every
+      // agent — including its prices and credit terms.
+      await app.close();
+      const legacyOrder = { ...sampleResponse, id: 'order-uuid-3', attributedCompanyUserId: null };
+      service.list.mockResolvedValue([sampleResponse, legacyOrder]);
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer()).get('/orders');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([sampleResponse]);
+    });
+
+    it('does NOT filter for a caller who ALSO holds a supervising role', async () => {
+      await app.close();
+      service.list.mockResolvedValue([sampleResponse, OTHER_AGENT_ORDER]);
+      app = await buildApp(service, USER_ROLES.sales_agent | USER_ROLES.sales_operator);
+
+      const response = await request(app.getHttpServer()).get('/orders');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveLength(2);
+    });
+  });
+
+  describe('sales_agent scope on GET /orders/:id', () => {
+    it('admits an agent reading their OWN attributed order -> 200', async () => {
+      await app.close();
+      service.findById.mockResolvedValue(sampleResponse);
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer()).get('/orders/order-uuid-1');
+      expect(response.status).toBe(200);
+    });
+
+    it("rejects an agent reading ANOTHER agent's order with 403", async () => {
+      await app.close();
+      service.findById.mockResolvedValue({ ...sampleResponse, attributedCompanyUserId: 'cu-other-agent' });
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer()).get('/orders/order-uuid-1');
+      expect(response.status).toBe(403);
+    });
+
+    it('rejects an agent reading a legacy unattributed order with 403', async () => {
+      await app.close();
+      service.findById.mockResolvedValue({ ...sampleResponse, attributedCompanyUserId: null });
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer()).get('/orders/order-uuid-1');
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('sales_agent scope on PATCH /orders/:id', () => {
+    // The read path is scoped, so the write path MUST be too. An agent editing
+    // a colleague's order rewrites its lines — and the lines are what the
+    // commission accrual is computed from, so an unscoped PATCH is a way to
+    // change what someone else gets paid.
+    it("admits an agent patching their OWN attributed order -> 200", async () => {
+      await app.close();
+      service.findById.mockResolvedValue(sampleResponse);
+      service.update.mockResolvedValue({ ...sampleResponse, deliveryMode: 'delivery' });
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer())
+        .patch('/orders/order-uuid-1')
+        .send({ deliveryMode: 'delivery' });
+
+      expect(response.status).toBe(200);
+    });
+
+    it("rejects an agent patching ANOTHER agent's order with 403, writing nothing", async () => {
+      await app.close();
+      service.findById.mockResolvedValue({ ...sampleResponse, attributedCompanyUserId: 'cu-other-agent' });
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer())
+        .patch('/orders/order-uuid-1')
+        .send({ deliveryMode: 'delivery' });
+
+      expect(response.status).toBe(403);
+      expect(service.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects an agent patching a legacy unattributed order with 403', async () => {
+      await app.close();
+      service.findById.mockResolvedValue({ ...sampleResponse, attributedCompanyUserId: null });
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer())
+        .patch('/orders/order-uuid-1')
+        .send({ deliveryMode: 'delivery' });
+
+      expect(response.status).toBe(403);
+      expect(service.update).not.toHaveBeenCalled();
+    });
+
+    it('does NOT scope — nor issue the scope read — for a caller who ALSO supervises', async () => {
+      await app.close();
+      service.findById.mockResolvedValue({ ...sampleResponse, attributedCompanyUserId: 'cu-other-agent' });
+      service.update.mockResolvedValue(sampleResponse);
+      app = await buildApp(service, USER_ROLES.sales_agent | USER_ROLES.sales_operator);
+
+      const response = await request(app.getHttpServer())
+        .patch('/orders/order-uuid-1')
+        .send({ deliveryMode: 'delivery' });
+
+      expect(response.status).toBe(200);
+      expect(service.findById).not.toHaveBeenCalled();
     });
   });
 

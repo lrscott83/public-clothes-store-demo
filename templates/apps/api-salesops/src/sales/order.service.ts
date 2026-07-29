@@ -174,7 +174,15 @@ export class OrderService {
     return found.fullName;
   }
 
-  async create(input: CreateOrderDto): Promise<OrderResponseDto> {
+  /**
+   * `attributedCompanyUserId` is a SEPARATE parameter, not a DTO field, and
+   * that is the whole guard: the request body is deserialized straight into
+   * `CreateOrderDto` with no `ValidationPipe` to strip unknown keys, so a
+   * declared field would be a channel for a caller to name whoever they like
+   * as the beneficiary of the commission. A parameter the body cannot reach
+   * closes that off structurally instead of by validation.
+   */
+  async create(input: CreateOrderDto, attributedCompanyUserId: string): Promise<OrderResponseDto> {
     const at = new Date();
     const rates = await this.fetchAllRates(at);
 
@@ -188,6 +196,7 @@ export class OrderService {
       warehouseId: input.warehouseId,
       deliveryMode: input.deliveryMode as DeliveryMode,
       lines: await this.resolveLineSnapshots(input.lines),
+      attributedCompanyUserId,
       payments: (input.payments ?? []).map((payment) => ({
         channel: payment.channel as PaymentChannel,
         amount: moneyFromDecimalString(payment.amount.amount, payment.amount.currency as Currency),
@@ -329,6 +338,7 @@ export class OrderService {
       lines: order.lines.map((line) => this.toLineResponse(line)),
       payments: order.payments.map((payment) => this.toPaymentResponse(payment)),
       saleCredit: order.saleCredit ? this.toSaleCreditResponse(order.saleCredit) : null,
+      attributedCompanyUserId: order.attributedCompanyUserId,
       orderDate: order.orderDate.toISOString(),
       verifiedAt: order.verifiedAt ? order.verifiedAt.toISOString() : null,
       deliveredAt: order.deliveredAt ? order.deliveredAt.toISOString() : null,

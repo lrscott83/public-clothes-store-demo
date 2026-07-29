@@ -218,6 +218,7 @@ function sampleOrder(overrides: Partial<DomainOrder> = {}): DomainOrder {
       },
     ],
     saleCredit: null,
+    attributedCompanyUserId: ACTOR_COMPANY_USER_ID,
     orderDate: at,
     verifiedAt: null,
     deliveredAt: null,
@@ -230,6 +231,9 @@ function sampleOrder(overrides: Partial<DomainOrder> = {}): DomainOrder {
 // WHAT and HOW MANY only. Everything that reaches money — name, category,
 // price, discounts, customer name — is resolved from the catalog and the
 // customer record by the service.
+/** The authenticated actor's `CompanyUser.id`, as `OrderController` would pass it. */
+const ACTOR_COMPANY_USER_ID = 'cu-actor-1';
+
 const sampleCreateDto: CreateOrderDto = {
   customerId: 'customer-uuid-1',
   warehouseId: 'warehouse-uuid-1',
@@ -275,7 +279,7 @@ describe('OrderService', () => {
     it('loads rates, runs createOrder to build the aggregate, THEN persists it via the repository', async () => {
       orderRepo.create.mockResolvedValue(sampleOrder());
 
-      const result = await service.create(sampleCreateDto);
+      const result = await service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID);
 
       expect(currencyRepo.ratesForChannel).toHaveBeenCalled();
       expect(orderRepo.create).toHaveBeenCalledTimes(1);
@@ -306,7 +310,7 @@ describe('OrderService', () => {
         payments: [{ channel: 'EUR_CASH', amount: { amount: '50.00', currency: 'EUR' } }],
       };
 
-      await expect(service.create(crossCurrencyDto)).rejects.toThrow(RateNotFoundError);
+      await expect(service.create(crossCurrencyDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(RateNotFoundError);
       expect(orderRepo.create).not.toHaveBeenCalled();
     });
   });
@@ -378,7 +382,7 @@ describe('OrderService', () => {
             categoryName: 'Categoría inventada',
           } as never,
         ],
-      });
+      }, ACTOR_COMPANY_USER_ID);
 
       const persisted = orderRepo.create.mock.calls[0]?.[0] as DomainOrder;
       expect(persisted.lines[0]?.price.minorUnits).toBe(10000n);
@@ -389,7 +393,7 @@ describe('OrderService', () => {
     it('rejects a product that does not exist', async () => {
       productRepo.findById.mockResolvedValue(null);
 
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(UnsellableOrderReferenceError);
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(UnsellableOrderReferenceError);
       expect(orderRepo.create).not.toHaveBeenCalled();
     });
 
@@ -398,31 +402,62 @@ describe('OrderService', () => {
         product('product-uuid-1', { minorUnits: 10000n, currency: 'USD' }, false),
       );
 
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(/inactive/i);
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(/inactive/i);
       expect(orderRepo.create).not.toHaveBeenCalled();
     });
 
     it('rejects an unknown customer, and takes customerName from the customer record', async () => {
       customerRepo.findById.mockResolvedValue(null);
 
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(UnsellableOrderReferenceError);
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(UnsellableOrderReferenceError);
       expect(orderRepo.create).not.toHaveBeenCalled();
     });
 
     it('rejects a soft-deleted customer', async () => {
       customerRepo.findById.mockResolvedValue(customer('customer-uuid-1', false));
 
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(/inactive/i);
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(/inactive/i);
       expect(orderRepo.create).not.toHaveBeenCalled();
     });
 
     it('snapshots customerName from the customer record, not from the request', async () => {
       orderRepo.create.mockResolvedValue(sampleOrder());
 
-      await service.create({ ...sampleCreateDto, customerName: 'Nombre inventado' } as never);
+      await service.create(
+        { ...sampleCreateDto, customerName: 'Nombre inventado' } as never,
+        ACTOR_COMPANY_USER_ID,
+      );
 
       const persisted = orderRepo.create.mock.calls[0]?.[0] as DomainOrder;
       expect(persisted.customerName).toBe('Ana Torres');
+    });
+  });
+
+  describe('create — sales attribution comes from the actor, never the request', () => {
+    it('persists the actor as attributedCompanyUserId', async () => {
+      orderRepo.create.mockResolvedValue(sampleOrder());
+
+      await service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID);
+
+      const persisted = orderRepo.create.mock.calls[0]?.[0] as DomainOrder;
+      expect(persisted.attributedCompanyUserId).toBe(ACTOR_COMPANY_USER_ID);
+    });
+
+    it('IGNORES an attributedCompanyUserId smuggled into the request body', async () => {
+      // This app installs no ValidationPipe, so the stray key really does
+      // survive into the DTO object. What must hold is that nothing reads it:
+      // the persisted attribution is the actor's, not the smuggled one.
+      // Otherwise any caller could credit someone else's commission to
+      // themselves.
+      orderRepo.create.mockResolvedValue(sampleOrder());
+
+      await service.create(
+        { ...sampleCreateDto, attributedCompanyUserId: 'cu-someone-else' } as never,
+        ACTOR_COMPANY_USER_ID,
+      );
+
+      const persisted = orderRepo.create.mock.calls[0]?.[0] as DomainOrder;
+      expect(persisted.attributedCompanyUserId).toBe(ACTOR_COMPANY_USER_ID);
     });
   });
 
@@ -433,8 +468,8 @@ describe('OrderService', () => {
       // error — and the DB FK must never be what catches this.
       warehouseRepo.findById.mockResolvedValue(null);
 
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(UnsellableOrderReferenceError);
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(/not found/i);
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(UnsellableOrderReferenceError);
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(/not found/i);
       expect(orderRepo.create).not.toHaveBeenCalled();
     });
 
@@ -445,8 +480,8 @@ describe('OrderService', () => {
       warehouseRepo.findById.mockResolvedValue(warehouse('warehouse-uuid-1', false));
       stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-1', 'product-uuid-1', 999)]);
 
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(UnsellableOrderReferenceError);
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(/inactive/i);
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(UnsellableOrderReferenceError);
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(/inactive/i);
       expect(orderRepo.create).not.toHaveBeenCalled();
     });
   });
@@ -455,7 +490,7 @@ describe('OrderService', () => {
     it('rejects a warehouse that cannot cover the basket, WITHOUT writing an order', async () => {
       stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-1', 'product-uuid-1', 0)]);
 
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(
         WarehouseCannotFulfillOrderError,
       );
       expect(orderRepo.create).not.toHaveBeenCalled();
@@ -464,7 +499,7 @@ describe('OrderService', () => {
     it('rejects when onHand looks sufficient but the stock is already reserved', async () => {
       stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-1', 'product-uuid-1', 1, 1)]);
 
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(
         WarehouseCannotFulfillOrderError,
       );
       expect(orderRepo.create).not.toHaveBeenCalled();
@@ -473,7 +508,7 @@ describe('OrderService', () => {
     it('rejects when the warehouse has no stock row for a requested product at all', async () => {
       stockRepo.list.mockResolvedValue([stockLevel('some-other-warehouse', 'product-uuid-1', 999)]);
 
-      await expect(service.create(sampleCreateDto)).rejects.toThrow(
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(
         WarehouseCannotFulfillOrderError,
       );
       expect(orderRepo.create).not.toHaveBeenCalled();
@@ -483,14 +518,14 @@ describe('OrderService', () => {
       stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-1', 'product-uuid-1', 1)]);
       orderRepo.create.mockResolvedValue(sampleOrder());
 
-      await expect(service.create(sampleCreateDto)).resolves.toMatchObject({ id: 'order-uuid-1' });
+      await expect(service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID)).resolves.toMatchObject({ id: 'order-uuid-1' });
       expect(orderRepo.create).toHaveBeenCalledTimes(1);
     });
 
     it('reserves nothing at creation — this is a fast-fail, not a hold', async () => {
       orderRepo.create.mockResolvedValue(sampleOrder());
 
-      await service.create(sampleCreateDto);
+      await service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID);
 
       expect(stockRepo.reserve).not.toHaveBeenCalled();
       expect(stockRepo.release).not.toHaveBeenCalled();
@@ -498,6 +533,24 @@ describe('OrderService', () => {
   });
 
   describe('update', () => {
+    it('NEVER forwards attribution to the repository, even when the patch names one', async () => {
+      // `OrderUpdateInput` is a `Partial<Order>`, so attribution is patchable
+      // through the port's type. The spec says it never changes once stamped,
+      // so `update` forwards an explicit allow-list rather than spreading the
+      // patch. This pins that: re-attributing a sale after the fact would
+      // silently move a commission from one agent to another.
+      orderRepo.findById.mockResolvedValue(sampleOrder());
+      orderRepo.update.mockResolvedValue(sampleOrder());
+
+      await service.update('order-uuid-1', {
+        deliveryMode: 'delivery',
+        attributedCompanyUserId: 'cu-someone-else',
+      } as never);
+
+      const forwarded = orderRepo.update.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(forwarded).not.toHaveProperty('attributedCompanyUserId');
+    });
+
     it('re-validates availability when warehouseId actually changes, and rejects a short one', async () => {
       orderRepo.findById.mockResolvedValue(sampleOrder());
       stockRepo.list.mockResolvedValue([stockLevel('warehouse-uuid-2', 'product-uuid-1', 0)]);
