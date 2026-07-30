@@ -3,11 +3,15 @@ import type { PrismaService } from '../prisma-client.js';
 /**
  * Commission reference seed.
  *
- * The table below is a HAND transcription of `docs/plans/reference/04-commissions.md`.
- * Hand, not parsed: the source doc writes some amounts with thousands spaces
- * (`10 000`), and a parser that silently read one of those as `10` would set a
- * payout twenty times too low with nothing to notice it. A human resolving them
- * once, in a reviewed diff, is the safer boundary.
+ * AMOUNTS come from `docs/plans/reference/04-commissions.md`, transcribed by
+ * hand rather than parsed: the doc writes some as `10 000`, and a parser
+ * reading that as `10` would set a payout twenty times too low with nothing to
+ * notice it. KEYWORDS AND THEIR ORDER come from the prototype's
+ * `commission-map.ts`, where they were authored against the real catalog and
+ * then corrected twice by business review. The doc's headings are plural
+ * category names ("Neveras", "TVs"); the catalog is singular and specific
+ * ("Nevera 3.5P Milexus"). A table written in the doc's words matches almost
+ * nothing — measured: 28 of 99 products, against 83 with these keywords.
  *
  * TWO GROUPS FROM THE SOURCE DOC ARE DELIBERATELY ABSENT:
  *
@@ -28,88 +32,128 @@ import type { PrismaService } from '../prisma-client.js';
  */
 
 export interface CommissionReferenceRow {
-  readonly name: string;
-  /** Whole MN units, as written in the source table. Converted to decimal at write time. */
+  /**
+   * Normalized keywords. A product matches this row if its normalized name
+   * CONTAINS any of them.
+   */
+  readonly keywords: readonly string[];
+  /** Whole MN units. Converted to decimal at write time. */
   readonly amountMn: number;
+  /** Human label for the seed report — which rule fired, in words. */
+  readonly label: string;
 }
 
-export const COMMISSION_REFERENCE_TABLE: readonly CommissionReferenceRow[] = [
-  // Electrodomésticos y equipos
-  { name: 'Toldos', amountMn: 2000 },
-  { name: 'Contadora', amountMn: 2000 },
-  { name: 'Escalera 6 pasos', amountMn: 2000 },
-  { name: 'Escalera 4 pasos', amountMn: 1000 },
-  { name: 'Filtro de agua', amountMn: 1000 },
-  { name: 'Horno eléctrico', amountMn: 2000 },
-  { name: 'Refrigeradores', amountMn: 4000 },
-  { name: 'Neveras', amountMn: 3000 },
-  { name: 'Calentadores de agua', amountMn: 3000 },
-  { name: 'Juego de muebles', amountMn: 4000 },
-  { name: 'TVs', amountMn: 3000 },
-  // Same amount as the plural row above, different normalized key — both kept.
-  // Had the two amounts differed, `buildCommissionAssignments` would refuse to
-  // seed rather than pick one.
-  { name: 'Calentador de agua', amountMn: 3000 },
-  { name: 'Microondas', amountMn: 2000 },
-  { name: 'Lavadora semiautomática', amountMn: 3000 },
-  { name: 'Hidrolavadora', amountMn: 2000 },
-  { name: 'Lavadora automática', amountMn: 3000 },
-  { name: 'Lámparas', amountMn: 500 },
-  { name: 'Cafetera de Fogón', amountMn: 500 },
-  { name: 'Fogón infrarrojo + olla de presión o calderos', amountMn: 1500 },
-  { name: 'Split', amountMn: 3000 },
-  { name: 'Bocina', amountMn: 1000 },
-  { name: 'Fogón grande con horno', amountMn: 3000 },
-  { name: 'Secadora a Vapor', amountMn: 3000 },
-  { name: 'Neveras de 16 y 20 pies', amountMn: 4000 },
-  { name: 'Exhibidor 13.77 pies', amountMn: 4000 },
-  { name: 'Exhibidor 20 pies', amountMn: 5000 },
-  { name: 'Ventilador de techo', amountMn: 2000 },
-  { name: 'Bomba de agua', amountMn: 1000 },
-  { name: 'Dispensador de agua', amountMn: 2000 },
-  { name: 'Fogón de petróleo', amountMn: 500 },
-  { name: 'Bici-moto', amountMn: 5000 },
-  { name: 'Juego de Baño', amountMn: 2000 },
-  { name: 'Bolsa de Cemento', amountMn: 100 },
-  { name: 'Máquina de Refrigerador', amountMn: 1000 },
-  { name: 'Metro de azulejos', amountMn: 500 },
-  { name: 'Colchón', amountMn: 1500 },
-  { name: 'Puerta', amountMn: 1000 },
-  { name: 'Bases de TV', amountMn: 500 },
-  { name: 'Ventilador Industrial', amountMn: 3000 },
-  { name: 'Ventilador normal', amountMn: 1000 },
-  { name: 'Silla', amountMn: 1000 },
-  { name: 'Escritorio', amountMn: 2000 },
-  { name: 'Bicicleta', amountMn: 2000 },
-  { name: 'Equipo de música LG', amountMn: 2000 },
-  { name: 'Lámpara 60w', amountMn: 500 },
-  { name: 'Lámpara solar', amountMn: 2000 },
-  { name: 'Enfriador de aire pequeño', amountMn: 1000 },
-  { name: 'Enfriador de aire grande', amountMn: 2000 },
-  { name: 'Máquina de café expreso', amountMn: 1000 },
-
-  // Energía solar (componentes)
-  { name: 'Panel Solar', amountMn: 1000 },
-  { name: 'Transfer', amountMn: 1000 },
-  { name: 'Base de Paneles', amountMn: 1000 },
-  // "50 por metro" in the source — flat per unit. See the module note.
-  { name: 'Cable', amountMn: 50 },
-  { name: 'Baterías', amountMn: 5000 },
-  { name: 'Inversores', amountMn: 5000 },
-  { name: 'Estaciones solas', amountMn: 5000 },
-
-  // Kits de energía — ordinary catalog products, same per-product path.
-  // Thousands spaces in the source resolved here, by hand.
-  { name: 'Kit de batería e Inversor (incluye los TodoEnUno)', amountMn: 8000 },
-  { name: 'Kit 3 con 5', amountMn: 10000 },
-  { name: 'Kit 3 con 7', amountMn: 12000 },
-  { name: 'Kit 5 con 10', amountMn: 15000 },
-  { name: 'Kit 6 con 15', amountMn: 18000 },
-  { name: 'Kit 10 con 16', amountMn: 20000 },
-  { name: 'Kit 12 con 16', amountMn: 20000 },
-  { name: 'Kit Ecoflow', amountMn: 7000 },
-  { name: 'Kit Pecron', amountMn: 7000 },
-  { name: 'Kit Must 2 con 2.5', amountMn: 7000 },
+/**
+ * ORDER ENCODES PRECEDENCE. First match wins. DO NOT SORT OR REORDER.
+ *
+ * This ordering is authored data, carried over from the prototype's
+ * `commission-map.ts` where it was built and then corrected by business review.
+ * It is not a heuristic and must not be replaced by one — an earlier attempt
+ * here ranked candidates by "longest matching key", and that reconstruction got
+ * three cases wrong that the ordering gets right:
+ *
+ *   - "Refrigerador Doble Puerta 16P" matched `puerta` (1000) instead of
+ *     `refrigerador` (4000), because "puerta" happened to be the longer key.
+ *   - "Base para Split" matched `split` (3000) — an accessory priced as a full
+ *     air conditioner.
+ *   - "Dispensador con Filtro de Agua" matched `filtro de agua` (1000) rather
+ *     than `dispensador` (2000).
+ *
+ * The accessory rows below (`base para split`, `base ... tv`, `cajita`) sit
+ * ABOVE the broad `tv` and `split` rows for exactly that reason — a bare `tv`
+ * or `split` matches any product whose name merely mentions one. Moving them
+ * reintroduces the bug.
+ *
+ * Amounts come from `docs/plans/reference/04-commissions.md`, hand-transcribed
+ * (the doc writes some as `10 000`, and a parser reading that as `10` would set
+ * a payout twenty times too low). Rows marked BUSINESS REVIEW are refinements
+ * made after that doc was written and are not in it.
+ */
+export const COMMISSION_KEYWORD_TABLE: readonly CommissionReferenceRow[] = [
+  // CORRECTION to the inherited ordering: "hidrolavadora" CONTAINS "lavadora",
+  // so with the washing-machine rows first a pressure washer was priced as a
+  // washing machine — 3000 instead of the 2000 the source table gives it. It
+  // has to be resolved before them. Found by running the table against the
+  // real 99-product catalog rather than against examples.
+  { keywords: ['hidrolavadora'], amountMn: 2000, label: 'Hidrolavadora' },
+  { keywords: ['lavadora semi'], amountMn: 3000, label: 'Lavadora semiautomática' },
+  { keywords: ['lavadora automatica'], amountMn: 3000, label: 'Lavadora automática' },
+  { keywords: ['lavadora secadora'], amountMn: 3000, label: 'Lavadora/Secadora' },
+  { keywords: ['lavadora'], amountMn: 3000, label: 'Lavadora' },
+  { keywords: ['cafetera de fogon'], amountMn: 500, label: 'Cafetera de fogón' },
+  { keywords: ['maquina de cafe', 'expreso'], amountMn: 1000, label: 'Máquina de café expreso' },
+  { keywords: ['cafetera'], amountMn: 500, label: 'Cafetera' },
+  // BUSINESS REVIEW 2026-07-08: these three were falling through to a generic
+  // fallback; they are large enough appliances to warrant their own tier.
+  { keywords: ['cocina de induccion'], amountMn: 2000, label: 'Cocina de inducción' },
+  { keywords: ['fogon de gas'], amountMn: 2000, label: 'Fogón de gas' },
+  { keywords: ['cocina infrarroja'], amountMn: 2000, label: 'Cocina infrarroja' },
+  { keywords: ['microondas'], amountMn: 2000, label: 'Microondas' },
+  { keywords: ['contadora'], amountMn: 2000, label: 'Contadora' },
+  { keywords: ['toldo'], amountMn: 2000, label: 'Toldos' },
+  { keywords: ['escalera 6'], amountMn: 2000, label: 'Escalera 6 pasos' },
+  { keywords: ['escalera 4', 'escalera'], amountMn: 1000, label: 'Escalera 4 pasos' },
+  { keywords: ['bomba'], amountMn: 1000, label: 'Bomba de agua' },
+  { keywords: ['calentador'], amountMn: 3000, label: 'Calentador de agua' },
+  { keywords: ['inversor'], amountMn: 5000, label: 'Inversores' },
+  { keywords: ['bateria'], amountMn: 5000, label: 'Baterías' },
+  { keywords: ['panel solar'], amountMn: 1000, label: 'Panel Solar' },
+  { keywords: ['base para paneles', 'base de paneles'], amountMn: 1000, label: 'Base de Paneles' },
+  {
+    keywords: ['lampara solar', 'luz recargable', 'recargable solar'],
+    amountMn: 2000,
+    label: 'Lámpara solar',
+  },
+  { keywords: ['lampara'], amountMn: 500, label: 'Lámparas' },
+  { keywords: ['exhibidor 20'], amountMn: 5000, label: 'Exhibidor 20 pies' },
+  { keywords: ['exhibidor'], amountMn: 4000, label: 'Exhibidor 13.77 pies' },
+  { keywords: ['refrigerador'], amountMn: 4000, label: 'Refrigeradores' },
+  { keywords: ['nevera'], amountMn: 3000, label: 'Neveras' },
+  { keywords: ['dispensador'], amountMn: 2000, label: 'Dispensador de agua' },
+  { keywords: ['filtro de agua'], amountMn: 1000, label: 'Filtro de agua' },
+  {
+    keywords: ['maquina de frio', 'maquina de refrigerador'],
+    amountMn: 1000,
+    label: 'Máquina de Refrigerador',
+  },
+  // BUSINESS REVIEW 2026-07-08: accessories were being swallowed by the broad
+  // `tv`/`split` tiers below. These MUST stay above them.
+  { keywords: ['base para split'], amountMn: 1000, label: 'Base para Split' },
+  {
+    keywords: ['base fija para tv', 'base para tv', 'base giratoria', 'base de pared'],
+    amountMn: 500,
+    label: 'Bases de TV',
+  },
+  { keywords: ['cajita'], amountMn: 1000, label: 'Cajita decodificadora' },
+  { keywords: ['smart tv', 'tv'], amountMn: 3000, label: 'TVs' },
+  { keywords: ['equipo de musica'], amountMn: 2000, label: 'Equipo de música LG' },
+  { keywords: ['split'], amountMn: 3000, label: 'Split' },
+  { keywords: ['ventilador industrial'], amountMn: 3000, label: 'Ventilador Industrial' },
+  { keywords: ['ventilador de techo'], amountMn: 2000, label: 'Ventilador de techo' },
+  { keywords: ['ventilador'], amountMn: 1000, label: 'Ventilador normal' },
+  { keywords: ['fogon de petroleo'], amountMn: 500, label: 'Fogón de petróleo' },
+  { keywords: ['fogon infrarrojo'], amountMn: 1500, label: 'Fogón infrarrojo + olla' },
+  { keywords: ['fogon grande con horno'], amountMn: 3000, label: 'Fogón grande con horno' },
+  { keywords: ['escritorio'], amountMn: 2000, label: 'Escritorio' },
+  { keywords: ['bici moto'], amountMn: 5000, label: 'Bici-moto' },
+  { keywords: ['bicicleta'], amountMn: 2000, label: 'Bicicleta' },
+  { keywords: ['juego de muebles'], amountMn: 4000, label: 'Juego de muebles' },
+  { keywords: ['juego de bano'], amountMn: 2000, label: 'Juego de Baño' },
+  { keywords: ['bolsa de cemento'], amountMn: 100, label: 'Bolsa de Cemento' },
+  { keywords: ['metro de azulejos', 'azulejo'], amountMn: 500, label: 'Metro de azulejos' },
+  { keywords: ['colchon'], amountMn: 1500, label: 'Colchón' },
+  { keywords: ['puerta'], amountMn: 1000, label: 'Puerta' },
+  { keywords: ['silla'], amountMn: 1000, label: 'Silla' },
+  { keywords: ['bocina'], amountMn: 1000, label: 'Bocina' },
+  { keywords: ['secadora a vapor'], amountMn: 3000, label: 'Secadora a Vapor' },
+  { keywords: ['horno electrico'], amountMn: 2000, label: 'Horno eléctrico' },
+  { keywords: ['enfriador de aire grande'], amountMn: 2000, label: 'Enfriador de aire grande' },
+  { keywords: ['enfriador de aire'], amountMn: 1000, label: 'Enfriador de aire pequeño' },
+  { keywords: ['transfer'], amountMn: 1000, label: 'Transfer' },
+  { keywords: ['estaciones solas', 'estacion sola'], amountMn: 5000, label: 'Estaciones solas' },
+  { keywords: ['cable'], amountMn: 50, label: 'Cable (por metro)' },
+  // Last: the broadest accessory tier. Anything still merely "a base".
+  { keywords: ['base'], amountMn: 500, label: 'Base (accesorio)' },
 ];
 
 /**
@@ -158,90 +202,68 @@ export class AmbiguousCommissionReferenceError extends Error {
 /**
  * PURE. Decides which product gets which amount.
  *
- * 1. Exact normalized-name match wins outright.
- * 2. Otherwise the LONGEST reference key that appears as a substring wins —
- *    "Neveras de 16 y 20 pies" beats "Neveras" for a 16-pie model.
- * 3. A tie between two different keys of equal length, or two rows sharing a
- *    key but disagreeing on the amount, THROWS. Neither can be resolved
- *    honestly, and picking one would set a person's pay arbitrarily.
- * 4. A product nothing matches gets NO row. It resolves to `undefined` at
- *    runtime and surfaces as an unresolved accrual line.
+ * FIRST MATCH WINS, in table order. The order is the precedence decision, made
+ * by a human who knew that "Base para Split" is a bracket and not an air
+ * conditioner. That is strictly more expressive than any scoring rule derived
+ * from the strings themselves, and — unlike a heuristic — it can be corrected
+ * by editing one line and re-reading the diff.
+ *
+ * A product matched by NOTHING gets no row. It resolves to `undefined` at
+ * runtime and surfaces as an unresolved accrual line: visible, fixable, and
+ * never quietly worth zero.
+ *
+ * The seed refuses to run if the same keyword appears in two rows with
+ * different amounts. Order resolves precedence between DIFFERENT keywords; it
+ * cannot resolve a keyword that contradicts itself, and picking one would set
+ * a person's pay by position in a list they never saw.
  */
 export function buildCommissionAssignments(
   products: readonly SeedProduct[],
-  table: readonly CommissionReferenceRow[] = COMMISSION_REFERENCE_TABLE,
+  table: readonly CommissionReferenceRow[] = COMMISSION_KEYWORD_TABLE,
 ): CommissionAssignmentReport {
-  const byKey = new Map<string, { name: string; amountMn: number }>();
+  const seen = new Map<string, { label: string; amountMn: number }>();
   for (const row of table) {
-    const key = normalizeName(row.name);
-    const existing = byKey.get(key);
-    if (existing && existing.amountMn !== row.amountMn) {
-      throw new AmbiguousCommissionReferenceError(
-        `Commission reference "${key}" is defined twice with different amounts ` +
-          `(${existing.name} = ${existing.amountMn}, ${row.name} = ${row.amountMn}). ` +
-          'Resolve the source table — the seed will not choose for you.',
-      );
+    for (const keyword of row.keywords) {
+      const key = normalizeName(keyword);
+      const previous = seen.get(key);
+      if (previous && previous.amountMn !== row.amountMn) {
+        throw new AmbiguousCommissionReferenceError(
+          `Keyword "${key}" appears twice with different amounts ` +
+            `("${previous.label}" = ${previous.amountMn}, "${row.label}" = ${row.amountMn}). ` +
+            'Resolve the table — the seed will not choose for you.',
+        );
+      }
+      seen.set(key, { label: row.label, amountMn: row.amountMn });
     }
-    byKey.set(key, { name: row.name, amountMn: row.amountMn });
   }
 
   const matched: CommissionAssignment[] = [];
   const unmatchedProducts: SeedProduct[] = [];
-  const usedKeys = new Set<string>();
+  const usedLabels = new Set<string>();
 
   for (const product of products) {
     const productKey = normalizeName(product.name);
 
-    const exact = byKey.get(productKey);
-    if (exact) {
+    const hit = table.find((row) =>
+      row.keywords.some((keyword) => productKey.includes(normalizeName(keyword))),
+    );
+
+    if (hit) {
       matched.push({
         productId: product.id,
         productName: product.name,
-        referenceName: exact.name,
-        amountMn: exact.amountMn,
+        referenceName: hit.label,
+        amountMn: hit.amountMn,
       });
-      usedKeys.add(productKey);
-      continue;
-    }
-
-    let best: { key: string; name: string; amountMn: number } | undefined;
-    let tiedWith: string | undefined;
-    for (const [key, entry] of byKey) {
-      if (!productKey.includes(key)) {
-        continue;
-      }
-      if (best === undefined || key.length > best.key.length) {
-        best = { key, name: entry.name, amountMn: entry.amountMn };
-        tiedWith = undefined;
-      } else if (key.length === best.key.length && entry.amountMn !== best.amountMn) {
-        tiedWith = entry.name;
-      }
-    }
-
-    if (best && tiedWith) {
-      throw new AmbiguousCommissionReferenceError(
-        `Product "${product.name}" matches two references of equal length with different amounts ` +
-          `("${best.name}" = ${best.amountMn}, "${tiedWith}"). This is an ambiguous tie — ` +
-          'disambiguate the source table or the product name.',
-      );
-    }
-
-    if (best) {
-      matched.push({
-        productId: product.id,
-        productName: product.name,
-        referenceName: best.name,
-        amountMn: best.amountMn,
-      });
-      usedKeys.add(best.key);
+      usedLabels.add(hit.label);
     } else {
       unmatchedProducts.push(product);
     }
   }
 
-  const unusedReferences = [...byKey.entries()]
-    .filter(([key]) => !usedKeys.has(key))
-    .map(([, entry]) => entry.name);
+  const unusedReferences = table
+    .filter((row) => !usedLabels.has(row.label))
+    .map((row) => row.label);
 
   return { matched, unmatchedProducts, unusedReferences };
 }
