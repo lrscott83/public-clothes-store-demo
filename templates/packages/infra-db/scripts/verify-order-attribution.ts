@@ -76,7 +76,8 @@ async function main(): Promise<void> {
   // Reported, never asserted: orders predating the cutover legitimately have
   // no agent, and backfilling one would fabricate financial evidence.
   console.log(
-    `${report.orders} order(s) total; ${report.legacyUnattributed} legacy unattributed (expected, not a failure).`,
+    `${report.orders} order(s) total; ${report.legacyUnattributed} legacy unattributed (expected, not a failure); ` +
+      `${report.postCutoverOrders} created after the cutover.`,
   );
 
   if (report.failures.length > 0) {
@@ -86,7 +87,25 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log('Attribution verification PASSED: 0 orphans, 0 post-cutover nulls. Migration B may proceed.');
+  // A pass over zero rows is not a pass. The assertion this gate exists to make
+  // is vacuously true on an empty table, so reporting PASSED here would hand
+  // migration B a green light backed by no evidence at all — and B is the one
+  // that stops being reversible the moment anything settles.
+  if (report.postCutoverOrders === 0) {
+    console.error(
+      'Attribution verification INCONCLUSIVE — do NOT run migration B: no order in this database was ' +
+        'created after the cutover, so the "every post-cutover order carries an attribution" assertion ' +
+        'examined nothing. Point this at a database with real post-cutover traffic, or place at least ' +
+        'one attributed order through the live delivery path first.',
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(
+    `Attribution verification PASSED over ${report.postCutoverOrders} post-cutover order(s): ` +
+      '0 orphans, 0 post-cutover nulls. Migration B may proceed.',
+  );
 }
 
 main().catch((err) => {

@@ -79,6 +79,37 @@ describe('verifyOrderAttribution — the migration B gate', () => {
     expect(report.legacyUnattributed).toBe(1);
   });
 
+  /**
+   * A gate that reports PASSED without having examined a single row is worse
+   * than no gate: it hands over the same green light on evidence it never
+   * gathered. The assertion it exists to make — "post-cutover orders carry an
+   * attribution" — is vacuously true on an empty table, so the report has to
+   * expose HOW MANY rows the assertion actually covered, and the caller has to
+   * be able to tell "verified" apart from "nothing to verify".
+   */
+  describe('vacuity — distinguishing a real pass from an empty one', () => {
+    it('reports zero post-cutover orders against an empty table, with no failure raised', async () => {
+      const report = await verifyOrderAttribution(connectionString, CUTOVER);
+
+      expect(report.orders).toBe(0);
+      expect(report.postCutoverOrders).toBe(0);
+      // Not a FAILURE — nothing is broken. It is an absence of evidence, and
+      // the CLI is what turns that into a refusal to proceed.
+      expect(report.failures).toHaveLength(0);
+    });
+
+    it('reports zero post-cutover orders when every order predates the cutover', async () => {
+      await seedOrder(null, new Date('2025-06-01T00:00:00.000Z'));
+
+      const report = await verifyOrderAttribution(connectionString, CUTOVER);
+
+      expect(report.orders).toBe(1);
+      expect(report.legacyUnattributed).toBe(1);
+      expect(report.postCutoverOrders).toBe(0);
+      expect(report.failures).toHaveLength(0);
+    });
+  });
+
   it('PASSES when every post-cutover order is attributed', async () => {
     const company = await prisma.company.create({ data: { name: 'Tienda Prueba', slug: 'default' } });
     const user = await prisma.user.create({
@@ -111,5 +142,8 @@ describe('verifyOrderAttribution — the migration B gate', () => {
     expect(report.failures).toHaveLength(0);
     expect(report.legacyUnattributed).toBe(0);
     expect(report.orders).toBe(1);
+    // The pass is backed by an actual row — this is what separates it from the
+    // vacuous cases above.
+    expect(report.postCutoverOrders).toBe(1);
   });
 });

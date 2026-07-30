@@ -13,12 +13,21 @@ interface AttributionRow {
   readonly legacy_unattributed: string;
   readonly orphans: string;
   readonly post_cutover_nulls: string;
+  readonly post_cutover_orders: string;
 }
 
 export interface AttributionReport {
   readonly orders: number;
   /** Orders predating the cutover with no agent. EXPECTED and permanent — reported, never asserted. */
   readonly legacyUnattributed: number;
+  /**
+   * How many rows the post-cutover assertion actually covered. ZERO means the
+   * assertion was vacuously true — it passed without examining anything. That
+   * is NOT a failure (nothing is broken) but it is NOT evidence either, and a
+   * caller gating an irreversible migration on this report must refuse to
+   * proceed on it. See the CLI wrapper.
+   */
+  readonly postCutoverOrders: number;
   readonly failures: readonly string[];
 }
 
@@ -43,6 +52,7 @@ export async function verifyOrderAttribution(
       return {
         orders: 0,
         legacyUnattributed: 0,
+        postCutoverOrders: 0,
         failures: [
           'sales_order.attributed_company_user_id does not exist — migration A has not run against ' +
             'this database. Apply it before gating migration B.',
@@ -61,7 +71,10 @@ export async function verifyOrderAttribution(
            WHERE o."attributed_company_user_id" IS NOT NULL AND cu."id" IS NULL) AS orphans,
         (SELECT count(*) FROM "sales_order"
            WHERE "attributed_company_user_id" IS NULL
-             AND "created_at" > $1)                                              AS post_cutover_nulls;
+             AND "created_at" > $1)                                              AS post_cutover_nulls,
+        -- The denominator of the assertion above. Without it, "0 post-cutover
+        -- nulls" is indistinguishable from "0 post-cutover orders".
+        (SELECT count(*) FROM "sales_order" WHERE "created_at" > $1)             AS post_cutover_orders;
       `,
       [cutover],
     );
@@ -71,6 +84,7 @@ export async function verifyOrderAttribution(
     const legacyUnattributed = Number(result.legacy_unattributed);
     const orphans = Number(result.orphans);
     const postCutoverNulls = Number(result.post_cutover_nulls);
+    const postCutoverOrders = Number(result.post_cutover_orders);
 
     const failures: string[] = [];
     if (orphans !== 0) {
@@ -87,7 +101,7 @@ export async function verifyOrderAttribution(
       );
     }
 
-    return { orders, legacyUnattributed, failures };
+    return { orders, legacyUnattributed, postCutoverOrders, failures };
   } finally {
     await client.end();
   }
