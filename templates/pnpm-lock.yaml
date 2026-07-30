@@ -159,6 +159,9 @@ importers:
       '@store-mgmt/infra-db':
         specifier: workspace:*
         version: link:../../packages/infra-db
+      bcrypt:
+        specifier: ^6.0.0
+        version: 6.0.0
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1
@@ -187,6 +190,9 @@ importers:
       '@store-mgmt/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
+      '@types/bcrypt':
+        specifier: ^5.0.2
+        version: 5.0.2
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6

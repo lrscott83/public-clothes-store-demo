@@ -44,6 +44,11 @@ describe('Customer (e2e)', () => {
     await prisma.customer.deleteMany({});
     // `company_user` has NO FK to `app_user` (soft FK by design), so deleting
     // users without this leaves orphan assignments accumulating across runs.
+    // `created_by_company_user_id` is a SELF-FK with `ON DELETE RESTRICT`, and
+    // RESTRICT is checked per row rather than at end-of-statement — so a single
+    // `deleteMany({})` covering both an assignment and the one that created it
+    // fails. Provisioned assignments (the ones carrying a creator) go first.
+    await prisma.companyUser.deleteMany({ where: { createdByCompanyUserId: { not: null } } });
     await prisma.companyUser.deleteMany({});
     await prisma.user.deleteMany({});
   });
@@ -229,6 +234,126 @@ describe('Customer (e2e)', () => {
       .set(...authHeader(callerToken));
 
     expect(response.status).toBe(404);
+  });
+
+  /**
+   * `POST /customers/with-identity` — the route a `sales_agent` uses to sign a
+   * walk-in customer up. It MINTS the login instead of linking an existing one,
+   * which is the whole reason the agent may call it at all (A14). These cases
+   * run against the real DB precisely because the guarantee being asserted is
+   * what ends up in `company_user.role` — a mocked repository could not tell
+   * the difference between "the constant won" and "the body won".
+   */
+  describe('POST /customers/with-identity', () => {
+    const VALID_BODY = {
+      fullName: 'Nadia Sosa',
+      login: 'nadia.sosa.e2e',
+      password: 'sup3rsecret',
+    };
+
+    it('mints an identity a sales_agent can create, and links the customer to it -> 201', async () => {
+      const { token } = await createAuthedUser(prisma, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer())
+        .post('/customers/with-identity')
+        .set(...authHeader(token))
+        .send(VALID_BODY);
+
+      expect(response.status).toBe(201);
+      expect(response.body.fullName).toBe(VALID_BODY.fullName);
+
+      const minted = await prisma.user.findUnique({ where: { login: VALID_BODY.login } });
+      expect(minted).not.toBeNull();
+      expect(response.body.userId).toBe(minted?.id);
+      expect(minted?.passwordHash).not.toBe(VALID_BODY.password);
+    });
+
+    // The load-bearing one (R21). No `ValidationPipe` runs in this app, so the
+    // body reaches the controller byte-for-byte as sent.
+    it('assigns exactly the `user` bit no matter what the body claims', async () => {
+      const { token } = await createAuthedUser(prisma, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer())
+        .post('/customers/with-identity')
+        .set(...authHeader(token))
+        .send({
+          ...VALID_BODY,
+          roles: USER_ROLES.admin,
+          role: USER_ROLES.owner,
+          userId: '00000000-0000-0000-0000-000000000000',
+        });
+
+      expect(response.status).toBe(201);
+      const minted = await prisma.user.findUniqueOrThrow({ where: { login: VALID_BODY.login } });
+      const assignment = await prisma.companyUser.findFirstOrThrow({
+        where: { userId: minted.id },
+      });
+      expect(assignment.role).toBe(USER_ROLES.user);
+      expect(assignment.status).toBe('ACTIVE');
+      // The caller-supplied `userId` was ignored: the Customer points at the
+      // minted identity, never at the one the body named.
+      expect(response.body.userId).toBe(minted.id);
+    });
+
+    it("records the caller's companyUser as the creator and keeps the assignment in the caller's company", async () => {
+      const { companyUserId, token } = await createAuthedUser(prisma, USER_ROLES.sales_agent);
+      const caller = await prisma.companyUser.findUniqueOrThrow({ where: { id: companyUserId } });
+
+      await request(app.getHttpServer())
+        .post('/customers/with-identity')
+        .set(...authHeader(token))
+        .send(VALID_BODY)
+        .expect(201);
+
+      const minted = await prisma.user.findUniqueOrThrow({ where: { login: VALID_BODY.login } });
+      const assignment = await prisma.companyUser.findFirstOrThrow({ where: { userId: minted.id } });
+      expect(assignment.createdByCompanyUserId).toBe(companyUserId);
+      expect(assignment.companyId).toBe(caller.companyId);
+    });
+
+    it('rejects a duplicate login -> 409, with no customer and no assignment left behind', async () => {
+      const { token } = await createAuthedUser(prisma, USER_ROLES.sales_agent);
+      await request(app.getHttpServer())
+        .post('/customers/with-identity')
+        .set(...authHeader(token))
+        .send(VALID_BODY)
+        .expect(201);
+
+      const response = await request(app.getHttpServer())
+        .post('/customers/with-identity')
+        .set(...authHeader(token))
+        .send({ ...VALID_BODY, fullName: 'Otra Persona' });
+
+      expect(response.status).toBe(409);
+      const customers = await prisma.customer.findMany({ where: { fullName: 'Otra Persona' } });
+      expect(customers).toHaveLength(0);
+    });
+
+    it('rejects a password under 8 characters -> 400, nothing persisted', async () => {
+      const { token } = await createAuthedUser(prisma, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer())
+        .post('/customers/with-identity')
+        .set(...authHeader(token))
+        .send({ ...VALID_BODY, password: 'short7c' });
+
+      expect(response.status).toBe(400);
+      const minted = await prisma.user.findUnique({ where: { login: VALID_BODY.login } });
+      expect(minted).toBeNull();
+    });
+
+    it('rejects a plain "user" caller with 403 — minting logins is not a customer-facing power', async () => {
+      const { token } = await createAuthedUser(prisma, USER_ROLES.user);
+
+      const response = await request(app.getHttpServer())
+        .post('/customers/with-identity')
+        .set(...authHeader(token))
+        .send(VALID_BODY);
+
+      expect(response.status).toBe(403);
+      const minted = await prisma.user.findUnique({ where: { login: VALID_BODY.login } });
+      expect(minted).toBeNull();
+    });
   });
 
   describe('RolesGuard enforcement (owner/admin/sales_operator only)', () => {

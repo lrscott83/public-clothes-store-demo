@@ -146,25 +146,50 @@ rehearsal (task 3.11), not an automated script.
 **Gate to enter**: Phase 3 exit criteria met (3c depends only on 3a, for `companyUserId` —
 design §13; independent of 3b).
 
-- [ ] 4.1 RED, write first, MUST be seen to fail — the load-bearing test (R21): `customer-identity.controller.spec.ts` + e2e `test/customer.e2e-spec.ts` — a payload carrying `"roles":8`/`"roles":16`/`"role"`/`"userId":<owner id>` ⇒ resulting assignment role is exactly `1`, regardless of body content. Confirm this test FAILS before any implementation exists (§0.13: `api-salesops` runs no `ValidationPipe` — this is the only guard, not a framework default).
-- [ ] 4.2 RED: `customer-identity.service.spec.ts` — created `User` has an ACTIVE `CompanyUser` (can actually authenticate) (R20).
-- [ ] 4.3 RED: same file — structural assertion: no code path reads a role from the request; the role constant is module-private with no parameter to override it (R22).
-- [ ] 4.4 RED: same file — assignment scoped to caller's `companyId`, attributed to caller's `companyUserId`; a second caller from another company never widens it (R23).
-- [ ] 4.5 RED: same file — partial-failure ordering (A16): `DuplicateLoginError` on write #1 ⇒ nothing written, 409; a failure after write #1 leaves a login that 403s `MISSING_COMPANY_USER` (R24).
-- [ ] 4.6 RED: `customer.controller.spec.ts` — `sales_agent` denied `POST /customers` (existing route), `PATCH /customers/:id`, `DELETE /customers/:id` ⇒ 403 (R25).
-- [ ] 4.7 GREEN: `domain/src/company/company-user.ts` (+test) — add `createdByCompanyUserId: string | null` to `CompanyUser` + `CreateCompanyUserInput` (D10 #3, A17).
-- [ ] 4.8 GREEN: `domain/src/company/company-user-repository.port.ts` — `create` accepts `createdByCompanyUserId`.
-- [ ] 4.9 GREEN: `infra-db/src/company/prisma-company-user.repository.ts` (+spec) — map the new column, default `null`, never backfilled.
-- [ ] 4.10 Author Prisma schema: `CompanyUser.createdByCompanyUserId` self-referencing nullable FK + index.
-- [ ] 4.11 Author migration C `..._add_company_user_created_by` per design §8.4 (`ADD COLUMN`, self-FK `ON DELETE RESTRICT`, index; **NO BACKFILL**). Timestamp AFTER migration A, BEFORE migration B.
-- [ ] 4.12 **GATE before applying C**: round-trip forward + Rollback C on a throwaway clone (§8.4 — the only genuinely lossless, unqualified rollback in this change: it discards only post-cutover audit provenance, nothing operational). Then apply forward via `prisma migrate deploy` (guarded URL check).
-- [ ] 4.13 GREEN: create `apps/api-salesops/src/customer/dto/create-customer-with-identity.dto.ts` — declares NEITHER `userId` NOR `roles` (design §4.5).
-- [ ] 4.14 GREEN: create `apps/api-salesops/src/customer/customer-identity.service.ts` — module-private `CUSTOMER_IDENTITY_ROLE = USER_ROLES.user` constant (A15); `createWithIdentity(actor, dto)` writes User -> CompanyUser -> Customer in that order, NOT transactional (A16); hand-written `assertNonBlank(fullName)`, `assertNonBlank(login)`, `assertMinLength(password, 8)` matching `CreateUserDto`'s floor.
-- [ ] 4.15 GREEN: create `apps/api-salesops/src/customer/customer-identity.controller.ts` — `POST /customers/with-identity`, roles owner/admin/sales_operator/sales_agent (A14); 201 / 400 / 409 `DuplicateLoginError` / 409 `DuplicateCustomerDocumentError`.
-- [ ] 4.16 Wire `customer.module.ts` — register the new controller/service (`USER_REPOSITORY`/`COMPANY_USER_REPOSITORY` already bound in `auth.module.ts:29-30`, §0.14 — confirm only, no new binding).
-- [ ] 4.17 Non-regression confirmation (not an edit): the existing `POST /customers`, `customer.service.ts`, and its 15 controller + 11 service tests remain byte-for-byte unchanged (A14).
+- [x] 4.1 RED, write first, MUST be seen to fail — the load-bearing test (R21): `customer-identity.controller.spec.ts` + e2e `test/customer.e2e-spec.ts` — a payload carrying `"roles":8`/`"roles":16`/`"role"`/`"userId":<owner id>` ⇒ resulting assignment role is exactly `1`, regardless of body content. Confirm this test FAILS before any implementation exists (§0.13: `api-salesops` runs no `ValidationPipe` — this is the only guard, not a framework default).
+- [x] 4.2 RED: `customer-identity.service.spec.ts` — created `User` has an ACTIVE `CompanyUser` (can actually authenticate) (R20).
+- [x] 4.3 RED: same file — structural assertion: no code path reads a role from the request; the role constant is module-private with no parameter to override it (R22).
+- [x] 4.4 RED: same file — assignment scoped to caller's `companyId`, attributed to caller's `companyUserId`; a second caller from another company never widens it (R23).
+- [x] 4.5 RED: same file — partial-failure ordering (A16): `DuplicateLoginError` on write #1 ⇒ nothing written, 409; a failure after write #1 leaves a login that 403s `MISSING_COMPANY_USER` (R24).
+- [x] 4.6 RED: `customer.controller.spec.ts` — `sales_agent` denied `POST /customers` (existing route), `PATCH /customers/:id`, `DELETE /customers/:id` ⇒ 403 (R25).
+- [x] 4.7 GREEN: `domain/src/company/company-user.ts` (+test) — add `createdByCompanyUserId: string | null` to `CompanyUser` + `CreateCompanyUserInput` (D10 #3, A17).
+- [x] 4.8 GREEN: `domain/src/company/company-user-repository.port.ts` — `create` accepts `createdByCompanyUserId`.
+- [x] 4.9 GREEN: `infra-db/src/company/prisma-company-user.repository.ts` (+spec) — map the new column, default `null`, never backfilled.
+- [x] 4.10 Author Prisma schema: `CompanyUser.createdByCompanyUserId` self-referencing nullable FK + index.
+- [x] 4.11 Author migration C `..._add_company_user_created_by` per design §8.4 (`ADD COLUMN`, self-FK `ON DELETE RESTRICT`, index; **NO BACKFILL**). Timestamp AFTER migration A, BEFORE migration B.
+- [x] 4.12 **GATE before applying C**: round-trip forward + Rollback C on a throwaway clone (§8.4 — the only genuinely lossless, unqualified rollback in this change: it discards only post-cutover audit provenance, nothing operational). Then apply forward via `prisma migrate deploy` (guarded URL check).
+- [x] 4.13 GREEN: create `apps/api-salesops/src/customer/dto/create-customer-with-identity.dto.ts` — declares NEITHER `userId` NOR `roles` (design §4.5).
+- [x] 4.14 GREEN: create `apps/api-salesops/src/customer/customer-identity.service.ts` — module-private `CUSTOMER_IDENTITY_ROLE = USER_ROLES.user` constant (A15); `createWithIdentity(actor, dto)` writes User -> CompanyUser -> Customer in that order, NOT transactional (A16); hand-written `assertNonBlank(fullName)`, `assertNonBlank(login)`, `assertMinLength(password, 8)` matching `CreateUserDto`'s floor.
+- [x] 4.15 GREEN: create `apps/api-salesops/src/customer/customer-identity.controller.ts` — `POST /customers/with-identity`, roles owner/admin/sales_operator/sales_agent (A14); 201 / 400 / 409 `DuplicateLoginError` / 409 `DuplicateCustomerDocumentError`.
+- [x] 4.16 Wire `customer.module.ts` — register the new controller/service (`USER_REPOSITORY`/`COMPANY_USER_REPOSITORY` already bound in `auth.module.ts:29-30`, §0.14 — confirm only, no new binding).
+- [x] 4.17 Non-regression confirmation (not an edit): the existing `POST /customers`, `customer.service.ts`, and its 15 controller + 11 service tests remain byte-for-byte unchanged (A14).
 
 **Exit criteria**: R20-R25 green, with R21 confirmed to have failed before 4.13-4.15 existed (note in commit message). `customer.controller.spec.ts` baseline + new R25 cases green. `customer.service.spec.ts` unchanged. New e2e cases (~4) green, existing 14 e2e cases unaffected. `company-user.test.ts` +1, `prisma-company-user.repository.spec.ts` +1 (both additive, not broken). `pnpm -r build` clean, lint clean. Migration C applied and structurally verified. Commit.
+
+**Deviations from this phase's task text, and why** (recorded at apply time):
+
+1. **4.16's premise was false.** `auth.module.ts:25-32` binds `USER_REPOSITORY`/
+   `COMPANY_USER_REPOSITORY` but **exports nothing**, and the module is not `@Global` —
+   Nest DI is module-scoped, so those bindings are invisible from `CustomerModule` and
+   "confirm only, no new binding" would have failed at bootstrap. Both tokens are now bound
+   in `customer.module.ts`, which is the pattern every feature module here already follows
+   (`sales.module.ts` re-binds 9 of them).
+2. **The boundary asserts live in the controller, not the service** (4.14). Every
+   `BadRequestException` in this app is thrown from a controller, and design §0.13's own
+   cited precedents (`assertCurrency`, `assertChannel`) are controller-level. Putting them
+   there also means a malformed request costs no bcrypt hash. The service keeps
+   `createUser()`/`createCustomer()` as the domain invariant check behind them.
+3. **4.6 was already satisfied** by task 1.11/1.12 — `customer.controller.spec.ts` already
+   carried the R25 denials for `POST`/`PATCH`/`DELETE`. Confirmed green, not rewritten.
+4. **Blast radius the design did not flag: migration C's self-FK breaks bulk fixture
+   cleanup.** `ON DELETE RESTRICT` is enforced per row, not at end-of-statement, so a single
+   `companyUser.deleteMany({})` spanning both an assignment and the one that created it now
+   fails. Repaired in `customer.e2e-spec.ts` and `prisma-company-user.repository.spec.ts` by
+   deleting provisioned assignments first. This is the FK behaving as designed.
+5. **4.9's spec gained +2 cases, not +1** (null default and the self-FK round trip) — the
+   "never backfilled" rule is only actually asserted by the first of the two.
+6. `api-salesops` had no `bcrypt` dependency; added (`^6.0.0` + `@types/bcrypt`, matching
+   `api-idp` and `infra-db`).
 
 ## Phase 5: Commission Ledger + Migration B (Slice 3b — LAST, irreversible-after-settlement)
 
