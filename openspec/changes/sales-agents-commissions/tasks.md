@@ -201,32 +201,58 @@ author or apply migration B until the cause is fixed.**
 
 ### Phase 5a: Domain, Adapters, Migration B, Seed
 
-- [ ] 5.1 RED: `domain/src/commission/compute-accrual.test.ts` — `300×2 + 200×1 = 800`; one unresolved line ⇒ total `600`, flagged in `unresolved`, never zeroed (R11).
-- [ ] 5.2 GREEN: create `domain/src/commission/{commission-reference,commission-accrual,commission-payment,compute-accrual,errors,index}.ts` per design §4.4 (A9-A13).
-- [ ] 5.3 GREEN: create the 4 ports `{commission-reference-provider,commission-accrual-repository,commission-payment-repository,commission-accrual-recorder}.port.ts`.
-- [ ] 5.4 Update `domain/src/index.ts` barrel — export `commission/`.
-- [ ] 5.5 RED: `infra-db/src/commission/*.spec.ts` — `commissionFor`: configured ⇒ `Money`; unconfigured ⇒ `undefined`, **never** `money(0n,'MN')` (R10).
-- [ ] 5.6 GREEN: create `infra-db/src/commission/{prisma-commission-reference.provider,prisma-commission-accrual.repository,prisma-commission-payment.repository}.ts` (+specs).
-- [ ] 5.7 Author Prisma schema: 5 new models exactly per design §8.1 (`ProductCommissionReference`, `CommissionAccrual`, `CommissionAccrualLine`, `CommissionAccrualUnresolved`, `CommissionPayment`). Confirm `OrderStatus` enum untouched (D7).
-- [ ] 5.8 Author migration B `..._add_commission_module` per design §8.5 — 5 `CREATE TABLE`s in FK-dependency order, 2 unique indexes (`commission_accrual(order_id)`, `commission_payment(accrual_id)`).
-- [ ] 5.9 **GATE before applying B** (both conditions, not either): (a) `verify-order-attribution.ts` passed (Phase 5 preamble above); (b) round-trip migration B forward + Rollback B (§8.5, `DROP TABLE` ×5) on a throwaway clone — safe only while the tables are empty, true pre-forward-apply. **Record explicitly and permanently: once any `commission_payment` row exists, Rollback B destroys a financial record; from that point the only acceptable rollback is a code revert with the tables left inert — this constraint governs every future hotfix to this module, not just today's apply.** Apply forward via `prisma migrate deploy` (guarded URL check) only after both conditions hold.
-- [ ] 5.10 RED: `infra-db/src/commission/seed.spec.ts` — exact match wins; longest-substring breaks `Neveras` vs `Neveras de 16 y 20 pies`; ambiguous same-key different-amount ⇒ seed throws; unmatched product ⇒ no row (R19).
-- [ ] 5.11 GREEN: create `infra-db/src/commission/seed.ts` — hand-transcribed constant from `docs/plans/reference/04-commissions.md`, `normalizeName` + longest-substring precedence (§7.2-7.4); exclude `Demás equipos pequeños` and `Combos de electrodomésticos` (D6, §7.3).
-- [ ] 5.12 Run `pnpm -r build` (required before any seed run), then run the commission seed against `store_mgmt_test`; review the matched/unmatched/unused report — **owner sign-off required** before this task is done (design §13).
+- [x] 5.1 RED: `domain/src/commission/compute-accrual.test.ts` — `300×2 + 200×1 = 800`; one unresolved line ⇒ total `600`, flagged in `unresolved`, never zeroed (R11).
+- [x] 5.2 GREEN: create `domain/src/commission/{commission-reference,commission-accrual,commission-payment,compute-accrual,errors,index}.ts` per design §4.4 (A9-A13).
+- [x] 5.3 GREEN: create the 4 ports `{commission-reference-provider,commission-accrual-repository,commission-payment-repository,commission-accrual-recorder}.port.ts`.
+- [x] 5.4 Update `domain/src/index.ts` barrel — export `commission/`.
+- [x] 5.5 RED: `infra-db/src/commission/*.spec.ts` — `commissionFor`: configured ⇒ `Money`; unconfigured ⇒ `undefined`, **never** `money(0n,'MN')` (R10).
+- [x] 5.6 GREEN: create `infra-db/src/commission/{prisma-commission-reference.provider,prisma-commission-accrual.repository,prisma-commission-payment.repository}.ts` (+specs).
+- [x] 5.7 Author Prisma schema: 5 new models exactly per design §8.1 (`ProductCommissionReference`, `CommissionAccrual`, `CommissionAccrualLine`, `CommissionAccrualUnresolved`, `CommissionPayment`). Confirm `OrderStatus` enum untouched (D7).
+- [x] 5.8 Author migration B `..._add_commission_module` per design §8.5 — 5 `CREATE TABLE`s in FK-dependency order, 2 unique indexes (`commission_accrual(order_id)`, `commission_payment(accrual_id)`).
+- [x] 5.9 **GATE before applying B** (both conditions, not either): (a) `verify-order-attribution.ts` passed (Phase 5 preamble above); (b) round-trip migration B forward + Rollback B (§8.5, `DROP TABLE` ×5) on a throwaway clone — safe only while the tables are empty, true pre-forward-apply. **Record explicitly and permanently: once any `commission_payment` row exists, Rollback B destroys a financial record; from that point the only acceptable rollback is a code revert with the tables left inert — this constraint governs every future hotfix to this module, not just today's apply.** Apply forward via `prisma migrate deploy` (guarded URL check) only after both conditions hold.
+- [x] 5.10 RED: `infra-db/src/commission/seed.spec.ts` — exact match wins; longest-substring breaks `Neveras` vs `Neveras de 16 y 20 pies`; ambiguous same-key different-amount ⇒ seed throws; unmatched product ⇒ no row (R19).
+- [x] 5.11 GREEN: create `infra-db/src/commission/seed.ts` — hand-transcribed constant from `docs/plans/reference/04-commissions.md`, `normalizeName` + longest-substring precedence (§7.2-7.4); exclude `Demás equipos pequeños` and `Combos de electrodomésticos` (D6, §7.3).
+- [x] 5.12 Run `pnpm -r build` (required before any seed run), then run the commission seed against `store_mgmt_test`; review the matched/unmatched/unused report — **owner sign-off required** before this task is done (design §13).
 
 ### Phase 5b: Delivery, Trigger, Reporting
 
-- [ ] 5.13 RED: `commission-accrual.recorder.spec.ts` — delivering creates exactly one accrual (idempotent, `@@unique(order_id)`); an unattributed legacy order ⇒ no accrual, logged `UNATTRIBUTED_ORDER` (R13).
-- [ ] 5.14 GREEN: `order.service.ts` `deliver()` — inject `COMMISSION_ACCRUAL_RECORDER` (A9), call `recordForDeliveredOrder` as a SEPARATE transaction after `orderRepository.deliver`. **Add the second `order.service.spec.ts` DI mock here** (DI-wave 2 of 2 — see forecast note; the 14 cases were already fixed once in Phase 2).
-- [ ] 5.15 Pin: same spec — no accrual possible for a non-`delivered` order; cancelling `created`/`verified` leaves no accrual, proving §0.10's structural claim (no new guard code) (R15).
-- [ ] 5.16 RED: same spec — fully-paid and credit-pending orders accrue identically at `delivered` (D9) (R18).
-- [ ] 5.17 RED: `order.service.spec.ts` — order creation succeeds for a product with no commission reference; resolvability is not a creation invariant (R12).
-- [ ] 5.18 GREEN: create `apps/api-salesops/src/commission/{commission.controller,commission.service,commission-accrual.recorder,commission.module}.ts` + `dto/`.
-- [ ] 5.19 RED: `commission.controller.spec.ts` + e2e — `POST /commissions/payments` leaves `Order.status` byte-for-byte unchanged; a second payment on the same accrual ⇒ 409 (R14).
-- [ ] 5.20 RED: same — `GET /commissions/report` includes an `owner` who registered and delivered a sale, never filtered (D8) (R16).
-- [ ] 5.21 RED: same — no combo-bracket computation exists anywhere in the capability's public surface (D6), structural `rg`-style assertion (R17).
-- [ ] 5.22 `GET /commissions/accruals`: reuse `isScopedSalesAgent` built in task 3.16 — no new predicate.
-- [ ] 5.23 Wire `apps/api-salesops/src/app.module.ts` — register `CommissionModule`. Wire `sales.module.ts` — bind `COMMISSION_ACCRUAL_RECORDER`.
+- [x] 5.13 RED: `commission-accrual.recorder.spec.ts` — delivering creates exactly one accrual (idempotent, `@@unique(order_id)`); an unattributed legacy order ⇒ no accrual, logged `UNATTRIBUTED_ORDER` (R13).
+- [x] 5.14 GREEN: `order.service.ts` `deliver()` — inject `COMMISSION_ACCRUAL_RECORDER` (A9), call `recordForDeliveredOrder` as a SEPARATE transaction after `orderRepository.deliver`. **Add the second `order.service.spec.ts` DI mock here** (DI-wave 2 of 2 — see forecast note; the 14 cases were already fixed once in Phase 2).
+- [x] 5.15 Pin: same spec — no accrual possible for a non-`delivered` order; cancelling `created`/`verified` leaves no accrual, proving §0.10's structural claim (no new guard code) (R15).
+- [x] 5.16 RED: same spec — fully-paid and credit-pending orders accrue identically at `delivered` (D9) (R18).
+- [x] 5.17 RED: `order.service.spec.ts` — order creation succeeds for a product with no commission reference; resolvability is not a creation invariant (R12).
+- [x] 5.18 GREEN: create `apps/api-salesops/src/commission/{commission.controller,commission.service,commission-accrual.recorder,commission.module}.ts` + `dto/`.
+- [x] 5.19 RED: `commission.controller.spec.ts` + e2e — `POST /commissions/payments` leaves `Order.status` byte-for-byte unchanged; a second payment on the same accrual ⇒ 409 (R14).
+- [x] 5.20 RED: same — `GET /commissions/report` includes an `owner` who registered and delivered a sale, never filtered (D8) (R16).
+- [x] 5.21 RED: same — no combo-bracket computation exists anywhere in the capability's public surface (D6), structural `rg`-style assertion (R17).
+- [x] 5.22 `GET /commissions/accruals`: reuse `isScopedSalesAgent` built in task 3.16 — no new predicate.
+- [x] 5.23 Wire `apps/api-salesops/src/app.module.ts` — register `CommissionModule`. Wire `sales.module.ts` — bind `COMMISSION_ACCRUAL_RECORDER`.
+
+**Deviations and findings from this phase** (recorded at apply time):
+
+1. **Task order inverted: 5.7/5.8 (schema + migration B) ran BEFORE 5.5/5.6 (adapters).**
+   The adapters are typed against the generated Prisma client, which does not exist until the
+   models do. The stated order cannot compile.
+2. **Migration B's blast radius on fixtures, not flagged in the design.** `commission_accrual.order_id`
+   is `ON DELETE RESTRICT` — deliberately, so evidence of earnings cannot be erased by tidying
+   up orders. The consequence is that `order.e2e-spec.ts`'s `order.deleteMany({})` now fails
+   once any delivered order has accrued. Repaired by deleting payments → accruals → orders.
+   Same class as migration C's self-FK finding in Phase 4.
+3. **`isScopedSalesAgent` was a PRIVATE method on `OrderController`** — not reusable as task
+   5.22 assumed. Extracted to `src/auth/role-scope.ts`; `OrderController` now delegates to it.
+   Who may read whose earnings is decided in exactly one place.
+4. **`POST /commissions/payments` forwarded the raw body to the service.** With no
+   `ValidationPipe`, a caller-supplied `amount` travelled all the way in. The service ignored
+   it, but one future line could have read it. The controller now rebuilds the DTO field by
+   field — same fix as the customer mint route in Phase 4.
+5. **Suites are order-dependent when residual data exists.** Two full-matrix runs showed
+   single transient failures that cleared on re-run, caused by data left by the seed/gate work.
+   Final verification was done against a **freshly recreated `store_mgmt_test`** — Phase 6.1
+   already prescribes this, and it is not optional.
+6. **Pre-existing (NOT introduced here):** `pnpm --filter api-salesops typecheck` reports two
+   `TS2353` errors in `order.service.spec.ts` (`productName`, `customerName`). Confirmed present
+   before this phase by stashing. `pnpm -r build` is unaffected — `tsconfig.build.json` excludes
+   specs. Left alone as out of scope.
 
 **Exit criteria**: R10-R19 green (5a) and R12-R18 green (5b) — full R10-R19 set confirmed together. Seed report reviewed and accepted. `pnpm -r build` clean. Full matrix green across every package (domain, infra-db, api-common, api-idp, api-salesops unit+e2e), lint `--max-warnings 0` on every touched package. This is the final content phase.
 

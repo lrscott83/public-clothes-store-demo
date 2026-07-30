@@ -22,11 +22,15 @@ import {
 } from '@store-mgmt/infra-db';
 import { AvailabilityController } from './availability.controller.js';
 import { AvailabilityService } from './availability.service.js';
+import { CommissionModule } from '../commission/commission.module.js';
 import { OrderController } from './order.controller.js';
 import { OrderService } from './order.service.js';
 
 @Module({
-  imports: [InfraDbModule],
+  // `CommissionModule` exports only the `COMMISSION_ACCRUAL_RECORDER` port, so
+  // this module gains the delivery→accrual trigger without gaining any
+  // knowledge of how a commission is computed or stored.
+  imports: [InfraDbModule, CommissionModule],
   controllers: [OrderController, AvailabilityController],
   providers: [
     OrderService,

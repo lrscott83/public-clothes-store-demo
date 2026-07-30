@@ -3,6 +3,7 @@ import type {
   ICurrencyRepository,
   IOrderRepository,
   ICategoryRepository,
+  ICommissionAccrualRecorder,
   ICustomerRepository,
   IProductRepository,
   IStockLevelRepository,
@@ -23,6 +24,7 @@ import {
   ORDER_REPOSITORY,
   RateNotFoundError,
   CATEGORY_REPOSITORY,
+  COMMISSION_ACCRUAL_RECORDER,
   CUSTOMER_REPOSITORY,
   PRODUCT_REPOSITORY,
   STOCK_LEVEL_REPOSITORY,
@@ -251,6 +253,7 @@ describe('OrderService', () => {
   let productRepo: jest.Mocked<IProductRepository>;
   let categoryRepo: jest.Mocked<ICategoryRepository>;
   let customerRepo: jest.Mocked<ICustomerRepository>;
+  let commissionRecorder: jest.Mocked<ICommissionAccrualRecorder>;
 
   beforeEach(async () => {
     orderRepo = buildOrderRepoMock();
@@ -260,6 +263,9 @@ describe('OrderService', () => {
     productRepo = buildProductRepoMock();
     categoryRepo = buildCategoryRepoMock();
     customerRepo = buildCustomerRepoMock();
+    commissionRecorder = {
+      recordForDeliveredOrder: jest.fn().mockResolvedValue(null),
+    } as unknown as jest.Mocked<ICommissionAccrualRecorder>;
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrderService,
@@ -270,6 +276,10 @@ describe('OrderService', () => {
         { provide: PRODUCT_REPOSITORY, useValue: productRepo },
         { provide: CATEGORY_REPOSITORY, useValue: categoryRepo },
         { provide: CUSTOMER_REPOSITORY, useValue: customerRepo },
+        // `deliver()` now records a commission accrual through this port. Mocked
+        // rather than exercised: what the accrual CONTAINS is the recorder's own
+        // spec; what matters here is that delivery still behaves the same.
+        { provide: COMMISSION_ACCRUAL_RECORDER, useValue: commissionRecorder },
       ],
     }).compile();
     service = module.get(OrderService);
@@ -349,6 +359,31 @@ describe('OrderService', () => {
       await expect(service.deliver('order-uuid-1')).rejects.toThrow(NegativeStockError);
       expect(orderRepo.deliver).toHaveBeenCalledWith('order-uuid-1');
     });
+
+    it('deliver records a commission accrual for the DELIVERED order', async () => {
+      const delivered = sampleOrder({ status: 'delivered' });
+      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verified' }));
+      orderRepo.deliver.mockResolvedValue(delivered);
+
+      await service.deliver('order-uuid-1');
+
+      // The order handed to the recorder is the DELIVERED one, not the
+      // pre-delivery read — accruing from a stale snapshot would credit the
+      // agent against a status that had not happened yet.
+      expect(commissionRecorder.recordForDeliveredOrder).toHaveBeenCalledWith(delivered);
+    });
+
+    it.each(['confirm', 'cancel'] as const)(
+      '%s never records an accrual — commission is earned by delivery alone',
+      async (action) => {
+        orderRepo.findById.mockResolvedValue(sampleOrder());
+        orderRepo[action].mockResolvedValue(sampleOrder({ status: 'verified' }));
+
+        await service[action]('order-uuid-1');
+
+        expect(commissionRecorder.recordForDeliveredOrder).not.toHaveBeenCalled();
+      },
+    );
 
     it('cancel delegates straight to the repository and propagates InvalidOrderStateError unmapped', async () => {
       orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'delivered' }));
@@ -430,6 +465,21 @@ describe('OrderService', () => {
 
       const persisted = orderRepo.create.mock.calls[0]?.[0] as DomainOrder;
       expect(persisted.customerName).toBe('Ana Torres');
+    });
+  });
+
+  // R17. Whether a product has a commission configured says nothing about
+  // whether it can be sold. Making resolvability a creation invariant would let
+  // an unfinished commission table block the shop from taking orders — the
+  // failure mode would be catastrophic and the coupling is entirely avoidable.
+  describe('create — commission configuration is not a creation invariant', () => {
+    it('creates an order for a product with no commission reference, consulting commission not at all', async () => {
+      orderRepo.create.mockResolvedValue(sampleOrder());
+
+      const result = await service.create(sampleCreateDto, ACTOR_COMPANY_USER_ID);
+
+      expect(result.id).toBeDefined();
+      expect(commissionRecorder.recordForDeliveredOrder).not.toHaveBeenCalled();
     });
   });
 

@@ -31,6 +31,7 @@ import {
   UnsellableOrderReferenceError,
   type IWarehouseOperatorRepository,
 } from '@store-mgmt/domain';
+import { isScopedSalesAgent } from '../auth/role-scope.js';
 import { OrderService } from './order.service.js';
 import type {
   CreateOrderDto,
@@ -326,13 +327,11 @@ export class OrderController {
    * here, where its data dependency (attribution) actually lives, rather than
    * being deferred to the phase that needs it second.
    */
+  // Delegates to the shared predicate: `CommissionController` scopes by the
+  // same rule, and who may read whose earnings must be decided in exactly one
+  // place.
   private isScopedSalesAgent(user: SanitizedUser): boolean {
-    return (
-      RoleHelpers.hasRole(user.roles, USER_ROLES.sales_agent) &&
-      !RoleHelpers.hasRole(user.roles, USER_ROLES.owner) &&
-      !RoleHelpers.hasRole(user.roles, USER_ROLES.admin) &&
-      !RoleHelpers.hasRole(user.roles, USER_ROLES.sales_operator)
-    );
+    return isScopedSalesAgent(user);
   }
 
   /** `true` only for a caller whose access to this endpoint comes SOLELY from `warehouse_operator` (not owner/admin/sales_operator). */

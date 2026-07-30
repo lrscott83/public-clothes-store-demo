@@ -128,6 +128,14 @@ describe('Sales (e2e)', () => {
   });
 
   afterEach(async () => {
+    // Commission first. Delivering an order now records an accrual, and
+    // `commission_accrual.order_id` is `ON DELETE RESTRICT` — deliberately, so
+    // nobody can erase evidence of what an agent earned by tidying up orders.
+    // The consequence lands here: the accrual (and any payment settling it)
+    // must go before the order it belongs to.
+    await prisma.commissionPayment.deleteMany({});
+    await prisma.commissionAccrual.deleteMany({});
+    await prisma.productCommissionReference.deleteMany({});
     // `Order` cascades to `OrderLine`/`OrderPayment`/`SaleCredit` on delete
     // (schema.prisma `onDelete: Cascade`) — one deleteMany clears the whole
     // aggregate tree. `User` cascades to `WarehouseOperator` the same way.

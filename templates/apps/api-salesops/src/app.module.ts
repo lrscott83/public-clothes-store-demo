@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { InfraDbModule } from '@store-mgmt/infra-db';
 import { AuthModule } from './auth/auth.module.js';
 import { CategoryModule } from './category/category.module.js';
+import { CommissionModule } from './commission/commission.module.js';
 import { CurrencyModule } from './currency/currency.module.js';
 import { CustomerModule } from './customer/customer.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -23,6 +24,7 @@ import { WarehouseModule } from './warehouse/warehouse.module.js';
     WarehouseModule,
     StockModule,
     CustomerModule,
+    CommissionModule,
     SalesModule,
   ],
 })

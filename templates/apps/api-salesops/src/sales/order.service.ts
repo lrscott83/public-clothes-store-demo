@@ -6,6 +6,7 @@ import type {
   DeliveryMode,
   ExchangeRate as DomainExchangeRate,
   ICategoryRepository,
+  ICommissionAccrualRecorder,
   ICurrencyRepository,
   ICustomerRepository,
   IOrderRepository,
@@ -28,6 +29,7 @@ import {
   ORDER_REPOSITORY,
   OrderLabelHelpers,
   CATEGORY_REPOSITORY,
+  COMMISSION_ACCRUAL_RECORDER,
   CUSTOMER_REPOSITORY,
   PRODUCT_REPOSITORY,
   STOCK_LEVEL_REPOSITORY,
@@ -84,6 +86,11 @@ export class OrderService {
     @Inject(PRODUCT_REPOSITORY) private readonly productRepository: IProductRepository,
     @Inject(CATEGORY_REPOSITORY) private readonly categoryRepository: ICategoryRepository,
     @Inject(CUSTOMER_REPOSITORY) private readonly customerRepository: ICustomerRepository,
+    // Sales depends on a port the COMMISSION module declares, never on its
+    // implementation — so this module knows that delivery earns something,
+    // without knowing anything about how much or how it is stored.
+    @Inject(COMMISSION_ACCRUAL_RECORDER)
+    private readonly commissionAccrualRecorder: ICommissionAccrualRecorder,
   ) {}
 
   /**
@@ -280,10 +287,23 @@ export class OrderService {
     return this.toResponse(confirmed);
   }
 
+  /**
+   * Delivery is what earns the commission, so this is where accrual is
+   * triggered — inside the one method that owns the transition, rather than in
+   * a controller or an event handler where it could drift away from it.
+   *
+   * The accrual is a SEPARATE step, deliberately not inside the delivery
+   * write. Delivery is an operational fact about the customer's goods;
+   * accrual is a financial record about the agent. If the accrual fails, the
+   * delivery must still stand — a warehouse cannot un-hand a fridge because a
+   * commission row would not insert. The recorder is idempotent, so the
+   * accrual can be replayed later without producing a second one.
+   */
   async deliver(id: string): Promise<OrderResponseDto | null> {
     const existing = await this.orderRepository.findById(id);
     if (!existing) return null;
     const delivered = await this.orderRepository.deliver(id);
+    await this.commissionAccrualRecorder.recordForDeliveredOrder(delivered);
     return this.toResponse(delivered);
   }
 
