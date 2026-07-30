@@ -10,3 +10,4 @@ export * from './customer/index.js';
 export * from './sales/index.js';
 export * from './users/index.js';
 export * from './company/index.js';
+export * from './commission/index.js';

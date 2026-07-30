@@ -16,3 +16,6 @@ export { PrismaWarehouseOperatorRepository } from './users/prisma-warehouse-oper
 export { PrismaCompanyRepository } from './company/prisma-company.repository.js';
 export { PrismaCompanyUserRepository } from './company/prisma-company-user.repository.js';
 export { seedCompany, DEFAULT_COMPANY_SLUG } from './company/seed.js';
+export { PrismaCommissionReferenceProvider } from './commission/prisma-commission-reference.provider.js';
+export { PrismaCommissionAccrualRepository } from './commission/prisma-commission-accrual.repository.js';
+export { PrismaCommissionPaymentRepository } from './commission/prisma-commission-payment.repository.js';

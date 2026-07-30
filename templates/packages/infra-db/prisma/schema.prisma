@@ -87,6 +87,8 @@ model Product {
   movements   StockMovement[]
   // Inverse relation only — added by the Sales module (backend-ventas).
   orderLines  OrderLine[]
+  // Inverse relation only — added by the Commission module. 0..1 per product.
+  commissionReference ProductCommissionReference?
 
   @@index([categoryId])
   @@map("product")
@@ -261,6 +263,9 @@ model Order {
   customer              Customer       @relation(fields: [customerId], references: [id])
   warehouse             Warehouse      @relation(fields: [warehouseId], references: [id])
   lines                 OrderLine[]
+  // Inverse relation only — added by the Commission module. 0..1 per order
+  // (`commission_accrual.order_id` is UNIQUE, the idempotency key).
+  commissionAccrual     CommissionAccrual?
   payments              OrderPayment[]
   saleCredit            SaleCredit?
   /// RESTRICT, not SET NULL: an assignment that has sales against it must not be deletable,
@@ -271,6 +276,100 @@ model Order {
   @@index([customerId])
   @@index([attributedCompanyUserId])
   @@map("sales_order") // "order" is a SQL reserved word
+}
+
+/// What one unit of a product earns its selling agent. PK == FK, so a product has
+/// exactly 0..1 reference — no ambiguity about which row applies, enforced by the
+/// schema rather than by a "pick the latest" rule nobody would remember.
+/// Name→product matching happens ONCE at seed time; the request path only reads by id.
+model ProductCommissionReference {
+  productId String   @id @map("product_id") @db.Uuid
+  /// MN only. The commission table is authored in national currency and never converted,
+  /// so there is no exchange rate to freeze here.
+  amountMn  Decimal  @map("amount_mn") @db.Decimal(18, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@map("product_commission_reference")
+}
+
+/// What one delivered order earned one agent. `orderId` is UNIQUE and that uniqueness
+/// IS the idempotency guarantee: delivering twice, or retrying after a partial failure,
+/// cannot produce a second accrual. Amounts are frozen at accrual time — a later edit to
+/// the commission table must never restate what someone already earned.
+model CommissionAccrual {
+  id                      String   @id @default(uuid()) @db.Uuid
+  orderId                 String   @unique @map("order_id") @db.Uuid
+  attributedCompanyUserId String   @map("attributed_company_user_id") @db.Uuid
+  /// Σ of the RESOLVED lines only, MN. Unresolved lines are excluded, never summed as zero.
+  total                   Decimal  @db.Decimal(18, 2)
+  accruedAt               DateTime @map("accrued_at")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  companyUser CompanyUser @relation(fields: [attributedCompanyUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  lines       CommissionAccrualLine[]
+  unresolved  CommissionAccrualUnresolved[]
+  payment     CommissionPayment?
+
+  @@index([attributedCompanyUserId])
+  @@map("commission_accrual")
+}
+
+/// One resolved line. `unitCommission` is the FROZEN snapshot of the reference at accrual
+/// time — the same discipline `order_line` already applies to price and exchange rate.
+model CommissionAccrualLine {
+  id             String  @id @default(uuid()) @db.Uuid
+  accrualId      String  @map("accrual_id") @db.Uuid
+  orderLineId    String  @map("order_line_id") @db.Uuid
+  productId      String  @map("product_id") @db.Uuid
+  quantity       Int
+  unitCommission Decimal @map("unit_commission") @db.Decimal(18, 2)
+  lineCommission Decimal @map("line_commission") @db.Decimal(18, 2)
+
+  accrual CommissionAccrual @relation(fields: [accrualId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([accrualId, orderLineId])
+  @@map("commission_accrual_line")
+}
+
+/// Lines whose product had NO reference configured. Recorded, never zeroed, never summed.
+/// "Unconfigured" and "worth nothing" are different facts: storing the first as the second
+/// would silently under-pay an agent and leave an accrual that looks complete.
+model CommissionAccrualUnresolved {
+  id          String @id @default(uuid()) @db.Uuid
+  accrualId   String @map("accrual_id") @db.Uuid
+  orderLineId String @map("order_line_id") @db.Uuid
+  productId   String @map("product_id") @db.Uuid
+  quantity    Int
+
+  accrual CommissionAccrual @relation(fields: [accrualId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([accrualId, orderLineId])
+  @@map("commission_accrual_unresolved")
+}
+
+/// Settlement of one accrual, 1:1 via the unique `accrual_id`. An accrual is paid once or
+/// not at all. `ON DELETE RESTRICT` because this is a financial record: it outlives the
+/// convenience of deleting the accrual it settles.
+/// Note what is ABSENT: nothing here references or alters an `Order`. Whether the customer's
+/// order is delivered and whether the agent has been paid are independent facts.
+model CommissionPayment {
+  id                      String   @id @default(uuid()) @db.Uuid
+  accrualId               String   @unique @map("accrual_id") @db.Uuid
+  amount                  Decimal  @db.Decimal(18, 2)
+  paidAt                  DateTime @map("paid_at")
+  /// The CompanyUser who RECORDED the settlement — never the one being paid.
+  recordedByCompanyUserId String   @map("recorded_by_company_user_id") @db.Uuid
+  note                    String?
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  accrual CommissionAccrual @relation(fields: [accrualId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@map("commission_payment")
 }
 
 model OrderLine {
@@ -456,6 +555,8 @@ model CompanyUser {
 
   company          Company @relation(fields: [companyId], references: [id])
   attributedOrders Order[]
+  // Inverse relation only — added by the Commission module.
+  commissionAccruals CommissionAccrual[]
 
   /// Self-relation. `ON DELETE RESTRICT` (Prisma's `Restrict`) matches every other FK in
   /// this schema; `company_user` has no hard-delete path today, so it can only ever fire
