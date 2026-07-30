@@ -23,6 +23,21 @@ describe('createCompanyUser — invariants', () => {
     expect(companyUser.status).toBe('REVOKED');
   });
 
+  it('defaults createdByCompanyUserId to null — nobody provisioned a signup or a seed', () => {
+    const companyUser = createCompanyUser({ userId: 'user-1', companyId: 'company-1', role: 1 });
+    expect(companyUser.createdByCompanyUserId).toBeNull();
+  });
+
+  it('keeps an explicit createdByCompanyUserId — the provisioning audit trail', () => {
+    const companyUser = createCompanyUser({
+      userId: 'user-1',
+      companyId: 'company-1',
+      role: 1,
+      createdByCompanyUserId: 'company-user-creator',
+    });
+    expect(companyUser.createdByCompanyUserId).toBe('company-user-creator');
+  });
+
   it('rejects a missing userId', () => {
     expect(() => createCompanyUser({ userId: '', companyId: 'company-1', role: 1 })).toThrow(
       InvalidCompanyUserError,

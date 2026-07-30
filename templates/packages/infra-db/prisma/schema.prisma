@@ -447,13 +447,24 @@ model CompanyUser {
   companyId String            @map("company_id") @db.Uuid
   role      Int
   status    CompanyUserStatus @default(ACTIVE)
+  /// `CompanyUser.id` of whoever provisioned this assignment. NULL for self-registered
+  /// (`AuthService.signup`), seeded, and pre-migration rows.
+  /// NEVER backfilled: an invented creator is invented audit.
+  createdByCompanyUserId String? @map("created_by_company_user_id") @db.Uuid
   createdAt DateTime          @default(now()) @map("created_at")
   updatedAt DateTime          @updatedAt @map("updated_at")
 
   company          Company @relation(fields: [companyId], references: [id])
   attributedOrders Order[]
 
+  /// Self-relation. `ON DELETE RESTRICT` (Prisma's `Restrict`) matches every other FK in
+  /// this schema; `company_user` has no hard-delete path today, so it can only ever fire
+  /// as a loud signal that one was introduced.
+  createdBy    CompanyUser?  @relation("CompanyUserProvisioning", fields: [createdByCompanyUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  provisioned  CompanyUser[] @relation("CompanyUserProvisioning")
+
   @@unique([userId, companyId])
   @@index([userId])
+  @@index([createdByCompanyUserId])
   @@map("company_user")
 }

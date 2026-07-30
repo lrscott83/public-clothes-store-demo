@@ -15,6 +15,7 @@ interface CompanyUserRow {
   readonly companyId: string;
   readonly role: number;
   readonly status: CompanyUserStatus;
+  readonly createdByCompanyUserId: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -26,6 +27,7 @@ function toDomain(row: CompanyUserRow): DomainCompanyUser {
     companyId: row.companyId,
     role: row.role,
     status: row.status,
+    createdByCompanyUserId: row.createdByCompanyUserId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -52,6 +54,9 @@ export class PrismaCompanyUserRepository implements ICompanyUserRepository {
         companyId: input.companyId,
         role: input.role,
         status: input.status ?? 'ACTIVE',
+        // Defaults to `null` — signup and seed paths pass nothing, and the
+        // column is NEVER backfilled for rows that predate it.
+        createdByCompanyUserId: input.createdByCompanyUserId ?? null,
       },
     });
     return toDomain(row);

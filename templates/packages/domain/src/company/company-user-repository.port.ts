@@ -7,6 +7,7 @@ import type { CompanyUser, CreateCompanyUserInput } from './company-user.js';
  * interface, never a concrete Prisma class.
  */
 export interface ICompanyUserRepository {
+  /** `input.createdByCompanyUserId` records who provisioned the assignment; omit it for signup/seed paths, where nobody did. */
   create(input: CreateCompanyUserInput): Promise<CompanyUser>;
   /** Sole ACTIVE assignment for `userId`, or `null`. `JwtStrategy` hot path (per cache miss) in the Phase 2 cutover. */
   findActiveByUserId(userId: string): Promise<CompanyUser | null>;

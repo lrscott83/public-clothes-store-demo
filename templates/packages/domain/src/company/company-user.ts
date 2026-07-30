@@ -22,6 +22,14 @@ export interface CompanyUser {
   readonly companyId: string;
   readonly role: UserRoleValue;
   readonly status: CompanyUserStatus;
+  /**
+   * `CompanyUser.id` of whoever provisioned this assignment. `null` for
+   * self-registered (`AuthService.signup`), seeded, and pre-migration rows —
+   * never backfilled, because an invented creator is invented audit. The
+   * assignment IS the privilege grant, so this is where "who granted it"
+   * belongs; nothing reads it to make a decision, it exists for forensics.
+   */
+  readonly createdByCompanyUserId: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -37,6 +45,8 @@ export interface CreateCompanyUserInput {
   readonly companyId: string;
   readonly role: UserRoleValue;
   readonly status?: CompanyUserStatus;
+  /** Omitted (or `null`) whenever nobody provisioned this assignment — signup, seed, migration. */
+  readonly createdByCompanyUserId?: string | null;
   readonly createdAt?: Date;
   readonly updatedAt?: Date;
 }
@@ -68,6 +78,7 @@ export function createCompanyUser(input: CreateCompanyUserInput): CompanyUser {
     companyId: input.companyId,
     role: input.role,
     status: input.status ?? 'ACTIVE',
+    createdByCompanyUserId: input.createdByCompanyUserId ?? null,
     createdAt: input.createdAt ?? now,
     updatedAt: input.updatedAt ?? now,
   };

@@ -22,18 +22,29 @@ describe('PrismaCompanyUserRepository', () => {
     repository = new PrismaCompanyUserRepository(prisma);
   });
 
+  /**
+   * `created_by_company_user_id` is a SELF-FK with `ON DELETE RESTRICT`, and
+   * RESTRICT is enforced per row rather than at end-of-statement — so a single
+   * `deleteMany({})` spanning both an assignment and the one that created it
+   * fails. Provisioned assignments (the ones carrying a creator) go first.
+   */
+  async function wipeCompanyUsers(): Promise<void> {
+    await prisma.companyUser.deleteMany({ where: { createdByCompanyUserId: { not: null } } });
+    await prisma.companyUser.deleteMany({});
+  }
+
   beforeEach(async () => {
     // Wipe FIRST, not just in afterEach: migration 001 seeds a `default`-slug
     // Company, so a create here would hit the slug unique index on the very
     // first test against a freshly migrated database.
-    await prisma.companyUser.deleteMany({});
+    await wipeCompanyUsers();
     await prisma.company.deleteMany({});
     const company = await prisma.company.create({ data: { name: 'Tienda Prueba', slug: 'default' } });
     companyId = company.id;
   });
 
   afterEach(async () => {
-    await prisma.companyUser.deleteMany({});
+    await wipeCompanyUsers();
     await prisma.company.deleteMany({});
     await prisma.user.deleteMany({});
   });
@@ -76,6 +87,29 @@ describe('PrismaCompanyUserRepository', () => {
     const created = await repository.create({ userId, companyId, role: 1, status: 'REVOKED' });
 
     expect(created.status).toBe('REVOKED');
+  });
+
+  it('create() defaults createdByCompanyUserId to null — signup and seed rows have no provisioner', async () => {
+    const userId = await createTestUser();
+
+    const created = await repository.create({ userId, companyId, role: 1 });
+
+    expect(created.createdByCompanyUserId).toBeNull();
+  });
+
+  it('create() round-trips an explicit createdByCompanyUserId through the self-FK', async () => {
+    const creator = await repository.create({ userId: await createTestUser(), companyId, role: 2 });
+
+    const created = await repository.create({
+      userId: await createTestUser(),
+      companyId,
+      role: 1,
+      createdByCompanyUserId: creator.id,
+    });
+
+    expect(created.createdByCompanyUserId).toBe(creator.id);
+    const reread = await repository.findByUserAndCompany(created.userId, companyId);
+    expect(reread?.createdByCompanyUserId).toBe(creator.id);
   });
 
   it('rejects a duplicate (userId, companyId) assignment', async () => {
