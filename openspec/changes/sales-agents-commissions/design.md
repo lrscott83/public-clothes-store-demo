@@ -718,7 +718,7 @@ The seed prints a report — `matched`, `unmatched products`, `unused references
 | `Calentadores de agua` / `Calentador de agua` — both 3000 | Collapse to ONE key after normalization | Identical amount ⇒ no information lost. Had they differed, step 4 would abort the seed |
 | `Cable \| 50 por metro` | Seeded as flat `50`, per unit | D5: valid **iff** the product's quantity is expressed in metres. Recorded as an assumption in §14, not machinery |
 | `Metro de azulejos \| 500` | Seeded as flat `500`, per unit | Same. The unit is already in the product name |
-| `Combos de electrodomésticos` (`:9-13`) | **NOT SEEDED** | D6 — order-level bracket rule, conflicts with the per-product table. Documented pending, never guessed |
+| `Combos de electrodomésticos` (`:9-13`) | **SEEDED, at product level only** (`COMBO_BRACKETS`, owner-confirmed 2026-07-30): a catalog product whose NAME joins pieces with `" + "` is priced by how many it joins — 1-2 → 3000, 3-5 → 4000, 6-7 → 5000. Nothing above 7 is extrapolated | D6 as originally written read the bracket as ORDER-level and left it out. The owner's reading is narrower: it prices a bundle SOLD AS ONE PRODUCT, which is per-product after all. The order-level rule — an order carrying N separate lines — stays **unimplemented** (R17 still holds; each line pays its own tier). `NAMED_BUNDLE_TABLE` and `KIT_TABLE` resolve BEFORE the bracket, so a bundle the doc named and priced itself (`Fogón infrarrojo + olla de presión o calderos \| 1500`) is not repriced by piece count |
 | `Kits de energía` (`:84-96`) | Seeded as ordinary rows | D5 — kits are catalog products, same per-product path |
 
 ### 7.4 MVP dictionary: kept vs rejected
@@ -1242,9 +1242,15 @@ four-slice split above is the deliverable-work-unit boundary.
       `forbidNonWhitelisted: true` would reject every write request in the application. Its
       own change, its own RED suite. Until then, A15's constant and R21 are the guard, and
       that fact should be stated in the PR description rather than assumed.
-- [ ] **Q3 — combo brackets (D6).** `04-commissions.md:9-13` remains unimplemented and
-      unseeded. Documented pending. Needs the owner to state how a bracket interacts with the
-      per-product amounts before anyone models it.
+- [x] **Q3 — combo brackets (D6). ANSWERED by the owner, 2026-07-30/31.** The bracket prices a
+      bundle sold as ONE catalog product (name joined with `" + "`), not an order carrying N
+      separate lines. Seeded on that reading (§7.3); the order-level rule stays unimplemented and
+      R17 still pins its absence from the capability's surface. The owner also confirmed the two
+      kits at 8000, the small-kitchen rows at 1000 and `Exhibidor 20P` at 5000, and stated the
+      seed is example data meant to be edited rather than a gate: "no vamos a bloquearnos por eso".
+      **Open consequence, not blocking:** there is no endpoint to edit a
+      `product_commission_reference` — the only write path is the seed, so "editable" today means
+      editable in the database, not in the product.
 - [ ] **Q4 — per-unit-of-measure rows.** `Cable | 50 por metro` and `Metro de azulejos | 500`
       are seeded as flat per-unit amounts (§7.3). This is correct **only if** those products'
       `quantity` is expressed in metres. Confirm against the real catalog at seed time; the

@@ -16,11 +16,17 @@ import type { PrismaService } from '../prisma-client.js';
  * RESOLUTION ORDER, most specific first:
  *
  *   1. {@link KIT_TABLE} — named kits have their own tiers, well above the
- *      combo bracket. A kit reaching rule 2 would be paid as a two-item combo.
- *   2. {@link COMBO_BRACKETS} — a product whose NAME joins several pieces with
+ *      combo bracket. A kit reaching rule 3 would be paid as a two-item combo.
+ *   2. {@link NAMED_BUNDLE_TABLE} — bundles the doc named and priced itself.
+ *      Counting their pieces would overrule an amount the business wrote down.
+ *   3. {@link COMBO_BRACKETS} — a product whose NAME joins several pieces with
  *      " + " is a combo, priced by how many it carries.
- *   3. {@link COMMISSION_KEYWORD_TABLE} — ordered keyword match.
- *   4. Nothing. No row is written; the line surfaces as unresolved.
+ *   4. {@link COMMISSION_KEYWORD_TABLE} — ordered keyword match.
+ *   5. Nothing. No row is written; the line surfaces as unresolved.
+ *
+ * Rules 2 and 3 price a bundle SOLD AS ONE PRODUCT. The doc's bracket read as
+ * an ORDER-level rule — N separate lines in one sale — is deliberately NOT
+ * implemented: each line still earns its own tier.
  *
  * `Demás equipos pequeños | 1000` from the source doc is still NOT seeded as a
  * rule. It is a FALLBACK, and seeding it would price every unconfigured product
@@ -122,6 +128,24 @@ export const KIT_TABLE: readonly CommissionReferenceRow[] = [
     keywords: ['kit 3 84', 'kit 5 12', 'kit de bateria e inversor', 'todoenuno'],
     amountMn: 8000,
     label: 'Kit de batería e Inversor',
+  },
+];
+
+/**
+ * Bundles the source doc NAMED and priced itself, checked before the bracket
+ * and only for names that are bundles at all.
+ *
+ * The bracket prices a bundle by counting its pieces. That is the right rule
+ * exactly where the business did not write one down — and the wrong one where
+ * it did. `Fogón infrarrojo + olla de presión o calderos | 1500` joins two
+ * pieces, so the bracket would pay 3000: twice the documented amount, decided
+ * by a rule the business never applied to this product.
+ */
+export const NAMED_BUNDLE_TABLE: readonly CommissionReferenceRow[] = [
+  {
+    keywords: ['fogon infrarrojo'],
+    amountMn: 1500,
+    label: 'Fogón infrarrojo + olla de presión o calderos',
   },
 ];
 
@@ -320,6 +344,13 @@ function resolve(
 
   const pieces = countComboPieces(rawName);
   if (pieces > 1) {
+    const named = NAMED_BUNDLE_TABLE.find((row) =>
+      row.keywords.some((keyword) => productKey.includes(normalizeName(keyword))),
+    );
+    if (named) {
+      return { label: named.label, amountMn: named.amountMn };
+    }
+
     const bracket = COMBO_BRACKETS.find((b) => pieces <= b.maxPieces);
     // Beyond the top bracket the doc stops. A bundle of 8 is left to the
     // keyword table rather than extrapolated into a tier nobody wrote down.

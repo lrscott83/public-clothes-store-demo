@@ -33,8 +33,11 @@ describe('commission seed — name resolution', () => {
       expect(amountFor('Cosa Absolutamente Desconocida XYZ')).toBeUndefined();
     });
 
-    it('has no combo-bracket row — those are order-level, not per-product', () => {
-      // "1 y 2 equipos → 3000" depends on how many items an ORDER carries.
+    it('has no combo row — the bracket is a resolution step, never a keyword', () => {
+      // Combos ARE priced (see COMBO_BRACKETS), but by counting the pieces a
+      // product's name joins — not by matching the word "combo" or "equipos"
+      // in it. A keyword row here would price by vocabulary instead, and would
+      // catch any product that merely says the word.
       expect(table.some((r) => r.keywords.some((k) => k.includes('equipos')))).toBe(false);
       expect(table.some((r) => r.keywords.some((k) => k.includes('combo')))).toBe(false);
     });
@@ -166,6 +169,15 @@ describe('commission seed — name resolution', () => {
 
     it('leaves a single-piece name to the keyword table', () => {
       expect(amountFor('Smart TV 43" HD')).toBe(3000);
+    });
+
+    it('does not overrule a bundle the doc prices by name', () => {
+      // `04-commissions.md:37` prices `Fogón infrarrojo + olla de presión o
+      // calderos` at 1500 — a bundle the doc named and priced itself. Its name
+      // joins two pieces, so the bracket would pay 3000: twice what the
+      // business wrote down, decided by a rule the business never applied here.
+      expect(amountFor('Fogón Infrarrojo + Olla de Presión')).toBe(1500);
+      expect(amountFor('Fogón Infrarrojo + Juego de Calderos')).toBe(1500);
     });
   });
 

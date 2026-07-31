@@ -14,12 +14,19 @@ Del más específico al más general. El primero que aplica gana:
 
 1. **Kit con nombre propio** (`KIT_TABLE`) — 7000 a 20000. Va primero porque el nombre de un
    kit también junta partes con ` + `, y sin esto caería en el bracket de combo a 3000.
-2. **Combo** — si el nombre junta N piezas con ` + `: 1-2 → 3000, 3-5 → 4000, 6-7 → 5000.
+2. **Bundle con precio propio en el doc** (`NAMED_BUNDLE_TABLE`) — hoy solo
+   `Fogón infrarrojo + olla de presión o calderos | 1500`. Va antes del bracket porque contar
+   sus piezas lo cobraría 3000: el doble de lo que el negocio escribió.
+3. **Combo** — si el nombre junta N piezas con ` + `: 1-2 → 3000, 3-5 → 4000, 6-7 → 5000.
    *(Confirmado por el dueño, 2026-07-30.)* Por encima de 7 el doc no dice nada y no se
    extrapola.
-3. **Tabla de keywords ordenada** — el orden ES la precedencia. Los accesorios van arriba de
+4. **Tabla de keywords ordenada** — el orden ES la precedencia. Los accesorios van arriba de
    `tv` y `split` para que un soporte suelto no cobre como televisor.
-4. **Nada** — no se escribe fila. La línea queda `unresolved` en el accrual: visible, nunca cero.
+5. **Nada** — no se escribe fila. La línea queda `unresolved` en el accrual: visible, nunca cero.
+
+Los pasos 2 y 3 cobran un bundle **vendido como un solo producto**. El bracket leído como regla
+de ORDEN — una venta con N líneas sueltas — sigue sin implementarse a propósito: cada línea cobra
+su propio tier.
 
 No hay catch-all. Los equipos chicos de cocina (freidoras, licuadoras, ollas…) tienen filas
 **explícitas** a 1000 en vez de la regla `Demás equipos pequeños` del doc — mismo dinero, pero
