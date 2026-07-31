@@ -73,6 +73,24 @@ describe('PrismaCommissionPaymentRepository', () => {
     expect(payment.recordedByCompanyUserId).toBe(fixture.companyUserId);
   });
 
+  it('REJECTS a settlement recorded by a company user that does not exist', async () => {
+    // Who authorised a payment is part of the financial record. Without a
+    // foreign key the column is a free-text UUID: it can name a company user
+    // that was deleted, or one that never existed, and the day someone asks
+    // who approved this the answer is an id nobody can resolve.
+    const { accrual } = await anAccrual();
+
+    await expect(
+      payments.create({
+        accrualId: accrual.id,
+        amountMinorUnits: accrual.total.minorUnits,
+        paidAt: new Date('2026-07-31T09:00:00.000Z'),
+        recordedByCompanyUserId: '00000000-0000-0000-0000-000000000000',
+        note: null,
+      }),
+    ).rejects.toThrow();
+  });
+
   it('REJECTS a second payment against the same accrual — paid once, or not at all', async () => {
     const { accrual, fixture } = await anAccrual();
     const input = {

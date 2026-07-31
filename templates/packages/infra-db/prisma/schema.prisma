@@ -368,7 +368,12 @@ model CommissionPayment {
   createdAt               DateTime @default(now()) @map("created_at")
 
   accrual CommissionAccrual @relation(fields: [accrualId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// RESTRICT, like every other edge in this module: who authorised a payment is
+  /// part of the financial record, so the assignment cannot be deleted out from
+  /// under it and the column can never name someone who does not exist.
+  recordedBy CompanyUser @relation("CommissionPaymentRecordedBy", fields: [recordedByCompanyUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
+  @@index([recordedByCompanyUserId])
   @@map("commission_payment")
 }
 
@@ -557,6 +562,7 @@ model CompanyUser {
   attributedOrders Order[]
   // Inverse relation only — added by the Commission module.
   commissionAccruals CommissionAccrual[]
+  recordedCommissionPayments CommissionPayment[] @relation("CommissionPaymentRecordedBy")
 
   /// Self-relation. `ON DELETE RESTRICT` (Prisma's `Restrict`) matches every other FK in
   /// this schema; `company_user` has no hard-delete path today, so it can only ever fire
