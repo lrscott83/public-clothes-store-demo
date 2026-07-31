@@ -146,4 +146,10 @@ export async function wipeCommissionFixture(
   await prisma.companyUser.deleteMany({ where: { createdByCompanyUserId: { not: null } } });
   await prisma.companyUser.deleteMany({});
   await prisma.user.deleteMany({});
+  // Last, and easy to forget because `seedCommissionFixture` UPSERTS it: the
+  // company. Its slug is the fixed `default`, and `verify-order-attribution`
+  // CREATEs that same slug — so a company left here fails a spec that never
+  // heard of commissions, only when the runner happens to order this suite
+  // first. Jest's sequencer uses previous runs' timings, so it sometimes does.
+  await prisma.company.deleteMany({});
 }

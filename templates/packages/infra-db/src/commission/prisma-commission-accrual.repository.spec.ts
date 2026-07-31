@@ -36,6 +36,19 @@ describe('PrismaCommissionAccrualRepository', () => {
     await prisma.$disconnect();
   });
 
+  it('leaves no company behind — the fixture cleans up everything it created', async () => {
+    // `seedCommissionFixture` upserts a company with the FIXED slug `default`.
+    // Leaving it behind makes an unrelated suite fail: `verify-order-attribution`
+    // CREATEs that same slug, and the collision surfaces there — in a spec that
+    // never heard of commissions — whenever the runner happens to order this
+    // suite first. Jest's sequencer uses previous runs' timings, so that order
+    // is not stable, and the failure comes and goes.
+    await seedCommissionFixture(prisma, categoryId);
+    await wipeCommissionFixture(prisma, categoryId);
+
+    expect(await prisma.company.count({ where: { slug: 'default' } })).toBe(0);
+  });
+
   function accrualFor(
     fixture: { companyUserId: string; orderId: string; orderLineId: string; productId: string },
     unitMinorUnits: bigint,
