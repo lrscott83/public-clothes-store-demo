@@ -174,19 +174,36 @@ Verified by leaving an attributed order in the database on purpose and running t
 specs that used to fail: 5 suites / 26 tests green. Full infra-db suite 214 (213 + 1
 new), build, lint and typecheck clean.
 
-### SUGGESTION 2 — partially addressed
+### WARNING 2 — CLOSED in `425e212` (owner ruling)
 
-The shared module removes the duplication, but clearing is still per-spec opt-in
-rather than a global Jest teardown hook. Left as written: a global hook would change
-the teardown semantics of all 26 suites at once, which is its own change and not one
-to make while closing a verification.
+The owner ruled that the column must always resolve to someone real. Migration
+`20260731220000_add_commission_payment_recorder_fk` adds the foreign key, `RESTRICT`
+like every other edge in the module, and `design.md` §8.1 is amended to match.
 
-### WARNING 2 — open, owner-facing
+Written test-first: the payment spec now records a settlement signed by an all-zeros
+UUID and expects rejection — before the constraint it was accepted and returned an
+ordinary payment row. The migration deliberately does not clean up before altering:
+an orphan row makes it raise, because an orphan is a data problem to look at, not a
+row to delete on the way past. Applied to `store_mgmt_test` and `store_mgmt`; neither
+had one.
 
-`commission_payment.recorded_by_company_user_id` still has no FK constraint. It
-matches the design as written, so it is not a deviation, but a payment can point at
-a `company_user` that never existed with nothing to catch it. Closing it means a new
-migration; deliberately NOT bundled into this change.
+### SUGGESTION 2 — CLOSED in `1c88692`, differently than suggested
+
+The report proposed a global Jest *teardown* hook clearing the RESTRICT chain after
+each test. That was not built, for a concrete reason: several specs create their
+fixture once in `beforeAll` and reuse it (the accrual spec's `commission-accrual-spec`
+category, deleted in `afterAll`). A hook clearing those tables after every test would
+delete that fixture after the first test and break the suite from the second one on.
+It would also cost ~215 × 10 deletes per run.
+
+What shipped instead is a **`globalSetup`** hook: one truncate, once, before any suite
+starts. It closes the hole the per-spec helpers cannot — state that arrived BEFORE the
+run (a hand-run seed, a previous run killed halfway), which was the actual trigger of
+all three incidents. It reads the table list from the database rather than carrying a
+hand-written one, and refuses to run unless the URL names `store_mgmt_test`.
+
+Verified by inserting a stray row and running the full suite four times: gone before
+the first spec starts, 215/215 green each time.
 
 ### WARNING 1 and SUGGESTION 1 — accepted as written
 

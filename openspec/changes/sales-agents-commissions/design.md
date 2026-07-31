@@ -808,6 +808,12 @@ model CommissionPayment {
   note                    String?
   createdAt               DateTime @default(now()) @map("created_at")
   accrual CommissionAccrual @relation(fields: [accrualId], references: [id])
+  // AMENDED 2026-07-31 (owner). This field shipped with no FK — NOT NULL but
+  // unconstrained, so it could name a company user that never existed. Verify
+  // flagged it; the owner ruled it must always resolve to someone real.
+  // Migration 20260731220000 adds it, RESTRICT like every other edge here.
+  recordedBy CompanyUser @relation("CommissionPaymentRecordedBy", fields: [recordedByCompanyUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  @@index([recordedByCompanyUserId])
   @@map("commission_payment")
 }
 ```
