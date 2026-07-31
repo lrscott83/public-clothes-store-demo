@@ -103,13 +103,15 @@ ComboComponent
 
 Y las preguntas que ese modelo tiene que contestar antes de existir:
 
-- **Q1 — ¿El combo tiene stock propio o derivado?** La que decide todo lo demás.
-  *Derivado*: la disponibilidad del combo es `min(stock_i / cantidad_i)` sobre sus
-  componentes, y venderlo descuenta cada componente. Arregla el doble conteo, y
-  obliga a tocar reserva, movimientos y disponibilidad.
-  *Propio*: el combo se arma físicamente y se cuenta aparte; entonces hace falta una
-  operación de **ensamblado** que mueva stock de los componentes al combo, si no
-  vuelve el mismo problema por otra puerta.
+- **Q1 — ¿El combo tiene stock propio o derivado? RESUELTA por el dueño (2026-07-31):
+  DERIVADO.** La disponibilidad del combo es `min(stock_i / cantidad_i)` sobre sus
+  componentes, y venderlo descuenta cada componente en su cantidad. Elimina el doble
+  conteo de raíz: el combo deja de ser una existencia y pasa a ser una *forma de
+  vender* las existencias que ya hay.
+  **Consecuencia inmediata:** un combo NO puede tener fila en `StockLevel`. No es que
+  no la use — no debe existir, o alguien la va a editar y va a creer que significa
+  algo. Eso empuja el modelo hacia una entidad separada, o hacia un `Product` con
+  componentes al que el inventario nunca mira (ver Q2).
 - **Q2 — ¿El combo es un `Product` o una entidad aparte?** Si es `Product`, hereda
   categoría, precio, imagen y todo el catálogo gratis, pero hay que impedir que un
   `Product` con componentes se comporte como uno común. Si es aparte, hay que
@@ -129,8 +131,9 @@ Y las preguntas que ese modelo tiene que contestar antes de existir:
 
 ## 5. Propuesta de trabajo (TDD, cuando se retome)
 
-1. **Cerrar Q1 y Q2 con el dueño.** Sin eso no se escribe una línea: el modelo
-   entero cuelga de si el stock es propio o derivado.
+1. **Cerrar Q2 con el dueño** (Q1 ya está: stock derivado). Q2 decide dónde vive la
+   entidad; con stock derivado, lo que NO puede pasar es que el combo tenga
+   `StockLevel`.
 2. [RED] Dominio: disponibilidad de un combo a partir de sus componentes, con el
    caso borde de cantidad > 1 (`min(stock_i / cantidad_i)`).
 3. [RED] Vender un combo descuenta **cada componente**, en su cantidad.
