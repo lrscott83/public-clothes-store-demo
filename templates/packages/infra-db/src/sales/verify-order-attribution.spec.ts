@@ -1,5 +1,6 @@
 import { PrismaService } from '../prisma-client.js';
 import { verifyOrderAttribution } from './verify-order-attribution.js';
+import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
 
 /**
  * The attribution gate is what stands between "orders carry an agent" and the
@@ -22,6 +23,8 @@ describe('verifyOrderAttribution — the migration B gate', () => {
   });
 
   afterEach(async () => {
+    // First: commission rows RESTRICT the order delete below.
+    await wipeCommissionTables(prisma);
     await prisma.order.deleteMany({});
     await prisma.customer.deleteMany({});
     await prisma.warehouse.deleteMany({});

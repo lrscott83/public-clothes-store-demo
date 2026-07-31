@@ -1,5 +1,6 @@
 import { PrismaService } from '../prisma-client.js';
 import { seedOrders } from './seed.js';
+import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
 
 /**
  * Integration test against the real `store_mgmt` Postgres database. Covers
@@ -18,6 +19,8 @@ describe('seedOrders', () => {
     // Targeted cleanup — only rows `seedOrders` itself creates, so sibling
     // spec files' own customer/warehouse fixtures (managed by their own
     // idempotent seeds) are left untouched.
+    // First: commission rows RESTRICT the order delete below.
+    await wipeCommissionTables(prisma);
     await prisma.orderPayment.deleteMany({});
     await prisma.saleCredit.deleteMany({});
     await prisma.orderLine.deleteMany({});

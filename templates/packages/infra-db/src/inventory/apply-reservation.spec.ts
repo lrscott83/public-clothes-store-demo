@@ -4,6 +4,7 @@ import { applyReservationTx } from './apply-reservation.js';
 import { PrismaWarehouseRepository } from './prisma-warehouse.repository.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
 import { PrismaProductRepository } from '../product/prisma-product.repository.js';
+import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
 
 describe('applyReservationTx', () => {
   let prisma: PrismaService;
@@ -19,6 +20,8 @@ describe('applyReservationTx', () => {
   });
 
   afterEach(async () => {
+    // First: commission rows RESTRICT the product delete below.
+    await wipeCommissionTables(prisma);
     await prisma.stockMovement.deleteMany({});
     await prisma.stockLevel.deleteMany({});
     await prisma.product.deleteMany({});

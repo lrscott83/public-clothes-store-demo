@@ -1,5 +1,6 @@
 import { PrismaService } from '../prisma-client.js';
 import { seedProducts, type Catalog } from './seed.js';
+import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
 
 /**
  * Integration test against the real `store_mgmt` Postgres database. Covers
@@ -51,6 +52,8 @@ describe('seedProducts', () => {
   });
 
   afterEach(async () => {
+    // First: commission rows RESTRICT the product delete below.
+    await wipeCommissionTables(prisma);
     await prisma.product.deleteMany({});
     await prisma.category.deleteMany({});
   });

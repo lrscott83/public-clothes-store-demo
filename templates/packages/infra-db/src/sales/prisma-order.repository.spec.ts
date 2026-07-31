@@ -14,6 +14,7 @@ import { PrismaStockLevelRepository } from '../inventory/prisma-stock-level.repo
 import { PrismaCustomerRepository } from '../customer/prisma-customer.repository.js';
 import { PrismaCurrencyRepository } from '../currency/prisma-currency.repository.js';
 import { PrismaOrderRepository } from './prisma-order.repository.js';
+import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
 
 const AT = new Date('2026-07-22T00:00:00Z');
 
@@ -41,6 +42,8 @@ describe('PrismaOrderRepository', () => {
   });
 
   afterEach(async () => {
+    // First: commission rows RESTRICT the order and product deletes below.
+    await wipeCommissionTables(prisma);
     await prisma.orderPayment.deleteMany({});
     await prisma.saleCredit.deleteMany({});
     await prisma.orderLine.deleteMany({});

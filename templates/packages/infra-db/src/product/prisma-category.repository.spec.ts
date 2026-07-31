@@ -1,6 +1,7 @@
 import { PrismaService } from '../prisma-client.js';
 import { PrismaCategoryRepository } from './prisma-category.repository.js';
 import { PrismaProductRepository } from './prisma-product.repository.js';
+import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
 
 /**
  * Integration tests against the real `store_mgmt` Postgres database (no
@@ -16,6 +17,8 @@ describe('PrismaCategoryRepository', () => {
   });
 
   afterEach(async () => {
+    // First: commission rows RESTRICT the product delete below.
+    await wipeCommissionTables(prisma);
     await prisma.product.deleteMany({});
     await prisma.category.deleteMany({});
   });

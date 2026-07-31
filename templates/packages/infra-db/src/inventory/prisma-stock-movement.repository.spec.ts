@@ -5,6 +5,7 @@ import { PrismaStockLevelRepository } from './prisma-stock-level.repository.js';
 import { PrismaStockMovementRepository } from './prisma-stock-movement.repository.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
 import { PrismaProductRepository } from '../product/prisma-product.repository.js';
+import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
 
 describe('PrismaStockMovementRepository', () => {
   let prisma: PrismaService;
@@ -24,6 +25,8 @@ describe('PrismaStockMovementRepository', () => {
   });
 
   afterEach(async () => {
+    // First: commission rows RESTRICT the product delete below.
+    await wipeCommissionTables(prisma);
     await prisma.stockMovement.deleteMany({});
     await prisma.stockLevel.deleteMany({});
     await prisma.product.deleteMany({});
