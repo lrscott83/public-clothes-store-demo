@@ -258,6 +258,34 @@ author or apply migration B until the cause is fixed.**
 
 ## Phase 6: Final Verification + Push
 
-- [ ] 6.1 Full-repo re-run from `templates/`: `pnpm -r build`; `pnpm --filter @store-mgmt/domain test`; **before** `pnpm --filter @store-mgmt/infra-db test`, run `prisma migrate reset --force --skip-seed` against the guarded `store_mgmt_test` URL if the 5.12 seed run left non-empty state (infra-db suite needs an EMPTY test DB); `pnpm --filter @store-mgmt/api-common test`; `pnpm --filter api-idp test` / `test:e2e`; `pnpm --filter api-salesops test` / `test:e2e`; lint `--max-warnings 0` on every touched package.
-- [ ] 6.2 Reconcile final suite counts against the Phase 0 baseline plus every phase's recorded deltas — no unexplained pass/fail drift.
+- [x] 6.1 Full-repo re-run from `templates/`: `pnpm -r build`; `pnpm --filter @store-mgmt/domain test`; **before** `pnpm --filter @store-mgmt/infra-db test`, run `prisma migrate reset --force --skip-seed` against the guarded `store_mgmt_test` URL if the 5.12 seed run left non-empty state (infra-db suite needs an EMPTY test DB); `pnpm --filter @store-mgmt/api-common test`; `pnpm --filter api-idp test` / `test:e2e`; `pnpm --filter api-salesops test` / `test:e2e`; lint `--max-warnings 0` on every touched package.
+- [x] 6.2 Reconcile final suite counts against the Phase 0 baseline plus every phase's recorded deltas — no unexplained pass/fail drift.
+
+  **Result (2026-07-31).** Build clean, lint clean on all 5 packages.
+
+  | Suite | Baseline (Phase 5) | Ahora | Δ |
+  |---|---|---|---|
+  | domain | 272 | 272 | 0 |
+  | api-common | 34 | 34 | 0 |
+  | infra-db | 184 | **213** | **+29** |
+  | api-salesops unit | 308 | 308 | 0 |
+  | api-salesops e2e | 73 | 73 | 0 |
+  | api-idp unit | 54 | 54 | 0 |
+  | api-idp e2e | 11 | 11 | 0 |
+
+  The whole +29 is in two commission specs, and accounts for itself exactly:
+  `commission/seed.spec.ts` 12 → 40 and `commission/prisma-commission-accrual.repository.spec.ts`
+  7 → 8 (28 + 1 = 29). No other file's test count moved. The nine other specs
+  touched since the baseline only gained a `wipeCommissionTables` teardown call.
+
+  **The reset in 6.1 was not needed.** The infra-db suite now passes against a
+  dirty `store_mgmt_test` on purpose — `911e882` and `30c957d` fixed the two
+  leaks that made a dirty database fail an unrelated spec. That was verified by
+  leaving a stray row behind and running the full suite against it.
+
+  **Two failures seen and dismissed with evidence, not by re-running until green:**
+  the first e2e pass reported timeouts (`Exceeded timeout of 5000 ms`) in api-idp
+  and api-salesops. Every one was a timeout, never an assertion, and `uptime`
+  showed a 15-minute load average of 5.19 from the chained suites. Re-run on an
+  idle machine: 11/11 and 73/73. Not a regression — my own contention.
 - [ ] 6.3 Push branch `salesops-sales-agents-commissions`. **No pull request** (owner-locked delivery model).
