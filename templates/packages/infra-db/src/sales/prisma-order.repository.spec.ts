@@ -14,7 +14,7 @@ import { PrismaStockLevelRepository } from '../inventory/prisma-stock-level.repo
 import { PrismaCustomerRepository } from '../customer/prisma-customer.repository.js';
 import { PrismaCurrencyRepository } from '../currency/prisma-currency.repository.js';
 import { PrismaOrderRepository } from './prisma-order.repository.js';
-import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
+import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
 const AT = new Date('2026-07-22T00:00:00Z');
 

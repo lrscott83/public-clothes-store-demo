@@ -2,6 +2,7 @@ import { computeAccrual, money, moneyToDecimalString } from '@store-mgmt/domain'
 import { PrismaService } from '../prisma-client.js';
 import { PrismaCommissionAccrualRepository } from './prisma-commission-accrual.repository.js';
 import { seedCommissionFixture, wipeCommissionFixture } from './commission-fixtures.spec-helper.js';
+import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
 /**
  * Integration tests against the real `store_mgmt_test` database.
@@ -34,6 +35,19 @@ describe('PrismaCommissionAccrualRepository', () => {
   afterAll(async () => {
     await prisma.category.deleteMany({ where: { id: categoryId } });
     await prisma.$disconnect();
+  });
+
+  it('clears everything that RESTRICTs a company user, so an unrelated spec can delete them', async () => {
+    // Migrations A and B both point at `company_user` with ON DELETE RESTRICT:
+    // `sales_order.attributed_company_user_id` and
+    // `commission_accrual.attributed_company_user_id`. Ten specs across users/,
+    // company/ and customer/ bulk-delete company users and know nothing about
+    // either table — one stray attributed order fails all of them, on a
+    // constraint whose name they never heard of.
+    await seedCommissionFixture(prisma, categoryId);
+    await wipeCompanyUserDependents(prisma);
+
+    await expect(prisma.companyUser.deleteMany({})).resolves.toBeDefined();
   });
 
   it('leaves no company behind — the fixture cleans up everything it created', async () => {

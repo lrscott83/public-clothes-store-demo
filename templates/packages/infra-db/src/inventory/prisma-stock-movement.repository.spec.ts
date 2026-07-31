@@ -5,7 +5,7 @@ import { PrismaStockLevelRepository } from './prisma-stock-level.repository.js';
 import { PrismaStockMovementRepository } from './prisma-stock-movement.repository.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
 import { PrismaProductRepository } from '../product/prisma-product.repository.js';
-import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
+import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
 describe('PrismaStockMovementRepository', () => {
   let prisma: PrismaService;

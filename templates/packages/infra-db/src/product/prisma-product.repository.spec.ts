@@ -6,7 +6,7 @@ import {
 import { PrismaService } from '../prisma-client.js';
 import { PrismaCategoryRepository } from './prisma-category.repository.js';
 import { PrismaProductRepository } from './prisma-product.repository.js';
-import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
+import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
 /**
  * Integration tests against the real `store_mgmt` Postgres database (no

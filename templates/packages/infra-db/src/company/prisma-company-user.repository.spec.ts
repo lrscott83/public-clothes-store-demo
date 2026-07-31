@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma-client.js';
 import { PrismaCompanyUserRepository } from './prisma-company-user.repository.js';
+import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
 const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
@@ -30,6 +31,7 @@ describe('PrismaCompanyUserRepository', () => {
    */
   async function wipeCompanyUsers(): Promise<void> {
     await prisma.companyUser.deleteMany({ where: { createdByCompanyUserId: { not: null } } });
+    await wipeCompanyUserDependents(prisma);
     await prisma.companyUser.deleteMany({});
   }
 

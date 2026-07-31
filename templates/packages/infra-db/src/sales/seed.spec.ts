@@ -1,6 +1,6 @@
 import { PrismaService } from '../prisma-client.js';
 import { seedOrders } from './seed.js';
-import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
+import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
 /**
  * Integration test against the real `store_mgmt` Postgres database. Covers

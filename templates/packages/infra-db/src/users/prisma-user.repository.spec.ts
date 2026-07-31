@@ -1,6 +1,7 @@
 import { DuplicateLoginError } from '@store-mgmt/domain';
 import { PrismaService } from '../prisma-client.js';
 import { PrismaUserRepository } from './prisma-user.repository.js';
+import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
 /** Bcrypt hash shape accepted by the `passwordHash` invariant — never a real credential. */
 const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
@@ -22,6 +23,7 @@ describe('PrismaUserRepository', () => {
     // `company_user` has NO FK to `app_user` (soft FK by design) — deleting
     // users alone would leave orphan assignments behind and trip the §7
     // backfill gate.
+    await wipeCompanyUserDependents(prisma);
     await prisma.companyUser.deleteMany({});
     await prisma.user.deleteMany({});
   });

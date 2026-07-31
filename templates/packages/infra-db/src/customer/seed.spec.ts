@@ -1,6 +1,7 @@
 import { PrismaService } from '../prisma-client.js';
 import { DEFAULT_COMPANY_SLUG } from '../company/seed.js';
 import { CUSTOMER_NAMES, seedCustomers } from './seed.js';
+import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
 /**
  * Integration test against the real `store_mgmt` Postgres database. Covers
@@ -20,12 +21,14 @@ describe('seedCustomers', () => {
   // Company, so the single-company assertion below must not inherit it.
   // `company_user` goes first — `company` is its only hard FK parent.
   beforeEach(async () => {
+    await wipeCompanyUserDependents(prisma);
     await prisma.companyUser.deleteMany({});
     await prisma.company.deleteMany({});
   });
 
   afterEach(async () => {
     await prisma.customer.deleteMany({});
+    await wipeCompanyUserDependents(prisma);
     await prisma.companyUser.deleteMany({});
     await prisma.company.deleteMany({});
     await prisma.user.deleteMany({});

@@ -4,7 +4,7 @@ import { applyReservationTx } from './apply-reservation.js';
 import { PrismaWarehouseRepository } from './prisma-warehouse.repository.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
 import { PrismaProductRepository } from '../product/prisma-product.repository.js';
-import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
+import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
 describe('applyReservationTx', () => {
   let prisma: PrismaService;

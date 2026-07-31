@@ -1,5 +1,6 @@
 import { PrismaService } from '../prisma-client.js';
 import { PrismaCompanyRepository } from './prisma-company.repository.js';
+import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
 /**
  * Integration tests against the real `store_mgmt_test` Postgres database (no
@@ -21,11 +22,13 @@ describe('PrismaCompanyRepository', () => {
   // the "no Company exists" and "exactly one" assertions below would otherwise
   // depend on whether this database had been migrated yet.
   beforeEach(async () => {
+    await wipeCompanyUserDependents(prisma);
     await prisma.companyUser.deleteMany({});
     await prisma.company.deleteMany({});
   });
 
   afterEach(async () => {
+    await wipeCompanyUserDependents(prisma);
     await prisma.companyUser.deleteMany({});
     await prisma.company.deleteMany({});
   });

@@ -1,6 +1,6 @@
 import { PrismaService } from '../prisma-client.js';
 import { verifyOrderAttribution } from './verify-order-attribution.js';
-import { wipeCommissionTables } from '../commission/commission-fixtures.spec-helper.js';
+import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
 /**
  * The attribution gate is what stands between "orders carry an agent" and the

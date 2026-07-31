@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '../prisma-client.js';
+import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
 /** Bcrypt hash shape accepted by the domain `passwordHash` invariant — never a real credential. */
 const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
@@ -91,28 +92,6 @@ export async function seedCommissionFixture(
     orderLineId: order.lines[0]!.id,
     productId: product.id,
   };
-}
-
-/**
- * Clears the three commission tables in reverse-FK order.
- *
- * EVERY suite that bulk-deletes products or orders must call this first, even
- * suites that have nothing to do with commissions. `product_commission_reference`
- * and `commission_accrual` both point at those tables with `RESTRICT`, so a
- * single leftover row — from a manual seed run against `store_mgmt_test`, or
- * from a suite that died before its own teardown — makes an unrelated
- * `product.deleteMany({})` fail with a foreign-key error naming a table that
- * spec never heard of. It looks like flakiness. It is contamination.
- *
- * The constraints are `RESTRICT` on purpose: a commission reference is
- * configuration and an accrual is money someone earned, and neither should
- * vanish because a row upstream was deleted. Cleaning up explicitly is the
- * price of that guarantee.
- */
-export async function wipeCommissionTables(prisma: PrismaService): Promise<void> {
-  await prisma.commissionPayment.deleteMany({});
-  await prisma.commissionAccrual.deleteMany({});
-  await prisma.productCommissionReference.deleteMany({});
 }
 
 /**

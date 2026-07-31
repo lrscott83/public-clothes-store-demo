@@ -1,5 +1,6 @@
 import { PrismaService } from '../prisma-client.js';
 import { DEFAULT_COMPANY_SLUG, seedCompany } from './seed.js';
+import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
 /**
  * Integration test against the real `store_mgmt_test` Postgres database.
@@ -16,11 +17,13 @@ describe('seedCompany', () => {
   // Wipe before AND after: migration 001 already seeds a `default`-slug
   // Company, so the `toHaveLength(1)` assertions below must not inherit it.
   beforeEach(async () => {
+    await wipeCompanyUserDependents(prisma);
     await prisma.companyUser.deleteMany({});
     await prisma.company.deleteMany({});
   });
 
   afterEach(async () => {
+    await wipeCompanyUserDependents(prisma);
     await prisma.companyUser.deleteMany({});
     await prisma.company.deleteMany({});
   });

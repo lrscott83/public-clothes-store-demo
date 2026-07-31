@@ -1,6 +1,7 @@
 import { PrismaService } from '../prisma-client.js';
 import { PrismaRefreshTokenRepository } from './prisma-refresh-token.repository.js';
 import { PrismaUserRepository } from './prisma-user.repository.js';
+import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
 const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
@@ -30,6 +31,7 @@ describe('PrismaRefreshTokenRepository', () => {
     // `company_user` has NO FK to `app_user` (soft FK by design) — deleting
     // users alone would leave orphan assignments behind and trip the §7
     // backfill gate.
+    await wipeCompanyUserDependents(prisma);
     await prisma.companyUser.deleteMany({});
     await prisma.user.deleteMany({});
   });
