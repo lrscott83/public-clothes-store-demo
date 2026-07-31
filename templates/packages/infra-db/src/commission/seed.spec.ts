@@ -120,10 +120,10 @@ describe('commission seed — name resolution', () => {
     });
 
     it('writes NO row for a product nothing matches, instead of inventing one', () => {
-      const result = buildCommissionAssignments([product('p1', 'Vajilla de Porcelana')], table);
+      const result = buildCommissionAssignments([product('p1', 'Artefacto Desconocido ZZZ')], table);
 
       expect(result.matched).toHaveLength(0);
-      expect(result.unmatchedProducts).toEqual([{ id: 'p1', name: 'Vajilla de Porcelana' }]);
+      expect(result.unmatchedProducts).toEqual([{ id: 'p1', name: 'Artefacto Desconocido ZZZ' }]);
     });
 
     it('reports table rows that matched no product, so stale data is visible', () => {
@@ -132,6 +132,83 @@ describe('commission seed — name resolution', () => {
       expect(result.unusedReferences).toContain('Neveras');
       expect(result.unusedReferences).not.toContain('Microondas');
     });
+  });
+
+  describe('combos — priced by how many pieces the name joins', () => {
+    it.each([
+      ['Smart TV 32" + Base Giratoria', 2, 3000],
+      ['Smart TV 43" + Base Giratoria', 2, 3000],
+      ['Smart TV + Cajita Decodificadora HD + Base de Pared Giratoria', 3, 4000],
+      ['Smart TV 43" HD + Base Giratoria + Cajita HD', 3, 4000],
+      ['Smart TV 32" + Base Giratoria + Cajita HD', 3, 4000],
+    ])('%s is %i equipos -> %i MN', (name, _pieces, expected) => {
+      expect(amountFor(name)).toBe(expected);
+    });
+
+    it('rescues the TV bundles from the bracket tier they were falling into', () => {
+      // Every one of these contains `base de pared` or `base giratoria`, and
+      // that row sits ABOVE `tv` so a bare bracket is not paid as a
+      // television. Left to keywords alone, a 3000 TV was paid 500.
+      expect(amountFor('Smart TV 43" + Base Giratoria')).not.toBe(500);
+    });
+
+    it('still prices a BARE bracket as a bracket', () => {
+      expect(amountFor('Base Fija para TV')).toBe(500);
+      expect(amountFor('Base para TV a la Pared Giratoria')).toBe(500);
+    });
+
+    it('does not extrapolate past the top bracket', () => {
+      // The doc stops at 7. An 8-piece bundle falls through to keywords rather
+      // than inventing a tier above 5000.
+      const eight = Array.from({ length: 8 }, (_, i) => `Pieza ${i}`).join(' + ');
+      expect(amountFor(`Smart TV + ${eight}`)).toBe(3000); // the `tv` keyword, not a combo
+    });
+
+    it('leaves a single-piece name to the keyword table', () => {
+      expect(amountFor('Smart TV 43" HD')).toBe(3000);
+    });
+  });
+
+  describe('kits — resolved before the combo bracket', () => {
+    it('prices the catalog kits as inverter-plus-battery kits, not as 2-piece combos', () => {
+      // Their names join two parts, so without the kit table they would be
+      // priced 3000 — below the 5000 they used to get and far below their tier.
+      expect(amountFor('Kit 3.84KW: Inversor MUST 3KW + 2 Baterías 1.92KWh')).toBe(8000);
+      expect(amountFor('Kit 5.12KW: Inversor MUST 3KW + Batería Humsienk 5.12KWh')).toBe(8000);
+    });
+
+    it('prices the named kits from the source table', () => {
+      expect(amountFor('Kit 3 con 5')).toBe(10000);
+      expect(amountFor('Kit 10 con 16')).toBe(20000);
+      expect(amountFor('Kit Ecoflow')).toBe(7000);
+    });
+  });
+
+  describe('small kitchen equipment — explicit rows, never a catch-all', () => {
+    it.each([
+      ['Freidora de Aire 4 lt', 1000],
+      ['Licuadora Milexus 1.5L 2 en 1', 1000],
+      ['Olla Arrocera EKO 1.8L', 1000],
+      ['Olla de Presión Bryderk 5.5lt', 1000],
+      ['Olla Reina', 1000],
+      ['Juego de Calderos', 1000],
+      ['Sandwichera', 1000],
+      ['Vajilla de Porcelana', 1000],
+      ['Galón de combustible 20lt', 1000],
+    ])('%s -> %i MN', (name, expected) => {
+      expect(amountFor(name)).toBe(expected);
+    });
+
+    it('still resolves a genuinely unknown product to NOTHING', () => {
+      // The distinction the explicit rows exist to preserve: these nine are
+      // configured at 1000, but there is no rule that gives 1000 to anything
+      // merely because it was not listed.
+      expect(amountFor('Artefacto Desconocido ZZZ')).toBeUndefined();
+    });
+  });
+
+  it('prices a 20-pie exhibitor at its own tier', () => {
+    expect(amountFor('Exhibidor Vertical 20P')).toBe(5000);
   });
 
   describe('refusing to guess', () => {

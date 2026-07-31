@@ -13,17 +13,21 @@ import type { PrismaService } from '../prisma-client.js';
  * ("Nevera 3.5P Milexus"). A table written in the doc's words matches almost
  * nothing — measured: 28 of 99 products, against 83 with these keywords.
  *
- * TWO GROUPS FROM THE SOURCE DOC ARE DELIBERATELY ABSENT:
+ * RESOLUTION ORDER, most specific first:
  *
- *  - `Demás equipos pequeños | 1000` — a FALLBACK RULE, not a product. Seeding
- *    it would price every unconfigured item at 1000, which is exactly the
- *    "invent an amount" behaviour this module exists to prevent. An
- *    unconfigured product must stay unresolved and visible.
+ *   1. {@link KIT_TABLE} — named kits have their own tiers, well above the
+ *      combo bracket. A kit reaching rule 2 would be paid as a two-item combo.
+ *   2. {@link COMBO_BRACKETS} — a product whose NAME joins several pieces with
+ *      " + " is a combo, priced by how many it carries.
+ *   3. {@link COMMISSION_KEYWORD_TABLE} — ordered keyword match.
+ *   4. Nothing. No row is written; the line surfaces as unresolved.
  *
- *  - `Combos de electrodomésticos` (1-2 / 3-5 / 6-7 equipos) — an ORDER-LEVEL
- *    bracket, computed from how many items a sale carries. It cannot be
- *    expressed in a per-product table, and approximating it here would be a
- *    guess wearing the costume of configuration. Left pending, on purpose.
+ * `Demás equipos pequeños | 1000` from the source doc is still NOT seeded as a
+ * rule. It is a FALLBACK, and seeding it would price every unconfigured product
+ * at 1000 — the "invent an amount" behaviour this module exists to prevent.
+ * The small items it was meant to cover (freidoras, licuadoras, ollas…) instead
+ * have EXPLICIT rows at that same amount. Same money, but configuration
+ * somebody chose rather than a default nobody sees.
  *
  * `Cable | 50 por metro` and `Metro de azulejos | 500` are seeded as flat
  * per-unit amounts. That is correct only while those products' quantities are
@@ -69,6 +73,58 @@ export interface CommissionReferenceRow {
  * a payout twenty times too low). Rows marked BUSINESS REVIEW are refinements
  * made after that doc was written and are not in it.
  */
+/**
+ * Combo brackets, from the source doc's `Combos de electrodomésticos` table.
+ * Owner-confirmed 2026-07-30.
+ *
+ * A "combo" here is a CATALOG PRODUCT whose name joins several pieces with
+ * " + " — `Smart TV 43" HD + Base Giratoria + Cajita HD` is three. The
+ * commission is the bracket, not the sum of the parts and not the price of the
+ * headline item.
+ *
+ * This is what a bundle needs and the keyword table cannot give it. Left to
+ * keywords, those seven TV bundles matched `base de pared` — the accessory row
+ * sits above `tv` on purpose, so a bare bracket is not paid as a television —
+ * and a 3000 TV was being paid 500.
+ *
+ * Above 7 pieces the doc says nothing. Deliberately NOT extrapolated: the top
+ * bracket is where the table stops, not where a pattern continues.
+ */
+export const COMBO_BRACKETS: readonly { readonly maxPieces: number; readonly amountMn: number }[] = [
+  { maxPieces: 2, amountMn: 3000 },
+  { maxPieces: 5, amountMn: 4000 },
+  { maxPieces: 7, amountMn: 5000 },
+];
+
+/**
+ * Named kits, resolved BEFORE the combo bracket. A kit's name also joins parts
+ * with " + ", so without this it would be priced as a two-piece combo (3000)
+ * instead of its own tier.
+ *
+ * The catalog's two kits are inverter-plus-battery packages, which the doc
+ * prices as `Kit de batería e Inversor (incluye los TodoEnUno) | 8000`. Their
+ * capacity-based names (`Kit 3.84KW`, `Kit 5.12KW`) match none of the doc's
+ * `Kit N con M` labels, so the mapping is recorded here explicitly rather than
+ * inferred from the numbers.
+ */
+export const KIT_TABLE: readonly CommissionReferenceRow[] = [
+  { keywords: ['kit 3 con 5'], amountMn: 10000, label: 'Kit 3 con 5' },
+  { keywords: ['kit 3 con 7'], amountMn: 12000, label: 'Kit 3 con 7' },
+  { keywords: ['kit 5 con 10'], amountMn: 15000, label: 'Kit 5 con 10' },
+  { keywords: ['kit 6 con 15'], amountMn: 18000, label: 'Kit 6 con 15' },
+  { keywords: ['kit 10 con 16'], amountMn: 20000, label: 'Kit 10 con 16' },
+  { keywords: ['kit 12 con 16'], amountMn: 20000, label: 'Kit 12 con 16' },
+  { keywords: ['kit ecoflow'], amountMn: 7000, label: 'Kit Ecoflow' },
+  { keywords: ['kit pecron'], amountMn: 7000, label: 'Kit Pecron' },
+  { keywords: ['kit must 2 con 2 5'], amountMn: 7000, label: 'Kit Must 2 con 2.5' },
+  // The two in this catalog. Both are inverter + battery.
+  {
+    keywords: ['kit 3 84', 'kit 5 12', 'kit de bateria e inversor', 'todoenuno'],
+    amountMn: 8000,
+    label: 'Kit de batería e Inversor',
+  },
+];
+
 export const COMMISSION_KEYWORD_TABLE: readonly CommissionReferenceRow[] = [
   // CORRECTION to the inherited ordering: "hidrolavadora" CONTAINS "lavadora",
   // so with the washing-machine rows first a pressure washer was priced as a
@@ -105,7 +161,12 @@ export const COMMISSION_KEYWORD_TABLE: readonly CommissionReferenceRow[] = [
     label: 'Lámpara solar',
   },
   { keywords: ['lampara'], amountMn: 500, label: 'Lámparas' },
-  { keywords: ['exhibidor 20'], amountMn: 5000, label: 'Exhibidor 20 pies' },
+  // `20P` in a catalog name is 20 pies — the doc's `Exhibidor 20 pies | 5000`.
+  // Without the `20p` form this fell through to the 13.77-pies tier at 4000.
+  // `20P` in a catalog name is 20 pies. Kept anchored to `exhibidor`: a bare
+  // `20p` would turn any 20-pie product into an exhibitor, and the exhibitor
+  // rows sit above `refrigerador`/`nevera`.
+  { keywords: ['exhibidor 20', 'exhibidor vertical 20'], amountMn: 5000, label: 'Exhibidor 20 pies' },
   { keywords: ['exhibidor'], amountMn: 4000, label: 'Exhibidor 13.77 pies' },
   { keywords: ['refrigerador'], amountMn: 4000, label: 'Refrigeradores' },
   { keywords: ['nevera'], amountMn: 3000, label: 'Neveras' },
@@ -152,6 +213,21 @@ export const COMMISSION_KEYWORD_TABLE: readonly CommissionReferenceRow[] = [
   { keywords: ['transfer'], amountMn: 1000, label: 'Transfer' },
   { keywords: ['estaciones solas', 'estacion sola'], amountMn: 5000, label: 'Estaciones solas' },
   { keywords: ['cable'], amountMn: 50, label: 'Cable (por metro)' },
+  // Small kitchen equipment. The source doc lumps these under
+  // `Demás equipos pequeños | 1000`, which is a fallback RULE — seeding it as
+  // such would price EVERY unconfigured product at 1000. These are explicit
+  // rows at the same amount instead: the money is identical, but each one is a
+  // choice somebody made and can see, and a genuinely unknown product still
+  // resolves to nothing.
+  { keywords: ['freidora'], amountMn: 1000, label: 'Freidora de aire' },
+  { keywords: ['licuadora'], amountMn: 1000, label: 'Licuadora' },
+  { keywords: ['olla arrocera'], amountMn: 1000, label: 'Olla arrocera' },
+  { keywords: ['olla de presion'], amountMn: 1000, label: 'Olla de presión' },
+  { keywords: ['olla reina', 'olla'], amountMn: 1000, label: 'Olla' },
+  { keywords: ['juego de calderos', 'caldero'], amountMn: 1000, label: 'Juego de calderos' },
+  { keywords: ['sandwichera'], amountMn: 1000, label: 'Sandwichera' },
+  { keywords: ['vajilla'], amountMn: 1000, label: 'Vajilla' },
+  { keywords: ['galon de combustible'], amountMn: 1000, label: 'Galón de combustible' },
   // Last: the broadest accessory tier. Anything still merely "a base".
   { keywords: ['base'], amountMn: 500, label: 'Base (accesorio)' },
 ];
@@ -217,6 +293,47 @@ export class AmbiguousCommissionReferenceError extends Error {
  * cannot resolve a keyword that contradicts itself, and picking one would set
  * a person's pay by position in a list they never saw.
  */
+/** How many pieces a bundle name joins with " + ". `1` means it is not a bundle. */
+export function countComboPieces(rawName: string): number {
+  return rawName.split(/\s+\+\s+/).length;
+}
+
+/**
+ * Resolves ONE product, most specific first: named kit, then combo bracket,
+ * then the ordered keyword table. `undefined` = nothing configured.
+ *
+ * Splitting on " + " happens against the RAW name, before normalization —
+ * normalizing collapses the plus sign into a space and the bundle structure
+ * disappears with it.
+ */
+function resolve(
+  rawName: string,
+  productKey: string,
+  table: readonly CommissionReferenceRow[],
+): { label: string; amountMn: number } | undefined {
+  const kit = KIT_TABLE.find((row) =>
+    row.keywords.some((keyword) => productKey.includes(normalizeName(keyword))),
+  );
+  if (kit) {
+    return { label: kit.label, amountMn: kit.amountMn };
+  }
+
+  const pieces = countComboPieces(rawName);
+  if (pieces > 1) {
+    const bracket = COMBO_BRACKETS.find((b) => pieces <= b.maxPieces);
+    // Beyond the top bracket the doc stops. A bundle of 8 is left to the
+    // keyword table rather than extrapolated into a tier nobody wrote down.
+    if (bracket) {
+      return { label: `Combo de ${pieces} equipos`, amountMn: bracket.amountMn };
+    }
+  }
+
+  const hit = table.find((row) =>
+    row.keywords.some((keyword) => productKey.includes(normalizeName(keyword))),
+  );
+  return hit ? { label: hit.label, amountMn: hit.amountMn } : undefined;
+}
+
 export function buildCommissionAssignments(
   products: readonly SeedProduct[],
   table: readonly CommissionReferenceRow[] = COMMISSION_KEYWORD_TABLE,
@@ -243,19 +360,16 @@ export function buildCommissionAssignments(
 
   for (const product of products) {
     const productKey = normalizeName(product.name);
+    const resolved = resolve(product.name, productKey, table);
 
-    const hit = table.find((row) =>
-      row.keywords.some((keyword) => productKey.includes(normalizeName(keyword))),
-    );
-
-    if (hit) {
+    if (resolved) {
       matched.push({
         productId: product.id,
         productName: product.name,
-        referenceName: hit.label,
-        amountMn: hit.amountMn,
+        referenceName: resolved.label,
+        amountMn: resolved.amountMn,
       });
-      usedLabels.add(hit.label);
+      usedLabels.add(resolved.label);
     } else {
       unmatchedProducts.push(product);
     }
