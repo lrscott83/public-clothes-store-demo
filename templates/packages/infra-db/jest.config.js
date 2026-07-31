@@ -4,6 +4,10 @@ module.exports = {
   rootDir: 'src',
   testRegex: '.*\\.spec\\.ts$',
   setupFiles: ['<rootDir>/../jest.setup.js'],
+  // Empties the test database ONCE before the run. Per-spec teardown handles
+  // contamination BETWEEN suites; this handles what arrives before the run even
+  // starts — a hand-run seed, a previous run that was killed. See the file.
+  globalSetup: '<rootDir>/../jest.global-setup.js',
   transform: {
     '^.+\\.(t|j)s$': 'ts-jest',
   },
