@@ -288,4 +288,4 @@ author or apply migration B until the cause is fixed.**
   and api-salesops. Every one was a timeout, never an assertion, and `uptime`
   showed a 15-minute load average of 5.19 from the chained suites. Re-run on an
   idle machine: 11/11 and 73/73. Not a regression — my own contention.
-- [ ] 6.3 Push branch `salesops-sales-agents-commissions`. **No pull request** (owner-locked delivery model).
+- [x] 6.3 Push branch `salesops-sales-agents-commissions`. **No pull request** (owner-locked delivery model).
