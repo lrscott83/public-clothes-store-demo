@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type {
   BasketLine,
   CreateOrderInput,
@@ -78,6 +78,8 @@ const ALL_CHANNELS = Object.keys(CHANNEL_CURRENCY) as PaymentChannel[];
  */
 @Injectable()
 export class OrderService {
+  private readonly logger = new Logger(OrderService.name);
+
   constructor(
     @Inject(ORDER_REPOSITORY) private readonly orderRepository: IOrderRepository,
     @Inject(CURRENCY_REPOSITORY) private readonly currencyRepository: ICurrencyRepository,
@@ -298,12 +300,36 @@ export class OrderService {
    * delivery must still stand — a warehouse cannot un-hand a fridge because a
    * commission row would not insert. The recorder is idempotent, so the
    * accrual can be replayed later without producing a second one.
+   *
+   * That "replayed later" is deliberately NOT a route here (design.md Q6):
+   * `delivered` is terminal, so `deliver` itself can never be retried to
+   * reach the recorder again. The reconcile endpoint design.md §9 sketched
+   * (a "delivered orders with no accrual" query, replayed through
+   * `computeAccrual`) was never built — real scope beyond this fix. So today
+   * there is no in-app recovery path at all: a recorder failure means the
+   * accrual has to be reconciled by hand, directly against the database,
+   * bypassing `computeAccrual` and the idempotency check. The contract here
+   * is narrower — a recorder failure must never fail delivery, and it must
+   * log everything an operator doing that manual reconciliation would need.
    */
   async deliver(id: string): Promise<OrderResponseDto | null> {
     const existing = await this.orderRepository.findById(id);
     if (!existing) return null;
     const delivered = await this.orderRepository.deliver(id);
-    await this.commissionAccrualRecorder.recordForDeliveredOrder(delivered);
+    try {
+      await this.commissionAccrualRecorder.recordForDeliveredOrder(delivered);
+    } catch (err) {
+      // No in-app replay path exists (design.md §9's reconcile endpoint was
+      // never built) — recovery is manual DB reconciliation, so the message
+      // carries the attributed agent inline rather than making the operator
+      // go look it up. `attributedCompanyUserId` can be null for an
+      // unattributed order; template-literal `null` reads unambiguously here
+      // rather than silently dropping the field.
+      this.logger.error(
+        `COMMISSION_ACCRUAL_FAILED: order "${id}" (attributed agent: ${delivered.attributedCompanyUserId}) was delivered but accrual recording threw; there is no in-app replay path — recovery requires manual DB reconciliation`,
+        err instanceof Error ? err.stack : String(err),
+      );
+    }
     return this.toResponse(delivered);
   }
 

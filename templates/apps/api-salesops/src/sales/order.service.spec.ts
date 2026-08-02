@@ -365,12 +365,63 @@ describe('OrderService', () => {
       orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verified' }));
       orderRepo.deliver.mockResolvedValue(delivered);
 
-      await service.deliver('order-uuid-1');
+      const result = await service.deliver('order-uuid-1');
 
       // The order handed to the recorder is the DELIVERED one, not the
       // pre-delivery read — accruing from a stale snapshot would credit the
       // agent against a status that had not happened yet.
       expect(commissionRecorder.recordForDeliveredOrder).toHaveBeenCalledWith(delivered);
+      // Unchanged behaviour: the delivered order is still returned to the caller.
+      expect(result?.status).toBe('delivered');
+    });
+
+    it('deliver still returns the delivered order, and logs loudly, when the accrual recorder throws', async () => {
+      // Delivery is an operational fact that already committed; a transient
+      // failure in the SEPARATE accrual step (design.md A9) must not make the
+      // caller believe delivery itself failed — `deliver` is terminal, so a
+      // retry of THIS request would read as "already delivered" (409), not
+      // as a path back to the missed accrual.
+      const delivered = sampleOrder({ status: 'delivered' });
+      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verified' }));
+      orderRepo.deliver.mockResolvedValue(delivered);
+      commissionRecorder.recordForDeliveredOrder.mockRejectedValue(
+        new Error('reference provider unavailable'),
+      );
+      const errorSpy = jest.spyOn(service['logger'], 'error').mockImplementation(() => undefined);
+
+      const result = await service.deliver('order-uuid-1');
+
+      expect(result?.status).toBe('delivered');
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const [message] = errorSpy.mock.calls[0] as [string];
+      expect(message).toContain('order-uuid-1');
+      // The attributed agent goes in the log line itself — an on-call
+      // engineer paged off this has no in-app lever to pull (design.md §9's
+      // reconcile endpoint was never built), so the message must carry
+      // everything a manual DB reconciliation needs without a follow-up query.
+      expect(message).toContain(delivered.attributedCompanyUserId);
+      // No promise of an in-app replay path that does not exist — recovery
+      // here is manual DB reconciliation, and the message must say so plainly.
+      expect(message).not.toContain('replayed by hand');
+      expect(message.toLowerCase()).toContain('manual');
+      errorSpy.mockRestore();
+    });
+
+    it('stringifies a null attributedCompanyUserId as "null" in the log line, whatever the throw reason', async () => {
+      const delivered = sampleOrder({ status: 'delivered', attributedCompanyUserId: null });
+      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verified' }));
+      orderRepo.deliver.mockResolvedValue(delivered);
+      commissionRecorder.recordForDeliveredOrder.mockRejectedValue(
+        new Error('reference provider unavailable'),
+      );
+      const errorSpy = jest.spyOn(service['logger'], 'error').mockImplementation(() => undefined);
+
+      await service.deliver('order-uuid-1');
+
+      const [message] = errorSpy.mock.calls[0] as [string];
+      expect(message).toContain('order-uuid-1');
+      expect(message).toContain('null');
+      errorSpy.mockRestore();
     });
 
     it.each(['confirm', 'cancel'] as const)(
