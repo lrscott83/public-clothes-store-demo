@@ -70,6 +70,13 @@ export class CommissionController {
     if (body.paidAt !== undefined && Number.isNaN(new Date(body.paidAt).getTime())) {
       throw new BadRequestException(`paidAt is not a valid timestamp: "${body.paidAt}"`);
     }
+    // `null` is a legitimate "no note", same as omitting the field —
+    // `commission.service.ts` does `note: dto.note ?? null` for exactly this,
+    // and plenty of JSON clients serialize an omitted field as explicit
+    // `null`. Only reject the field when it is present and neither.
+    if (body.note !== undefined && body.note !== null && typeof body.note !== 'string') {
+      throw new BadRequestException('note must be a string');
+    }
 
     try {
       return await this.commissionService.recordPayment(

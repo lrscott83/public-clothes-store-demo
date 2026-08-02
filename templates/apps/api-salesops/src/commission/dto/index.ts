@@ -42,7 +42,7 @@ export interface CommissionAccrualResponseDto {
 export class RecordCommissionPaymentDto {
   accrualId!: string;
   paidAt?: string;
-  note?: string;
+  note?: string | null;
 }
 
 export interface CommissionPaymentResponseDto {

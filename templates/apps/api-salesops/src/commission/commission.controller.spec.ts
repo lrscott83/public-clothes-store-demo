@@ -106,6 +106,12 @@ describe('CommissionController', () => {
       ['a missing accrualId', {}],
       ['a blank accrualId', { accrualId: '   ' }],
       ['an invalid paidAt', { accrualId: 'accrual-1', paidAt: 'no-es-una-fecha' }],
+      // No global ValidationPipe runs in this app (same reason accrualId/paidAt
+      // are hand-checked above), so a non-string `note` would otherwise reach
+      // Prisma untouched and surface as an unhandled 500 instead of a 400.
+      ['a numeric note', { accrualId: 'accrual-1', note: 123 }],
+      ['an object note', { accrualId: 'accrual-1', note: { text: 'hi' } }],
+      ['an array note', { accrualId: 'accrual-1', note: ['hi'] }],
     ])('rejects %s -> 400, nothing recorded', async (_label, body) => {
       const response = await request(app.getHttpServer())
         .post('/commissions/payments')
@@ -113,6 +119,34 @@ describe('CommissionController', () => {
 
       expect(response.status).toBe(400);
       expect(service.recordPayment).not.toHaveBeenCalled();
+    });
+
+    it('accepts a well-formed optional note', async () => {
+      await request(app.getHttpServer())
+        .post('/commissions/payments')
+        .send({ accrualId: 'accrual-1', note: 'paid in cash' })
+        .expect(201);
+
+      expect(service.recordPayment).toHaveBeenCalledWith(
+        expect.objectContaining({ note: 'paid in cash' }),
+        SAMPLE_AUTH_USER.companyUserId,
+      );
+    });
+
+    // `commission.service.ts` does `note: dto.note ?? null` specifically so
+    // both `undefined` and `null` mean "no note" — and many JSON clients
+    // serialize an omitted optional field as explicit `null`. Rejecting it
+    // here would be a regression against that established contract.
+    it('accepts note: null — explicit null is "no note", same as omitting it', async () => {
+      await request(app.getHttpServer())
+        .post('/commissions/payments')
+        .send({ accrualId: 'accrual-1', note: null })
+        .expect(201);
+
+      expect(service.recordPayment).toHaveBeenCalledWith(
+        expect.objectContaining({ note: null }),
+        SAMPLE_AUTH_USER.companyUserId,
+      );
     });
 
     it.each([
