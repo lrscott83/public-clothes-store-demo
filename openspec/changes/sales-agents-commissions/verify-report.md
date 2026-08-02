@@ -1,8 +1,30 @@
 # Verification Report — sales-agents-commissions
 
 **Mode**: Strict TDD
-**Verified**: 2026-07-31, fresh re-run of the full suite + independent reproduction work, not a re-read of prior claims.
-**Verdict**: **PASS WITH WARNINGS** — 1 CRITICAL (a shared-test-DB FK-leak gap, empirically reproduced, not yet observed in CI but real and live), 2 WARNING, 2 SUGGESTION. Every functional spec/design/task requirement checked holds.
+**Verified**: 2026-08-02, fresh re-run of the full suite (all 6 packages/apps), not a re-read of prior claims.
+**Verdict**: **PASS** — 0 CRITICAL, 0 net-new WARNING, 2 SUGGESTION carried forward. The prior CRITICAL and both prior open items are now closed. 4 new commits landed since the last verify (adversarial dual review); all inspected, all correct, all covered by real tests.
+
+Supersedes the previous report body below `## Resolution` in the prior revision — this file now reflects the state at HEAD `ab7b135`, pushed, working tree clean.
+
+---
+
+## What changed since the last verify (this run's delta)
+
+Prior verify (2026-07-31) returned PASS WITH WARNINGS: 1 CRITICAL (shared-test-DB RESTRICT-FK leak reproducible via ~10 unaudited infra-db specs), 2 WARNING (TDD evidence narrative-not-tabular; `commission_payment.recorded_by_company_user_id` had no FK), 2 SUGGESTION.
+
+Closed since then (all re-verified in this session, not taken on faith):
+
+1. **CRITICAL (FK leak) → CLOSED, `157a705`**: centralized teardown in `db-cleanup.spec-helper.ts` (`wipeCommissionTables` + new `wipeCompanyUserDependents`), 10 specs repointed.
+2. **WARNING (`recorded_by_company_user_id` no FK) → CLOSED, `425e212`**: migration `20260731220000_add_commission_payment_recorder_fk` adds a `RESTRICT` FK to `company_user`; `design.md` §8.1 amended in `6f56bac`.
+3. **SUGGESTION (single global teardown) → CLOSED differently, `1c88692`**: not a per-test teardown (would break `beforeAll`-fixture specs) — a `globalSetup` hook truncates all tables once before the run, refuses to run unless `TEST_URL` names `store_mgmt_test`.
+4. Task 6.3 (push, no PR) ticked in `ab7b135` — **tasks now 87/87**, 0 incomplete.
+
+New since the last verify, inspected fresh this session:
+
+- **`a75e084`** — `OrderService.deliver()` (`templates/apps/api-salesops/src/sales/order.service.ts:301-334`) now wraps `commissionAccrualRecorder.recordForDeliveredOrder(delivered)` in try/catch. On throw: logs `COMMISSION_ACCRUAL_FAILED` via `Logger` with the order id and `delivered.attributedCompanyUserId` (stringifies `null` explicitly, verified by its own test), and still returns the delivered order. 3 new/changed tests in `order.service.spec.ts` — real assertions against a `service['logger'].error` spy, not tautologies.
+- **`64ddf79`** — `CommissionController.recordPayment` (`commission.controller.ts:71-77`) adds a hand-rolled guard: `note` must be `undefined | null | string`, else 400. Guard runs BEFORE the try/catch that maps service errors, so it correctly short-circuits to `BadRequestException` (confirmed by reading the method body — not converted to 500 downstream). `RecordCommissionPaymentDto.note` widened to `string | null`. 5 new e2e assertions in `commission.controller.spec.ts`.
+- **`cb59146`** — repaired two stale DTO literals failing `tsc --noEmit` (fields the snapshot refactor removed) and rewrote the `RateNotFoundError` test so the EUR line is structurally the only possible throw source. `pnpm --filter api-salesops typecheck` is now **fully clean** — the 2 pre-existing `TS2353` errors noted in the prior verify report are gone.
+- **`ab7b135`** — docs only, ticks 6.3.
 
 ---
 
@@ -11,200 +33,113 @@
 | Metric | Value |
 |--------|-------|
 | Tasks total | 87 |
-| Tasks complete | 86 |
-| Tasks incomplete | 1 — `6.3` (push branch, no PR, owner-locked delivery model) |
+| Tasks complete | 87 |
+| Tasks incomplete | 0 |
 
-`6.3` is a delivery/administrative task, not a functional one. Not a verify blocker.
+`rg '\[ \]' tasks.md` returns zero matches; `rg -c '\[x\]' tasks.md` = 87.
 
-## Build & Tests Execution (all re-run fresh this session)
+## Build & Tests Execution (all re-run fresh this session, from `templates/`)
 
-**Build**: ✅ `pnpm -r build` clean.
-
-**Tests** (from `templates/`):
+**Build**: `pnpm -r build` — clean, all packages/apps.
 
 | Package | Unit | E2E |
 |---|---|---|
 | `@store-mgmt/domain` | 272/272 ✅ | — |
 | `@store-mgmt/api-common` | 34/34 ✅ | — |
-| `@store-mgmt/infra-db` | 213/213 ✅ (26 suites) | — |
+| `@store-mgmt/infra-db` | 215/215 ✅ (26 suites, incl. new payment-recorder-FK test + `globalSetup` truncate) | — |
 | `api-idp` | 54/54 ✅ | 11/11 ✅ |
-| `api-salesops` | 308/308 ✅ | 73/73 ✅ |
+| `api-salesops` | 315/315 ✅ (up from 308 — +7 from `a75e084`/`64ddf79`) | 73/73 ✅ |
 
-Matches the counts recorded in `tasks.md` Phase 6.2 exactly.
+**Lint**: `--max-warnings 0` clean on `api-salesops` and `infra-db` (the two touched by the delta commits); `eslint --fix` produced zero diffs (`git status --short` empty after).
 
-**Lint**: `--max-warnings 0` clean on all 5 touched packages. `eslint --fix` was run as part of the lint script; `git status` after was clean (zero diffs), confirming the codebase was already lint-clean, not just auto-fixable.
+**Typecheck**: `pnpm --filter api-salesops typecheck` — **clean, zero errors** (previously 2 pre-existing `TS2353` errors, now fixed by `cb59146`).
 
-**Typecheck**: `pnpm --filter api-salesops typecheck` reproduces exactly the 2 pre-existing `TS2353` errors in `order.service.spec.ts` (`productName`, `customerName`) claimed as pre-existing/out-of-scope. Confirmed unrelated to this change (`pnpm -r build` unaffected, `tsconfig.build.json` excludes specs). No new typecheck regressions found.
-
-**Coverage**: Not run — no coverage script is wired into the standard test commands for these packages; `@vitest/coverage-v8` is a devDependency of `domain` but not invoked by `pnpm test`. Not a blocker per Strict TDD rules (informational, not gating).
+**Coverage**: Not run — no coverage script wired into the standard test commands (unchanged from prior verify; informational only, not gating under Strict TDD rules).
 
 ---
 
-## CRITICAL: shared-test-DB RESTRICT-FK leak is not fully closed by `911e882`/`30c957d`
+## TDD Compliance (delta commits)
 
-The task explicitly asked to verify whether the two leak fixes are complete, or whether other fixtures/specs share the same exposure. They do not, and I reproduced it rather than reasoning about it in the abstract.
+| Task/commit | RED | GREEN | Triangulate | Notes |
+|---|---|---|---|---|
+| `a75e084` (deliver try/catch) | ✅ new tests written alongside fix | ✅ 315/315 pass incl. these 3 | ✅ 3 cases: success, throw, null-attribution | Real `Logger.error` spy assertions, no tautologies |
+| `64ddf79` (note guard) | ✅ 5 new e2e cases via `supertest` | ✅ 73/73 e2e pass incl. these | ✅ 3 negative (number/object/array) + 2 positive (string, null) | Real HTTP roundtrip, asserts status AND `service.recordPayment` call/no-call |
+| `cb59146` (test repair) | N/A — test-only correctness fix | ✅ | N/A | Assertion is behaviorally specific (`caught.message` contains `'EUR'`), not a tautology |
 
-**Reproduction**: left one stray `sales_order` + `commission_accrual` row attributed to a freshly created `company_user` in `store_mgmt_test` (via a throwaway script using the same `PrismaPg` adapter path production code uses), then ran:
+Commits are squashed per work-unit (repo convention) — consistent with WARNING 1 below (narrative, not tabular, TDD evidence), unchanged in nature for these 3 commits.
 
-```
-pnpm --filter @store-mgmt/infra-db test -- users/seed.spec.ts customer/seed.spec.ts company/prisma-company.repository.spec.ts
-```
+## Assertion Quality Audit (delta test files)
 
-Result: **3 suites / 14 tests failed**, all on `Foreign key constraint violated on the constraint: sales_order_attributed_company_user_id_fkey`, all at each spec's own unscoped `prisma.companyUser.deleteMany({})`. Cleaned the stray rows up afterward and reran the full `infra-db` suite: back to 213/213 green — confirming the failure was caused by the stray data, not a real regression, and that the DB is now clean again.
-
-**Root cause**: this change adds *two* new `ON DELETE RESTRICT` edges into `company_user` that did not exist before:
-
-- `sales_order.attributed_company_user_id` → `company_user.id` (migration A)
-- `commission_accrual.attributed_company_user_id` → `company_user.id` (migration B)
-
-`911e882` and `30c957d` added `wipeCommissionTables()` calls to exactly the 9 specs that themselves bulk-delete products/orders (`apply-reservation.spec.ts`, `prisma-stock-level.repository.spec.ts`, `prisma-stock-movement.repository.spec.ts`, `prisma-category.repository.spec.ts`, `prisma-product.repository.spec.ts`, `product/seed.spec.ts`, `prisma-order.repository.spec.ts`, `sales/seed.spec.ts`, `verify-order-attribution.spec.ts`), plus fixed the commission fixture's own leftover `company` row. That is real and verified working.
-
-What it does **not** cover: roughly 10 other specs across `users/`, `customer/`, `company/` still do an **unscoped** `companyUser.deleteMany({})` / `company.deleteMany({})` with no cleanup of orders or accruals first:
-
-- `users/seed.spec.ts`, `users/prisma-warehouse-operator.repository.spec.ts`, `users/prisma-password-reset-token.repository.spec.ts`, `users/prisma-refresh-token.repository.spec.ts`, `users/prisma-user.repository.spec.ts`
-- `customer/seed.spec.ts`, `customer/prisma-customer.repository.spec.ts`
-- `company/seed.spec.ts`, `company/prisma-company.repository.spec.ts`, `company/prisma-company-user.repository.spec.ts`
-
-This is the same defect class the team already found and fixed twice — "It looks like flakiness. It is contamination." (911e882's own commit message) — at a third, unaudited set of call sites. It does not fail *today* only because no currently-committed fixture happens to leave that exact combination behind at the moment one of these 10 specs runs. It is a live landmine for: (a) any future commission or attributed-order fixture that dies before its own teardown, or (b) a developer re-running `infra-db` tests twice against the same `store_mgmt_test` without a full reset (exactly the scenario `tasks.md` Phase 6.1/6.2 already documents happening twice this same week).
-
-**Suggested fix shape** (not applied — verify does not fix):
-1. Either extend `wipeCommissionTables()` (or a new `wipeAttributionBlastRadius()`) to also delete any orders/accruals attributed to company_user rows before every unscoped `companyUser`/`company` bulk-delete in the ~10 files above, or
-2. Centralize teardown ordering in one global Jest setup/teardown hook so no individual spec author has to remember the full RESTRICT chain that migrations A and B introduced.
-
-**Severity rationale**: CRITICAL because it is reproducible, it is the literal scenario the task instructions asked to check for, and it is the same failure class that has already cost two rounds of "looks like flakiness, is actually contamination" investigation on this same change. It is not a functional/spec defect — the commission and attribution features themselves work correctly — but it is a real gap in the guarantee Phase 6.1/6.2 claims ("infra-db suite now passes against a dirty database on purpose").
+Scanned `order.service.spec.ts` and `commission.controller.spec.ts` diffs. No tautologies, no ghost loops, no assertion-free tests, no mock/assertion-ratio red flags. `errorSpy.mockRestore()` present in both new logger-spy tests. **Assertion quality: ✅ all new/changed assertions verify real behavior.**
 
 ---
 
-## WARNING: TDD evidence is narrative, not a dedicated structured table
+## Behavioral change vs spec/design — `deliver()` no longer propagates accrual failure
 
-`apply-progress` (engram `sdd/sales-agents-commissions/apply-progress`, id #1643) and `tasks.md` document RED→GREEN per task inline in prose (e.g. "R21 confirmed to have failed before 4.13-4.15 existed (note in commit message)"; roles.test.ts "fails by construction" §0.6) rather than as a separate structured TDD Cycle Evidence table with RED/GREEN/TRIANGULATE/SAFETY-NET columns. Commits are squashed one-per-work-unit (tests + implementation together, per this repo's own `work-unit-commits` convention), so RED-phase failures are not independently re-derivable from git history alone.
+Checked explicitly, not assumed.
 
-Mitigated by spot-checking 8 of the highest-risk requirements directly in source (R21, R9, R14, R16, R11, R6, R17, R24) — every one inspected has real, non-vacuous, production-code-exercising assertions: no tautologies, no ghost loops over possibly-empty collections, no smoke-test-only patterns. Treated as a documentation-format gap, not a substance gap — WARNING, not CRITICAL.
+- **spec.md** (`specs/salesops-commissions/spec.md:33-41`, "Order Creation Is Never Blocked by Missing Commission Data") states this invariant for **creation**, not delivery — the fix generalizes the same philosophy to delivery, but there is no explicit spec requirement/scenario for delivery-side decoupling yet. Not a violation; see SUGGESTION 2 below.
+- **design.md A9** ("accrual triggered from `OrderService.deliver` via a domain port, separate transaction") — unaffected; the try/catch sits around the same port call, transaction boundary unchanged.
+- **design.md Q6** ("...mitigated by the idempotent `POST /commissions/accruals` reconcile endpoint (§9) and the `UNATTRIBUTED_ORDER`/accrual-failure log lines") — the fix delivers the **log-line half** of Q6's mitigation. It does **not** deliver the reconcile-endpoint half: confirmed via the controller's routes — only `GET /commissions/accruals`, `GET /commissions/report`, `POST /commissions/payments` exist; **`POST /commissions/accruals` was never built**. This is the KNOWN, OWNER-DEFERRED gap — reported as an **open item, not a new CRITICAL**.
+- **Order controller** — just returns whatever `orderService.deliver()` resolves to; no additional error-swallowing or status-code change.
 
-## WARNING: `commission_payment.recorded_by_company_user_id` has no FK constraint
+**Verdict**: consistent with design's own stated risk analysis (Q6); correctly implements the log-line mitigation Q6 anticipated; honestly documents that the reconcile-endpoint mitigation remains unbuilt. Not a spec/design violation.
 
-Confirmed in both `schema.prisma:360-373` and design.md's own schema fragment (§8.1) — neither declares a `@relation` for that field, so it's a plain UUID column with zero DB-level referential guarantee. This matches the design exactly (not a deviation from what was planned), so it is not a verify failure, but it is worth flagging: a payment can point at a `company_user` id that no longer exists (or never did) with nothing to catch it.
+## Endpoint review notes (relevant dimensions)
+
+`POST /orders/:id/deliver` — **Error handling**: previously a single unhandled exception could report an order as "not delivered" when it in fact was (silent DB/caller divergence); now correctly isolated per failure-domain. **Design**: response contract unchanged (200 + delivered order) — correct, since delivery itself did not fail.
+
+`POST /commissions/payments` — **Error handling / Design**: closes a real robustness gap (unhandled exception → 500 on a bad `note`) with a boundary check consistent with the app's existing hand-rolled-validation convention (no global `ValidationPipe`, confirmed absent from `main.ts`). Guard correctly placed before the try/catch. No completeness gap found — `typeof body.note !== 'string'` already rejects booleans too.
 
 ---
-
-## R17 / D6 combo-bracket claim — explicitly re-verified, holds
-
-The task instructions specifically asked not to assume this and to check it. Verified:
-
-- `COMBO_BRACKETS` in `packages/infra-db/src/commission/seed.ts:99-103` prices a **catalog product** whose name joins pieces with `" + "` — this is seed-time, per-product resolution, not an order-level (multi-line) rule.
-- R17's structural test (`apps/api-salesops/src/commission/commission.controller.spec.ts:218-234`) scans only the 3 runtime app-layer commission files — `commission.controller.ts`, `commission.service.ts`, `commission-accrual.recorder.ts` — for bracket-computation regex patterns. It correctly does **not** scan `seed.ts`, because seed-time authoring is not request-path computation.
-- `specs/salesops-commissions/spec.md`'s "Combo Brackets Are Not Implemented" requirement text already reads "**Order-level** combo-bracket commission rules MUST NOT be implemented" (not a bare "combo brackets") — already correctly narrowed for the D6 reversal, and still accurate as written. No spec/implementation drift found.
 
 ## Spec Compliance Matrix (spot-checked with runtime evidence)
 
 | Requirement | Scenario | Test | Result |
 |---|---|---|---|
-| R21 — privilege escalation impossible | Every escalation shape (`roles`, `role`, string, combined, `userId` hijack) → role is exactly `user` bit | `customer-identity.controller.spec.ts` (real RolesGuard + real service, mocked repos only) | ✅ COMPLIANT |
-| R9 — non-ACTIVE CompanyUser denied | REVOKED/SUSPENDED treated exactly like missing | `jwt.strategy.spec.ts` `it.each(['REVOKED','SUSPENDED'])` | ✅ COMPLIANT |
-| R24 — partial-failure ordering (A16) | Write order User→CompanyUser→Customer; failure after write #1 leaves a dangling, 403-ing login | `customer-identity.service.spec.ts` | ✅ COMPLIANT |
-| R6 — race accepted, pinned | Two orders created against same stock; winner reserves at confirm, loser 409s, order untouched | `order.e2e-spec.ts`, real HTTP + real DB | ✅ COMPLIANT |
-| R11 — unresolved line excluded, never zeroed | `300×2 + 200×1 = 800`; one unresolved excludes it from total | `compute-accrual.test.ts` | ✅ COMPLIANT |
-| R14 — double payment 409 | Second payment on same accrual → 409 | `commission.controller.spec.ts` | ✅ COMPLIANT |
-| R16 — owner not filtered from report | Owner accrual included, unfiltered | `commission.controller.spec.ts` (mocked service response) + structural: `commission.service.ts#report` groups strictly by `attributedCompanyUserId`, no role branch anywhere | ✅ COMPLIANT (structural + controller pass-through) |
-| R17 — no order-level combo-bracket computation | `rg`-style structural scan of 3 app-layer files | `commission.controller.spec.ts:218-234` | ✅ COMPLIANT, scope-verified against D6 reversal |
+| Delivery must not be blocked by an accrual failure (Q6 mitigation) | Recorder throws → order still delivered, failure logged with order+agent id | `order.service.spec.ts` (2 new cases) | ✅ COMPLIANT |
+| `POST /commissions/payments` note validation | Non-string note → 400, nothing recorded; string/null note → 201 | `commission.controller.spec.ts` (5 new cases) | ✅ COMPLIANT |
+| R21 — privilege escalation impossible | (re-confirmed) | `customer-identity.controller.spec.ts` | ✅ COMPLIANT |
+| R9 — non-ACTIVE CompanyUser denied | (re-confirmed) | `jwt.strategy.spec.ts` | ✅ COMPLIANT |
+| R6 — race pinned, not fixed | (re-confirmed) | `order.e2e-spec.ts` | ✅ COMPLIANT |
+| R11 — unresolved line excluded, never zeroed | (re-confirmed) | `compute-accrual.test.ts` | ✅ COMPLIANT |
+| R14 — double payment 409 | (re-confirmed) | `commission.controller.spec.ts` | ✅ COMPLIANT |
+| `commission_payment.recorded_by_company_user_id` FK | Orphan UUID rejected | `prisma-commission-payment.repository.spec.ts` (new) | ✅ COMPLIANT |
 
-**Compliance summary**: 8/8 spot-checked scenarios compliant with real, runtime-executed evidence. The remaining R1-R25 rows were checked for presence and narrative RED/GREEN discipline in `tasks.md`/`apply-progress` but not individually re-executed line-by-line in this pass, given the full suite (all containing them) ran green.
+**Compliance summary**: all spot-checked scenarios compliant with real, runtime-executed evidence; full suite (272+34+215+315+73+54+11 = 974 tests) green.
 
-## Coherence (Design)
+## Coherence (Design) — delta only, prior rows unchanged and still hold
 
 | Decision | Followed? | Notes |
 |---|---|---|
-| A9 — accrual via port, separate transaction from `deliver` | ✅ Yes | `commission-accrual.recorder.ts` injected via `COMMISSION_ACCRUAL_RECORDER` |
-| A14 — separate `/customers/with-identity` route | ✅ Yes | Existing `POST /customers` byte-for-byte unchanged, confirmed by lint/test parity |
-| A15 — module-private role constant, no DTO field | ✅ Yes | Confirmed via R21/R22 |
-| A17 — `createdByCompanyUserId` self-FK, never backfilled | ✅ Yes | Migration C additive, nullable |
-| D6/Q3 — order-level bracket unimplemented, product-level bracket seeded | ✅ Yes | See R17 section above |
-| §8.3 verify-order-attribution gate before migration B | ✅ Yes, per tasks.md 5.9 | Not independently re-run this session (would require a fresh migration cycle) |
+| A9 — accrual via port, separate transaction from `deliver` | ✅ Yes | try/catch added around the same port call; transaction boundary untouched |
+| Q6 mitigation (log lines) | ✅ Yes, partially | Log-line half delivered; reconcile-endpoint half still unbuilt — known, owner-deferred |
+| §0.13 — no global ValidationPipe, hand-rolled DTO guards | ✅ Yes | `note` guard follows the same pattern as `accrualId`/`paidAt` |
 
 ---
+
+## Known, owner-deferred items (not raised as CRITICAL)
+
+1. **No company-level isolation in `api-salesops`** — app-wide, predates this branch. Spec does not claim otherwise; no drift found.
+2. **Commission reconcile endpoint (`POST /commissions/accruals`, design.md §9/Q6) was never built.** The log-line half of Q6's mitigation now exists (`a75e084`); the endpoint half does not. Flagging as an open item for a future change, not a defect in this one.
 
 ## Issues Found
 
-**CRITICAL**:
-1. Shared-test-DB RESTRICT-FK leak from migrations A/B into `company_user` is only closed for 9 of ~19 specs that bulk-delete `companyUser`/`company`. Empirically reproduced (3 suites / 14 tests failing), then cleaned up and reverified green. See full section above.
+**CRITICAL**: None.
 
 **WARNING**:
-1. TDD evidence is narrative (in `tasks.md`/`apply-progress`), not a dedicated structured table — spot-checks confirm substance is real, but the format doesn't match the strict-TDD verify module's expected artifact shape.
-2. `commission_payment.recorded_by_company_user_id` has no FK constraint (matches design as written, not a code deviation, but a referential-integrity gap worth a follow-up).
+1. TDD evidence for this change lives in `tasks.md`/`apply-progress` narrative form, not a dedicated structured RED/GREEN/TRIANGULATE table. Spot-checks (including of the 3 new delta commits) continue to show real, non-vacuous assertions. Documentation-format gap, not a substance gap. (Carried forward from the prior report, unchanged.)
 
 **SUGGESTION**:
-1. Consider a dedicated integration test that creates a real owner-attributed accrual and asserts it via `GET /commissions/report` end-to-end (current R16 coverage is controller pass-through + structural absence of a role filter, not a full-stack behavioral proof).
-2. Given the CRITICAL finding above has now bitten this shared-DB pattern three times, consider a single global Jest teardown hook for `infra-db` that always clears the full RESTRICT chain (commission → order → company_user → company) in one place, rather than per-spec opt-in.
+1. Consider a full-stack integration test creating a real owner-attributed accrual and asserting it via `GET /commissions/report` end-to-end (current coverage is controller pass-through + structural absence of a role filter).
+2. Consider adding an explicit spec requirement/scenario stating delivery MUST NOT be blocked by a commission-accrual failure, mirroring the existing creation-side requirement — the behavior is now implemented and tested, but not yet spec'd in words.
 
 ---
+
+## Delivery state
+
+Branch `salesops-sales-agents-commissions`, HEAD `ab7b135`, pushed, up to date with `origin/salesops-sales-agents-commissions`. Working tree clean. Tasks 87/87.
 
 ## Verdict
 
-**PASS WITH WARNINGS.** Every functional spec requirement, design decision, and task spot-checked holds against real, freshly-executed test evidence (build, lint, typecheck, full suite: 272+34+213+308+73+54+11 all green, matching claimed counts exactly). The one CRITICAL finding is a test-infrastructure integrity gap, not a product defect — it does not block the feature from working correctly, but it is real, reproducible, and belongs to a defect class that has already required two rounds of "flakiness" investigation on this exact change. Recommend the owner either fix it before push (task 6.3) or explicitly accept it as logged debt.
-
----
-
-## Resolution (2026-07-31, after the report was written)
-
-### CRITICAL — CLOSED in `157a705`
-
-The finding was **independently reproduced before being acted on**, rather than
-taken on the verifier's word: a stray attributed order left in `store_mgmt_test`,
-then `users/seed.spec.ts` and `users/prisma-user.repository.spec.ts` run against
-it — failures on `sales_order_attributed_company_user_id_fkey`, exactly as
-reported.
-
-Fixed at the cause rather than the ten call sites' symptom. The recurring defect
-was that **every spec kept its own hand-written list of tables to clear**, so each
-migration adding a `RESTRICT` edge silently invalidated every list that did not
-mention the new table. `src/db-cleanup.spec-helper.ts` now holds that knowledge in
-one place:
-
-- `wipeCommissionTables` MOVED there (it was about to be duplicated), with the
-  nine specs that used it repointed at the shared module.
-- `wipeCompanyUserDependents` added — commission tables, then order payments,
-  sale credits, order lines, orders, then migration C's self-referencing
-  assignments — and called by the ten specs that bulk-delete company users.
-
-Written test-first: the RED assertion (`prisma-commission-accrual.repository.spec.ts`)
-seeds a fixture, runs the *existing* helper, and asserts `companyUser.deleteMany({})`
-resolves — which failed on the FK before the new helper existed.
-
-Verified by leaving an attributed order in the database on purpose and running the
-specs that used to fail: 5 suites / 26 tests green. Full infra-db suite 214 (213 + 1
-new), build, lint and typecheck clean.
-
-### WARNING 2 — CLOSED in `425e212` (owner ruling)
-
-The owner ruled that the column must always resolve to someone real. Migration
-`20260731220000_add_commission_payment_recorder_fk` adds the foreign key, `RESTRICT`
-like every other edge in the module, and `design.md` §8.1 is amended to match.
-
-Written test-first: the payment spec now records a settlement signed by an all-zeros
-UUID and expects rejection — before the constraint it was accepted and returned an
-ordinary payment row. The migration deliberately does not clean up before altering:
-an orphan row makes it raise, because an orphan is a data problem to look at, not a
-row to delete on the way past. Applied to `store_mgmt_test` and `store_mgmt`; neither
-had one.
-
-### SUGGESTION 2 — CLOSED in `1c88692`, differently than suggested
-
-The report proposed a global Jest *teardown* hook clearing the RESTRICT chain after
-each test. That was not built, for a concrete reason: several specs create their
-fixture once in `beforeAll` and reuse it (the accrual spec's `commission-accrual-spec`
-category, deleted in `afterAll`). A hook clearing those tables after every test would
-delete that fixture after the first test and break the suite from the second one on.
-It would also cost ~215 × 10 deletes per run.
-
-What shipped instead is a **`globalSetup`** hook: one truncate, once, before any suite
-starts. It closes the hole the per-spec helpers cannot — state that arrived BEFORE the
-run (a hand-run seed, a previous run killed halfway), which was the actual trigger of
-all three incidents. It reads the table list from the database rather than carrying a
-hand-written one, and refuses to run unless the URL names `store_mgmt_test`.
-
-Verified by inserting a stray row and running the full suite four times: gone before
-the first spec starts, 215/215 green each time.
-
-### WARNING 1 and SUGGESTION 1 — accepted as written
-
-A documentation-format gap and a test-depth suggestion. Neither changes behaviour.
+**PASS.** All functional spec requirements, design decisions, and tasks hold against real, freshly-executed evidence across the full matrix (974 tests, all green; build/lint/typecheck clean). The prior CRITICAL and both prior open items are closed and independently re-verified in this session. The 4 new commits since the last verify are all correct, tested, and — for the one behavioral change (`deliver()` no longer propagating accrual failures) — explicitly consistent with design.md's own anticipated risk (Q6), with the remaining half of that mitigation (the reconcile endpoint) correctly left as a known, owner-deferred gap. Ready for `sdd-archive`.
