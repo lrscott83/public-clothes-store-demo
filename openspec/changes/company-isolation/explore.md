@@ -1,5 +1,23 @@
 # Exploration: company-isolation
 
+> **SUPERSEDED, 2026-08-02, before any code was written.** The owner answered this
+> exploration's Open Question 4 with "several companies are coming", which invalidates the
+> premise every option here rests on. Row-level `companyId` scoping (options a and b) is the
+> work this document itself flagged as potentially throwaway against the sibling project's
+> schema-per-tenant shape — and with a real second tenant expected, that risk is no longer
+> hypothetical. Superseded by the `multi-tenant-by-schema` change, which resumes "Approach 1"
+> from `openspec/changes/archive/2026-07-28-company-user-roles-reframe/`.
+>
+> **Kept because sections 1 and 2 remain accurate and useful**: the entity table (what is
+> company-owned in principle vs company-linked today) and the JOIN-path asymmetry are facts
+> about the current schema, independent of which tenancy shape wins. Sections 3-5 (options,
+> backfill, open questions) are void.
+>
+> Three of this document's open questions dissolve entirely under schema-per-tenant: whether
+> the catalog is global or company-private, what a supervisor sees for null-attribution orders,
+> and whether the single-company guard fails hard or allows an opt-in. Each was an artifact of
+> row-level scoping, not a real product question.
+
 Surfaced by the adversarial verify of `sales-agents-commissions`
 (`openspec/changes/archive/2026-08-02-sales-agents-commissions/verify-report.md`,
 "Known, owner-deferred items #1"). Artifact store `hybrid`. Engram twin:
