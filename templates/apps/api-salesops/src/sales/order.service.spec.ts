@@ -306,21 +306,41 @@ describe('OrderService', () => {
 
     it('propagates RateNotFoundError from the domain factory WITHOUT calling the repository', async () => {
       currencyRepo.ratesForChannel.mockResolvedValue([]);
+      // The DTO's price is ignored at runtime — `resolveLineSnapshots` resolves
+      // the real price from the catalog — so the cross-currency condition has
+      // to come from the mocked PRODUCT, not from anything the caller sends.
+      // The payment is deliberately USD (not EUR): `resolveRateForCurrency`
+      // (rate-resolver.ts:43-51) returns the synthetic USD identity rate
+      // unconditionally, so a USD payment can NEVER throw `RateNotFoundError`
+      // regardless of what rates are on file — that source of the throw is
+      // structurally eliminated, not just avoided by convention. Combined
+      // with `createOrder` building every line (order.ts:132) before any
+      // payment (order.ts:133-135) — so a throw inside `buildOrderLine` never
+      // even reaches payment construction — the EUR-priced line is now the
+      // ONLY possible origin of `RateNotFoundError` in this test: delete the
+      // override below and nothing throws at all (proven empirically).
+      productRepo.findById.mockResolvedValueOnce(
+        product('product-uuid-2', { minorUnits: 5000n, currency: 'EUR' }),
+      );
       const crossCurrencyDto: CreateOrderDto = {
         ...sampleCreateDto,
-        lines: [
-          {
-            productId: 'product-uuid-2',
-            productName: 'Reloj',
-            categoryName: 'Accesorios',
-            price: { amount: '50.00', currency: 'EUR' },
-            quantity: 1,
-          },
-        ],
-        payments: [{ channel: 'EUR_CASH', amount: { amount: '50.00', currency: 'EUR' } }],
+        lines: [{ productId: 'product-uuid-2', quantity: 1 }],
+        payments: [{ channel: 'USD_CASH', amount: { amount: '50.00', currency: 'USD' } }],
       };
 
-      await expect(service.create(crossCurrencyDto, ACTOR_COMPANY_USER_ID)).rejects.toThrow(RateNotFoundError);
+      let caught: unknown;
+      try {
+        await service.create(crossCurrencyDto, ACTOR_COMPANY_USER_ID);
+      } catch (err) {
+        caught = err;
+      }
+
+      // Observe the actual error rather than just that the call rejected: the
+      // EUR-priced line (no USD line present) derives an order currency of
+      // 'MN', and converting that EUR line into 'MN' with no rates on file is
+      // what must throw — not some unrelated resolution.
+      expect(caught).toBeInstanceOf(RateNotFoundError);
+      expect((caught as Error).message).toContain('EUR');
       expect(orderRepo.create).not.toHaveBeenCalled();
     });
   });
@@ -750,7 +770,7 @@ describe('OrderService', () => {
     it('returns null when the order does not exist', async () => {
       orderRepo.findById.mockResolvedValue(null);
 
-      const result = await service.update('unknown-id', { customerName: 'X' });
+      const result = await service.update('unknown-id', { deliveryMode: 'delivery' });
 
       expect(result).toBeNull();
     });
