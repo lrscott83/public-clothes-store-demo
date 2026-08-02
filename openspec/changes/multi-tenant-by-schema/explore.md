@@ -168,7 +168,98 @@ real code at `/home/coder/sources/poolops/poolops-biz`.
   (W4) verified **7 carry `@UseGuards`** — that is the accurate count for guard-chain changes.
   Each needs `TenantContextGuard` added after `JwtAuthGuard`, before `RolesGuard`.
 
+## 6. Verified answers (second pass, 2026-08-02 — two independent read-only audits of poolops-biz)
+
+The open questions below were re-checked against the code rather than reasoned about. All five
+prior claims were CONFIRMED. What follows corrects or sharpens them.
+
+**Topology — one database, not two.** Master and every tenant schema share a single Postgres
+database via one `DATABASE_URL` (`packages/infra-db/src/prisma-client.ts:11`,
+`tenant/tenant-prisma-factory.ts:47`, error text: "the schema-per-tenant architecture requires a
+single consolidated database URL"). **The repo's root `.env.example:9-16` describes a two-URL
+Supabase topology that NO `.ts` file reads** — stale documentation. Verified by grepping every
+consumer of `MASTER_DATABASE_URL`/`TENANT_DATABASE_URL`: zero.
+
+**Q1 — CompanyUser shape: RESOLVED.** `CompanyUser.id String @id` IS the master `User.id`
+(`tenant/schema.prisma:246-247`). `CompanyUserRepository.findByUserId` is literally
+`return this.findById(userId)` (`repositories/company-user.repository.ts:77-79`). Zero hops, no
+translation table. The pattern extends further: `CompanyCustomer.id` and `CompanyTechnician.id`
+are ALSO forced to that same value at every creation site
+(`services/customer-profile.helper.ts:32-40`, `technician-profile.helper.ts:32-40`).
+**Caveat worth improving on**: poolops's schema PERMITS `id` and `companyUserId` to diverge —
+only convention keeps them equal. store-mgmt should make the master user id the sole PK so the
+invariant is structural, not remembered.
+
+**Q2 — Client management: RESOLVED, and the numbers are worse than assumed.** No `max` is passed
+to `new Pool()` (`tenant-prisma-factory.ts:49-52`) so each pool takes pg's default of **10**.
+The cache is a plain `Map` with **no eviction, TTL or LRU** (line 21). `disposeClient()` (line
+76) has **zero call sites in the entire repo** — only `disposeAll()` is ever called, and only
+from CLI scripts, test harnesses and process-exit paths, **never from a long-running server**.
+So one app instance holds `(N tenants + 1) × 10` connections, unbounded. `docker-compose.yml`
+sets no `max_connections`, leaving Postgres's default of 100 for the whole cluster, shared
+across four app types. This is an exhaustion risk in the low double digits of tenants, not a
+theoretical one.
+**Framing correction**: schema-per-tenant itself IS shipped and running. Spec 045 is a
+follow-on hardening proposal (shared client + `SET LOCAL search_path`) that is unimplemented —
+not the pattern as a whole.
+
+**Q3 — Migration drift: RESOLVED. No detection exists.** Zero hits for `drift`,
+`migrate status` or `_prisma_migrations` in runtime or CI code; no health check or startup
+assertion notices a tenant that is behind. `tenant-deploy-all.ts:38-56` confirms the
+no-transaction / continue-on-failure / exit-1 behaviour. Two further landmines found:
+a second, redundant tool (`migrate-all-tenants.ts`) routinely runs
+`prisma db push --accept-data-loss`, with nothing indicating which of the two is authoritative
+for production; and `pushSchema()` shells `execSync` per tenant **with no timeout**, so one
+hung migration blocks the whole fleet batch.
+
+**Q4 — Isolation proof: RESOLVED. Nothing tests it.** `concurrent-isolation.test.ts` does not
+exist. No test anywhere uses two tenant schema names in one run. e2e `overrideGuard` stubs BOTH
+`JwtAuthGuard` and `TenantContextGuard` with a passing guard hardcoding one schema
+(`apps/api-technician/test/support/readings-e2e.ts:92-97`) — so the real tenant-guard logic is
+never exercised end to end, and cross-tenant leakage is untested.
+
+**Q5 — Guard placement: RESOLVED**, with a design lesson. Order is `JwtAuthGuard` →
+`TenantContextGuard` (`packages/api-common/src/guards/tenant-context.guard.ts:33`). But the
+guard's own comment claiming its `AsyncLocalStorage` scope is long-lived across the request is
+**stale**: every downstream service (100+ call sites) independently re-opens its own `runAsync`
+scope from `request.company`. That re-scoping is the more robust pattern — it avoids depending
+on ALS surviving NestJS's RxJS/interceptor pipeline — and store-mgmt should adopt it
+deliberately rather than trusting a request-long scope.
+
+**Q6 — Cutover: RESOLVED as "no precedent to copy."** Zero hits for `SET SCHEMA` anywhere. No
+script moves rows between schemas. Every tenant is provisioned from a static empty
+`tenant-schema.sql`, and the documented "cutover" is destructive dev-only (drop and recreate).
+**store-mgmt must design its own cutover from scratch** for the one existing company's real
+data. The remaining question is operational, not technical: how much locked downtime is
+acceptable.
+
+**Q7 — Customer/WarehouseOperator reshape: RESOLVED.** A tenant-schema model CANNOT `@relation`
+to a master-schema model — Prisma forbids it across separate schema files, so this is enforced
+by tooling, not merely chosen. poolops's answer is the id-collapse described in Q1.
+
+**Non-HTTP database access — a pattern worth copying.** `apps/worker`'s `@Cron` job
+(`rolling-routeitem-cron.service.ts`) opens its own `TenantContextService.runAsync({companyId,
+schemaName}, ...)` per tenant, correctly bypassing the HTTP-only guard. No queue system is in
+use. CLI backfill scripts, by contrast, call the factory directly — a third way of obtaining a
+tenant client, and an inconsistency store-mgmt should not reproduce.
+
+### Landmines in poolops that store-mgmt should NOT inherit
+
+1. Unbounded per-tenant pool cache with no `max` and no disposal in server processes (Q2).
+2. Two redundant migration tools, one habitually running `--accept-data-loss` (Q3).
+3. `packages/infra-db/README.md` documents the UNBUILT shared-client design as current fact —
+   a documentation-trust trap, the same class of error as the stale root `.env.example`.
+4. `schemaName` is regex-validated only at creation; every later read site string-interpolates
+   it into raw SQL and pool options **without re-validating**.
+5. Saga compensation on company creation only logs when a rollback step itself fails — no
+   retry, no alert, no reconciliation sweep. Orphaned rows are possible and would be silent.
+6. "Is this person active" lives in TWO places — master `Membership.status` and tenant
+   `CompanyUser.isActive` — kept in sync by hand.
+
 ## Open Questions for the Owner
+
+**Resolved by the second pass: Q1, Q2, Q3, Q4, Q5, Q7 (see section 6). Only the operational
+half of Q6 remains open.**
 
 1. **CompanyUser shape**: adopt poolops's collapsed `id == master User.id` shape now (cheap
    today — zero real tenant-side FKs depend on the current shape yet) or keep store-mgmt's
