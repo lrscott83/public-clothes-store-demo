@@ -4,7 +4,7 @@
 the evidence behind it, and — for the two that were withdrawn — why the question was wrong.
 
 Artifact store: **hybrid** (this file + engram). Branch `salesops-multi-tenant-by-schema`,
-five commits, **not pushed**.
+pushed through `5316aa9`.
 
 | Commit | What |
 |---|---|
@@ -13,6 +13,12 @@ five commits, **not pushed**.
 | `7bd98fb` | `multi-tenant-by-schema` exploration, read from poolops-biz |
 | `29908fd` | the open questions answered from code, second pass |
 | `f7d4205` | thirteen decisions handed off, none taken |
+| `50a90fe` | the blocking question retired — its premise was never true |
+| `22cee4c` | proposal |
+| `7c01f53` | P12 investigated — what tenant schemas cost the suite |
+| `86c4b55` | design — D1–D7 |
+| `c9935f1` | delta specs across six capabilities |
+| `5316aa9` | eighteen work-unit commits planned |
 
 Artifacts: [`explore.md`](./explore.md) (section 6 holds the verified answers with `file:line`),
 engram `sdd/multi-tenant-by-schema/explore` (#1562), `reference/poolops-tenancy-verified` (#1779),
