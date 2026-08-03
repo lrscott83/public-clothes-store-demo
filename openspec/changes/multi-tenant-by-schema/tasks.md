@@ -1,0 +1,157 @@
+# Tasks: multi-tenant-by-schema
+
+> **Size deviation flagged**: this artifact exceeds the nominal 530-word budget from
+> sdd-tasks/SKILL.md. The change is sized by its own proposal as "the largest in the
+> repo's history" (~60–90 files, 2000+ lines); P5, P12's e2e rewiring, and D4's
+> invariant rewrite are each required as explicit, un-buried tasks. Chose completeness
+> over the word cap — same tradeoff `sdd-spec` made on the six delta specs.
+
+## Review Workload Forecast
+
+This repo's delivery is **owner-locked**: single branch, work-unit commits, push once
+at the end, **no pull requests** (`sdd-init` #492). The generic PR/400-line chain guard
+does not apply as a gate — there is no PR to split. What replaces it: 18 work-unit
+commits below, each independently revertable, sized so no single sitting reviews more
+than one commit's diff. Two are flagged oversized regardless (WU3a, WU3b) because
+Prisma's schema is validated as one atomic file and cannot be split further without an
+intermediate broken build.
+
+| Field | Value |
+|-------|-------|
+| Estimated changed lines | ~3,000–4,000 hand-written + ~1,500–2,000 generated (migration SQL, tenant-schema.sql) |
+| Estimated files touched | ~85–90 |
+| 400-line budget risk | High (moot — no PR exists to budget) |
+| Chained PRs recommended | No — owner-locked to single branch, no PRs |
+| Suggested split | 18 work-unit commits (below), not PRs |
+| Delivery strategy | owner-locked (single branch, work-unit commits, push at end) |
+| Chain strategy | pending (not applicable — recorded per SKILL contract, not acted on) |
+
+```text
+Decision needed before apply: No
+Chained PRs recommended: No
+Chain strategy: pending
+400-line budget risk: High
+```
+
+### Suggested Work Units (commits, not PRs)
+
+| # | Commit boundary (goal) | Files | Lines | Split risk |
+|---|---|---|---|---|
+| 1 | `feat(domain): add Membership model and tenant-access policy port` | 4 | ~180 | Low |
+| 2 | `feat(infra-db): add schemaNameFor/assertSchemaName helper` | 2 | ~90 | Low |
+| 3a | `feat(infra-db): split Prisma schema into master + tenant` | ~9 | ~1,100–1,500 (mostly generated) | **High — flagged, not splittable further** (one Prisma validation unit) |
+| 3b | `feat(infra-db): re-source repos to split clients, add Membership/ProvisioningIncident repos` | ~19 | ~350–450 | Medium — mechanical but wide |
+| 4 | `feat(infra-db): bounded per-schema tenant client factory (D2)` | 4 | ~350 | Low |
+| 5 | `test(infra-db): schema-per-suite tenant test helper (P12)` | 3 | ~200 | Low |
+| 6a–c | `test(infra-db): re-source {currency+customer, sales+commission, inventory+warehouse+product} repos to tenant client` | ~8 each | ~300 each | Medium — 3 sub-commits by domain group |
+| 7 | `feat(api-common): TenantContextGuard + rewrite JwtStrategy/RolesGuard invariant (D4)` | 8 | ~450 | Medium — includes comment + spec rewrite by constraint |
+| 8 | `feat(api-salesops): wire TenantContextGuard into 10 controllers (D5)` | ~18 | ~400 | Low — mechanical, one line per handler |
+| 9 | `feat(infra-db): template catalog copy at provisioning (P8/P9)` | 4 | ~200 | Low |
+| 10 | `feat(api-idp): provisioning saga with orphan detection (D7)` | ~8 | ~500 | Medium |
+| 11 | `feat(infra-db): fleet migration tool + drift check (D6)` | 4 | ~350 | Low — spike gates the rest |
+| 12a | `test(api-salesops): rewire e2e auth helper + 7 e2e specs for real tenant resolution (P12)` | 8 | ~450 | **High — flagged**, could split per resource (customer/order/commission vs category/product/warehouse) if it drags |
+| 12b | `test(api-idp): rewire 2 e2e specs for real tenant resolution (P12)` | 3 | ~150 | Low |
+| 13 | `test: cross-schema isolation proof, two tenants in one run (P5)` | 2 | ~200 | Low — must stay its own commit, not bundled |
+| 14 | `chore: eslint tenant-repo boundary + pnpm seed wiring + flag stale architecture.md` | 4 | ~120 | Low |
+
+---
+
+## Phase 1: Domain foundations
+
+- [ ] 1.1 [RED] `packages/domain/src/company/models.test.ts` — failing tests for reshaped `CompanyUser` (no `userId`/`companyId`), `Membership` (status transitions), `resolveTenantAccess` policy (ACTIVE Membership + tenant CompanyUser → access; anything else → denied).
+- [ ] 1.2 [GREEN] `packages/domain/src/company/models.ts`, `imembership.repository.ts` (port), `resolve-tenant-access.ts` — implement to pass 1.1. Satisfies spec: salesops-companies "Master Membership Gates Company Access", "Membership Status Gates Company Access".
+- [ ] 1.3 Export new types from `packages/domain/src/index.ts`.
+
+## Phase 2: schemaName helper (D3)
+
+- [ ] 2.1 [RED] `packages/infra-db/src/tenant/schema-name.spec.ts` — `schemaNameFor(companyId)` UUID validation + format, `assertSchemaName(name)` rejection of malformed names.
+- [ ] 2.2 [GREEN] `packages/infra-db/src/tenant/schema-name.ts`. Satisfies spec: salesops-tenancy "Schema-Per-Tenant Topology" (validated-everywhere requirement).
+
+## Phase 3: Prisma schema split
+
+- [ ] 3.1 (WU3a) Create `packages/infra-db/prisma/master/schema.prisma` (`User`, `Company`+`schemaName`, `Membership`, `TemplateCategory`, `TemplateProduct`, `ProvisioningIncident`, `RefreshToken`, `PasswordResetToken`, enum `MembershipStatus`) + its own `prisma.config.ts`.
+- [ ] 3.2 (WU3a) Create `packages/infra-db/prisma/tenant/schema.prisma` (`CompanyUser` collapsed-PK, `Customer`/`WarehouseOperator` reshaped onto `companyUserId`, all remaining business tables + enums) + its own `prisma.config.ts`. `CompanyUser.company → Company` relation is dropped (D1).
+- [ ] 3.3 (WU3a) Generate the master migration (`prisma migrate dev`) and `packages/infra-db/scripts/generate-tenant-schema-sql.ts` (`prisma migrate diff --from-empty`) producing committed `packages/infra-db/prisma/tenant-schema.sql`.
+- [ ] 3.4 (WU3b) Add `PrismaMembershipRepository`, `PrismaProvisioningIncidentRepository` (master-side, `packages/infra-db/src/company/`).
+- [ ] 3.5 (WU3b) Re-type the ~17 repository files' Prisma client import to the correct generated client (5 master repos unchanged in behavior; ~12 tenant repos temporarily bind a single default-schema client so the package compiles — full tenant-context wiring lands in Phase 6). Update `prisma/seed.js` to seed master only for now.
+
+No cutover/migration-of-existing-rows tasks anywhere in this phase or elsewhere — provisioning always starts from an empty schema (spec: "Provisioning Creates, Never Migrates, Existing Data").
+
+## Phase 4: Tenant client factory (D2)
+
+- [ ] 4.1 [RED] `packages/infra-db/src/tenant/tenant-prisma-factory.spec.ts`, `tenant-context.service.spec.ts` — bounded pool (`max`, idle timeout, LRU cap), `getClient()` throws with no active context, `disposeClient` called on eviction and `onModuleDestroy`.
+- [ ] 4.2 [GREEN] `packages/infra-db/src/tenant/tenant-prisma-factory.ts`, `tenant-context.service.ts`, `tenant-database.service.ts` (`createSchema`/`deleteSchema`/`schemaExists`, raw `pg.Client`, applies `tenant-schema.sql`). Satisfies spec: salesops-tenancy "Tenant Client Acquisition Fails Loud, Never Falls Back".
+
+## Phase 5: Test infra — schema-per-suite (P12, Option C scoped)
+
+- [ ] 5.1 [GREEN — new test infra, no separate RED] `packages/infra-db/src/tenant-schema.spec-helper.ts` — `CREATE SCHEMA` + apply `tenant-schema.sql` in `beforeAll`, `DROP SCHEMA CASCADE` in `afterAll`. Reuses Phase 4's `TenantDatabaseService`, not a parallel implementation.
+- [ ] 5.2 Refactor `packages/infra-db/src/db-cleanup.spec-helper.ts` and `packages/infra-db/src/commission/commission-fixtures.spec-helper.ts` to split master-side rows (shared-schema truncate, unchanged) from tenant-side rows (now via 5.1's schema-drop, no RESTRICT-ordering cleanup needed for those tables).
+- [ ] 5.3 Keep `packages/infra-db/jest.config.js` `maxWorkers: 1` as-is — do not attempt schema-per-worker (rejected option, reopens the 2026-07-27 race).
+
+## Phase 6: Repository re-sourcing (~12 tenant-side repos)
+
+Three sub-commits by domain group — each is [RED: update spec to use 5.1's helper + assert tenant-schema isolation] → [GREEN: switch the repo's client source from injected `PrismaService` to `TenantContextService.getClient()`]:
+
+- [ ] 6.1 Currency + Customer repos.
+- [ ] 6.2 Sales (Order) + Commission (×3) repos.
+- [ ] 6.3 Inventory (StockLevel, StockMovement, Warehouse) + Product/Category + WarehouseOperator repos.
+- [ ] 6.4 Add the lint boundary check as a local `pnpm lint` run per group (full eslint rule ships in Phase 14) to confirm no tenant repo imports the master `PrismaService`.
+
+## Phase 7: Guard chain — D4 (tenant resolution moves the bitmask)
+
+This is one work unit by explicit constraint — the invariant comment and its regression test move together with the code, not after.
+
+- [ ] 7.1 [RED] `packages/api-common/src/auth/tenant-context.guard.spec.ts` — X-Company-Id / sole-ACTIVE-Membership resolution, 403 on missing/inactive Membership, 403 on inactive/unprovisioned Company, 500 on DB error during tenant `CompanyUser` lookup vs 403 on genuinely missing row.
+- [ ] 7.2 [GREEN] `packages/api-common/src/auth/tenant-context.guard.ts`, `run-in-tenant.ts` (D5 re-scoping helper). Satisfies spec: salesops-tenancy "Tenant Resolution Guard Chain", "Per-Call Tenant Re-Scoping".
+- [ ] 7.3 [RED] Update `packages/api-common/src/auth/jwt.strategy.spec.ts` — `validate()` returns only `{id, login, isActive}`, no `roles`/`companyId`/`companyUserId`.
+- [ ] 7.4 [GREEN] Rewrite `jwt.strategy.ts` — drop `CompanyUser` resolution and the `COMPANY_USER_REPOSITORY` dependency; rewrite the `:16-29` GUARD-ORDER INVARIANT comment to describe the new chain (JwtAuthGuard → TenantContextGuard → RolesGuard) instead of forbidding a third guard.
+- [ ] 7.5 [RED then GREEN, same commit] `roles.guard.ts` — add the explicit `req.user.roles === undefined` → `403 'Tenant context not resolved'` check; rewrite `roles.guard.spec.ts:60-71`'s "guard-order invariant" test to assert this new explicit check instead of the old "no `req.user`" case (keep that case too — both are now valid failure modes). Satisfies spec: salesops-identity "Role Resolution at Authentication Time", "@Roles()/RolesGuard Enforcement".
+
+## Phase 8: Controller wiring (D5)
+
+- [ ] 8.1 Add `TenantContextGuard` to `@UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)` on the 10 guarded `apps/api-salesops/src/**/*.controller.ts` files (health excluded — no guards).
+- [ ] 8.2 Wrap each tenant-touching handler body in `runInTenant(req.tenant, () => service.x(...))` — one line per handler, per D5. Update each controller's `*.controller.spec.ts` guard mocks accordingly.
+
+## Phase 9: Catalog templating (P8/P9)
+
+- [ ] 9.1 [RED] `packages/infra-db/src/product/copy-catalog.spec.ts` — copying `TemplateCategory`/`TemplateProduct` into a tenant's `Category`/`Product` is idempotent and produces independent rows (spec: salesops-products "Tenant Catalog Is Independently Editable").
+- [ ] 9.2 [GREEN] `packages/infra-db/src/product/copy-catalog.ts`. Update `prisma/seed.js` to seed the 11 slugs as master `TemplateCategory`/`TemplateProduct` once (spec: "Category Catalog Seed Load").
+
+## Phase 10: Provisioning saga (D7)
+
+- [ ] 10.1 [RED] `apps/api-idp/src/company/create-company.saga.spec.ts` — happy path (owner + populated catalog, no follow-up request needed), mid-saga failure rolls back prior steps, failing compensation writes `ProvisioningIncident`.
+- [ ] 10.2 [GREEN] `apps/api-idp/src/company/create-company.saga.ts` — 6 steps with reverse-order compensation (§D7), step 6 (catalog copy, Phase 9) AWAITED. Replace `AuthService.signup`'s `resolveSoleCompany` with explicit `Membership` lookup.
+- [ ] 10.3 `packages/infra-db/scripts/tenant-orphan-sweep.ts` — reconciles orphan schemas, dangling `Company.schemaName`, `Membership` with no tenant `CompanyUser`.
+
+## Phase 11: Migration tool + drift detection (D6)
+
+- [ ] 11.1 **SPIKE — FIRST, before any code in this phase.** Run `prisma migrate diff --from-schema-datasource <url?schema=X> --to-schema-datamodel prisma/tenant/schema.prisma --script` and the `--exit-code` drift variant against a real tenant schema, by hand, to confirm the flag set behaves as D6 assumes (Prisma 7.8 semantics, never executed). **If it doesn't: stop, this phase needs redesign, not a patch — escalate before writing `tenant-migrate.ts`.**
+- [ ] 11.2 [RED] `packages/infra-db/scripts/tenant-migrate.spec.ts` (or equivalent integration test) — one tenant timing out doesn't block the others; drift check names a behind tenant and fails; destructive statement refused without `--allow-destructive`.
+- [ ] 11.3 [GREEN] `packages/infra-db/scripts/tenant-migrate.ts` — per-tenant timeout, continue-and-report, `--check` mode, destructive-flag guard. Satisfies spec: salesops-tenancy "Single Migration Tool With Loud Drift Detection".
+
+## Phase 12: e2e test rewiring (P12 — largest uncosted surface, own explicit tasks)
+
+- [ ] 12.1 [RED] Extend `apps/api-salesops/test/support/auth-e2e-helper.ts`'s own assertions (or a small new spec) to require `createAuthedUser` return a real provisioned tenant schema + a working `X-Company-Id` header pair, not a `Company.upsert` into `public`.
+- [ ] 12.2 [GREEN] Rewrite `createAuthedUser`/`createAuthedWarehouseOperator` (`auth-e2e-helper.ts:19-77`) — provision a tenant schema (reuse Phase 4/10's `TenantDatabaseService`), create the master `User` + `Membership` + tenant `CompanyUser`, return `{userId, companyUserId, companyId, token}`.
+- [ ] 12.3 Update all 7 `apps/api-salesops/test/*.e2e-spec.ts` files to send `X-Company-Id` and assert against the real `TenantContextGuard` (no `overrideGuard` stubbing — spec: salesops-tenancy "The test exercises the real guard, not a stub").
+- [ ] 12.4 Update the 2 `apps/api-idp/test/*.e2e-spec.ts` files for the same real tenant-resolution path.
+- [ ] 12.5 Update the 3 hardcoded `?schema=public` fallbacks (`packages/infra-db/jest.setup.js`, `apps/api-salesops/jest.setup.js`, `apps/api-idp/jest.setup.js`) and `packages/infra-db/jest.global-setup.js`'s `schemaname = 'public'` enumeration to also cover per-suite tenant schemas from Phase 5.
+
+## Phase 13: Cross-schema isolation proof (P5 — budgeted deliverable, not a chore)
+
+- [ ] 13.1 **NEW FILE, own commit, never bundled**: `apps/api-salesops/test/tenant-isolation.e2e-spec.ts` — provision two named tenant schemas (A, B) in one test run via Phase 10's saga (or Phase 4/5's provisioning path), write a row in A, run the same query scoped to B, assert B's result set does not contain A's row. Real `TenantContextGuard`, not stubbed. Satisfies spec: salesops-tenancy "Cross-Schema Isolation Is Proven, Not Assumed" — both scenarios ("Writes in tenant A are invisible to tenant B", "The test exercises the real guard, not a stub").
+
+## Phase 14: Cleanup
+
+- [ ] 14.1 `packages/eslint-config/backend-boundaries.config.js` — add the rule: tenant-side repos under `packages/infra-db/src/{currency,customer,sales,commission,inventory,product,users/warehouse-operator}/` may not import the master `PrismaService`.
+- [ ] 14.2 Final `prisma/seed.js` wiring: master seed → provision one tenant via the saga (Phase 10) → seed it. Confirm `prisma migrate reset && pnpm seed` reproduces full state (spec success criteria).
+- [ ] 14.3 Add a one-line flag comment (not a rewrite — out of scope per design §5) noting `docs/system/architecture.md`'s "HTTP backend: does not exist" line is stale relative to this change.
+
+---
+
+## Explicitly out of scope (per proposal/design — do not add tasks for these)
+
+Cutover, downtime window, data migration, dual-write (P1 withdrawn — no production data);
+`Invitation`/invite-accept flow; cross-tenant reporting; tenant-aware background
+jobs/queues; `salesops-mvp`/`static-store` frontend apps; rewriting
+`docs/system/architecture.md`; commission reconcile endpoint; Combos.
