@@ -1,9 +1,10 @@
-# multi-tenant-by-schema — decisions pending
+# multi-tenant-by-schema — decisions
 
-**Handoff for the next session. Nothing here is decided.** Every item carries a suggestion and
-the evidence behind it, but the call is the owner's. Written 2026-08-02.
+**Updated 2026-08-03.** The owner resolved the blocking set. What follows records each decision,
+the evidence behind it, and — for the two that were withdrawn — why the question was wrong.
 
-Where things stand: branch `salesops-multi-tenant-by-schema`, three commits, **not pushed**.
+Artifact store: **hybrid** (this file + engram). Branch `salesops-multi-tenant-by-schema`,
+five commits, **not pushed**.
 
 | Commit | What |
 |---|---|
@@ -11,260 +12,224 @@ Where things stand: branch `salesops-multi-tenant-by-schema`, three commits, **n
 | `90dd42a` | that change superseded — target is schema-per-tenant |
 | `7bd98fb` | `multi-tenant-by-schema` exploration, read from poolops-biz |
 | `29908fd` | the open questions answered from code, second pass |
+| `f7d4205` | thirteen decisions handed off, none taken |
 
 Artifacts: [`explore.md`](./explore.md) (section 6 holds the verified answers with `file:line`),
-engram `sdd/multi-tenant-by-schema/explore` (#1562) and
-`reference/poolops-tenancy-verified` (#1779).
+engram `sdd/multi-tenant-by-schema/explore` (#1562), `reference/poolops-tenancy-verified` (#1779),
+`reference/poolops-cutover-precedent` (#1787).
 
-## Already locked by the owner — do not re-open
+---
+
+## The premise correction that reshaped this document
+
+**There is no production.** The owner stated it plainly on 2026-08-03: *"estamos haciendo esto y
+la app no esta funcionando ni en produccion aun."*
+
+The previous version of this file asserted the opposite — "store-mgmt has one real company's
+production data to preserve" — and built its top-priority blocking question on it. That assertion
+was never verified. P13, twenty lines below it, admitted as much and asked for the check that was
+never run. A blocking question was allowed to rest on an unconfirmed precondition.
+
+Verified since: [`prisma/seed.js`](../../../templates/packages/infra-db/prisma/seed.js) is a single
+idempotent entrypoint covering categories + products (from `catalog.json`), warehouses, cockpit
+users and demo customers, with `company/seed.ts` and `commission/seed.ts` alongside. Every row is
+reproducible. Nothing needs preserving.
+
+**Consequence**: store-mgmt is now in exactly the condition poolops declared when it chose its own
+cutover — `specs/045-schema-per-tenant/spec.md:182`, *"No production data exists yet."* Its
+documented answer therefore applies to us verbatim, where before it did not.
+
+---
+
+## Locked by the owner
 
 1. **Tenancy shape: schema-per-tenant**, mirroring `poolops-biz`. Row-level `companyId` was
    considered and rejected. (2026-08-02)
-2. **Several companies are coming.** This is what expired the 2026-07-28 deferral and what makes
-   the whole change necessary.
-
-## Decisions pending
-
-Each has: the question, what the code shows, a suggestion, and what it blocks.
-
----
-
-### P1 — How much locked downtime is acceptable for the cutover?
-
-**The only question the code genuinely cannot answer.** Still unanswered from the last session.
-
-**Evidence.** poolops has NO cutover precedent — zero `SET SCHEMA` anywhere in the repo, every
-tenant is provisioned from an empty `tenant-schema.sql`, and its documented cutover is
-destructive dev-only ("dev data is disposable"). store-mgmt has one real company's production
-data to preserve, so this gets designed from scratch.
-
-`ALTER TABLE … SET SCHEMA` is fast and copies nothing, but takes an exclusive lock per table,
-and a partial cutover leaves cross-schema joins broken (`Order.warehouseId -> Warehouse`) until
-every table lands. So it runs as one batch, in one window.
-
-**Suggestion**: accept a short coordinated window (seconds to a couple of minutes) and do the
-whole batch in one transaction. Zero-downtime is possible but costs a dual-write phase that is
-disproportionate for a single company.
-
-**Blocks**: the design's cutover section, and the tasks that stage it.
+2. **Several companies are coming.** This expired the 2026-07-28 deferral.
+3. **Follow poolops — minus its six verified landmines.** (2026-08-03) The owner's instruction was
+   to reuse the sibling rather than re-derive. Adopted, with the exclusions named in P3/P4/P5/P6/P9
+   below, each of which is a defect poolops's own team documented and did not fix.
+4. **No cutover.** Drop and recreate from seed. (2026-08-03, follows from the premise correction.)
 
 ---
 
-### P2 — Adopt poolops's collapsed `CompanyUser` PK?
+## Withdrawn — the question was wrong
 
-**Evidence.** poolops: `CompanyUser.id String @id` IS the master `User.id`
-(`tenant/schema.prisma:246-247`); `findByUserId` is `return this.findById(userId)`
-(`company-user.repository.ts:77-79`). Zero hops, no translation table. store-mgmt today has a
-separate `id` plus a `userId` soft-FK column — and the 2026-07-28 D1 claims that shape "is
-poolops's verified shape", which is **not accurate**: the principle matches, the columns do not.
+### P1 — ~~How much locked downtime is acceptable for the cutover?~~ **WITHDRAWN**
 
-Cheap to change today — no real tenant-side FK depends on the current shape yet.
+There is no cutover. With no production data, the migration is: create the tenant schema, apply the
+tenant DDL, re-run the seed. No `ALTER TABLE … SET SCHEMA`, no exclusive locks, no coordinated
+window, no dual-write phase.
 
-**Suggestion**: adopt the collapsed shape, and go one better than poolops — make the master user
-id the SOLE primary key. In poolops, `CompanyCustomer.id` and `companyUserId` are allowed to
-diverge and only convention keeps them equal (forced by hand at every `create()`), which is a
-foot-gun.
+This also removes the design's entire cutover section and the tasks that would have staged it.
 
-**Blocks**: every FK to `CompanyUser` — `Order.attributedCompanyUserId`,
-`CommissionAccrual.attributedCompanyUserId`, `CommissionPayment.recordedByCompanyUserId`.
+**Note on the earlier claim.** It was said that "poolops has NO cutover precedent." That was too
+strong, and the owner caught it. poolops *does* create schemas —
+`packages/infra-db/src/tenant/tenant-database.service.ts:28-52`, `createSchema()` runs
+`CREATE SCHEMA IF NOT EXISTS` → `SET search_path` → applies `tenant-schema.sql`, with
+`deleteSchema()`, `schemaExists()` and a UUID-validating `schemaNameForCompany()` beside it. That
+code is live and we copy it for **provisioning**. What it does not do is move pre-existing rows,
+which is what P1 was asking about — and poolops answered that separately, destructively, and in
+writing (`spec.md:177`, `spec.md:159`, `tasks.md:216`, `checklists/requirements.md:37`). With the
+premise corrected, that destructive answer is simply the right one for us too.
+
+### P13 — ~~Verify the live `Company` row count~~ **WITHDRAWN**
+
+Nothing to preserve, so nothing to count.
 
 ---
 
-### P3 — Copy poolops's per-tenant pool factory, or bound it first?
+## Resolved
 
-**Evidence.** Each pool takes pg's default of **10** connections (no `max` passed,
+### P2 — Collapse `CompanyUser` to the master user id — **YES, as sole PK**
+
+**Evidence.** poolops: `CompanyUser.id` IS the master `User.id` (`tenant/schema.prisma:246-247`);
+`findByUserId` is `return this.findById(userId)` (`company-user.repository.ts:77-79`). Zero hops.
+store-mgmt today carries a separate `id` plus a `userId` soft-FK; the 2026-07-28 D1 called the
+current shape "poolops's verified shape", which is **not accurate** — the principle matches, the
+columns do not.
+
+**Decision.** Adopt the collapsed shape, and go one better: the master user id is the SOLE primary
+key. poolops lets `CompanyCustomer.id` and `companyUserId` diverge, with only convention forcing
+them equal at every `create()` — a foot-gun we do not inherit.
+
+**Now nearly free**: no data to migrate behind the FK change.
+
+### P3 — Per-tenant pool factory — **copy the shape, bound it**
+
+**Evidence.** Each pool takes pg's default of **10** (no `max` passed,
 `tenant-prisma-factory.ts:49-52`). The cache is a `Map` with no eviction, TTL or LRU.
-`disposeClient()` has **zero call sites in the whole repo** — only `disposeAll()`, and only from
-CLI scripts and process-exit paths, never from a running server. So one instance holds
-`(N + 1) × 10` connections, unbounded, against a cluster left at Postgres's default of 100.
+`disposeClient()` has **zero call sites repo-wide** — only `disposeAll()`, from CLI scripts and
+process-exit paths, never from a running server. One instance holds `(N+1)×10` connections against
+a cluster left at Postgres's default of 100.
 
-poolops's own team drafted the fix (spec 045: single shared client + `SET LOCAL search_path`)
-and never shipped it — 0 of 40 tasks checked, and the live schema lacks the `multiSchema`
-preview feature that design requires.
+**Decision.** Copy the factory's shape; set an explicit pool `max`; wire real disposal. Record
+spec 045's single-shared-client target as a known future step. Do not build it now, do not chase it.
 
-**Suggestion**: copy the factory's shape, but set an explicit pool `max`, wire real disposal, and
-record spec 045's target as a known future step rather than building it now. Do not copy it
-verbatim, and do not chase 045 either.
+**Refinement (2026-08-03).** It was previously reported that spec 045 "was never shipped, 0/40 tasks
+checked." The unchecked boxes are real but misleading — **the schema-per-tenant part is live**
+(`tenant-database.service.ts` does `CREATE SCHEMA`, and `tenant-prisma-factory.ts:51` passes
+`options: -c search_path="<schema>",public`). What was not shipped is the pool consolidation:
+`tenant-schema-runner.ts` (T009) does not exist in `src/tenant/`, so there is no shared client and
+no `SET LOCAL search_path`. The landmine stands; its framing was wrong.
 
-**Blocks**: the infra-db design.
+Lesson recorded: unchecked task boxes in that repo do not mean unshipped code. Verify against
+`src/`, same as the stale README and `.env.example`.
 
----
+### P4 — One migration tool, with a timeout and a drift check — **YES**
 
-### P4 — One migration tool, and a drift check?
+**Evidence.** poolops has TWO: `tenant-deploy-all.ts` (`migrate deploy` per tenant) and
+`migrate-all-tenants.ts` (`prisma db push --accept-data-loss`), with nothing saying which is
+authoritative. Neither uses a transaction. `pushSchema()` shells `execSync` per tenant with **no
+timeout**, so one hung migration blocks the batch. **No drift detection anywhere** — zero hits for
+`drift`, `migrate status`, `_prisma_migrations`.
 
-**Evidence.** poolops has TWO tools: `tenant-deploy-all.ts` (`migrate deploy` per tenant) and
-`migrate-all-tenants.ts` (`prisma db push --accept-data-loss`), with nothing indicating which is
-authoritative for production. Neither uses a transaction; on partial failure the fleet is left
-in a mixed migration state by design. `pushSchema()` shells `execSync` per tenant with **no
-timeout**, so one hung migration blocks the whole batch. And there is **no drift detection
-anywhere** — zero hits for `drift`, `migrate status`, `_prisma_migrations`.
+**Decision.** One tool. A timeout per tenant. A drift check that fails loudly when a tenant is
+behind. A fleet in mixed states that nothing reports is found months later, by a bug.
 
-**Suggestion**: one tool only, with a timeout per tenant, and a drift check that fails loudly
-when a tenant is behind. A fleet in mixed states that nothing reports is the kind of problem
-found months later, by a bug.
+### P5 — Write the cross-schema isolation test as new work — **YES, as a deliverable**
 
-**Blocks**: the migration strategy section of the design.
+**Evidence.** Nothing in poolops proves isolation. `concurrent-isolation.test.ts` is unshipped task
+T031 of Draft spec 045. No test anywhere uses two tenant schemas in one run. Its e2e suite stubs
+BOTH `JwtAuthGuard` and `TenantContextGuard` via `overrideGuard` against one hardcoded schema, so
+the real guard is never exercised end to end.
 
----
+**Decision.** This is the change's proof obligation, budgeted as a deliverable, not a chore. It must
+appear in `tasks.md` explicitly or it will not get written. Without it, "isolated" is an assertion.
 
-### P5 — Commit to writing the isolation test as new work?
-
-**Evidence.** Nothing in poolops proves cross-schema isolation. `concurrent-isolation.test.ts`
-is unshipped task T031 of the Draft spec 045. No test anywhere uses two tenant schemas in one
-run. Its e2e suite stubs BOTH `JwtAuthGuard` and `TenantContextGuard` via `overrideGuard`
-against one hardcoded schema, so the real guard is never exercised end to end.
-
-**Suggestion**: yes — treat it as the change's proof obligation, budgeted as a deliverable, not
-a chore. It would be the first of its kind in either codebase. Without it, "isolated" is an
-assertion.
-
-**Blocks**: nothing, but it must reach `tasks.md` explicitly or it will not get written.
-
----
-
-### P6 — Where does tenant resolution live?
+### P6 — Tenant resolution in `packages/api-common/src/auth/` — **YES, with the re-scoping pattern**
 
 **Evidence.** poolops puts `TenantContextGuard` in `packages/api-common/src/guards/`, after
-`JwtAuthGuard`. store-mgmt's own D4 precedent already put role resolution in `JwtStrategy`
-rather than a new guard — the same tier.
+`JwtAuthGuard`. store-mgmt's own D4 precedent put role resolution in `JwtStrategy` — the same tier.
 
-A second finding worth deciding on deliberately: the guard's comment claims its
-`AsyncLocalStorage` scope is long-lived across the request, but that is **stale** — 100+
-downstream call sites re-open their own scope from `request.company`. That re-scoping is the
-more robust pattern, because ALS may not survive NestJS's RxJS/interceptor pipeline.
+**Decision.** Guard in `auth/`, matching D4 rather than poolops's `guards/`. Adopt the re-scoping
+pattern deliberately: the guard's comment claims its `AsyncLocalStorage` scope is long-lived across
+the request, but that is **stale** — 100+ downstream call sites re-open their own scope from
+`request.company`. Re-scoping is the more robust pattern because ALS may not survive NestJS's
+RxJS/interceptor pipeline. **Write down WHY**, so nobody later "optimizes" it back.
 
-**Suggestion**: guard in `packages/api-common/src/auth/`, matching D4's placement rather than
-poolops's `guards/`. Adopt the re-scoping pattern deliberately, and write down WHY, so nobody
-later "optimizes" it back into a single request-long scope.
-
-**Blocks**: the delivery-layer design.
-
----
-
-### P7 — Reshape `Customer` / `WarehouseOperator` in this change, or defer?
+### P7 — Reshape `Customer` / `WarehouseOperator` in this change — **YES**
 
 **Evidence.** Both hold real Prisma `@relation` FKs to master `User` (`schema.prisma:192, :509`).
 Prisma **forbids** a relation across separate schema files, so these cannot survive the split —
-this is enforced by tooling, not a preference. poolops's answer is the id-collapse of P2.
+tooling-enforced, not a preference. poolops's answer is the id-collapse of P2.
 
-**Suggestion**: in this change. Deferring leaves the split half-done, and a half-split schema is
-harder to reason about than either end state.
+**Decision.** In this change. A half-split schema is harder to reason about than either end state.
 
-**Blocks**: the schema design and the cutover's table list.
+**Now nearly free**: schema change plus a reseed, with no data migration behind it.
 
----
+### P8 — Master templates copied per tenant for the catalog — **YES**
 
-### P8 — Adopt the master-templates → per-tenant-copy pattern for the catalog?
+**Evidence.** poolops keeps admin-editable `Template*` tables in master and, at company creation,
+**copies** them into the new tenant's own tables (`CompanyDefaultsSeeder.seedNewCompany`). Nothing
+is shared at runtime; every tenant's rows are physically its own.
 
-**New — surfaced by the audit, not previously on any list.**
+This settles the question that dogged the superseded `company-isolation` change — "is the catalog
+global or company-private?" Neither: templated centrally, owned per tenant.
 
-**Evidence.** poolops keeps admin-editable `Template*` tables in master and, at company
-creation, **copies** them into the new tenant's own tables (`CompanyDefaultsSeeder.seedNewCompany`).
-Nothing is shared at runtime; every tenant's rows are physically its own.
+**Decision.** Adopt for `Product`/`Category`. A new company gets a working catalog on day one
+without coupling it to anyone else's edits.
 
-This finally answers the question that dogged the superseded `company-isolation` change —
-"is the catalog global or company-private?" The answer is neither: templated centrally, owned
-per tenant.
+### P9 — Seed synchronously, not fire-and-forget — **YES**
 
-**Suggestion**: adopt it for `Product`/`Category`. It gives a new company a working catalog on
-day one without coupling it to anyone else's edits. But note P9 before copying the mechanism.
+**Evidence.** poolops's catalog seed is deliberately `void this.seedNewCompany(...)` after the 201
+already returned, because awaiting it pushed request latency past client timeouts. The consequence
+is a real window where a brand-new tenant has a working owner account and **zero** catalog data.
 
-**Blocks**: the master/tenant table split, and provisioning.
+**Decision.** Do not inherit this implicitly. Seed synchronously — store-mgmt's catalog is smaller
+than poolops's. If it ever gets slow enough to matter, make the incomplete state explicit in the
+API rather than silent. A company that logs in to an empty catalog reads it as a bug.
 
----
-
-### P9 — Background seeding, or seed before the tenant is usable?
-
-**Evidence.** poolops's catalog seed is deliberately fire-and-forget — `void this.seedNewCompany(...)`
-after the 201 already returned, because awaiting it pushed request latency past client timeouts.
-The consequence is a real window where a brand-new tenant has a working owner account and **zero**
-catalog data.
-
-**Suggestion**: do not inherit this implicitly. Either seed synchronously (store-mgmt's catalog
-is smaller than poolops's) or make the incomplete state explicit in the API. A company that can
-log in and sees an empty catalog will read it as a bug.
-
-**Blocks**: provisioning design.
-
----
-
-### P10 — Introduce a master `Membership` table now?
+### P10 — Introduce master `Membership`, active flag in ONE place — **YES**
 
 **Evidence.** The 2026-07-28 D3 predicted the split: `status` → master `Membership`, `role` →
-tenant `CompanyUser`, and deliberately withheld `Membership` so the future change would be "a
-clean field extraction, not a redesign". The audit confirms poolops does exactly that — with one
-nuance: its `CompanyUser` ALSO carries `isActive`, so "is this person active in this company"
-lives in **two places**, master `Membership.status` and tenant `CompanyUser.isActive`, kept in
+tenant `CompanyUser`, withholding `Membership` so the future change would be "a clean field
+extraction, not a redesign". poolops does exactly that — with one nuance: its `CompanyUser` ALSO
+carries `isActive`, so "is this person active in this company" lives in **two places**, kept in
 sync by hand.
 
-**Suggestion**: introduce `Membership` as D3 planned, but do NOT duplicate the active flag. One
-home for that fact. poolops's two-place version is drift waiting to happen.
+**Decision.** Introduce `Membership` as D3 planned. Do NOT duplicate the active flag. One home for
+that fact. poolops's two-place version is drift waiting to happen.
 
-**Blocks**: the master schema, and `api-idp`.
-
----
-
-### P11 — Does `api-idp` own the provisioning saga?
+### P11 — `api-idp` owns the provisioning saga — **YES, with orphan detection**
 
 **Evidence.** poolops duplicates `CompanyService.createCompany` across THREE apps because it has
-three front doors and no identity app. store-mgmt has `api-idp`, which already owns User,
-Company, CompanyUser and the token tables end to end via ports — a single natural home.
+three front doors and no identity app. store-mgmt has `api-idp`, which already owns User, Company,
+CompanyUser and the token tables end to end via ports.
 
-The saga itself is: create master Company → create schema → set `schemaName` → create Membership
-→ create tenant CompanyUser → seed. With compensating rollback. **But poolops's compensation only
-logs when a rollback step itself fails** — no retry, no alert, no reconciliation. Orphans are
-possible and silent.
+The saga: create master Company → create schema → set `schemaName` → create Membership → create
+tenant CompanyUser → seed. With compensating rollback. **poolops's compensation only logs when a
+rollback step itself fails** — no retry, no alert, no reconciliation. Orphans are possible and
+silent.
 
-**Suggestion**: `api-idp` owns it, one implementation. And pair the saga with something that
-detects orphans, rather than trusting rollback to always work.
-
-**Blocks**: which app the provisioning code lands in.
+**Decision.** `api-idp` owns it, one implementation. Pair the saga with something that detects
+orphans rather than trusting rollback to always work.
 
 ---
+
+## Still open — not a decision, an investigation
 
 ### P12 — How do the existing 974 tests deal with schemas?
 
-**Evidence.** Not yet investigated — flagged here so it is not discovered mid-implementation.
-store-mgmt's `infra-db` tests run against a real Postgres with `maxWorkers:1` and a shared test
-database, and this session already fixed three separate cross-suite contamination bugs in that
-setup. Adding tenant schemas on top of that is not obviously free.
+Not yet investigated. store-mgmt's `infra-db` tests run against a real Postgres with
+`maxWorkers:1` and a shared test database, and three separate cross-suite contamination bugs were
+fixed in that setup during the week of 2026-07-27. Adding tenant schemas on top is not obviously
+free.
 
-poolops's approach is one fixed test schema with the guards stubbed — which is precisely why it
-proves nothing about isolation (P5).
+poolops's approach is one fixed test schema with the guards stubbed — precisely why it proves
+nothing about isolation (P5).
 
-**Suggestion**: treat this as its own investigation before `sdd-design` finalizes, not as an
-implementation detail. It could be the largest hidden cost in the change.
-
-**Blocks**: realistic sizing of the whole change.
-
----
-
-### P13 — Verify the live `Company` row count
-
-**Not a decision — an unmet precondition.** The single-company claim is structural (the seed
-upserts one; no endpoint creates another), never confirmed against live data. `.env` access was
-denied in this session and no ad-hoc query script exists.
-
-**Suggestion**: confirm the count in `store_mgmt` and `store_mgmt_test` before any migration is
-authored. If a second row was ever inserted by hand, the cutover plan changes.
+**Owner agreed this is its own investigation before `sdd-design` finalizes**, not an implementation
+detail. It could still be the largest hidden cost in the change, and it is the one item the premise
+correction did NOT make cheaper.
 
 ---
 
-## Questions for the owner, in the order they block work
+## Next step
 
-1. **P1** — how much locked downtime for the cutover? *(blocks the design)*
-2. **P2** — collapse `CompanyUser` to the master user id as sole PK? *(blocks the schema)*
-3. **P7** — reshape `Customer`/`WarehouseOperator` in this change? *(blocks the schema)*
-4. **P8 / P9** — adopt master-templates for the catalog, and seed synchronously? *(blocks provisioning)*
-5. **P10** — introduce `Membership`, with the active flag in one place only? *(blocks the master schema)*
-6. **P11** — `api-idp` owns provisioning? *(blocks placement)*
-7. **P3 / P4 / P5 / P6** — the infra and delivery suggestions above. *(lower risk, but still yours)*
-8. **P12** — agree to investigate the test-schema strategy before design? *(affects sizing)*
-
-## Next step once P1, P2 and P7 are answered
-
-`sdd-design` — the proposal phase can be folded in, since the shape is locked and the
-exploration is unusually complete. Design must not finalize the cutover until P1 is answered.
+`sdd-design`, with the proposal folded in — the shape is locked, the exploration is unusually
+complete, and every blocking decision above is taken. No cutover section. P12 is the one input
+design must gather rather than assume.
 
 ## Unrelated work still open
 
