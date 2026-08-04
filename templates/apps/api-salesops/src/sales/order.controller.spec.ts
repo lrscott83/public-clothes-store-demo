@@ -12,8 +12,14 @@ import {
   WarehouseCannotFulfillOrderError,
   type IWarehouseOperatorRepository,
 } from '@store-mgmt/domain';
+import { TenantContextService } from '@store-mgmt/infra-db';
 import request from 'supertest';
-import { overrideJwtAuth, SAMPLE_AUTH_USER } from '../test-support/auth-test-helpers.js';
+import {
+  mockTenantContextService,
+  overrideJwtAuth,
+  overrideTenantContext,
+  SAMPLE_AUTH_USER,
+} from '../test-support/auth-test-helpers.js';
 import { OrderController } from './order.controller.js';
 import { OrderService } from './order.service.js';
 
@@ -62,22 +68,25 @@ const validCreateBody = {
   payments: [{ channel: 'USD_CASH', amount: { amount: '100.00', currency: 'USD' } }],
 };
 
-/** Builds a test app with `JwtAuthGuard` overridden to inject `req.user` with `roles` (`null` -> 401), keeping the REAL `RolesGuard`. `warehouseOperatorRepository.findByUserId` defaults to a row scoped to `OWN_WAREHOUSE_ID`. */
+/** Builds a test app with `JwtAuthGuard`/`TenantContextGuard` overridden to inject `req.user`/`req.tenant` (`roles: null` -> 401), keeping the REAL `RolesGuard`. `warehouseOperatorRepository.findByUserId` defaults to a row scoped to `OWN_WAREHOUSE_ID`. */
 async function buildApp(
   service: OrderServiceMock,
   roles: number | null,
   warehouseOperatorRepository: jest.Mocked<IWarehouseOperatorRepository> = buildOperatorRepoMock(),
 ): Promise<INestApplication> {
-  const builder = overrideJwtAuth(
-    Test.createTestingModule({
-      controllers: [OrderController],
-      providers: [
-        { provide: OrderService, useValue: service },
-        { provide: WAREHOUSE_OPERATOR_REPOSITORY, useValue: warehouseOperatorRepository },
-        RolesGuard,
-      ],
-    }),
-    roles,
+  const builder = overrideTenantContext(
+    overrideJwtAuth(
+      Test.createTestingModule({
+        controllers: [OrderController],
+        providers: [
+          { provide: OrderService, useValue: service },
+          { provide: WAREHOUSE_OPERATOR_REPOSITORY, useValue: warehouseOperatorRepository },
+          { provide: TenantContextService, useValue: mockTenantContextService() },
+          RolesGuard,
+        ],
+      }),
+      roles,
+    ),
   );
   const module: TestingModule = await builder.compile();
   const app = module.createNestApplication();

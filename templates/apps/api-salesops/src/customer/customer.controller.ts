@@ -12,9 +12,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, Roles, RolesGuard } from '@store-mgmt/api-common';
+import { JwtAuthGuard, Roles, RolesGuard, TenantContextGuard, createRunInTenant } from '@store-mgmt/api-common';
 import {
   CustomerUserNotFoundError,
   DuplicateCustomerDocumentError,
@@ -22,8 +23,13 @@ import {
   InvalidCustomerError,
   USER_ROLES,
 } from '@store-mgmt/domain';
+import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
+import type { Request } from 'express';
 import { CustomerService } from './customer.service.js';
 import type { CreateCustomerDto, CustomerResponseDto, UpdateCustomerDto } from './dto/index.js';
+
+/** `Request` carrying `req.tenant`, set by `TenantContextGuard` (design D4/D5). */
+type TenantScopedRequest = Request & { tenant: TenantContext };
 
 /**
  * REST delivery for the Customer module. Maps `InvalidCustomerError` -> 400
@@ -44,45 +50,71 @@ import type { CreateCustomerDto, CustomerResponseDto, UpdateCustomerDto } from '
  * itself and never honours a caller-supplied `userId`.
  */
 @Controller('customers')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)
 @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator)
 export class CustomerController {
-  constructor(private readonly customerService: CustomerService) {}
+  private readonly runInTenant: ReturnType<typeof createRunInTenant>;
+
+  constructor(
+    private readonly customerService: CustomerService,
+    tenantContext: TenantContextService,
+  ) {
+    this.runInTenant = createRunInTenant(tenantContext);
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() body: CreateCustomerDto): Promise<CustomerResponseDto> {
-    return this.withDomainErrorMapping(() => this.customerService.create(body));
+  async create(
+    @Body() body: CreateCustomerDto,
+    @Req() req: TenantScopedRequest,
+  ): Promise<CustomerResponseDto> {
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(() => this.customerService.create(body)),
+    );
   }
 
   @Get()
   @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.sales_agent)
-  async list(@Query('includeInactive') includeInactive?: string): Promise<CustomerResponseDto[]> {
-    return this.customerService.list(includeInactive === 'true');
+  async list(
+    @Query('includeInactive') includeInactive: string | undefined,
+    @Req() req: TenantScopedRequest,
+  ): Promise<CustomerResponseDto[]> {
+    return this.runInTenant(req.tenant, () => this.customerService.list(includeInactive === 'true'));
   }
 
   @Get(':id')
   @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.sales_agent)
-  async findById(@Param('id') id: string): Promise<CustomerResponseDto> {
-    const found = await this.customerService.findById(id);
-    if (!found) {
-      throw new NotFoundException(`Customer "${id}" not found`);
-    }
-    return found;
+  async findById(
+    @Param('id') id: string,
+    @Req() req: TenantScopedRequest,
+  ): Promise<CustomerResponseDto> {
+    return this.runInTenant(req.tenant, async () => {
+      const found = await this.customerService.findById(id);
+      if (!found) {
+        throw new NotFoundException(`Customer "${id}" not found`);
+      }
+      return found;
+    });
   }
 
   @Patch(':id')
   async update(
     @Param('id') id: string,
     @Body() body: UpdateCustomerDto,
+    @Req() req: TenantScopedRequest,
   ): Promise<CustomerResponseDto> {
-    return this.withDomainErrorMapping(() => this.customerService.update(id, body));
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(() => this.customerService.update(id, body)),
+    );
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  async softDelete(@Param('id') id: string): Promise<{ id: string }> {
-    await this.customerService.softDelete(id);
+  async softDelete(
+    @Param('id') id: string,
+    @Req() req: TenantScopedRequest,
+  ): Promise<{ id: string }> {
+    await this.runInTenant(req.tenant, () => this.customerService.softDelete(id));
     return { id };
   }
 

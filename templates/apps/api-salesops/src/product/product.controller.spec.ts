@@ -2,8 +2,13 @@ import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesGuard } from '@store-mgmt/api-common';
 import { InvalidMoneyError, InvalidProductError, USER_ROLES } from '@store-mgmt/domain';
+import { TenantContextService } from '@store-mgmt/infra-db';
 import request from 'supertest';
-import { overrideJwtAuth } from '../test-support/auth-test-helpers.js';
+import {
+  mockTenantContextService,
+  overrideJwtAuth,
+  overrideTenantContext,
+} from '../test-support/auth-test-helpers.js';
 import { ProductController } from './product.controller.js';
 import { ProductService } from './product.service.js';
 
@@ -36,14 +41,20 @@ const sampleResponse = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
-/** Builds a test app with `JwtAuthGuard` overridden to inject `req.user` with `roles` (`null` -> 401), keeping the REAL `RolesGuard`. */
+/** Builds a test app with `JwtAuthGuard`/`TenantContextGuard` overridden to inject `req.user`/`req.tenant` (`roles: null` -> 401), keeping the REAL `RolesGuard`. */
 async function buildApp(service: ProductServiceMock, roles: number | null): Promise<INestApplication> {
-  const builder = overrideJwtAuth(
-    Test.createTestingModule({
-      controllers: [ProductController],
-      providers: [{ provide: ProductService, useValue: service }, RolesGuard],
-    }),
-    roles,
+  const builder = overrideTenantContext(
+    overrideJwtAuth(
+      Test.createTestingModule({
+        controllers: [ProductController],
+        providers: [
+          { provide: ProductService, useValue: service },
+          { provide: TenantContextService, useValue: mockTenantContextService() },
+          RolesGuard,
+        ],
+      }),
+      roles,
+    ),
   );
   const module: TestingModule = await builder.compile();
   const app = module.createNestApplication();

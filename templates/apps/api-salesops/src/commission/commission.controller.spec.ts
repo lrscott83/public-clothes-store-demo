@@ -4,8 +4,14 @@ import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesGuard } from '@store-mgmt/api-common';
 import { CommissionAlreadySettledError, USER_ROLES } from '@store-mgmt/domain';
+import { TenantContextService } from '@store-mgmt/infra-db';
 import request from 'supertest';
-import { SAMPLE_AUTH_USER, overrideJwtAuth } from '../test-support/auth-test-helpers.js';
+import {
+  SAMPLE_AUTH_USER,
+  mockTenantContextService,
+  overrideJwtAuth,
+  overrideTenantContext,
+} from '../test-support/auth-test-helpers.js';
 import { CommissionController } from './commission.controller.js';
 import { AccrualNotFoundError, CommissionService } from './commission.service.js';
 
@@ -25,12 +31,18 @@ const SAMPLE_PAYMENT = {
 };
 
 async function buildApp(service: ServiceMock, roles: number | null): Promise<INestApplication> {
-  const builder = overrideJwtAuth(
-    Test.createTestingModule({
-      controllers: [CommissionController],
-      providers: [{ provide: CommissionService, useValue: service }, RolesGuard],
-    }),
-    roles,
+  const builder = overrideTenantContext(
+    overrideJwtAuth(
+      Test.createTestingModule({
+        controllers: [CommissionController],
+        providers: [
+          { provide: CommissionService, useValue: service },
+          { provide: TenantContextService, useValue: mockTenantContextService() },
+          RolesGuard,
+        ],
+      }),
+      roles,
+    ),
   );
   const module: TestingModule = await builder.compile();
   const app = module.createNestApplication();

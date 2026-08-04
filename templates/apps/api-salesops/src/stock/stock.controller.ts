@@ -12,7 +12,15 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, Roles, RolesGuard, type SanitizedUser } from '@store-mgmt/api-common';
+import {
+  JwtAuthGuard,
+  Roles,
+  RolesGuard,
+  TenantContextGuard,
+  createRunInTenant,
+  type SanitizedUser,
+} from '@store-mgmt/api-common';
+import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
 import type { Request } from 'express';
 import {
   InvalidStockMovementError,
@@ -25,8 +33,8 @@ import {
 import { StockService } from './stock.service.js';
 import type { MovementResponseDto, RecordMovementDto, StockLevelResponseDto } from './dto/index.js';
 
-/** `Request` carrying the `req.user` populated by `JwtStrategy` — never carries `passwordHash`. */
-type AuthenticatedRequest = Request & { user: SanitizedUser };
+/** `Request` carrying the `req.user` populated by `JwtStrategy` and `req.tenant` set by `TenantContextGuard` — never carries `passwordHash`. */
+type AuthenticatedRequest = Request & { user: SanitizedUser; tenant: TenantContext };
 
 /** The closed `StockMovementType` union, mirrored here for boundary validation. */
 const VALID_MOVEMENT_TYPES = new Set<string>([
@@ -51,14 +59,19 @@ const VALID_MOVEMENT_TYPES = new Set<string>([
  * requirement) — a mismatched `warehouseId` is rejected with 403.
  */
 @Controller('stock')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)
 @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.warehouse_operator)
 export class StockController {
+  private readonly runInTenant: ReturnType<typeof createRunInTenant>;
+
   constructor(
     private readonly stockService: StockService,
     @Inject(WAREHOUSE_OPERATOR_REPOSITORY)
     private readonly warehouseOperatorRepository: IWarehouseOperatorRepository,
-  ) {}
+    tenantContext: TenantContextService,
+  ) {
+    this.runInTenant = createRunInTenant(tenantContext);
+  }
 
   @Get()
   async getLevel(
@@ -66,8 +79,10 @@ export class StockController {
     @Query('warehouseId') warehouseId: string,
     @Req() req: AuthenticatedRequest,
   ): Promise<StockLevelResponseDto> {
-    await this.assertWarehouseScope(req.user, warehouseId);
-    return this.stockService.getLevel(productId, warehouseId);
+    return this.runInTenant(req.tenant, async () => {
+      await this.assertWarehouseScope(req.user, warehouseId);
+      return this.stockService.getLevel(productId, warehouseId);
+    });
   }
 
   @Post('movements')
@@ -79,8 +94,10 @@ export class StockController {
     if (!VALID_MOVEMENT_TYPES.has(body.type)) {
       throw new BadRequestException(`Unknown movement type: "${body.type}"`);
     }
-    await this.assertWarehouseScope(req.user, body.warehouseId);
-    return this.withDomainErrorMapping(() => this.stockService.recordMovement(body));
+    return this.runInTenant(req.tenant, async () => {
+      await this.assertWarehouseScope(req.user, body.warehouseId);
+      return this.withDomainErrorMapping(() => this.stockService.recordMovement(body));
+    });
   }
 
   /**

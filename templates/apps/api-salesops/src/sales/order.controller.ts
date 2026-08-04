@@ -15,7 +15,15 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, Roles, RolesGuard, type SanitizedUser } from '@store-mgmt/api-common';
+import {
+  JwtAuthGuard,
+  Roles,
+  RolesGuard,
+  TenantContextGuard,
+  createRunInTenant,
+  type SanitizedUser,
+} from '@store-mgmt/api-common';
+import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
 import type { Request } from 'express';
 import {
   CHANNEL_CURRENCY,
@@ -40,8 +48,8 @@ import type {
   UpdateOrderDto,
 } from './dto/index.js';
 
-/** `Request` carrying the `req.user` populated by `JwtStrategy` — never carries `passwordHash`. */
-type AuthenticatedRequest = Request & { user: SanitizedUser };
+/** `Request` carrying the `req.user` populated by `JwtStrategy` and `req.tenant` set by `TenantContextGuard` — never carries `passwordHash`. */
+type AuthenticatedRequest = Request & { user: SanitizedUser; tenant: TenantContext };
 
 const VALID_CURRENCIES = new Set<string>(['USD', 'EUR', 'MN']);
 const VALID_CHANNELS = new Set<string>(Object.keys(CHANNEL_CURRENCY));
@@ -90,14 +98,19 @@ function assertChannel(channel: string): void {
  * matrix / OperadorAlmacen Warehouse Scope requirement).
  */
 @Controller('orders')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)
 @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator)
 export class OrderController {
+  private readonly runInTenant: ReturnType<typeof createRunInTenant>;
+
   constructor(
     private readonly orderService: OrderService,
     @Inject(WAREHOUSE_OPERATOR_REPOSITORY)
     private readonly warehouseOperatorRepository: IWarehouseOperatorRepository,
-  ) {}
+    tenantContext: TenantContextService,
+  ) {
+    this.runInTenant = createRunInTenant(tenantContext);
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -135,8 +148,8 @@ export class OrderController {
     // Attribution comes from the authenticated actor and ONLY from there.
     // `req.user.companyUserId` is guaranteed present: `JwtStrategy` refuses to
     // hand back a `req.user` at all without an ACTIVE `CompanyUser`.
-    return this.withDomainErrorMapping(() =>
-      this.orderService.create(body, req.user.companyUserId),
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(() => this.orderService.create(body, req.user.companyUserId)),
     );
   }
 
@@ -149,11 +162,13 @@ export class OrderController {
     USER_ROLES.sales_agent,
   )
   async list(@Req() req: AuthenticatedRequest): Promise<OrderResponseDto[]> {
-    const orders = await this.orderService.list();
-    return this.scopeToOwnAttributions(
-      req.user,
-      await this.scopeToOperatorWarehouse(req.user, orders),
-    );
+    return this.runInTenant(req.tenant, async () => {
+      const orders = await this.orderService.list();
+      return this.scopeToOwnAttributions(
+        req.user,
+        await this.scopeToOperatorWarehouse(req.user, orders),
+      );
+    });
   }
 
   @Get(':id')
@@ -168,13 +183,15 @@ export class OrderController {
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
   ): Promise<OrderResponseDto> {
-    const found = await this.orderService.findById(id);
-    if (!found) {
-      throw new NotFoundException(`Order "${id}" not found`);
-    }
-    await this.assertOrderWarehouseScope(req.user, found.warehouseId);
-    this.assertOrderAttributionScope(req.user, found.attributedCompanyUserId);
-    return found;
+    return this.runInTenant(req.tenant, async () => {
+      const found = await this.orderService.findById(id);
+      if (!found) {
+        throw new NotFoundException(`Order "${id}" not found`);
+      }
+      await this.assertOrderWarehouseScope(req.user, found.warehouseId);
+      this.assertOrderAttributionScope(req.user, found.attributedCompanyUserId);
+      return found;
+    });
   }
 
   @Patch(':id')
@@ -184,41 +201,48 @@ export class OrderController {
     @Body() body: UpdateOrderDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<OrderResponseDto> {
-    return this.withDomainErrorMapping(async () => {
-      // The write path is scoped exactly like the read path. Skipping this
-      // would leave an agent able to rewrite a colleague's order — and since
-      // the lines are what the commission accrual is computed from, that is a
-      // way to change what someone else gets paid. Read-scoped and
-      // write-unscoped on the same rows is not a narrower grant, it's a hole.
-      //
-      // The lookup runs ONLY for a scoped agent, mirroring
-      // `assertOrderWarehouseScope`: an `owner`/`admin`/`sales_operator` patch
-      // issues no extra read.
-      if (this.isScopedSalesAgent(req.user)) {
-        const existing = await this.orderService.findById(id);
-        if (!existing) {
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(async () => {
+        // The write path is scoped exactly like the read path. Skipping this
+        // would leave an agent able to rewrite a colleague's order — and since
+        // the lines are what the commission accrual is computed from, that is a
+        // way to change what someone else gets paid. Read-scoped and
+        // write-unscoped on the same rows is not a narrower grant, it's a hole.
+        //
+        // The lookup runs ONLY for a scoped agent, mirroring
+        // `assertOrderWarehouseScope`: an `owner`/`admin`/`sales_operator` patch
+        // issues no extra read.
+        if (this.isScopedSalesAgent(req.user)) {
+          const existing = await this.orderService.findById(id);
+          if (!existing) {
+            throw new NotFoundException(`Order "${id}" not found`);
+          }
+          this.assertOrderAttributionScope(req.user, existing.attributedCompanyUserId);
+        }
+        const updated = await this.orderService.update(id, body);
+        if (!updated) {
           throw new NotFoundException(`Order "${id}" not found`);
         }
-        this.assertOrderAttributionScope(req.user, existing.attributedCompanyUserId);
-      }
-      const updated = await this.orderService.update(id, body);
-      if (!updated) {
-        throw new NotFoundException(`Order "${id}" not found`);
-      }
-      return updated;
-    });
+        return updated;
+      }),
+    );
   }
 
   @Post(':id/confirm')
   @HttpCode(HttpStatus.OK)
-  async confirm(@Param('id') id: string): Promise<OrderResponseDto> {
-    return this.withDomainErrorMapping(async () => {
-      const confirmed = await this.orderService.confirm(id);
-      if (!confirmed) {
-        throw new NotFoundException(`Order "${id}" not found`);
-      }
-      return confirmed;
-    });
+  async confirm(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<OrderResponseDto> {
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(async () => {
+        const confirmed = await this.orderService.confirm(id);
+        if (!confirmed) {
+          throw new NotFoundException(`Order "${id}" not found`);
+        }
+        return confirmed;
+      }),
+    );
   }
 
   @Post(':id/deliver')
@@ -228,30 +252,37 @@ export class OrderController {
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
   ): Promise<OrderResponseDto> {
-    return this.withDomainErrorMapping(async () => {
-      const existing = await this.orderService.findById(id);
-      if (!existing) {
-        throw new NotFoundException(`Order "${id}" not found`);
-      }
-      await this.assertOrderWarehouseScope(req.user, existing.warehouseId);
-      const delivered = await this.orderService.deliver(id);
-      if (!delivered) {
-        throw new NotFoundException(`Order "${id}" not found`);
-      }
-      return delivered;
-    });
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(async () => {
+        const existing = await this.orderService.findById(id);
+        if (!existing) {
+          throw new NotFoundException(`Order "${id}" not found`);
+        }
+        await this.assertOrderWarehouseScope(req.user, existing.warehouseId);
+        const delivered = await this.orderService.deliver(id);
+        if (!delivered) {
+          throw new NotFoundException(`Order "${id}" not found`);
+        }
+        return delivered;
+      }),
+    );
   }
 
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
-  async cancel(@Param('id') id: string): Promise<OrderResponseDto> {
-    return this.withDomainErrorMapping(async () => {
-      const cancelled = await this.orderService.cancel(id);
-      if (!cancelled) {
-        throw new NotFoundException(`Order "${id}" not found`);
-      }
-      return cancelled;
-    });
+  async cancel(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<OrderResponseDto> {
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(async () => {
+        const cancelled = await this.orderService.cancel(id);
+        if (!cancelled) {
+          throw new NotFoundException(`Order "${id}" not found`);
+        }
+        return cancelled;
+      }),
+    );
   }
 
   /**

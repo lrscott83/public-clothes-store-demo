@@ -2,8 +2,13 @@ import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { RolesGuard } from '@store-mgmt/api-common';
 import { USER_ROLES, type Warehouse } from '@store-mgmt/domain';
+import { TenantContextService } from '@store-mgmt/infra-db';
 import request from 'supertest';
-import { overrideJwtAuth } from '../test-support/auth-test-helpers.js';
+import {
+  mockTenantContextService,
+  overrideJwtAuth,
+  overrideTenantContext,
+} from '../test-support/auth-test-helpers.js';
 import { AvailabilityController } from './availability.controller.js';
 import { AvailabilityService } from './availability.service.js';
 
@@ -21,9 +26,13 @@ async function buildApp(roles: number | null, eligible: Warehouse[] = []): Promi
   const service = { eligibleWarehousesFor: jest.fn().mockResolvedValue(eligible) };
   const builder = Test.createTestingModule({
     controllers: [AvailabilityController],
-    providers: [RolesGuard, { provide: AvailabilityService, useValue: service }],
+    providers: [
+      RolesGuard,
+      { provide: AvailabilityService, useValue: service },
+      { provide: TenantContextService, useValue: mockTenantContextService() },
+    ],
   });
-  const moduleRef = await overrideJwtAuth(builder, roles).compile();
+  const moduleRef = await overrideTenantContext(overrideJwtAuth(builder, roles)).compile();
   const app = moduleRef.createNestApplication();
   await app.init();
 

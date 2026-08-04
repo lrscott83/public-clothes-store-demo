@@ -11,8 +11,16 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, Roles, RolesGuard, type SanitizedUser } from '@store-mgmt/api-common';
+import {
+  JwtAuthGuard,
+  Roles,
+  RolesGuard,
+  TenantContextGuard,
+  createRunInTenant,
+  type SanitizedUser,
+} from '@store-mgmt/api-common';
 import { CommissionAlreadySettledError, USER_ROLES } from '@store-mgmt/domain';
+import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
 import type { Request } from 'express';
 import { isScopedSalesAgent } from '../auth/role-scope.js';
 import { AccrualNotFoundError, CommissionService } from './commission.service.js';
@@ -23,8 +31,8 @@ import type {
   RecordCommissionPaymentDto,
 } from './dto/index.js';
 
-/** `Request` carrying the `req.user` populated by `JwtStrategy` — never carries `passwordHash`. */
-type AuthenticatedRequest = Request & { user: SanitizedUser };
+/** `Request` carrying the `req.user` populated by `JwtStrategy` and `req.tenant` set by `TenantContextGuard` — never carries `passwordHash`. */
+type AuthenticatedRequest = Request & { user: SanitizedUser; tenant: TenantContext };
 
 /**
  * REST delivery for the Commission module.
@@ -39,21 +47,30 @@ type AuthenticatedRequest = Request & { user: SanitizedUser };
  * conjured for an order that was never delivered.
  */
 @Controller('commissions')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)
 @Roles(USER_ROLES.owner, USER_ROLES.admin)
 export class CommissionController {
-  constructor(private readonly commissionService: CommissionService) {}
+  private readonly runInTenant: ReturnType<typeof createRunInTenant>;
+
+  constructor(
+    private readonly commissionService: CommissionService,
+    tenantContext: TenantContextService,
+  ) {
+    this.runInTenant = createRunInTenant(tenantContext);
+  }
 
   @Get('accruals')
   @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.sales_agent)
   async listAccruals(@Req() req: AuthenticatedRequest): Promise<CommissionAccrualResponseDto[]> {
-    return this.commissionService.listAccruals(this.scopeFor(req.user));
+    return this.runInTenant(req.tenant, () =>
+      this.commissionService.listAccruals(this.scopeFor(req.user)),
+    );
   }
 
   @Get('report')
   @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.sales_agent)
   async report(@Req() req: AuthenticatedRequest): Promise<CommissionReportRowDto[]> {
-    return this.commissionService.report(this.scopeFor(req.user));
+    return this.runInTenant(req.tenant, () => this.commissionService.report(this.scopeFor(req.user)));
   }
 
   @Post('payments')
@@ -78,29 +95,31 @@ export class CommissionController {
       throw new BadRequestException('note must be a string');
     }
 
-    try {
-      return await this.commissionService.recordPayment(
-        // Rebuilt field by field, never forwarded whole. With no
-        // `ValidationPipe` the body arrives intact, so a caller-supplied
-        // `amount` would otherwise travel all the way to the service — where
-        // it is ignored today, and where one future line could start reading
-        // it. What is owed is the accrual's frozen total, and the only way to
-        // keep that true is for the caller's figure never to arrive.
-        { accrualId: body.accrualId, paidAt: body.paidAt, note: body.note },
-        req.user.companyUserId,
-      );
-    } catch (err) {
-      if (err instanceof AccrualNotFoundError) {
-        throw new NotFoundException(err.message);
+    return this.runInTenant(req.tenant, async () => {
+      try {
+        return await this.commissionService.recordPayment(
+          // Rebuilt field by field, never forwarded whole. With no
+          // `ValidationPipe` the body arrives intact, so a caller-supplied
+          // `amount` would otherwise travel all the way to the service — where
+          // it is ignored today, and where one future line could start reading
+          // it. What is owed is the accrual's frozen total, and the only way to
+          // keep that true is for the caller's figure never to arrive.
+          { accrualId: body.accrualId, paidAt: body.paidAt, note: body.note },
+          req.user.companyUserId,
+        );
+      } catch (err) {
+        if (err instanceof AccrualNotFoundError) {
+          throw new NotFoundException(err.message);
+        }
+        // 409, not 400: the request is well-formed, it just conflicts with a
+        // settlement that already happened. Same class as the order module's
+        // state conflicts.
+        if (err instanceof CommissionAlreadySettledError) {
+          throw new ConflictException(err.message);
+        }
+        throw err;
       }
-      // 409, not 400: the request is well-formed, it just conflicts with a
-      // settlement that already happened. Same class as the order module's
-      // state conflicts.
-      if (err instanceof CommissionAlreadySettledError) {
-        throw new ConflictException(err.message);
-      }
-      throw err;
-    }
+    });
   }
 
   /** `undefined` = see everything. An agent sees only their own; a supervisor sees the company. */

@@ -11,12 +11,18 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, Roles, RolesGuard } from '@store-mgmt/api-common';
+import { JwtAuthGuard, Roles, RolesGuard, TenantContextGuard, createRunInTenant } from '@store-mgmt/api-common';
 import { InvalidWarehouseError, USER_ROLES } from '@store-mgmt/domain';
+import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
+import type { Request } from 'express';
 import { WarehouseService } from './warehouse.service.js';
 import type { CreateWarehouseDto, UpdateWarehouseDto, WarehouseResponseDto } from './dto/index.js';
+
+/** `Request` carrying `req.tenant`, set by `TenantContextGuard` (design D4/D5). */
+type TenantScopedRequest = Request & { tenant: TenantContext };
 
 /**
  * REST delivery for the Warehouse module. Maps `InvalidWarehouseError` -> 400
@@ -26,29 +32,49 @@ import type { CreateWarehouseDto, UpdateWarehouseDto, WarehouseResponseDto } fro
  * permission matrix).
  */
 @Controller('warehouses')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)
 export class WarehouseController {
-  constructor(private readonly warehouseService: WarehouseService) {}
+  private readonly runInTenant: ReturnType<typeof createRunInTenant>;
+
+  constructor(
+    private readonly warehouseService: WarehouseService,
+    tenantContext: TenantContextService,
+  ) {
+    this.runInTenant = createRunInTenant(tenantContext);
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @Roles(USER_ROLES.owner, USER_ROLES.admin)
-  async create(@Body() body: CreateWarehouseDto): Promise<WarehouseResponseDto> {
-    return this.withDomainErrorMapping(() => this.warehouseService.create(body));
+  async create(
+    @Body() body: CreateWarehouseDto,
+    @Req() req: TenantScopedRequest,
+  ): Promise<WarehouseResponseDto> {
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(() => this.warehouseService.create(body)),
+    );
   }
 
   @Get()
-  async list(@Query('includeInactive') includeInactive?: string): Promise<WarehouseResponseDto[]> {
-    return this.warehouseService.list(includeInactive === 'true');
+  async list(
+    @Query('includeInactive') includeInactive: string | undefined,
+    @Req() req: TenantScopedRequest,
+  ): Promise<WarehouseResponseDto[]> {
+    return this.runInTenant(req.tenant, () => this.warehouseService.list(includeInactive === 'true'));
   }
 
   @Get(':id')
-  async findById(@Param('id') id: string): Promise<WarehouseResponseDto> {
-    const found = await this.warehouseService.findById(id);
-    if (!found) {
-      throw new NotFoundException(`Warehouse "${id}" not found`);
-    }
-    return found;
+  async findById(
+    @Param('id') id: string,
+    @Req() req: TenantScopedRequest,
+  ): Promise<WarehouseResponseDto> {
+    return this.runInTenant(req.tenant, async () => {
+      const found = await this.warehouseService.findById(id);
+      if (!found) {
+        throw new NotFoundException(`Warehouse "${id}" not found`);
+      }
+      return found;
+    });
   }
 
   @Patch(':id')
@@ -56,15 +82,21 @@ export class WarehouseController {
   async update(
     @Param('id') id: string,
     @Body() body: UpdateWarehouseDto,
+    @Req() req: TenantScopedRequest,
   ): Promise<WarehouseResponseDto> {
-    return this.withDomainErrorMapping(() => this.warehouseService.update(id, body));
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(() => this.warehouseService.update(id, body)),
+    );
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @Roles(USER_ROLES.owner, USER_ROLES.admin)
-  async softDelete(@Param('id') id: string): Promise<{ id: string }> {
-    await this.warehouseService.softDelete(id);
+  async softDelete(
+    @Param('id') id: string,
+    @Req() req: TenantScopedRequest,
+  ): Promise<{ id: string }> {
+    await this.runInTenant(req.tenant, () => this.warehouseService.softDelete(id));
     return { id };
   }
 

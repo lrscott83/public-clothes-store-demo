@@ -1,8 +1,13 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
+import { JwtStrategy, TenantContextGuard } from '@store-mgmt/api-common';
+import { COMPANY_REPOSITORY, MEMBERSHIP_REPOSITORY, USER_REPOSITORY } from '@store-mgmt/domain';
 import { PassportModule } from '@nestjs/passport';
-import { JwtStrategy } from '@store-mgmt/api-common';
-import { COMPANY_USER_REPOSITORY, USER_REPOSITORY } from '@store-mgmt/domain';
-import { InfraDbModule, PrismaCompanyUserRepository, PrismaUserRepository } from '@store-mgmt/infra-db';
+import {
+  InfraDbModule,
+  PrismaCompanyRepository,
+  PrismaMembershipRepository,
+  PrismaUserRepository,
+} from '@store-mgmt/infra-db';
 
 /**
  * Wires the shared auth kit's `JwtStrategy` (from `@store-mgmt/api-common`,
@@ -16,18 +21,29 @@ import { InfraDbModule, PrismaCompanyUserRepository, PrismaUserRepository } from
  * effect of the provider's construction at bootstrap, not of per-module DI
  * scoping (mirrors `apps/api-idp`'s `AuthModule` precedent).
  *
- * `COMPANY_USER_REPOSITORY` is what `JwtStrategy` resolves the role bitmask
- * from. Forgetting this binding fails Nest DI AT BOOTSTRAP rather than
- * per-request — that is deliberate (design §0.1, enforcement layer 1): an app
- * that cannot resolve roles must refuse to start, not serve traffic that
- * silently 403s.
+ * `@Global()` (new, Phase 8/D4) — `TenantContextGuard` is referenced by
+ * `@UseGuards(...)` on 10 controllers spread across 9 different feature
+ * modules (`CurrencyModule`, `ProductModule`, ...), none of which import
+ * `AuthModule` today. A guard passed by class reference is instantiated
+ * through the HOST module's own injector, so its constructor deps
+ * (`MEMBERSHIP_REPOSITORY`, `COMPANY_REPOSITORY`) must be resolvable from
+ * every one of those modules — global export is the one-module fix, instead
+ * of adding `imports: [AuthModule]` to all 10. `MEMBERSHIP_REPOSITORY`/
+ * `COMPANY_REPOSITORY` feed `TenantContextGuard`'s own resolution chain
+ * (design D4); `JwtStrategy` no longer needs `COMPANY_USER_REPOSITORY` at
+ * all (Phase 7 moved that lookup into the guard) — that binding is dropped
+ * here, not carried forward.
  */
+@Global()
 @Module({
   imports: [PassportModule, InfraDbModule],
   providers: [
     JwtStrategy,
+    TenantContextGuard,
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
-    { provide: COMPANY_USER_REPOSITORY, useClass: PrismaCompanyUserRepository },
+    { provide: MEMBERSHIP_REPOSITORY, useClass: PrismaMembershipRepository },
+    { provide: COMPANY_REPOSITORY, useClass: PrismaCompanyRepository },
   ],
+  exports: [TenantContextGuard],
 })
 export class AuthModule {}

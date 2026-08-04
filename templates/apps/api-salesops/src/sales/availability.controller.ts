@@ -5,11 +5,17 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, Roles, RolesGuard } from '@store-mgmt/api-common';
+import { JwtAuthGuard, Roles, RolesGuard, TenantContextGuard, createRunInTenant } from '@store-mgmt/api-common';
 import { USER_ROLES, type BasketLine } from '@store-mgmt/domain';
+import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
+import type { Request } from 'express';
 import { AvailabilityService } from './availability.service.js';
+
+/** `Request` carrying `req.tenant`, set by `TenantContextGuard` (design D4/D5). */
+type TenantScopedRequest = Request & { tenant: TenantContext };
 
 /** One requested product and how many of it. */
 interface BasketLineDto {
@@ -66,16 +72,28 @@ function assertBasket(lines: unknown): BasketLine[] {
  * `confirm`, and that race is accepted deliberately.
  */
 @Controller('orders/availability')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)
 @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.sales_operator, USER_ROLES.sales_agent)
 export class AvailabilityController {
-  constructor(private readonly availabilityService: AvailabilityService) {}
+  private readonly runInTenant: ReturnType<typeof createRunInTenant>;
+
+  constructor(
+    private readonly availabilityService: AvailabilityService,
+    tenantContext: TenantContextService,
+  ) {
+    this.runInTenant = createRunInTenant(tenantContext);
+  }
 
   @Post()
   @HttpCode(HttpStatus.OK)
-  async eligible(@Body() body: AvailabilityQueryDto): Promise<EligibleWarehousesResponseDto> {
+  async eligible(
+    @Body() body: AvailabilityQueryDto,
+    @Req() req: TenantScopedRequest,
+  ): Promise<EligibleWarehousesResponseDto> {
     const basket = assertBasket(body?.lines);
-    const warehouses = await this.availabilityService.eligibleWarehousesFor(basket);
+    const warehouses = await this.runInTenant(req.tenant, () =>
+      this.availabilityService.eligibleWarehousesFor(basket),
+    );
 
     // An empty list is a valid answer, not an error: "nothing can fulfil this
     // basket right now" is exactly what the agent needs to be told.

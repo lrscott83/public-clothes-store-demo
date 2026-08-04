@@ -1,6 +1,7 @@
 import { UnauthorizedException, type ExecutionContext } from '@nestjs/common';
 import type { TestingModuleBuilder } from '@nestjs/testing';
-import { JwtAuthGuard, type SanitizedUser } from '@store-mgmt/api-common';
+import { JwtAuthGuard, TenantContextGuard, type SanitizedUser } from '@store-mgmt/api-common';
+import type { TenantContext } from '@store-mgmt/infra-db';
 
 /** `req.user` shape after a REAL `JwtStrategy.validate` — reused verbatim for every controller unit spec. */
 export const SAMPLE_AUTH_USER: Omit<SanitizedUser, 'roles'> = {
@@ -44,4 +45,49 @@ export function overrideJwtAuth(
       return true;
     },
   });
+}
+
+/** `req.tenant` shape set by a REAL `TenantContextGuard` — reused verbatim for every controller unit spec (Phase 8, design D5). */
+export const SAMPLE_TENANT: TenantContext = {
+  companyId: SAMPLE_AUTH_USER.companyId,
+  schemaName: 'store_mgmt_tenant_test_company_1',
+};
+
+/**
+ * Overrides `TenantContextGuard` on `builder` to set `req.tenant` directly,
+ * mirroring `overrideJwtAuth` above. Controller unit specs exercise the REAL
+ * `RolesGuard` and the REAL per-handler `runInTenant(...)` wiring (design
+ * D5), but never need a live tenant Postgres schema to prove controller
+ * wiring/role enforcement — that is `tenant-context.guard.spec.ts`'s job
+ * (Phase 7). MUST be paired with `mockTenantContextService()` bound to
+ * `TenantContextService` in the module's `providers` — the controller's own
+ * `runInTenant` closure is REAL and calls straight through to it.
+ */
+export function overrideTenantContext(builder: TestingModuleBuilder): TestingModuleBuilder {
+  return builder.overrideGuard(TenantContextGuard).useValue({
+    canActivate: (context: ExecutionContext) => {
+      const req = context.switchToHttp().getRequest();
+      req.tenant = SAMPLE_TENANT;
+      return true;
+    },
+  });
+}
+
+/**
+ * Minimal `TenantContextService` stand-in: `run(context, fn)` just invokes
+ * `fn()` synchronously, no `AsyncLocalStorage`, no real tenant client. Every
+ * controller spec provides this via `{ provide: TenantContextService, useValue:
+ * mockTenantContextService() }` so the controller's REAL `createRunInTenant`
+ * closure has something to call — proving the WIRING (guard sets
+ * `req.tenant`, handler calls `runInTenant(req.tenant, ...)`) without
+ * standing up a real Postgres schema per unit spec.
+ */
+export function mockTenantContextService(): { run: jest.Mock } {
+  return {
+    // Untyped against `TenantContextService['run']`'s generic signature —
+    // `jest.fn()` cannot express `<T>(context, fn: () => T) => T` — but this
+    // object is only ever handed to Nest DI as a `useValue` for the
+    // `TenantContextService` token, never imported by its class type.
+    run: jest.fn((_context: TenantContext, fn: () => unknown) => fn()),
+  };
 }

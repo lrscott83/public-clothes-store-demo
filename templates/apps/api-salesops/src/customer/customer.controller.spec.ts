@@ -8,8 +8,13 @@ import {
   InvalidCustomerError,
   USER_ROLES,
 } from '@store-mgmt/domain';
+import { TenantContextService } from '@store-mgmt/infra-db';
 import request from 'supertest';
-import { overrideJwtAuth } from '../test-support/auth-test-helpers.js';
+import {
+  mockTenantContextService,
+  overrideJwtAuth,
+  overrideTenantContext,
+} from '../test-support/auth-test-helpers.js';
 import { CustomerController } from './customer.controller.js';
 import { CustomerService } from './customer.service.js';
 
@@ -35,14 +40,20 @@ const sampleResponse = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
-/** Builds a test app with `JwtAuthGuard` overridden to inject `req.user` with `roles` (`null` -> 401), keeping the REAL `RolesGuard`. */
+/** Builds a test app with `JwtAuthGuard`/`TenantContextGuard` overridden to inject `req.user`/`req.tenant` (`roles: null` -> 401), keeping the REAL `RolesGuard`. */
 async function buildApp(service: CustomerServiceMock, roles: number | null): Promise<INestApplication> {
-  const builder = overrideJwtAuth(
-    Test.createTestingModule({
-      controllers: [CustomerController],
-      providers: [{ provide: CustomerService, useValue: service }, RolesGuard],
-    }),
-    roles,
+  const builder = overrideTenantContext(
+    overrideJwtAuth(
+      Test.createTestingModule({
+        controllers: [CustomerController],
+        providers: [
+          { provide: CustomerService, useValue: service },
+          { provide: TenantContextService, useValue: mockTenantContextService() },
+          RolesGuard,
+        ],
+      }),
+      roles,
+    ),
   );
   const module: TestingModule = await builder.compile();
   const app = module.createNestApplication();
