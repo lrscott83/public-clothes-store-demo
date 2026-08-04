@@ -1,41 +1,66 @@
-import { ForbiddenException, Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import {
-  COMPANY_USER_REPOSITORY,
-  USER_REPOSITORY,
-  type CompanyUser,
-  type ICompanyUserRepository,
-  type IUserRepository,
-  type User,
-  type UserRoleValue,
-} from '@store-mgmt/domain';
+import { USER_REPOSITORY, type IUserRepository, type User, type UserRoleValue } from '@store-mgmt/domain';
 import { TtlCache } from '../cache/ttl-cache.js';
 import { JWT_CONFIG, type JwtAccessPayload } from './jwt.config.js';
 
 /**
- * `req.user` shape after `JwtStrategy.validate` — never carries
- * `passwordHash`.
- *
- * GUARD-ORDER INVARIANT (design §0.1) — do NOT break this: the company-scoped
- * role bitmask MUST stay a property of `req.user`, it must NEVER be attached
- * to `req` as a sibling field, and no third guard may be introduced to
- * populate it. `RolesGuard` null-checks `req.user` and throws a LOUD
- * `ForbiddenException('Authentication required')`; a bitmask living on a
- * sibling field would instead arrive as `undefined`, and `can(undefined, mask)`
- * silently evaluates to `0` — a 403 for every user, with nothing in the logs
- * saying why. `roles` is therefore declared REQUIRED here so the compiler
- * refuses any path that would leave it unset.
+ * `req.user` shape after `JwtStrategy.validate` — master-side identity ONLY,
+ * never carries `passwordHash`. This is `req.user`'s type BETWEEN
+ * `JwtAuthGuard` and `TenantContextGuard` in the chain (see the
+ * GUARD-ORDER INVARIANT below) — it deliberately has NO `roles`,
+ * `companyId`, or `companyUserId` key at all, not even an optional one:
+ * those genuinely do not exist yet at this point (spec: salesops-identity
+ * "JwtStrategy output carries no roles or companyId").
  */
-export type SanitizedUser = Omit<User, 'passwordHash' | 'roles'> & {
+export type AuthenticatedUser = Omit<User, 'passwordHash' | 'roles'>;
+
+/**
+ * `req.user` shape after `TenantContextGuard` has ALSO run — the shape every
+ * `@Roles(...)`-guarded controller in `apps/*` is written against.
+ *
+ * GUARD-ORDER INVARIANT (design D4) — REWRITTEN for the tenant-resolution
+ * chain; do not delete this just because the old wording below no longer
+ * applies. The chain is now THREE guards, in this exact order:
+ *
+ *     JwtAuthGuard  →  TenantContextGuard  →  RolesGuard
+ *
+ * `req.user` is `AuthenticatedUser` (above) right after `JwtAuthGuard` — no
+ * `roles`/`companyId`/`companyUserId` exist yet. `JwtStrategy.validate`
+ * (this file) resolves ONLY master-side identity: the `CompanyUser` row
+ * these three fields come from lives in a tenant schema whose identity is
+ * not yet known when Passport runs. `TenantContextGuard` resolves
+ * `Membership → Company → tenant CompanyUser` (see `tenant-context.guard.ts`)
+ * and is what upgrades `req.user` from `AuthenticatedUser` to this type. This
+ * is a genuine sequencing dependency, not a style choice: run `RolesGuard`
+ * before `TenantContextGuard`, or omit `TenantContextGuard` from the chain,
+ * and `req.user` never becomes a `SanitizedUser` at all — `req.user.roles`
+ * reads as `undefined` at runtime despite what this type claims, which is
+ * exactly the case `RolesGuard`'s explicit check below exists to catch.
+ *
+ * The OLD rule here forbade introducing any THIRD guard to populate this
+ * bitmask at all, on the theory that the only failure worth guarding
+ * against was the bitmask landing on a stray `req` sibling field instead of
+ * `req.user`. This change introduces exactly that third guard
+ * (`TenantContextGuard`) — the old rule doesn't fit the new shape and is
+ * retired. What it was PROTECTING is preserved instead, explicitly:
+ * `RolesGuard` checks `req.user.roles === undefined` and throws a LOUD
+ * `403 ('Tenant context not resolved')`, rather than letting
+ * `can(undefined, mask)` silently evaluate to `0` — a 403 for every user
+ * with nothing in the logs saying why. `roles` stays declared REQUIRED here
+ * (same as before this change) precisely so every existing `@Roles(...)`
+ * controller keeps compiling once it is wired behind `TenantContextGuard`
+ * (Phase 8) — `RolesGuard`'s runtime check is what catches the guard being
+ * skipped, a static type cannot. Regression test: `roles.guard.spec.ts`,
+ * "tenant context not resolved".
+ */
+export type SanitizedUser = AuthenticatedUser & {
   readonly roles: UserRoleValue;
   readonly companyId: string;
   /**
    * `CompanyUser.id` — the stable attribution identity (design A7). REQUIRED
-   * for the same reason `roles` is: sales attribution is stamped from this
-   * field, and an `undefined` slipping through would write an unattributed
-   * order instead of failing loudly. Attributing by the `(id, companyId)` pair
-   * instead was rejected — the assignment id is the single stable key.
+   * for the same reason `roles` is — see the GUARD-ORDER INVARIANT above.
    */
   readonly companyUserId: string;
 };
@@ -49,7 +74,7 @@ export type SanitizedUser = Omit<User, 'passwordHash' | 'roles'> & {
  */
 const USER_CACHE_TTL_MS = 30_000;
 
-function sanitize(user: User, assignment: CompanyUser): SanitizedUser {
+function sanitize(user: User): AuthenticatedUser {
   return {
     id: user.id,
     login: user.login,
@@ -57,9 +82,6 @@ function sanitize(user: User, assignment: CompanyUser): SanitizedUser {
     email: user.email,
     cellPhone: user.cellPhone,
     isActive: user.isActive,
-    roles: assignment.role,
-    companyId: assignment.companyId,
-    companyUserId: assignment.id,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -67,23 +89,21 @@ function sanitize(user: User, assignment: CompanyUser): SanitizedUser {
 
 /**
  * Validates the HS256 access token and resolves `req.user` FRESH per-request
- * (ADR-2) — roles are never baked into the token, so a deactivation or role
- * change takes effect within `USER_CACHE_TTL_MS` at most. Rejects when the
- * user no longer exists or is inactive.
+ * (ADR-2) — the underlying `User` row is never baked into the token, so a
+ * deactivation takes effect within `USER_CACHE_TTL_MS` at most. Rejects when
+ * the user no longer exists or is inactive.
  *
- * The role bitmask comes from the user's `CompanyUser` assignment, NOT from
- * the `User` row. A user with no ACTIVE assignment is authenticated but not
- * provisioned: that is a 403, never a silent zero-permission session.
+ * Resolves ONLY master-side identity (spec: salesops-identity "Role
+ * Resolution at Authentication Time") — no `CompanyUser` lookup happens
+ * here. Returns `AuthenticatedUser`, NOT `SanitizedUser` — see the
+ * GUARD-ORDER INVARIANT on `SanitizedUser` above for where role/company
+ * resolution moved and why.
  */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  private readonly logger = new Logger(JwtStrategy.name);
-  private readonly userCache = new TtlCache<string, SanitizedUser>(USER_CACHE_TTL_MS);
+  private readonly userCache = new TtlCache<string, AuthenticatedUser>(USER_CACHE_TTL_MS);
 
-  constructor(
-    @Inject(USER_REPOSITORY) private readonly userRepository: IUserRepository,
-    @Inject(COMPANY_USER_REPOSITORY) private readonly companyUserRepository: ICompanyUserRepository,
-  ) {
+  constructor(@Inject(USER_REPOSITORY) private readonly userRepository: IUserRepository) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -91,9 +111,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: JwtAccessPayload): Promise<SanitizedUser> {
-    // One cache entry holds the JOINED User+CompanyUser projection (A7), so a
-    // hit skips BOTH repositories and there is a single invalidation window.
+  async validate(payload: JwtAccessPayload): Promise<AuthenticatedUser> {
     const cached = this.userCache.get(payload.sub);
     if (cached) return cached;
 
@@ -102,24 +120,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found or inactive');
     }
 
-    const assignment = await this.companyUserRepository.findActiveByUserId(user.id);
-    // A non-ACTIVE assignment is rejected identically to a missing one. The
-    // status is re-checked here rather than trusted from the query so that a
-    // repository regression cannot quietly widen access.
-    if (!assignment || assignment.status !== 'ACTIVE') {
-      // 403, not 401: the token is valid and the account is live — the user is
-      // authenticated but NOT provisioned for any company. Logged because it
-      // means data is inconsistent, not that the caller did something wrong.
-      this.logger.error(
-        `MISSING_COMPANY_USER: user ${user.id} has no ACTIVE CompanyUser assignment (status: ${assignment?.status ?? 'none'})`,
-      );
-      throw new ForbiddenException('User is not assigned to any company');
-    }
-
-    // The whole assignment is passed rather than three loose strings: `id` and
-    // `companyId` are both opaque uuids, and a positional swap between them
-    // would misattribute every order without failing any type check.
-    const sanitized = sanitize(user, assignment);
+    const sanitized = sanitize(user);
     this.userCache.set(payload.sub, sanitized);
     return sanitized;
   }

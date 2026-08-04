@@ -423,6 +423,9 @@ importers:
       '@store-mgmt/domain':
         specifier: workspace:*
         version: link:../domain
+      '@store-mgmt/infra-db':
+        specifier: workspace:*
+        version: link:../infra-db
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1

@@ -1,6 +1,5 @@
-import { ForbiddenException, Logger, UnauthorizedException } from '@nestjs/common';
-import type { CompanyUser, ICompanyUserRepository, IUserRepository, User } from '@store-mgmt/domain';
-import { USER_ROLES } from '@store-mgmt/domain';
+import { Logger, UnauthorizedException } from '@nestjs/common';
+import type { IUserRepository, User } from '@store-mgmt/domain';
 import { JwtStrategy } from './jwt.strategy.js';
 
 function activeUser(overrides: Partial<User> = {}): User {
@@ -18,28 +17,12 @@ function activeUser(overrides: Partial<User> = {}): User {
   };
 }
 
-function companyUser(overrides: Partial<CompanyUser> = {}): CompanyUser {
-  return {
-    id: 'cu-1',
-    userId: 'user-1',
-    companyId: 'company-1',
-    role: USER_ROLES.owner,
-    status: 'ACTIVE',
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-    ...overrides,
-  };
-}
-
 function makeStrategy() {
   const findById = jest.fn();
-  const findActiveByUserId = jest.fn().mockResolvedValue(companyUser());
   const userRepository = { findById } as unknown as IUserRepository;
-  const companyUserRepository = { findActiveByUserId } as unknown as ICompanyUserRepository;
   return {
-    strategy: new JwtStrategy(userRepository, companyUserRepository),
+    strategy: new JwtStrategy(userRepository),
     findById,
-    findActiveByUserId,
   };
 }
 
@@ -58,6 +41,7 @@ describe('JwtStrategy.validate', () => {
     expect(findById).toHaveBeenCalledWith('user-1');
     expect(result.id).toBe('user-1');
     expect(result.login).toBe('juan.perez');
+    expect(result.isActive).toBe(true);
     expect(result).not.toHaveProperty('passwordHash');
   });
 
@@ -108,109 +92,44 @@ describe('JwtStrategy.validate', () => {
     expect(findById).toHaveBeenCalledTimes(2);
   });
 
-  // --- CompanyUser role resolution (Phase 2 cutover) ---
+  // --- Tenant resolution moved out (design D4, Phase 7) ---
+  // `JwtStrategy` now resolves ONLY master-side data — the `CompanyUser`
+  // table these fields used to come from lives in a tenant schema whose
+  // identity is not yet known when Passport runs. Role/company resolution
+  // moves to `TenantContextGuard` (spec: salesops-identity "Role Resolution
+  // at Authentication Time").
 
-  it('sources `roles` from CompanyUser.role, NEVER from the User row, and exposes companyId', async () => {
-    const { strategy, findById, findActiveByUserId } = makeStrategy();
-    // Since migration 002 the User row cannot carry a bitmask at all — the
-    // assignment is the only possible source, and this asserts it is the one
-    // actually read.
+  it('does NOT construct a second repository dependency — validate() never resolves CompanyUser', async () => {
+    const { strategy, findById } = makeStrategy();
     findById.mockResolvedValue(activeUser());
-    findActiveByUserId.mockResolvedValue(companyUser({ role: USER_ROLES.admin }));
+    // `JwtStrategy`'s constructor takes exactly one repository now — a second
+    // positional argument here would be a silent, unused parameter. Asserted
+    // by construction succeeding with a single mock and no CompanyUser
+    // repository ever provided (see `makeStrategy` above).
+    expect(strategy).toBeInstanceOf(JwtStrategy);
+  });
+
+  it('validate() returns only master-side identity — no roles/companyId/companyUserId field', async () => {
+    const { strategy, findById } = makeStrategy();
+    findById.mockResolvedValue(activeUser());
 
     const result = await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
 
-    expect(findActiveByUserId).toHaveBeenCalledWith('user-1');
-    expect(result.roles).toBe(USER_ROLES.admin);
-    expect(result.companyId).toBe('company-1');
+    expect(result).not.toHaveProperty('roles');
+    expect(result).not.toHaveProperty('companyId');
+    expect(result).not.toHaveProperty('companyUserId');
   });
 
-  it('exposes `companyUserId` from CompanyUser.id — the stable attribution identity (A7)', async () => {
-    const { strategy, findById, findActiveByUserId } = makeStrategy();
+  it('does NOT log MISSING_COMPANY_USER — that failure mode now originates in TenantContextGuard', async () => {
+    const { strategy, findById } = makeStrategy();
     findById.mockResolvedValue(activeUser());
-    findActiveByUserId.mockResolvedValue(companyUser({ id: 'cu-7' }));
-
-    const result = await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
-
-    // The assignment id, NOT the User id: attribution is recorded against the
-    // company-scoped assignment, so the two must never be conflated.
-    expect(result.companyUserId).toBe('cu-7');
-    expect(result.companyUserId).not.toBe(result.id);
-  });
-
-  it('role bitmask 0 is a VALID zero-permission assignment, not a missing one', async () => {
-    const { strategy, findById, findActiveByUserId } = makeStrategy();
-    findById.mockResolvedValue(activeUser());
-    findActiveByUserId.mockResolvedValue(companyUser({ role: 0 }));
-
-    const result = await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
-
-    expect(result.roles).toBe(0);
-  });
-
-  it('missing CompanyUser → ForbiddenException (403, NOT 401) and logs MISSING_COMPANY_USER', async () => {
-    const { strategy, findById, findActiveByUserId } = makeStrategy();
-    findById.mockResolvedValue(activeUser());
-    findActiveByUserId.mockResolvedValue(null);
     const logged: string[] = [];
     jest.spyOn(Logger.prototype, 'error').mockImplementation((msg: unknown) => {
       logged.push(String(msg));
     });
 
-    await expect(strategy.validate({ sub: 'user-1', login: 'juan.perez' })).rejects.toThrow(ForbiddenException);
-    expect(logged.join('\n')).toContain('MISSING_COMPANY_USER');
-  });
-
-  it.each(['REVOKED', 'SUSPENDED'] as const)(
-    'a %s CompanyUser is treated exactly like a missing one → ForbiddenException',
-    async (status) => {
-      const { strategy, findById, findActiveByUserId } = makeStrategy();
-      findById.mockResolvedValue(activeUser());
-      findActiveByUserId.mockResolvedValue(companyUser({ status }));
-
-      await expect(strategy.validate({ sub: 'user-1', login: 'juan.perez' })).rejects.toThrow(ForbiddenException);
-    },
-  );
-
-  it.each(['REVOKED', 'SUSPENDED'] as const)(
-    'a %s CompanyUser yields NO req.user at all — so nothing downstream can be attributed to it',
-    async (status) => {
-      // The attribution guarantee upstream of every sales route: a revoked or
-      // suspended agent never reaches order creation, because `validate`
-      // throws instead of returning a `SanitizedUser`. There is therefore no
-      // `companyUserId` in existence to stamp a sale with, which is a stronger
-      // guarantee than any check the sales layer could make for itself.
-      const { strategy, findById, findActiveByUserId } = makeStrategy();
-      findById.mockResolvedValue(activeUser());
-      findActiveByUserId.mockResolvedValue(companyUser({ id: 'cu-revoked', status }));
-
-      const resolved = await strategy
-        .validate({ sub: 'user-1', login: 'juan.perez' })
-        .catch(() => null);
-
-      expect(resolved).toBeNull();
-    },
-  );
-
-  it('does NOT cache a rejected (missing CompanyUser) resolution → re-queries each time', async () => {
-    const { strategy, findById, findActiveByUserId } = makeStrategy();
-    findById.mockResolvedValue(activeUser());
-    findActiveByUserId.mockResolvedValue(null);
-
-    await expect(strategy.validate({ sub: 'user-1', login: 'juan.perez' })).rejects.toThrow(ForbiddenException);
-    await expect(strategy.validate({ sub: 'user-1', login: 'juan.perez' })).rejects.toThrow(ForbiddenException);
-
-    expect(findActiveByUserId).toHaveBeenCalledTimes(2);
-  });
-
-  it('cache hit skips BOTH repositories — one joined projection, one invalidation window (A7)', async () => {
-    const { strategy, findById, findActiveByUserId } = makeStrategy();
-    findById.mockResolvedValue(activeUser());
-
-    await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
     await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
 
-    expect(findById).toHaveBeenCalledTimes(1);
-    expect(findActiveByUserId).toHaveBeenCalledTimes(1);
+    expect(logged.join('\n')).not.toContain('MISSING_COMPANY_USER');
   });
 });
