@@ -84,7 +84,7 @@ No cutover/migration-of-existing-rows tasks anywhere in this phase or elsewhere 
 
 ## Phase 5: Test infra — schema-per-suite (P12, Option C scoped)
 
-- [ ] 5.1 [GREEN — new test infra, no separate RED] `packages/infra-db/src/tenant-schema.spec-helper.ts` — `CREATE SCHEMA` + apply `tenant-schema.sql` in `beforeAll`, `DROP SCHEMA CASCADE` in `afterAll`. Reuses Phase 4's `TenantDatabaseService`, not a parallel implementation.
+- [x] 5.1 [GREEN — new test infra, no separate RED] `packages/infra-db/src/tenant-schema.spec-helper.ts` — `CREATE SCHEMA` + apply `tenant-schema.sql` in `beforeAll`, `DROP SCHEMA CASCADE` in `afterAll`. Reuses Phase 4's `TenantDatabaseService`, not a parallel implementation.
 - [ ] 5.2 Refactor `packages/infra-db/src/db-cleanup.spec-helper.ts` and `packages/infra-db/src/commission/commission-fixtures.spec-helper.ts` to split master-side rows (shared-schema truncate, unchanged) from tenant-side rows (now via 5.1's schema-drop, no RESTRICT-ordering cleanup needed for those tables).
 - [ ] 5.3 Keep `packages/infra-db/jest.config.js` `maxWorkers: 1` as-is — do not attempt schema-per-worker (rejected option, reopens the 2026-07-27 race).
 
