@@ -107,27 +107,39 @@ Do not replace it with an interceptor.
 
 ### D6 — One migration tool; drift check is the same primitive in report mode.
 
-Tenant schemas carry **no** `_prisma_migrations` history. Their truth is `prisma/tenant/schema.prisma`.
+Tenant schemas carry **no** `_prisma_migrations` history. Their truth is `prisma/tenant/schema.prisma`,
+whose `datasource` block declares `provider` **only** — Prisma 7 rejects a `url` inside a schema file
+(error P1012). Mirror `prisma/schema.prisma:8-10`.
+
+**The per-tenant connection travels in the environment, not in a flag.** Prisma 7.8 removed every CLI
+flag that takes an arbitrary URL: `migrate diff` offers only `--from-config-datasource` /
+`--to-config-datasource`, which take no argument, and `db execute` lost `--url` entirely. Both read the
+datasource from `prisma.config.ts`, which resolves `process.env.DATABASE_URL` (`prisma.config.ts:22-24`)
+and whose `loadEnvFile` never overrides an already-set value. So every per-tenant invocation is a child
+process carrying `DATABASE_URL=<base>?schema=<tenant>` in its env.
 
 | Path | Mechanism |
 |---|---|
-| Provision (runtime, in-request) | apply generated `tenant-schema.sql` via `pg.Client` in one transaction. No CLI in the request path. |
-| Evolve the fleet (`scripts/tenant-migrate.ts`) | per tenant: `prisma migrate diff --from-schema-datasource <url?schema=X> --to-schema-datamodel prisma/tenant/schema.prisma --script` → apply in a transaction, **per-tenant timeout**, continue-and-report, exit non-zero. |
-| Drift check (`--check`, CI + startup assertion) | same diff, `--exit-code`, no apply. Any tenant with a non-empty diff is named and the run FAILS. |
+| Provision (runtime, in-request) | apply generated `tenant-schema.sql` via `pg.Client` in one transaction. No CLI in the request path. The generated DDL is **schema-unqualified**, so the client must `SET search_path` to the tenant schema first or it writes into `public`. |
+| Evolve the fleet (`scripts/tenant-migrate.ts`) | per tenant, with `DATABASE_URL=<base>?schema=X` in the child env: `prisma migrate diff --from-config-datasource --to-schema prisma/tenant/schema.prisma --script` → apply in a transaction, **per-tenant timeout**, continue-and-report, exit non-zero. |
+| Drift check (`--check`, CI + startup assertion) | same diff with `--exit-code` and no `--script`, no apply. In sync exits 0, behind exits 2, and the report names the table and the column. Any tenant with a non-empty diff is named and the run FAILS. |
 
-Destructive statements (`DROP TABLE`/`DROP COLUMN`) are refused unless `--allow-destructive` is passed
-explicitly — the inverse of poolops's habitual `--accept-data-loss` (landmine 2). Master keeps normal
-`prisma migrate dev/deploy` history.
+`migrate diff` has **no** data-loss gate of its own — it emits `DROP TABLE` / `DROP COLUMN` with no
+warning and no refusal. The guard is ours: `tenant-migrate.ts` scans the emitted SQL and refuses
+destructive statements unless `--allow-destructive` is passed explicitly — the inverse of poolops's
+habitual `--accept-data-loss` (landmine 2). Master keeps normal `prisma migrate dev/deploy` history.
 
-*Unverified:* the exact `migrate diff` flag set is written from Prisma 7.8 semantics, not executed.
-Validate it in the first task of this slice before building on it.
+*Verified 2026-08-04* by task 11.1's spike, against Prisma 7.8.0 and a real throwaway Postgres schema:
+the mechanism above reproduced end to end, including that `?schema=` correctly scopes the `from` side.
+The flag names here replace three that do not exist in 7.8 — `--from-schema-datasource`,
+`--to-schema-datamodel`, and `db execute --url`. Evidence: engram `sdd/multi-tenant-by-schema/spike-11-1`.
 
 ### D7 — Provisioning saga in `api-idp`, with orphan detection.
 
 ```
 createCompany(input)
   1 master Company (schemaName NULL)     ↺ delete Company
-  2 CREATE SCHEMA + tenant-schema.sql    ↺ DROP SCHEMA CASCADE
+  2 CREATE SCHEMA + tenant-schema.sql    ↺ DROP SCHEMA CASCADE   (SET search_path first — D6)
   3 Company.schemaName = <name>          ↺ set NULL
   4 master Membership (ACTIVE)           ↺ delete
   5 tenant CompanyUser (owner role)      ↺ delete
@@ -206,7 +218,8 @@ withdrawn). The path is: create schema → apply tenant DDL → `pnpm seed`. Rol
 
 ## 7. Open items
 
-- [ ] D6's `migrate diff` flags are unverified against Prisma 7.8 — validate before building on them.
+- [x] D6's `migrate diff` flags — **resolved 2026-08-04** by task 11.1's spike. Three flags did not
+      exist in 7.8; D6 now carries the executed set. The mechanism was unchanged by the correction.
 - [ ] `TemplateCategory`/`TemplateProduct` columns mirror what `seedProducts` writes from
       `catalog.json` today; the exact column list is settled in tasks, not here.
 - [ ] Pool `max` default of 5 is a starting value, not a measured one.

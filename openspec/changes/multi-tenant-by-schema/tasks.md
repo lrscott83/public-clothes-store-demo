@@ -70,7 +70,7 @@ Chain strategy: pending
 ## Phase 3: Prisma schema split
 
 - [ ] 3.1 (WU3a) Create `packages/infra-db/prisma/master/schema.prisma` (`User`, `Company`+`schemaName`, `Membership`, `TemplateCategory`, `TemplateProduct`, `ProvisioningIncident`, `RefreshToken`, `PasswordResetToken`, enum `MembershipStatus`) + its own `prisma.config.ts`.
-- [ ] 3.2 (WU3a) Create `packages/infra-db/prisma/tenant/schema.prisma` (`CompanyUser` collapsed-PK, `Customer`/`WarehouseOperator` reshaped onto `companyUserId`, all remaining business tables + enums) + its own `prisma.config.ts`. `CompanyUser.company → Company` relation is dropped (D1).
+- [ ] 3.2 (WU3a) Create `packages/infra-db/prisma/tenant/schema.prisma` (`CompanyUser` collapsed-PK, `Customer`/`WarehouseOperator` reshaped onto `companyUserId`, all remaining business tables + enums) + its own `prisma.config.ts`. `CompanyUser.company → Company` relation is dropped (D1). Both new schema files declare `provider` only in `datasource` — Prisma 7 rejects `url` in a schema file (P1012, confirmed by 11.1's spike).
 - [ ] 3.3 (WU3a) Generate the master migration (`prisma migrate dev`) and `packages/infra-db/scripts/generate-tenant-schema-sql.ts` (`prisma migrate diff --from-empty`) producing committed `packages/infra-db/prisma/tenant-schema.sql`.
 - [ ] 3.4 (WU3b) Add `PrismaMembershipRepository`, `PrismaProvisioningIncidentRepository` (master-side, `packages/infra-db/src/company/`).
 - [ ] 3.5 (WU3b) Re-type the ~17 repository files' Prisma client import to the correct generated client (5 master repos unchanged in behavior; ~12 tenant repos temporarily bind a single default-schema client so the package compiles — full tenant-context wiring lands in Phase 6). Update `prisma/seed.js` to seed master only for now.
@@ -80,7 +80,7 @@ No cutover/migration-of-existing-rows tasks anywhere in this phase or elsewhere 
 ## Phase 4: Tenant client factory (D2)
 
 - [ ] 4.1 [RED] `packages/infra-db/src/tenant/tenant-prisma-factory.spec.ts`, `tenant-context.service.spec.ts` — bounded pool (`max`, idle timeout, LRU cap), `getClient()` throws with no active context, `disposeClient` called on eviction and `onModuleDestroy`.
-- [ ] 4.2 [GREEN] `packages/infra-db/src/tenant/tenant-prisma-factory.ts`, `tenant-context.service.ts`, `tenant-database.service.ts` (`createSchema`/`deleteSchema`/`schemaExists`, raw `pg.Client`, applies `tenant-schema.sql`). Satisfies spec: salesops-tenancy "Tenant Client Acquisition Fails Loud, Never Falls Back".
+- [ ] 4.2 [GREEN] `packages/infra-db/src/tenant/tenant-prisma-factory.ts`, `tenant-context.service.ts`, `tenant-database.service.ts` (`createSchema`/`deleteSchema`/`schemaExists`, raw `pg.Client`, applies `tenant-schema.sql` — the generated DDL is schema-unqualified, so the client MUST `SET search_path` to the tenant schema first or it writes into `public`; confirmed by 11.1's spike). Satisfies spec: salesops-tenancy "Tenant Client Acquisition Fails Loud, Never Falls Back".
 
 ## Phase 5: Test infra — schema-per-suite (P12, Option C scoped)
 
@@ -125,9 +125,9 @@ This is one work unit by explicit constraint — the invariant comment and its r
 
 ## Phase 11: Migration tool + drift detection (D6)
 
-- [ ] 11.1 **SPIKE — FIRST, before any code in this phase.** Run `prisma migrate diff --from-schema-datasource <url?schema=X> --to-schema-datamodel prisma/tenant/schema.prisma --script` and the `--exit-code` drift variant against a real tenant schema, by hand, to confirm the flag set behaves as D6 assumes (Prisma 7.8 semantics, never executed). **If it doesn't: stop, this phase needs redesign, not a patch — escalate before writing `tenant-migrate.ts`.**
+- [x] 11.1 **SPIKE — DONE 2026-08-04, ran before Phase 1.** Executed by hand against Prisma 7.8.0 and a real throwaway Postgres schema. **Outcome: flags wrong, mechanism sound → D6 corrected, no redesign** (owner call). Three flags did not exist in 7.8 (`--from-schema-datasource`, `--to-schema-datamodel`, `db execute --url`); the per-tenant URL now travels as `DATABASE_URL` in the child process env. Everything else reproduced: `?schema=` scopes the `from` side, `--exit-code` gives 0 in sync / 2 behind, and `migrate diff` emits destructive SQL with no gate of its own. Evidence: engram `sdd/multi-tenant-by-schema/spike-11-1`; corrected mechanism in `design.md` D6.
 - [ ] 11.2 [RED] `packages/infra-db/scripts/tenant-migrate.spec.ts` (or equivalent integration test) — one tenant timing out doesn't block the others; drift check names a behind tenant and fails; destructive statement refused without `--allow-destructive`.
-- [ ] 11.3 [GREEN] `packages/infra-db/scripts/tenant-migrate.ts` — per-tenant timeout, continue-and-report, `--check` mode, destructive-flag guard. Satisfies spec: salesops-tenancy "Single Migration Tool With Loud Drift Detection".
+- [ ] 11.3 [GREEN] `packages/infra-db/scripts/tenant-migrate.ts` — per-tenant timeout, continue-and-report, `--check` mode, destructive-flag guard. Per 11.1: spawn one child per tenant with `DATABASE_URL=<base>?schema=<tenant>` in its env (there is no URL flag left), and implement the destructive guard as our own scan of the emitted SQL — `migrate diff` refuses nothing. Satisfies spec: salesops-tenancy "Single Migration Tool With Loud Drift Detection".
 
 ## Phase 12: e2e test rewiring (P12 — largest uncosted surface, own explicit tasks)
 
