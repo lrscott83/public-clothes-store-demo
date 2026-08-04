@@ -1,11 +1,14 @@
 import { computeAccrual, money, moneyToDecimalString } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { fakeTenantContext, useTenantSchema, assertAbsentFromPublicSchema } from '../tenant-schema.spec-helper.js';
 import { PrismaCommissionAccrualRepository } from './prisma-commission-accrual.repository.js';
 import { PrismaCommissionPaymentRepository } from './prisma-commission-payment.repository.js';
 import { seedCommissionFixture, wipeCommissionFixture } from './commission-fixtures.spec-helper.js';
 
 /**
- * Integration tests against the real `store_mgmt_test` database.
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — same discipline as
+ * `prisma-currency.repository.spec.ts`.
  *
  * The one guarantee that matters here is 1:1 — an accrual is settled once or
  * not at all. It is enforced by a unique index rather than by a check in the
@@ -13,16 +16,17 @@ import { seedCommissionFixture, wipeCommissionFixture } from './commission-fixtu
  * is the table where losing means paying somebody twice.
  */
 describe('PrismaCommissionPaymentRepository', () => {
-  let prisma: TenantDefaultPrismaService;
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
   let accruals: PrismaCommissionAccrualRepository;
   let payments: PrismaCommissionPaymentRepository;
   let categoryId: string;
 
   beforeAll(async () => {
-    prisma = new TenantDefaultPrismaService();
-    accruals = new PrismaCommissionAccrualRepository(prisma);
-    payments = new PrismaCommissionPaymentRepository(prisma);
-    const category = await prisma.category.upsert({
+    tenantContext = fakeTenantContext(getTenantSchema);
+    accruals = new PrismaCommissionAccrualRepository(tenantContext);
+    payments = new PrismaCommissionPaymentRepository(tenantContext);
+    const category = await tenantContext.getClient().category.upsert({
       where: { slug: 'commission-payment-spec' },
       update: {},
       create: { name: 'Commission Payment Spec', slug: 'commission-payment-spec', order: 902, active: true },
@@ -31,16 +35,11 @@ describe('PrismaCommissionPaymentRepository', () => {
   });
 
   afterEach(async () => {
-    await wipeCommissionFixture(prisma, categoryId);
-  });
-
-  afterAll(async () => {
-    await prisma.category.deleteMany({ where: { id: categoryId } });
-    await prisma.$disconnect();
+    await wipeCommissionFixture(tenantContext.getClient(), categoryId);
   });
 
   async function anAccrual() {
-    const fixture = await seedCommissionFixture(prisma, categoryId);
+    const fixture = await seedCommissionFixture(tenantContext.getClient(), categoryId);
     const accrual = await accruals.create(
       computeAccrual(
         {
@@ -55,7 +54,7 @@ describe('PrismaCommissionPaymentRepository', () => {
     return { accrual, fixture };
   }
 
-  it('records a settlement and round-trips it as MN Money', async () => {
+  it('records a settlement and round-trips it as MN Money, scoped to the tenant schema alone', async () => {
     const { accrual, fixture } = await anAccrual();
 
     const payment = await payments.create({
@@ -71,6 +70,11 @@ describe('PrismaCommissionPaymentRepository', () => {
     expect(payment.paidAt).toEqual(new Date('2026-07-31T09:00:00.000Z'));
     expect(payment.note).toBe('Pago quincenal');
     expect(payment.recordedByCompanyUserId).toBe(fixture.companyUserId);
+    // The trap this batch's instructions call out by name: a spec that never
+    // provisions a tenant schema, or that reaches a master/default client,
+    // can still pass for the wrong reason. `public` still holds a same-named
+    // legacy `commission_payment` table until task 14.2's reset.
+    await assertAbsentFromPublicSchema('commission_payment', 'id', payment.id);
   });
 
   it('REJECTS a settlement recorded by a company user that does not exist', async () => {
@@ -102,7 +106,9 @@ describe('PrismaCommissionPaymentRepository', () => {
     await payments.create(input);
 
     await expect(payments.create(input)).rejects.toThrow();
-    expect(await prisma.commissionPayment.count({ where: { accrualId: accrual.id } })).toBe(1);
+    expect(
+      await tenantContext.getClient().commissionPayment.count({ where: { accrualId: accrual.id } }),
+    ).toBe(1);
   });
 
   it('defaults an omitted note to null rather than an empty string', async () => {
@@ -162,6 +168,8 @@ describe('PrismaCommissionPaymentRepository', () => {
 
     // RESTRICT, not CASCADE: proof that a person was paid must not vanish
     // because somebody tidied up the accrual it settles.
-    await expect(prisma.commissionAccrual.delete({ where: { id: accrual.id } })).rejects.toThrow();
+    await expect(
+      tenantContext.getClient().commissionAccrual.delete({ where: { id: accrual.id } }),
+    ).rejects.toThrow();
   });
 });

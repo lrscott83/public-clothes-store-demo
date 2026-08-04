@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createOrder, money, rateFromDecimalString, type ExchangeRate } from '@store-mgmt/domain';
 import type { PrismaService } from '../prisma-client.js';
+import type { TenantContextService } from '../tenant/tenant-context.service.js';
 import { seedWarehouses } from '../inventory/seed.js';
 import { seedCustomers } from '../customer/seed.js';
 import { seedUsers, SALES_AGENT_LOGIN } from '../users/seed.js';
@@ -152,7 +153,17 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
     effectiveFrom: row.effectiveFrom,
   }));
 
-  const repository = new PrismaOrderRepository(prisma);
+  // `seedOrders` is currently UNREACHABLE from `prisma/seed.js` (task 3.5's
+  // "master only for now" — see that file's header comment); this fake keeps
+  // `PrismaOrderRepository`'s constructor (task 6.2, `TenantContextService`)
+  // satisfied at the type level without rewriting this whole function onto a
+  // real tenant schema, which is Phase 9/14.2's job once seeding is wired
+  // through the provisioning saga. Points `getClient()` straight at the same
+  // `prisma` connection every other call in this function already uses, so
+  // behavior is unchanged if this ever runs again before then.
+  const repository = new PrismaOrderRepository({
+    getClient: () => prisma,
+  } as unknown as TenantContextService);
   const at = new Date('2026-07-22T00:00:00Z');
   let ordersUpserted = 0;
 

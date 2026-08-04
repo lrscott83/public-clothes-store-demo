@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { moneyToDecimalString } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { fakeTenantContext, useTenantSchema } from '../tenant-schema.spec-helper.js';
 import { PrismaCommissionReferenceProvider } from './prisma-commission-reference.provider.js';
 
 /**
- * Integration tests against the real `store_mgmt_test` database.
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — same discipline as
+ * `prisma-currency.repository.spec.ts`.
  *
  * The load-bearing property here is a NEGATIVE one: a product with no
  * configured commission must come back `undefined`, never `money(0n, 'MN')`.
@@ -13,14 +16,15 @@ import { PrismaCommissionReferenceProvider } from './prisma-commission-reference
  * producing an accrual that looks perfectly complete.
  */
 describe('PrismaCommissionReferenceProvider', () => {
-  let prisma: TenantDefaultPrismaService;
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
   let provider: PrismaCommissionReferenceProvider;
   let categoryId: string;
 
   beforeAll(async () => {
-    prisma = new TenantDefaultPrismaService();
-    provider = new PrismaCommissionReferenceProvider(prisma);
-    const category = await prisma.category.upsert({
+    tenantContext = fakeTenantContext(getTenantSchema);
+    provider = new PrismaCommissionReferenceProvider(tenantContext);
+    const category = await tenantContext.getClient().category.upsert({
       where: { slug: 'commission-spec' },
       update: {},
       create: { name: 'Commission Spec', slug: 'commission-spec', order: 900, active: true },
@@ -29,17 +33,13 @@ describe('PrismaCommissionReferenceProvider', () => {
   });
 
   afterEach(async () => {
+    const prisma = tenantContext.getClient();
     await prisma.productCommissionReference.deleteMany({});
     await prisma.product.deleteMany({ where: { categoryId } });
   });
 
-  afterAll(async () => {
-    await prisma.category.deleteMany({ where: { id: categoryId } });
-    await prisma.$disconnect();
-  });
-
   async function createProduct(name: string): Promise<string> {
-    const product = await prisma.product.create({
+    const product = await tenantContext.getClient().product.create({
       data: {
         name: `${name}.${randomUUID()}`,
         description: 'commission spec fixture',
@@ -57,7 +57,9 @@ describe('PrismaCommissionReferenceProvider', () => {
 
   it('returns the configured commission as MN Money', async () => {
     const productId = await createProduct('Configured');
-    await prisma.productCommissionReference.create({ data: { productId, amountMn: '350.00' } });
+    await tenantContext.getClient().productCommissionReference.create({
+      data: { productId, amountMn: '350.00' },
+    });
 
     const result = await provider.commissionFor(productId);
 
@@ -86,7 +88,9 @@ describe('PrismaCommissionReferenceProvider', () => {
     // A deliberate 0.00 IS a decision ("this product earns nothing") and must
     // survive the round trip as a value, not decay into an absence.
     const productId = await createProduct('ExplicitZero');
-    await prisma.productCommissionReference.create({ data: { productId, amountMn: '0.00' } });
+    await tenantContext.getClient().productCommissionReference.create({
+      data: { productId, amountMn: '0.00' },
+    });
 
     const result = await provider.commissionFor(productId);
 
@@ -98,7 +102,7 @@ describe('PrismaCommissionReferenceProvider', () => {
     it('returns one entry per CONFIGURED id and omits the rest, never padding with zeros', async () => {
       const configured = await createProduct('BatchConfigured');
       const unconfigured = await createProduct('BatchUnconfigured');
-      await prisma.productCommissionReference.create({
+      await tenantContext.getClient().productCommissionReference.create({
         data: { productId: configured, amountMn: '120.50' },
       });
 
@@ -111,7 +115,7 @@ describe('PrismaCommissionReferenceProvider', () => {
 
     it('returns an empty map for an empty input, without querying for everything', async () => {
       const configured = await createProduct('ShouldNotAppear');
-      await prisma.productCommissionReference.create({
+      await tenantContext.getClient().productCommissionReference.create({
         data: { productId: configured, amountMn: '99.00' },
       });
 
@@ -120,7 +124,9 @@ describe('PrismaCommissionReferenceProvider', () => {
 
     it('deduplicates repeated ids — an order can carry the same product on two lines', async () => {
       const productId = await createProduct('Repeated');
-      await prisma.productCommissionReference.create({ data: { productId, amountMn: '75.00' } });
+      await tenantContext.getClient().productCommissionReference.create({
+        data: { productId, amountMn: '75.00' },
+      });
 
       const result = await provider.commissionsFor([productId, productId]);
 

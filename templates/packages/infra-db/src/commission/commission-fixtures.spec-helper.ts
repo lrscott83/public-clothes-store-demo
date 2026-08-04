@@ -1,9 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { PrismaService } from '../prisma-client.js';
-import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
-
-/** Bcrypt hash shape accepted by the domain `passwordHash` invariant — never a real credential. */
-const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
+import type { PrismaClient } from '../../generated/tenant/client.js';
 
 export interface CommissionFixture {
   readonly companyUserId: string;
@@ -14,27 +10,29 @@ export interface CommissionFixture {
 
 /**
  * Builds the minimum real graph an accrual needs: an agent assignment, a
- * product, and a delivered order with one line. Every FK in the commission
- * module is `RESTRICT`, so these rows have to genuinely exist — there is no
- * shortcut fixture that satisfies the schema without them.
+ * product, and a delivered order with one line — directly against a real
+ * PROVISIONED TENANT SCHEMA (design.md §4, P12 Option C; task 6.2), not the
+ * shared master `public` schema this helper used before. Every FK in the
+ * commission module is `RESTRICT`, so these rows have to genuinely exist —
+ * there is no shortcut fixture that satisfies the schema without them.
+ *
+ * Raw `prisma.<model>.create` calls, not the repository classes — deliberate
+ * (mirrors `prisma-order.repository.spec.ts`'s pre-6.3 fixture seam): this
+ * helper only needs the tenant CLIENT, so it stays self-contained without
+ * waiting on Category/Product/Warehouse/Order repos to be re-sourced. There
+ * is no master `Company`/`User` fixture anymore — the tenant `CompanyUser`
+ * this reshape produces (design.md D1: `id`, `role`, `createdByCompanyUserId`
+ * only) has no cross-schema FK to satisfy; its `id` stands in for "the
+ * master `User.id` it represents" without a real master row needing to
+ * exist.
  */
 export async function seedCommissionFixture(
-  prisma: PrismaService,
+  prisma: PrismaClient,
   categoryId: string,
 ): Promise<CommissionFixture> {
-  const company = await prisma.company.upsert({
-    where: { slug: 'default' },
-    update: {},
-    create: { name: 'Tienda Prueba', slug: 'default' },
-  });
-  const user = await prisma.user.create({
-    data: { login: `spec.${randomUUID()}`, passwordHash: VALID_HASH, fullName: 'Gestor' },
-  });
-  const assignment = await prisma.companyUser.create({
-    data: { userId: user.id, companyId: company.id, role: 32, status: 'ACTIVE' },
-  });
+  const assignment = await prisma.companyUser.create({ data: { id: randomUUID(), role: 32 } });
   const customer = await prisma.customer.create({
-    data: { fullName: `Cliente ${randomUUID()}`, userId: user.id },
+    data: { fullName: `Cliente ${randomUUID()}`, companyUserId: assignment.id },
   });
   const warehouse = await prisma.warehouse.create({ data: { name: `Almacén ${randomUUID()}` } });
   const product = await prisma.product.create({
@@ -95,40 +93,27 @@ export async function seedCommissionFixture(
 }
 
 /**
- * Tears the graph down in reverse-FK order. Every commission FK is `RESTRICT`
- * except the accrual's own children, and `sales_order.attributed_company_user_id`
- * is `RESTRICT` too — so payments go before accruals, accruals before orders,
- * and orders before company users. A bulk wipe in the wrong order fails loudly,
- * which is the constraint doing its job rather than a nuisance to work around.
- *
- * Products are scoped to `categoryId`: this suite's own. Deleting every product
- * would take out rows that other suites' stock levels still reference, turning
- * one spec's cleanup into another spec's FK error.
+ * Tears the graph down in reverse-FK order, against the same tenant client.
+ * `categoryId` scopes the product wipe — this suite's own — since one
+ * tenant schema is shared by the whole describe block (created once in
+ * `beforeAll` by `useTenantSchema()`), so rows accumulate across tests
+ * unless wiped here. Unlike the pre-6.2 shared-`public` version, this no
+ * longer needs to protect OTHER suites' data (each suite gets its own
+ * schema) — only tests WITHIN this one suite.
  */
-export async function wipeCommissionFixture(
-  prisma: PrismaService,
-  categoryId: string,
-): Promise<void> {
-  await wipeCommissionTables(prisma);
+export async function wipeCommissionFixture(prisma: PrismaClient, categoryId: string): Promise<void> {
+  await prisma.commissionPayment.deleteMany({});
+  await prisma.commissionAccrual.deleteMany({});
+  await prisma.productCommissionReference.deleteMany({});
   await prisma.orderLine.deleteMany({});
   await prisma.order.deleteMany({});
   await prisma.stockLevel.deleteMany({ where: { product: { categoryId } } });
   await prisma.stockMovement.deleteMany({ where: { product: { categoryId } } });
   await prisma.product.deleteMany({ where: { categoryId } });
-  // Only the warehouses this suite created — they are exactly the ones left
-  // holding no stock and no orders. Wiping every warehouse would break the FK
-  // from stock levels that belong to other suites' products.
   await prisma.warehouse.deleteMany({
     where: { stockLevels: { none: {} }, movements: { none: {} }, orders: { none: {} } },
   });
   await prisma.customer.deleteMany({});
   await prisma.companyUser.deleteMany({ where: { createdByCompanyUserId: { not: null } } });
   await prisma.companyUser.deleteMany({});
-  await prisma.user.deleteMany({});
-  // Last, and easy to forget because `seedCommissionFixture` UPSERTS it: the
-  // company. Its slug is the fixed `default`, and `verify-order-attribution`
-  // CREATEs that same slug — so a company left here fails a spec that never
-  // heard of commissions, only when the runner happens to order this suite
-  // first. Jest's sequencer uses previous runs' timings, so it sometimes does.
-  await prisma.company.deleteMany({});
 }

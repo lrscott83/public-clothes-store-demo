@@ -5,7 +5,7 @@ import type {
   ICommissionAccrualRepository,
 } from '@store-mgmt/domain';
 import { moneyFromDecimalString, moneyToDecimalString } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 
 /** Shape of a `commission_accrual` row with its children included. */
 interface AccrualRow {
@@ -68,10 +68,14 @@ const WITH_CHILDREN = { lines: true, unresolved: true } as const;
  * than restate it against a possibly-edited commission table. The uniqueness
  * of `order_id` is what makes that safe under concurrency — two racing writers
  * cannot both insert, and the loser reads back the winner's row.
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
  */
 @Injectable()
 export class PrismaCommissionAccrualRepository implements ICommissionAccrualRepository {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async create(accrual: CommissionAccrual): Promise<CommissionAccrual> {
     const existing = await this.findByOrderId(accrual.orderId);
@@ -80,7 +84,7 @@ export class PrismaCommissionAccrualRepository implements ICommissionAccrualRepo
     }
 
     try {
-      const row = await this.prisma.commissionAccrual.create({
+      const row = await this.tenantContext.getClient().commissionAccrual.create({
         data: {
           orderId: accrual.orderId,
           attributedCompanyUserId: accrual.attributedCompanyUserId,
@@ -121,7 +125,7 @@ export class PrismaCommissionAccrualRepository implements ICommissionAccrualRepo
   }
 
   async findByOrderId(orderId: string): Promise<CommissionAccrual | null> {
-    const row = await this.prisma.commissionAccrual.findUnique({
+    const row = await this.tenantContext.getClient().commissionAccrual.findUnique({
       where: { orderId },
       include: WITH_CHILDREN,
     });
@@ -129,7 +133,7 @@ export class PrismaCommissionAccrualRepository implements ICommissionAccrualRepo
   }
 
   async findById(id: string): Promise<CommissionAccrual | null> {
-    const row = await this.prisma.commissionAccrual.findUnique({
+    const row = await this.tenantContext.getClient().commissionAccrual.findUnique({
       where: { id },
       include: WITH_CHILDREN,
     });
@@ -137,7 +141,7 @@ export class PrismaCommissionAccrualRepository implements ICommissionAccrualRepo
   }
 
   async list(filter?: CommissionAccrualFilter): Promise<CommissionAccrual[]> {
-    const rows = await this.prisma.commissionAccrual.findMany({
+    const rows = await this.tenantContext.getClient().commissionAccrual.findMany({
       where: {
         ...(filter?.attributedCompanyUserId
           ? { attributedCompanyUserId: filter.attributedCompanyUserId }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { ExchangeRate } from '@store-mgmt/domain';
 import {
   InsufficientStockError,
@@ -5,7 +6,9 @@ import {
   createOrder,
   money,
 } from '@store-mgmt/domain';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { fakeTenantContext, useTenantSchema, assertAbsentFromPublicSchema } from '../tenant-schema.spec-helper.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
 import { PrismaProductRepository } from '../product/prisma-product.repository.js';
 import { PrismaWarehouseRepository } from '../inventory/prisma-warehouse.repository.js';
@@ -14,12 +17,17 @@ import { PrismaStockLevelRepository } from '../inventory/prisma-stock-level.repo
 import { PrismaCustomerRepository } from '../customer/prisma-customer.repository.js';
 import { PrismaCurrencyRepository } from '../currency/prisma-currency.repository.js';
 import { PrismaOrderRepository } from './prisma-order.repository.js';
-import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
 const AT = new Date('2026-07-22T00:00:00Z');
 
+/**
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — same discipline as
+ * `prisma-currency.repository.spec.ts`/`prisma-customer.repository.spec.ts`.
+ */
 describe('PrismaOrderRepository', () => {
-  let prisma: TenantDefaultPrismaService;
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
   let repository: PrismaOrderRepository;
   let categoryRepository: PrismaCategoryRepository;
   let productRepository: PrismaProductRepository;
@@ -30,20 +38,51 @@ describe('PrismaOrderRepository', () => {
   let currencyRepository: PrismaCurrencyRepository;
 
   beforeAll(() => {
-    prisma = new TenantDefaultPrismaService();
-    repository = new PrismaOrderRepository(prisma);
-    categoryRepository = new PrismaCategoryRepository(prisma);
-    productRepository = new PrismaProductRepository(prisma);
-    warehouseRepository = new PrismaWarehouseRepository(prisma);
-    stockMovementRepository = new PrismaStockMovementRepository(prisma);
-    stockLevelRepository = new PrismaStockLevelRepository(prisma);
-    customerRepository = new PrismaCustomerRepository(prisma);
-    currencyRepository = new PrismaCurrencyRepository(prisma);
+    tenantContext = fakeTenantContext(getTenantSchema);
+    repository = new PrismaOrderRepository(tenantContext);
+    customerRepository = new PrismaCustomerRepository(tenantContext);
+    currencyRepository = new PrismaCurrencyRepository(tenantContext);
+
+    // TRANSITIONAL (task 6.2 -> 6.3 boundary, see apply-reservation.ts's doc
+    // comment for the same seam): Category/Product/Warehouse/StockLevel/
+    // StockMovement repos are re-sourced to TenantContextService in the very
+    // next commit, 6.3. Until then their constructors still expect a
+    // TenantDefaultPrismaService instance — this hands them the REAL tenant
+    // client under that old type instead (Category/Product/Warehouse/
+    // StockLevel/StockMovement are untouched by D1, identical shape on both
+    // generated clients), so every fixture this suite builds lives in ONE
+    // real tenant schema rather than being split between the tenant schema
+    // (Order/Customer/CompanyUser, already migrated) and `public` (which
+    // would fail every FK `PrismaOrderRepository` relies on). 6.3 replaces
+    // this cast with `tenantContext` directly, exactly like the repos above.
+    const tenantClient = tenantContext.getClient();
+    categoryRepository = new PrismaCategoryRepository(
+      tenantClient as unknown as TenantDefaultPrismaService,
+    );
+    productRepository = new PrismaProductRepository(
+      tenantClient as unknown as TenantDefaultPrismaService,
+    );
+    warehouseRepository = new PrismaWarehouseRepository(
+      tenantClient as unknown as TenantDefaultPrismaService,
+    );
+    stockMovementRepository = new PrismaStockMovementRepository(
+      tenantClient as unknown as TenantDefaultPrismaService,
+    );
+    stockLevelRepository = new PrismaStockLevelRepository(
+      tenantClient as unknown as TenantDefaultPrismaService,
+    );
   });
 
   afterEach(async () => {
-    // First: commission rows RESTRICT the order and product deletes below.
-    await wipeCommissionTables(prisma);
+    // One tenant schema is shared by the whole suite (created once in
+    // `beforeAll`), so rows accumulate across tests unless wiped here.
+    // FK-safe order — same shape as the pre-6.2 cleanup, now against the
+    // tenant client. `company_user` has no cross-schema FK to any master
+    // `User` (D1 dropped it), so no separate "wipe users" step is needed.
+    const prisma = tenantContext.getClient();
+    await prisma.commissionPayment.deleteMany({});
+    await prisma.commissionAccrual.deleteMany({});
+    await prisma.productCommissionReference.deleteMany({});
     await prisma.orderPayment.deleteMany({});
     await prisma.saleCredit.deleteMany({});
     await prisma.orderLine.deleteMany({});
@@ -54,19 +93,10 @@ describe('PrismaOrderRepository', () => {
     await prisma.category.deleteMany({});
     await prisma.warehouse.deleteMany({});
     await prisma.customer.deleteMany({});
-    // `company_user` has NO FK to `app_user` (soft FK by design) — deleting
-    // users alone would leave orphan assignments behind and trip the §7
-    // backfill gate.
+    await prisma.companyUser.deleteMany({ where: { createdByCompanyUserId: { not: null } } });
     await prisma.companyUser.deleteMany({});
-    await prisma.user.deleteMany({});
     await prisma.exchangeRate.deleteMany({});
   });
-
-  afterAll(async () => {
-    await prisma.$disconnect();
-  });
-
-  const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
   /**
    * The `CompanyUser.id` every fixture order is attributed to. Set by
@@ -88,23 +118,19 @@ describe('PrismaOrderRepository', () => {
       order: 1,
     });
     const warehouse = await warehouseRepository.create({ name: 'Pinar del Río' });
-    // Every Customer now requires an existing User (backend-users-roles,
-    // Customer.userId 1:1) — mint one for this fixture.
-    const user = await prisma.user.create({
-      data: { login: 'ana.torres.spec', passwordHash: VALID_HASH, fullName: 'Ana Torres' },
+    // Customer now FKs the tenant CompanyUser (design.md D1) — a tenant
+    // CompanyUser needs no master User row to exist (the cross-schema FK was
+    // dropped), so this mints one directly with a fresh id.
+    const customerCompanyUser = await tenantContext.getClient().companyUser.create({
+      data: { id: randomUUID(), role: 0 },
     });
-    const customer = await customerRepository.create({ fullName: 'Ana Torres', userId: user.id });
+    const customer = await customerRepository.create({
+      fullName: 'Ana Torres',
+      companyUserId: customerCompanyUser.id,
+    });
 
-    const company = await prisma.company.upsert({
-      where: { slug: 'default' },
-      update: {},
-      create: { name: 'Tienda Prueba', slug: 'default' },
-    });
-    const agentUser = await prisma.user.create({
-      data: { login: 'sales.agent.spec', passwordHash: VALID_HASH, fullName: 'Gestor Spec' },
-    });
-    const assignment = await prisma.companyUser.create({
-      data: { userId: agentUser.id, companyId: company.id, role: 32, status: 'ACTIVE' },
+    const assignment = await tenantContext.getClient().companyUser.create({
+      data: { id: randomUUID(), role: 32 },
     });
     attributedCompanyUserId = assignment.id;
 
@@ -172,6 +198,11 @@ describe('PrismaOrderRepository', () => {
       expect(created.lines).toHaveLength(1);
       expect(created.payments).toHaveLength(1);
       expect(created.currency).toBe('USD');
+      // The trap this batch's instructions call out by name: a spec that
+      // never provisions a tenant schema, or that reaches a master/default
+      // client, can still pass for the wrong reason. `public` still holds a
+      // same-named legacy `sales_order` table until task 14.2's reset.
+      await assertAbsentFromPublicSchema('sales_order', 'id', created.id);
     });
 
     it('round-trips attributedCompanyUserId through create and findById', async () => {
@@ -210,7 +241,9 @@ describe('PrismaOrderRepository', () => {
 
       // SET NULL here would silently erase who earned the commission, so the
       // FK restricts instead. Retiring an agent is a `status` change.
-      await expect(prisma.companyUser.delete({ where: { id: assignment.id } })).rejects.toThrow();
+      await expect(
+        tenantContext.getClient().companyUser.delete({ where: { id: assignment.id } }),
+      ).rejects.toThrow();
     });
 
     it('findById returns the full aggregate via one include; FK relations resolve both sides', async () => {

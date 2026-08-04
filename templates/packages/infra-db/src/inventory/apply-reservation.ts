@@ -1,6 +1,6 @@
 import type { ReserveStockInput, StockLevel as DomainStockLevel } from '@store-mgmt/domain';
 import { InsufficientStockError, InvalidStockLevelError } from '@store-mgmt/domain';
-import { Prisma } from '../../generated/client/client.js';
+import { Prisma } from '../../generated/tenant/client.js';
 
 /** Shape shared by every row Prisma returns for the `StockLevel` model. */
 interface StockLevelRow {
@@ -36,6 +36,20 @@ function toDomain(row: StockLevelRow): DomainStockLevel {
  * (`PrismaStockLevelRepository.reserve`/`.release`, which wrap it in their
  * own `$transaction`).
  *
+ * `tx` is typed against `generated/tenant`'s `Prisma.TransactionClient`
+ * (task 6.2, design.md D2) — both callers now resolve their client via
+ * `TenantContextService.getClient()`, so their `$transaction` callback
+ * produces a tenant-typed `tx`. Prisma's two independently generated
+ * clients are NOT structurally assignable to each other even where their
+ * model shapes coincide (`Types of parameters 'arg' and 'fn' are
+ * incompatible` — confirmed empirically), so this swap and
+ * `PrismaOrderRepository`'s land together in 6.2; `PrismaStockLevelRepository`/
+ * `PrismaStockMovementRepository` (still `TenantDefaultPrismaService` at
+ * this point) pick up the matching swap in the very next commit, 6.3 — until
+ * then `pnpm typecheck` fails on those two files, transitionally, the same
+ * way 6.1 left `sales/prisma-order.repository.spec.ts` transitionally red.
+ *
+
  * 1. `upsert` the `StockLevel` row on `UNIQUE(productId, warehouseId)` —
  *    lazily creates it at `{onHand:0, reserved:0}` on first call, mirroring
  *    `PrismaStockMovementRepository.record`.

@@ -24,7 +24,7 @@ import {
   rateFromDecimalString,
   rateToDecimalString,
 } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 import { applyReservationTx } from '../inventory/apply-reservation.js';
 import { applyStockMovementTx } from '../inventory/apply-stock-movement.js';
 
@@ -206,16 +206,20 @@ function orderToDomain(row: OrderRow): DomainOrder {
  * any stock-guard failure (`InsufficientStockError`/`NegativeStockError`)
  * rolls back the WHOLE transaction, including the status change and any
  * earlier per-line mutation in the same call.
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
  */
 @Injectable()
 export class PrismaOrderRepository implements IOrderRepository {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async create(order: DomainOrder): Promise<DomainOrder> {
     // The `input as unknown as Order` cast that used to open this method is
     // gone: the port now types `create` as taking the factory-built aggregate,
     // which is what every caller has always passed.
-    const row = await this.prisma.$transaction(async (tx) => {
+    const row = await this.tenantContext.getClient().$transaction(async (tx) => {
       const orderRow = await tx.order.create({
         data: {
           id: order.id,
@@ -297,7 +301,7 @@ export class PrismaOrderRepository implements IOrderRepository {
   }
 
   async update(id: string, patch: OrderUpdateInput): Promise<DomainOrder> {
-    const row = await this.prisma.order.update({
+    const row = await this.tenantContext.getClient().order.update({
       where: { id },
       // `attributedCompanyUserId` is ABSENT from this allow-list on purpose,
       // even though `OrderUpdateInput` is a `Partial<Order>` and so nominally
@@ -324,12 +328,14 @@ export class PrismaOrderRepository implements IOrderRepository {
   }
 
   async findById(id: string): Promise<DomainOrder | null> {
-    const row = await this.prisma.order.findUnique({ where: { id }, include: AGGREGATE_INCLUDE });
+    const row = await this.tenantContext
+      .getClient()
+      .order.findUnique({ where: { id }, include: AGGREGATE_INCLUDE });
     return row ? orderToDomain(row) : null;
   }
 
   async list(filter?: OrderListFilter): Promise<DomainOrder[]> {
-    const rows = await this.prisma.order.findMany({
+    const rows = await this.tenantContext.getClient().order.findMany({
       where: {
         ...(filter?.customerId ? { customerId: filter.customerId } : {}),
         ...(filter?.status ? { status: filter.status } : {}),
@@ -341,7 +347,7 @@ export class PrismaOrderRepository implements IOrderRepository {
   }
 
   async confirm(id: string): Promise<DomainOrder> {
-    const row = await this.prisma.$transaction(async (tx) => {
+    const row = await this.tenantContext.getClient().$transaction(async (tx) => {
       const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: { lines: true } });
       if (orderRow.status !== 'created') {
         throw new InvalidOrderStateError(id, 'created', orderRow.status);
@@ -364,7 +370,7 @@ export class PrismaOrderRepository implements IOrderRepository {
   }
 
   async deliver(id: string): Promise<DomainOrder> {
-    const row = await this.prisma.$transaction(async (tx) => {
+    const row = await this.tenantContext.getClient().$transaction(async (tx) => {
       const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: { lines: true } });
       if (orderRow.status !== 'verified') {
         throw new InvalidOrderStateError(id, 'verified', orderRow.status);
@@ -399,7 +405,7 @@ export class PrismaOrderRepository implements IOrderRepository {
   }
 
   async cancel(id: string): Promise<DomainOrder> {
-    const row = await this.prisma.$transaction(async (tx) => {
+    const row = await this.tenantContext.getClient().$transaction(async (tx) => {
       const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: { lines: true } });
       if (orderRow.status !== 'created' && orderRow.status !== 'verified') {
         throw new InvalidOrderStateError(id, 'created|verified', orderRow.status);

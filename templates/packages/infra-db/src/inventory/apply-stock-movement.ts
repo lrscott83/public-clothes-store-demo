@@ -6,7 +6,7 @@ import type {
   StockMovementType,
 } from '@store-mgmt/domain';
 import { NegativeStockError, movementDirection } from '@store-mgmt/domain';
-import { Prisma } from '../../generated/client/client.js';
+import { Prisma } from '../../generated/tenant/client.js';
 
 /** Shape shared by every row Prisma returns for the `StockLevel` model. */
 interface StockLevelRow {
@@ -71,6 +71,12 @@ function movementToDomain(row: StockMovementRow): DomainStockMovement {
  * `$transaction`). Behavior is IDENTICAL to the pre-extraction inline code —
  * this is a pure refactor, verified zero-regression by the pre-existing
  * `prisma-stock-movement.repository.spec.ts` staying green.
+ *
+ * `tx` is typed against `generated/tenant`'s `Prisma.TransactionClient` —
+ * see `apply-reservation.ts`'s doc comment for why this and
+ * `PrismaOrderRepository`'s client swap must land together (task 6.2), and
+ * why `PrismaStockMovementRepository`/`PrismaStockLevelRepository` pick up
+ * the matching swap in 6.3, the very next commit.
  *
  * 1. `upsert` the `StockLevel` row on `UNIQUE(productId, warehouseId)` —
  *    lazily creates it at `{onHand:0, reserved:0}` on the first movement.

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ICommissionReferenceProvider, Money } from '@store-mgmt/domain';
 import { moneyFromDecimalString } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 
 /**
  * Prisma adapter for `ICommissionReferenceProvider`. A pure id lookup — every
@@ -12,12 +12,19 @@ import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.serv
  * absence becomes an `unresolved` accrual line — visible, fixable — instead of
  * a zero that would sum into a total and look settled.
  */
+/**
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
+ */
 @Injectable()
 export class PrismaCommissionReferenceProvider implements ICommissionReferenceProvider {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async commissionFor(productId: string): Promise<Money | undefined> {
-    const row = await this.prisma.productCommissionReference.findUnique({ where: { productId } });
+    const row = await this.tenantContext
+      .getClient()
+      .productCommissionReference.findUnique({ where: { productId } });
     // `?? undefined` would be wrong here only if a row could carry a null
     // amount — it cannot (NOT NULL), so a missing row is the only absence.
     return row ? moneyFromDecimalString(row.amountMn.toString(), 'MN') : undefined;
@@ -32,7 +39,7 @@ export class PrismaCommissionReferenceProvider implements ICommissionReferencePr
       return new Map();
     }
 
-    const rows = await this.prisma.productCommissionReference.findMany({
+    const rows = await this.tenantContext.getClient().productCommissionReference.findMany({
       where: { productId: { in: unique } },
     });
 

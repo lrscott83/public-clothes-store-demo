@@ -5,7 +5,7 @@ import type {
   ICommissionPaymentRepository,
 } from '@store-mgmt/domain';
 import { moneyFromDecimalString, money, moneyToDecimalString } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 
 interface PaymentRow {
   readonly id: string;
@@ -37,13 +37,17 @@ function toDomain(row: PaymentRow): CommissionPayment {
  * here — returning the existing payment, say — would make double-settlement
  * look successful, and this is the one table where a silent no-op is worse
  * than an error.
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
  */
 @Injectable()
 export class PrismaCommissionPaymentRepository implements ICommissionPaymentRepository {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async create(input: CreateCommissionPaymentInput): Promise<CommissionPayment> {
-    const row = await this.prisma.commissionPayment.create({
+    const row = await this.tenantContext.getClient().commissionPayment.create({
       data: {
         accrualId: input.accrualId,
         amount: moneyToDecimalString(money(input.amountMinorUnits, 'MN')),
@@ -56,7 +60,9 @@ export class PrismaCommissionPaymentRepository implements ICommissionPaymentRepo
   }
 
   async findByAccrualId(accrualId: string): Promise<CommissionPayment | null> {
-    const row = await this.prisma.commissionPayment.findUnique({ where: { accrualId } });
+    const row = await this.tenantContext.getClient().commissionPayment.findUnique({
+      where: { accrualId },
+    });
     return row ? toDomain(row) : null;
   }
 
@@ -65,7 +71,7 @@ export class PrismaCommissionPaymentRepository implements ICommissionPaymentRepo
     if (unique.length === 0) {
       return [];
     }
-    const rows = await this.prisma.commissionPayment.findMany({
+    const rows = await this.tenantContext.getClient().commissionPayment.findMany({
       where: { accrualId: { in: unique } },
     });
     return rows.map(toDomain);
