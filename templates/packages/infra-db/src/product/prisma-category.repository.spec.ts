@@ -1,39 +1,41 @@
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { fakeTenantContext, useTenantSchema, assertAbsentFromPublicSchema } from '../tenant-schema.spec-helper.js';
 import { PrismaCategoryRepository } from './prisma-category.repository.js';
 import { PrismaProductRepository } from './prisma-product.repository.js';
-import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
 /**
- * Integration tests against the real `store_mgmt` Postgres database (no
- * mocks) — same discipline as `prisma-currency.repository.spec.ts`.
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — same discipline as
+ * `prisma-currency.repository.spec.ts`.
  */
 describe('PrismaCategoryRepository', () => {
-  let prisma: TenantDefaultPrismaService;
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
   let repository: PrismaCategoryRepository;
 
   beforeAll(() => {
-    prisma = new TenantDefaultPrismaService();
-    repository = new PrismaCategoryRepository(prisma);
+    tenantContext = fakeTenantContext(getTenantSchema);
+    repository = new PrismaCategoryRepository(tenantContext);
   });
 
   afterEach(async () => {
-    // First: commission rows RESTRICT the product delete below.
-    await wipeCommissionTables(prisma);
+    const prisma = tenantContext.getClient();
     await prisma.product.deleteMany({});
     await prisma.category.deleteMany({});
   });
 
-  afterAll(async () => {
-    await prisma.$disconnect();
-  });
-
-  it('create() persists a Category with a real DB-generated UUID id', async () => {
+  it('create() persists a Category with a real DB-generated UUID id, scoped to the tenant schema alone', async () => {
     const created = await repository.create({ name: 'Cafeteras', slug: 'cafeteras', order: 1 });
 
     expect(created.id).toEqual(expect.any(String));
     expect(created.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(created.slug).toBe('cafeteras');
     expect(created.active).toBe(true);
+    // The trap this batch's instructions call out by name: a spec that never
+    // provisions a tenant schema, or that reaches a master/default client,
+    // can still pass for the wrong reason. `public` still holds a same-named
+    // legacy `category` table until task 14.2's reset.
+    await assertAbsentFromPublicSchema('category', 'id', created.id);
   });
 
   it('rejects a duplicate slug on create() — unique constraint surfaces as an error, never a silent overwrite', async () => {
@@ -83,7 +85,7 @@ describe('PrismaCategoryRepository', () => {
 
   it('deactivating a category keeps referencing products intact — never orphaned/cascaded', async () => {
     const category = await repository.create({ name: 'Freidoras', slug: 'freidoras', order: 6 });
-    const productRepository = new PrismaProductRepository(prisma);
+    const productRepository = new PrismaProductRepository(tenantContext);
     const product = await productRepository.create({
       name: 'Freidora de aire',
       description: '5 litros',

@@ -4,11 +4,11 @@ import type {
   IWarehouseOperatorRepository,
   WarehouseOperator as DomainWarehouseOperator,
 } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 
 /** Shape shared by every row Prisma returns for the `WarehouseOperator` model (table `warehouse_operator`). */
 interface WarehouseOperatorRow {
-  readonly userId: string;
+  readonly companyUserId: string;
   readonly warehouseId: string;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -16,7 +16,7 @@ interface WarehouseOperatorRow {
 
 function toDomain(row: WarehouseOperatorRow): DomainWarehouseOperator {
   return {
-    userId: row.userId,
+    companyUserId: row.companyUserId,
     warehouseId: row.warehouseId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -24,19 +24,25 @@ function toDomain(row: WarehouseOperatorRow): DomainWarehouseOperator {
 }
 
 /**
- * Prisma adapter for `IWarehouseOperatorRepository`. `userId` is the PK/FK
- * (1:1 with `User`); `findByWarehouseId` supports listing every operator
- * scoped to a given warehouse — `warehouseId` is deliberately NOT unique, a
- * single `Warehouse` MAY have many operators.
+ * Prisma adapter for `IWarehouseOperatorRepository`. `companyUserId` is the
+ * PK/FK (1:1 with the tenant `CompanyUser`, design.md D1); `findByWarehouseId`
+ * supports listing every operator scoped to a given warehouse —
+ * `warehouseId` is deliberately NOT unique, a single `Warehouse` MAY have
+ * many operators. `findByUserId(userId)` queries the `companyUserId` column
+ * — the port's doc comment explains why the parameter name stayed `userId`.
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
  */
 @Injectable()
 export class PrismaWarehouseOperatorRepository implements IWarehouseOperatorRepository {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async create(input: CreateWarehouseOperatorInput): Promise<DomainWarehouseOperator> {
-    const row = await this.prisma.warehouseOperator.create({
+    const row = await this.tenantContext.getClient().warehouseOperator.create({
       data: {
-        userId: input.userId,
+        companyUserId: input.companyUserId,
         warehouseId: input.warehouseId,
       },
     });
@@ -44,12 +50,14 @@ export class PrismaWarehouseOperatorRepository implements IWarehouseOperatorRepo
   }
 
   async findByUserId(userId: string): Promise<DomainWarehouseOperator | null> {
-    const row = await this.prisma.warehouseOperator.findUnique({ where: { userId } });
+    const row = await this.tenantContext
+      .getClient()
+      .warehouseOperator.findUnique({ where: { companyUserId: userId } });
     return row ? toDomain(row) : null;
   }
 
   async findByWarehouseId(warehouseId: string): Promise<DomainWarehouseOperator[]> {
-    const rows = await this.prisma.warehouseOperator.findMany({ where: { warehouseId } });
+    const rows = await this.tenantContext.getClient().warehouseOperator.findMany({ where: { warehouseId } });
     return rows.map(toDomain);
   }
 }

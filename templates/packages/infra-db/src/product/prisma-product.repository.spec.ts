@@ -3,26 +3,27 @@ import {
   moneyFromDecimalString,
   moneyToDecimalString,
 } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { fakeTenantContext, useTenantSchema, assertAbsentFromPublicSchema } from '../tenant-schema.spec-helper.js';
 import { PrismaCategoryRepository } from './prisma-category.repository.js';
 import { PrismaProductRepository } from './prisma-product.repository.js';
-import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
 /**
- * Integration tests against the real `store_mgmt` Postgres database (no
- * mocks) — same discipline as `prisma-currency.repository.spec.ts` and
- * `prisma-category.repository.spec.ts`.
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — same discipline as
+ * `prisma-currency.repository.spec.ts` and `prisma-category.repository.spec.ts`.
  */
 describe('PrismaProductRepository', () => {
-  let prisma: TenantDefaultPrismaService;
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
   let repository: PrismaProductRepository;
   let categoryRepository: PrismaCategoryRepository;
   let categoryId: string;
 
   beforeAll(() => {
-    prisma = new TenantDefaultPrismaService();
-    repository = new PrismaProductRepository(prisma);
-    categoryRepository = new PrismaCategoryRepository(prisma);
+    tenantContext = fakeTenantContext(getTenantSchema);
+    repository = new PrismaProductRepository(tenantContext);
+    categoryRepository = new PrismaCategoryRepository(tenantContext);
   });
 
   beforeEach(async () => {
@@ -35,14 +36,9 @@ describe('PrismaProductRepository', () => {
   });
 
   afterEach(async () => {
-    // First: commission rows RESTRICT the product delete below.
-    await wipeCommissionTables(prisma);
+    const prisma = tenantContext.getClient();
     await prisma.product.deleteMany({});
     await prisma.category.deleteMany({});
-  });
-
-  afterAll(async () => {
-    await prisma.$disconnect();
   });
 
   function validInput(overrides: Record<string, unknown> = {}) {
@@ -58,7 +54,7 @@ describe('PrismaProductRepository', () => {
     };
   }
 
-  it('create() persists a Product linked to a valid categoryId, with Decimal<->Money round-trip fidelity', async () => {
+  it('create() persists a Product linked to a valid categoryId, with Decimal<->Money round-trip fidelity, scoped to the tenant schema alone', async () => {
     const created = await repository.create(
       validInput({
         percentDiscountPrice: 1250n, // 12.50%
@@ -73,6 +69,11 @@ describe('PrismaProductRepository', () => {
     expect(moneyToDecimalString(created.cost)).toBe('89.99');
     expect(created.percentDiscountPrice).toBe(1250n);
     expect(created.active).toBe(true);
+    // The trap this batch's instructions call out by name: a spec that never
+    // provisions a tenant schema, or that reaches a master/default client,
+    // can still pass for the wrong reason. `public` still holds a same-named
+    // legacy `product` table until task 14.2's reset.
+    await assertAbsentFromPublicSchema('product', 'id', created.id);
   });
 
   it('create() honors caller-chosen currencies for price/cost, which MAY DIFFER', async () => {

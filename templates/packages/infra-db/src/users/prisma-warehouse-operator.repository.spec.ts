@@ -1,60 +1,73 @@
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
-import { PrismaUserRepository } from './prisma-user.repository.js';
+import { randomUUID } from 'node:crypto';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { fakeTenantContext, useTenantSchema, assertAbsentFromPublicSchema } from '../tenant-schema.spec-helper.js';
+import { PrismaWarehouseRepository } from '../inventory/prisma-warehouse.repository.js';
 import { PrismaWarehouseOperatorRepository } from './prisma-warehouse-operator.repository.js';
-import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
-
-const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
 /**
- * Integration tests against the real `store_mgmt` Postgres database (no
- * mocks) — same discipline as `prisma-user.repository.spec.ts`.
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — same discipline as
+ * `prisma-currency.repository.spec.ts`. `WarehouseOperator` now FKs the
+ * tenant `CompanyUser` via `companyUserId` (design.md D1, spec
+ * salesops-inventory "WarehouseOperator FKs Tenant CompanyUser, Not Master
+ * User") — no more cross-schema `User` FK to satisfy, so
+ * `createTestCompanyUser` mints a tenant `CompanyUser` row directly, same
+ * pattern as `prisma-customer.repository.spec.ts`.
  */
 describe('PrismaWarehouseOperatorRepository', () => {
-  let prisma: TenantDefaultPrismaService;
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
   let repository: PrismaWarehouseOperatorRepository;
-  let users: PrismaUserRepository;
+  let warehouseRepository: PrismaWarehouseRepository;
   let warehouseId: string;
 
   beforeAll(() => {
-    prisma = new TenantDefaultPrismaService();
-    repository = new PrismaWarehouseOperatorRepository(prisma);
-    users = new PrismaUserRepository(prisma);
+    tenantContext = fakeTenantContext(getTenantSchema);
+    repository = new PrismaWarehouseOperatorRepository(tenantContext);
+    warehouseRepository = new PrismaWarehouseRepository(tenantContext);
   });
 
   beforeEach(async () => {
-    const warehouse = await prisma.warehouse.create({ data: { name: 'Depósito Operadores Spec' } });
+    const warehouse = await warehouseRepository.create({ name: 'Depósito Operadores Spec' });
     warehouseId = warehouse.id;
   });
 
   afterEach(async () => {
+    const prisma = tenantContext.getClient();
     await prisma.warehouseOperator.deleteMany({});
-    // `company_user` has NO FK to `app_user` (soft FK by design) — deleting
-    // users alone would leave orphan assignments behind and trip the §7
-    // backfill gate.
-    await wipeCompanyUserDependents(prisma);
     await prisma.companyUser.deleteMany({});
-    await prisma.user.deleteMany({});
     await prisma.warehouse.deleteMany({});
   });
 
-  afterAll(async () => {
-    await prisma.$disconnect();
-  });
+  async function createTestCompanyUser(): Promise<string> {
+    const companyUser = await tenantContext.getClient().companyUser.create({
+      data: { id: randomUUID(), role: 0 },
+    });
+    return companyUser.id;
+  }
 
-  it('create() persists a WarehouseOperator row keyed by userId', async () => {
-    const user = await users.create({ login: 'op1', passwordHash: VALID_HASH, fullName: 'Operador Uno' });
+  it('create() persists a WarehouseOperator row keyed by companyUserId, scoped to the tenant schema alone', async () => {
+    const companyUserId = await createTestCompanyUser();
 
-    const created = await repository.create({ userId: user.id, warehouseId });
+    const created = await repository.create({ companyUserId, warehouseId });
 
-    expect(created.userId).toBe(user.id);
+    expect(created.companyUserId).toBe(companyUserId);
     expect(created.warehouseId).toBe(warehouseId);
+    // The trap this batch's instructions call out by name: a spec that never
+    // provisions a tenant schema, or that reaches a master/default client,
+    // can still pass for the wrong reason. `public` still holds a same-named
+    // legacy `warehouse_operator` table until task 14.2's reset — its PK is
+    // still the PRE-reshape `user_id` column (D1 hasn't touched `public`),
+    // so the check queries that column name, not the tenant schema's
+    // `company_user_id`.
+    await assertAbsentFromPublicSchema('warehouse_operator', 'user_id', created.companyUserId);
   });
 
   it('findByUserId() round-trips a persisted WarehouseOperator', async () => {
-    const user = await users.create({ login: 'op2', passwordHash: VALID_HASH, fullName: 'Operador Dos' });
-    await repository.create({ userId: user.id, warehouseId });
+    const companyUserId = await createTestCompanyUser();
+    await repository.create({ companyUserId, warehouseId });
 
-    const found = await repository.findByUserId(user.id);
+    const found = await repository.findByUserId(companyUserId);
 
     expect(found).not.toBeNull();
     expect(found?.warehouseId).toBe(warehouseId);
@@ -66,13 +79,13 @@ describe('PrismaWarehouseOperatorRepository', () => {
   });
 
   it('findByWarehouseId() returns every operator scoped to a warehouse — NOT unique', async () => {
-    const userA = await users.create({ login: 'op3', passwordHash: VALID_HASH, fullName: 'Operador Tres' });
-    const userB = await users.create({ login: 'op4', passwordHash: VALID_HASH, fullName: 'Operador Cuatro' });
-    await repository.create({ userId: userA.id, warehouseId });
-    await repository.create({ userId: userB.id, warehouseId });
+    const companyUserIdA = await createTestCompanyUser();
+    const companyUserIdB = await createTestCompanyUser();
+    await repository.create({ companyUserId: companyUserIdA, warehouseId });
+    await repository.create({ companyUserId: companyUserIdB, warehouseId });
 
     const operators = await repository.findByWarehouseId(warehouseId);
 
-    expect(operators.map((o) => o.userId).sort()).toEqual([userA.id, userB.id].sort());
+    expect(operators.map((o) => o.companyUserId).sort()).toEqual([companyUserIdA, companyUserIdB].sort());
   });
 });

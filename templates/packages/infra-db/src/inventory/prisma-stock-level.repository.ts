@@ -5,7 +5,7 @@ import type {
   StockLevel as DomainStockLevel,
   StockLevelListFilter,
 } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 import { applyReservationTx } from './apply-reservation.js';
 
 /** Shape shared by every row Prisma returns for the `StockLevel` model. */
@@ -42,13 +42,17 @@ function toDomain(row: StockLevelRow): DomainStockLevel {
  * `(productId, warehouseId)` pair resolves to `null` on reads — the caller
  * treats that as zero stock, never an error (StockLevel rows are lazily
  * created on first movement or first reservation).
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
  */
 @Injectable()
 export class PrismaStockLevelRepository implements IStockLevelRepository {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async findById(id: string): Promise<DomainStockLevel | null> {
-    const row = await this.prisma.stockLevel.findUnique({ where: { id } });
+    const row = await this.tenantContext.getClient().stockLevel.findUnique({ where: { id } });
     return row ? toDomain(row) : null;
   }
 
@@ -56,14 +60,14 @@ export class PrismaStockLevelRepository implements IStockLevelRepository {
     productId: string,
     warehouseId: string,
   ): Promise<DomainStockLevel | null> {
-    const row = await this.prisma.stockLevel.findUnique({
+    const row = await this.tenantContext.getClient().stockLevel.findUnique({
       where: { productId_warehouseId: { productId, warehouseId } },
     });
     return row ? toDomain(row) : null;
   }
 
   async list(filter?: StockLevelListFilter): Promise<DomainStockLevel[]> {
-    const rows = await this.prisma.stockLevel.findMany({
+    const rows = await this.tenantContext.getClient().stockLevel.findMany({
       where: {
         ...(filter?.productId ? { productId: filter.productId } : {}),
         ...(filter?.warehouseId ? { warehouseId: filter.warehouseId } : {}),
@@ -73,10 +77,10 @@ export class PrismaStockLevelRepository implements IStockLevelRepository {
   }
 
   async reserve(input: ReserveStockInput): Promise<DomainStockLevel> {
-    return this.prisma.$transaction((tx) => applyReservationTx(tx, input, 'reserve'));
+    return this.tenantContext.getClient().$transaction((tx) => applyReservationTx(tx, input, 'reserve'));
   }
 
   async release(input: ReserveStockInput): Promise<DomainStockLevel> {
-    return this.prisma.$transaction((tx) => applyReservationTx(tx, input, 'release'));
+    return this.tenantContext.getClient().$transaction((tx) => applyReservationTx(tx, input, 'release'));
   }
 }

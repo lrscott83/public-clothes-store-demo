@@ -1,36 +1,41 @@
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { fakeTenantContext, useTenantSchema, assertAbsentFromPublicSchema } from '../tenant-schema.spec-helper.js';
 import { PrismaWarehouseRepository } from './prisma-warehouse.repository.js';
 
 /**
- * Integration tests against the real `store_mgmt` Postgres database (no
- * mocks) — same discipline as `prisma-category.repository.spec.ts`.
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — same discipline as
+ * `prisma-currency.repository.spec.ts`.
  */
 describe('PrismaWarehouseRepository', () => {
-  let prisma: TenantDefaultPrismaService;
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
   let repository: PrismaWarehouseRepository;
 
   beforeAll(() => {
-    prisma = new TenantDefaultPrismaService();
-    repository = new PrismaWarehouseRepository(prisma);
+    tenantContext = fakeTenantContext(getTenantSchema);
+    repository = new PrismaWarehouseRepository(tenantContext);
   });
 
   afterEach(async () => {
+    const prisma = tenantContext.getClient();
     await prisma.stockMovement.deleteMany({});
     await prisma.stockLevel.deleteMany({});
     await prisma.warehouse.deleteMany({});
   });
 
-  afterAll(async () => {
-    await prisma.$disconnect();
-  });
-
-  it('create() persists a Warehouse with a real DB-generated UUID id', async () => {
+  it('create() persists a Warehouse with a real DB-generated UUID id, scoped to the tenant schema alone', async () => {
     const created = await repository.create({ name: 'Pinar del Río' });
 
     expect(created.id).toEqual(expect.any(String));
     expect(created.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(created.name).toBe('Pinar del Río');
     expect(created.active).toBe(true);
+    // The trap this batch's instructions call out by name: a spec that never
+    // provisions a tenant schema, or that reaches a master/default client,
+    // can still pass for the wrong reason. `public` still holds a same-named
+    // legacy `warehouse` table until task 14.2's reset.
+    await assertAbsentFromPublicSchema('warehouse', 'id', created.id);
   });
 
   it('softDelete() flips active=false, row still findById-able', async () => {

@@ -6,7 +6,7 @@ import type {
   CreateCategoryInput,
   ICategoryRepository,
 } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 
 /** Shape shared by every row Prisma returns for the `Category` model. */
 interface CategoryRow {
@@ -40,13 +40,17 @@ function toDomain(row: CategoryRow): DomainCategory {
  * through to Prisma — the DB always generates it (`@default(uuid())`), even
  * though the domain's `createCategory` factory can mint its own id for
  * standalone/in-memory use. `softDelete` flips `active`, never a hard DELETE.
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
  */
 @Injectable()
 export class PrismaCategoryRepository implements ICategoryRepository {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async create(input: CreateCategoryInput): Promise<DomainCategory> {
-    const row = await this.prisma.category.create({
+    const row = await this.tenantContext.getClient().category.create({
       data: {
         name: input.name,
         slug: input.slug,
@@ -60,7 +64,7 @@ export class PrismaCategoryRepository implements ICategoryRepository {
   }
 
   async update(id: string, patch: CategoryUpdateInput): Promise<DomainCategory> {
-    const row = await this.prisma.category.update({
+    const row = await this.tenantContext.getClient().category.update({
       where: { id },
       data: {
         ...(patch.name !== undefined ? { name: patch.name } : {}),
@@ -75,21 +79,21 @@ export class PrismaCategoryRepository implements ICategoryRepository {
   }
 
   async softDelete(id: string): Promise<void> {
-    await this.prisma.category.update({ where: { id }, data: { active: false } });
+    await this.tenantContext.getClient().category.update({ where: { id }, data: { active: false } });
   }
 
   async findById(id: string): Promise<DomainCategory | null> {
-    const row = await this.prisma.category.findUnique({ where: { id } });
+    const row = await this.tenantContext.getClient().category.findUnique({ where: { id } });
     return row ? toDomain(row) : null;
   }
 
   async findBySlug(slug: string): Promise<DomainCategory | null> {
-    const row = await this.prisma.category.findUnique({ where: { slug } });
+    const row = await this.tenantContext.getClient().category.findUnique({ where: { slug } });
     return row ? toDomain(row) : null;
   }
 
   async list(filter?: CategoryListFilter): Promise<DomainCategory[]> {
-    const rows = await this.prisma.category.findMany({
+    const rows = await this.tenantContext.getClient().category.findMany({
       where: filter?.includeInactive ? {} : { active: true },
       orderBy: { order: 'asc' },
     });

@@ -96,7 +96,7 @@ Three sub-commits by domain group — each is [RED: update spec to use 5.1's hel
 
 - [x] 6.1 Currency + Customer repos.
 - [x] 6.2 Sales (Order) + Commission (×3) repos.
-- [ ] 6.3 Inventory (StockLevel, StockMovement, Warehouse) + Product/Category + WarehouseOperator repos.
+- [x] 6.3 Inventory (StockLevel, StockMovement, Warehouse) + Product/Category + WarehouseOperator repos.
 - [ ] 6.4 Add the lint boundary check as a local `pnpm lint` run per group (full eslint rule ships in Phase 14) to confirm no tenant repo imports the master `PrismaService`.
 - [ ] 6.5 **Retire the pre-reshape `CompanyUser` from every consumer this phase touches.** Phase 1 left two shapes of the same concept alive: the reshaped one in `packages/domain/src/company/models.ts`, exported from the package root aliased as `TenantCompanyUser`/`createTenantCompanyUser`/`CreateTenantCompanyUserInput` (commit `f376942`), and the pre-reshape one in `company-user.ts` still reachable through `company/index.ts`'s wildcard. Both compile, so importing the wrong one is silent. Every repo re-sourced in 6.1–6.3 must bind the reshaped shape. End this phase by writing down, in the commit body, exactly which consumers still hold the old shape — expected: `packages/api-common` guards (Phase 7) and the provisioning saga (Phase 10).
 

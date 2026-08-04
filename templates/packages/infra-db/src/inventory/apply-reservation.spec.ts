@@ -1,36 +1,40 @@
 import { InsufficientStockError, InvalidStockLevelError } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { fakeTenantContext, useTenantSchema } from '../tenant-schema.spec-helper.js';
 import { applyReservationTx } from './apply-reservation.js';
 import { PrismaWarehouseRepository } from './prisma-warehouse.repository.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
 import { PrismaProductRepository } from '../product/prisma-product.repository.js';
-import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
+/**
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — same discipline as
+ * `prisma-currency.repository.spec.ts`. `applyReservationTx`'s `tx` param is
+ * typed against `generated/tenant`'s `Prisma.TransactionClient` (task 6.2),
+ * so this spec must drive it through a real tenant client, not the master
+ * `PrismaService` it used before.
+ */
 describe('applyReservationTx', () => {
-  let prisma: PrismaService;
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
   let warehouseRepository: PrismaWarehouseRepository;
   let categoryRepository: PrismaCategoryRepository;
   let productRepository: PrismaProductRepository;
 
   beforeAll(() => {
-    prisma = new PrismaService();
-    warehouseRepository = new PrismaWarehouseRepository(prisma);
-    categoryRepository = new PrismaCategoryRepository(prisma);
-    productRepository = new PrismaProductRepository(prisma);
+    tenantContext = fakeTenantContext(getTenantSchema);
+    warehouseRepository = new PrismaWarehouseRepository(tenantContext);
+    categoryRepository = new PrismaCategoryRepository(tenantContext);
+    productRepository = new PrismaProductRepository(tenantContext);
   });
 
   afterEach(async () => {
-    // First: commission rows RESTRICT the product delete below.
-    await wipeCommissionTables(prisma);
+    const prisma = tenantContext.getClient();
     await prisma.stockMovement.deleteMany({});
     await prisma.stockLevel.deleteMany({});
     await prisma.product.deleteMany({});
     await prisma.category.deleteMany({});
     await prisma.warehouse.deleteMany({});
-  });
-
-  afterAll(async () => {
-    await prisma.$disconnect();
   });
 
   async function seedProductAndWarehouse() {
@@ -50,6 +54,7 @@ describe('applyReservationTx', () => {
 
   it('reserve raises reserved by quantity when available >= quantity', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
+    const prisma = tenantContext.getClient();
     await prisma.stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 10, reserved: 0 },
     });
@@ -73,6 +78,7 @@ describe('applyReservationTx', () => {
 
   it('reserve beyond available (onHand - (reserved+qty) < 0) throws InsufficientStockError and mutates zero rows', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
+    const prisma = tenantContext.getClient();
     await prisma.stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 5, reserved: 2 },
     });
@@ -96,6 +102,7 @@ describe('applyReservationTx', () => {
 
   it('release lowers reserved by quantity', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
+    const prisma = tenantContext.getClient();
     await prisma.stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 10, reserved: 6 },
     });
@@ -114,6 +121,7 @@ describe('applyReservationTx', () => {
 
   it('release beyond reserved (reserved-qty < 0) throws InvalidStockLevelError and mutates zero rows', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
+    const prisma = tenantContext.getClient();
     await prisma.stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 10, reserved: 2 },
     });
@@ -136,6 +144,7 @@ describe('applyReservationTx', () => {
 
   it('reserving against a not-yet-existing StockLevel (lazily upserted at onHand=0) fails and rolls back the lazy-create too', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
+    const prisma = tenantContext.getClient();
 
     await expect(
       prisma.$transaction((tx) =>

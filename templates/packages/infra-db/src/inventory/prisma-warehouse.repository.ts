@@ -6,7 +6,7 @@ import type {
   WarehouseListFilter,
   WarehouseUpdateInput,
 } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 
 /** Shape shared by every row Prisma returns for the `Warehouse` model. */
 interface WarehouseRow {
@@ -32,13 +32,17 @@ function toDomain(row: WarehouseRow): DomainWarehouse {
  * through to Prisma — the DB always generates it (`@default(uuid())`).
  * `softDelete` flips `active`, never a hard DELETE (StockLevel/StockMovement
  * FK references would orphan history).
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
  */
 @Injectable()
 export class PrismaWarehouseRepository implements IWarehouseRepository {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async create(input: CreateWarehouseInput): Promise<DomainWarehouse> {
-    const row = await this.prisma.warehouse.create({
+    const row = await this.tenantContext.getClient().warehouse.create({
       data: {
         name: input.name,
         active: input.active ?? true,
@@ -48,7 +52,7 @@ export class PrismaWarehouseRepository implements IWarehouseRepository {
   }
 
   async update(id: string, patch: WarehouseUpdateInput): Promise<DomainWarehouse> {
-    const row = await this.prisma.warehouse.update({
+    const row = await this.tenantContext.getClient().warehouse.update({
       where: { id },
       data: {
         ...(patch.name !== undefined ? { name: patch.name } : {}),
@@ -59,16 +63,16 @@ export class PrismaWarehouseRepository implements IWarehouseRepository {
   }
 
   async softDelete(id: string): Promise<void> {
-    await this.prisma.warehouse.update({ where: { id }, data: { active: false } });
+    await this.tenantContext.getClient().warehouse.update({ where: { id }, data: { active: false } });
   }
 
   async findById(id: string): Promise<DomainWarehouse | null> {
-    const row = await this.prisma.warehouse.findUnique({ where: { id } });
+    const row = await this.tenantContext.getClient().warehouse.findUnique({ where: { id } });
     return row ? toDomain(row) : null;
   }
 
   async list(filter?: WarehouseListFilter): Promise<DomainWarehouse[]> {
-    const rows = await this.prisma.warehouse.findMany({
+    const rows = await this.tenantContext.getClient().warehouse.findMany({
       where: filter?.includeInactive ? {} : { active: true },
       orderBy: { name: 'asc' },
     });

@@ -1,38 +1,39 @@
 import { InsufficientStockError, InvalidStockLevelError } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { fakeTenantContext, useTenantSchema } from '../tenant-schema.spec-helper.js';
 import { PrismaWarehouseRepository } from './prisma-warehouse.repository.js';
 import { PrismaStockLevelRepository } from './prisma-stock-level.repository.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
 import { PrismaProductRepository } from '../product/prisma-product.repository.js';
-import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
+/**
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — same discipline as
+ * `prisma-currency.repository.spec.ts`.
+ */
 describe('PrismaStockLevelRepository', () => {
-  let prisma: TenantDefaultPrismaService;
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
   let repository: PrismaStockLevelRepository;
   let warehouseRepository: PrismaWarehouseRepository;
   let categoryRepository: PrismaCategoryRepository;
   let productRepository: PrismaProductRepository;
 
   beforeAll(() => {
-    prisma = new TenantDefaultPrismaService();
-    repository = new PrismaStockLevelRepository(prisma);
-    warehouseRepository = new PrismaWarehouseRepository(prisma);
-    categoryRepository = new PrismaCategoryRepository(prisma);
-    productRepository = new PrismaProductRepository(prisma);
+    tenantContext = fakeTenantContext(getTenantSchema);
+    repository = new PrismaStockLevelRepository(tenantContext);
+    warehouseRepository = new PrismaWarehouseRepository(tenantContext);
+    categoryRepository = new PrismaCategoryRepository(tenantContext);
+    productRepository = new PrismaProductRepository(tenantContext);
   });
 
   afterEach(async () => {
-    // First: commission rows RESTRICT the product delete below.
-    await wipeCommissionTables(prisma);
+    const prisma = tenantContext.getClient();
     await prisma.stockMovement.deleteMany({});
     await prisma.stockLevel.deleteMany({});
     await prisma.product.deleteMany({});
     await prisma.category.deleteMany({});
     await prisma.warehouse.deleteMany({});
-  });
-
-  afterAll(async () => {
-    await prisma.$disconnect();
   });
 
   async function seedProductAndWarehouse() {
@@ -60,7 +61,7 @@ describe('PrismaStockLevelRepository', () => {
 
   it('findByProductAndWarehouse returns the persisted row when one exists', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
-    await prisma.stockLevel.create({
+    await tenantContext.getClient().stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 5, reserved: 1 },
     });
 
@@ -73,12 +74,12 @@ describe('PrismaStockLevelRepository', () => {
 
   it('enforces UNIQUE(productId, warehouseId) — duplicate insert is rejected', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
-    await prisma.stockLevel.create({
+    await tenantContext.getClient().stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 0, reserved: 0 },
     });
 
     await expect(
-      prisma.stockLevel.create({
+      tenantContext.getClient().stockLevel.create({
         data: { productId: product.id, warehouseId: warehouse.id, onHand: 0, reserved: 0 },
       }),
     ).rejects.toThrow();
@@ -86,7 +87,7 @@ describe('PrismaStockLevelRepository', () => {
 
   it('list() maps every row to the domain StockLevel shape', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
-    await prisma.stockLevel.create({
+    await tenantContext.getClient().stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 3, reserved: 0 },
     });
 
@@ -98,7 +99,7 @@ describe('PrismaStockLevelRepository', () => {
 
   it('reserve() wraps applyReservationTx in its own $transaction and returns the mapped StockLevel', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
-    await prisma.stockLevel.create({
+    await tenantContext.getClient().stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 10, reserved: 0 },
     });
 
@@ -117,7 +118,7 @@ describe('PrismaStockLevelRepository', () => {
 
   it('reserve() beyond available throws InsufficientStockError and mutates zero rows', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
-    await prisma.stockLevel.create({
+    await tenantContext.getClient().stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 2, reserved: 0 },
     });
 
@@ -131,7 +132,7 @@ describe('PrismaStockLevelRepository', () => {
 
   it('release() wraps applyReservationTx in its own $transaction and returns the mapped StockLevel', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
-    await prisma.stockLevel.create({
+    await tenantContext.getClient().stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 10, reserved: 5 },
     });
 
@@ -147,7 +148,7 @@ describe('PrismaStockLevelRepository', () => {
 
   it('release() beyond reserved throws InvalidStockLevelError and mutates zero rows', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
-    await prisma.stockLevel.create({
+    await tenantContext.getClient().stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 10, reserved: 1 },
     });
 
@@ -167,12 +168,14 @@ describe('PrismaStockLevelRepository', () => {
   // the DB. An IMMEDIATE (non-deferrable) CHECK, so it fires per statement.
   it('rejects an UPDATE that drops on_hand below reserved (reserved <= on_hand CHECK)', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
-    const level = await prisma.stockLevel.create({
+    const level = await tenantContext.getClient().stockLevel.create({
       data: { productId: product.id, warehouseId: warehouse.id, onHand: 5, reserved: 5 },
     });
 
     await expect(
-      prisma.$executeRaw`UPDATE "stock_level" SET "on_hand" = 3 WHERE "id" = ${level.id}::uuid`,
+      tenantContext
+        .getClient()
+        .$executeRaw`UPDATE "stock_level" SET "on_hand" = 3 WHERE "id" = ${level.id}::uuid`,
     ).rejects.toThrow();
 
     const found = await repository.findByProductAndWarehouse(product.id, warehouse.id);

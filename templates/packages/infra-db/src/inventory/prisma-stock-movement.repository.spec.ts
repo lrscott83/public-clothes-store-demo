@@ -1,14 +1,20 @@
 import { NegativeStockError, type StockMovementType } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { fakeTenantContext, useTenantSchema, assertAbsentFromPublicSchema } from '../tenant-schema.spec-helper.js';
 import { PrismaWarehouseRepository } from './prisma-warehouse.repository.js';
 import { PrismaStockLevelRepository } from './prisma-stock-level.repository.js';
 import { PrismaStockMovementRepository } from './prisma-stock-movement.repository.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
 import { PrismaProductRepository } from '../product/prisma-product.repository.js';
-import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
+/**
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — same discipline as
+ * `prisma-currency.repository.spec.ts`.
+ */
 describe('PrismaStockMovementRepository', () => {
-  let prisma: TenantDefaultPrismaService;
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
   let repository: PrismaStockMovementRepository;
   let stockLevelRepository: PrismaStockLevelRepository;
   let warehouseRepository: PrismaWarehouseRepository;
@@ -16,26 +22,21 @@ describe('PrismaStockMovementRepository', () => {
   let productRepository: PrismaProductRepository;
 
   beforeAll(() => {
-    prisma = new TenantDefaultPrismaService();
-    repository = new PrismaStockMovementRepository(prisma);
-    stockLevelRepository = new PrismaStockLevelRepository(prisma);
-    warehouseRepository = new PrismaWarehouseRepository(prisma);
-    categoryRepository = new PrismaCategoryRepository(prisma);
-    productRepository = new PrismaProductRepository(prisma);
+    tenantContext = fakeTenantContext(getTenantSchema);
+    repository = new PrismaStockMovementRepository(tenantContext);
+    stockLevelRepository = new PrismaStockLevelRepository(tenantContext);
+    warehouseRepository = new PrismaWarehouseRepository(tenantContext);
+    categoryRepository = new PrismaCategoryRepository(tenantContext);
+    productRepository = new PrismaProductRepository(tenantContext);
   });
 
   afterEach(async () => {
-    // First: commission rows RESTRICT the product delete below.
-    await wipeCommissionTables(prisma);
+    const prisma = tenantContext.getClient();
     await prisma.stockMovement.deleteMany({});
     await prisma.stockLevel.deleteMany({});
     await prisma.product.deleteMany({});
     await prisma.category.deleteMany({});
     await prisma.warehouse.deleteMany({});
-  });
-
-  afterAll(async () => {
-    await prisma.$disconnect();
   });
 
   async function seedProductAndWarehouse() {
@@ -53,7 +54,7 @@ describe('PrismaStockMovementRepository', () => {
     return { product, warehouse };
   }
 
-  it('lazily creates a StockLevel on the first movement and adjusts onHand', async () => {
+  it('lazily creates a StockLevel on the first movement and adjusts onHand, scoped to the tenant schema alone', async () => {
     const { product, warehouse } = await seedProductAndWarehouse();
 
     const result = await repository.record({
@@ -69,6 +70,11 @@ describe('PrismaStockMovementRepository', () => {
 
     const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
     expect(level?.onHand).toBe(10);
+    // The trap this batch's instructions call out by name: a spec that never
+    // provisions a tenant schema, or that reaches a master/default client,
+    // can still pass for the wrong reason. `public` still holds a same-named
+    // legacy `stock_movement` table until task 14.2's reset.
+    await assertAbsentFromPublicSchema('stock_movement', 'id', result.movement.id);
   });
 
   it('appends a StockMovement row for every record() call', async () => {

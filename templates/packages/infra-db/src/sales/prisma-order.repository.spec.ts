@@ -7,7 +7,6 @@ import {
   money,
 } from '@store-mgmt/domain';
 import { TenantContextService } from '../tenant/tenant-context.service.js';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { fakeTenantContext, useTenantSchema, assertAbsentFromPublicSchema } from '../tenant-schema.spec-helper.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
 import { PrismaProductRepository } from '../product/prisma-product.repository.js';
@@ -42,35 +41,14 @@ describe('PrismaOrderRepository', () => {
     repository = new PrismaOrderRepository(tenantContext);
     customerRepository = new PrismaCustomerRepository(tenantContext);
     currencyRepository = new PrismaCurrencyRepository(tenantContext);
-
-    // TRANSITIONAL (task 6.2 -> 6.3 boundary, see apply-reservation.ts's doc
-    // comment for the same seam): Category/Product/Warehouse/StockLevel/
-    // StockMovement repos are re-sourced to TenantContextService in the very
-    // next commit, 6.3. Until then their constructors still expect a
-    // TenantDefaultPrismaService instance — this hands them the REAL tenant
-    // client under that old type instead (Category/Product/Warehouse/
-    // StockLevel/StockMovement are untouched by D1, identical shape on both
-    // generated clients), so every fixture this suite builds lives in ONE
-    // real tenant schema rather than being split between the tenant schema
-    // (Order/Customer/CompanyUser, already migrated) and `public` (which
-    // would fail every FK `PrismaOrderRepository` relies on). 6.3 replaces
-    // this cast with `tenantContext` directly, exactly like the repos above.
-    const tenantClient = tenantContext.getClient();
-    categoryRepository = new PrismaCategoryRepository(
-      tenantClient as unknown as TenantDefaultPrismaService,
-    );
-    productRepository = new PrismaProductRepository(
-      tenantClient as unknown as TenantDefaultPrismaService,
-    );
-    warehouseRepository = new PrismaWarehouseRepository(
-      tenantClient as unknown as TenantDefaultPrismaService,
-    );
-    stockMovementRepository = new PrismaStockMovementRepository(
-      tenantClient as unknown as TenantDefaultPrismaService,
-    );
-    stockLevelRepository = new PrismaStockLevelRepository(
-      tenantClient as unknown as TenantDefaultPrismaService,
-    );
+    // Category/Product/Warehouse/StockLevel/StockMovement repos are
+    // re-sourced to TenantContextService as of task 6.3 — every repo this
+    // suite builds now shares the SAME real tenant client/schema.
+    categoryRepository = new PrismaCategoryRepository(tenantContext);
+    productRepository = new PrismaProductRepository(tenantContext);
+    warehouseRepository = new PrismaWarehouseRepository(tenantContext);
+    stockMovementRepository = new PrismaStockMovementRepository(tenantContext);
+    stockLevelRepository = new PrismaStockLevelRepository(tenantContext);
   });
 
   afterEach(async () => {

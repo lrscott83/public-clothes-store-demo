@@ -68,7 +68,7 @@ function buildOperatorRepoMock(): jest.Mocked<IWarehouseOperatorRepository> {
   return {
     create: jest.fn(),
     findByUserId: jest.fn().mockResolvedValue({
-      userId: 'test-user-1',
+      companyUserId: 'test-user-1',
       warehouseId: OWN_WAREHOUSE_ID,
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),

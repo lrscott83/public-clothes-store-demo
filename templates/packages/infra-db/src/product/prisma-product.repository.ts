@@ -15,7 +15,7 @@ import {
   percentFromDecimalString,
   percentToDecimalString,
 } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 
 /** Shape shared by every row Prisma returns for the `Product` model. */
 interface ProductRow {
@@ -72,13 +72,17 @@ function toDomain(row: ProductRow): DomainProduct {
  * `create()` never passes `id` through to Prisma — the DB always generates
  * it. `softDelete` flips `active`, never a hard DELETE (order-history FK
  * references must never be orphaned).
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
  */
 @Injectable()
 export class PrismaProductRepository implements IProductRepository {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async create(input: CreateProductInput): Promise<DomainProduct> {
-    const row = await this.prisma.product.create({
+    const row = await this.tenantContext.getClient().product.create({
       data: {
         name: input.name,
         description: input.description,
@@ -101,7 +105,7 @@ export class PrismaProductRepository implements IProductRepository {
   }
 
   async update(id: string, patch: ProductUpdateInput): Promise<DomainProduct> {
-    const row = await this.prisma.product.update({
+    const row = await this.tenantContext.getClient().product.update({
       where: { id },
       data: {
         ...(patch.name !== undefined ? { name: patch.name } : {}),
@@ -131,16 +135,16 @@ export class PrismaProductRepository implements IProductRepository {
   }
 
   async softDelete(id: string): Promise<void> {
-    await this.prisma.product.update({ where: { id }, data: { active: false } });
+    await this.tenantContext.getClient().product.update({ where: { id }, data: { active: false } });
   }
 
   async findById(id: string): Promise<DomainProduct | null> {
-    const row = await this.prisma.product.findUnique({ where: { id } });
+    const row = await this.tenantContext.getClient().product.findUnique({ where: { id } });
     return row ? toDomain(row) : null;
   }
 
   async list(filter?: ProductListFilter): Promise<DomainProduct[]> {
-    const rows = await this.prisma.product.findMany({
+    const rows = await this.tenantContext.getClient().product.findMany({
       where: {
         ...(filter?.includeInactive ? {} : { active: true }),
         ...(filter?.categoryId ? { categoryId: filter.categoryId } : {}),

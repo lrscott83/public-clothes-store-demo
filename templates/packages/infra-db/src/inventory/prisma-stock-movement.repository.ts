@@ -7,7 +7,7 @@ import type {
   StockMovementListFilter,
   StockMovementType,
 } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 import { applyStockMovementTx } from './apply-stock-movement.js';
 
 /** Shape shared by every row Prisma returns for the `StockMovement` model. */
@@ -48,17 +48,21 @@ function movementToDomain(row: StockMovementRow): DomainStockMovement {
  * order's own transaction — mirrors `PrismaStockLevelRepository.reserve`/
  * `.release` wrapping `applyReservationTx`). Behavior is unchanged from the
  * pre-extraction inline implementation.
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
  */
 @Injectable()
 export class PrismaStockMovementRepository implements IStockMovementRepository {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async record(input: CreateStockMovementInput): Promise<RecordMovementResult> {
-    return this.prisma.$transaction((tx) => applyStockMovementTx(tx, input));
+    return this.tenantContext.getClient().$transaction((tx) => applyStockMovementTx(tx, input));
   }
 
   async list(filter?: StockMovementListFilter): Promise<DomainStockMovement[]> {
-    const rows = await this.prisma.stockMovement.findMany({
+    const rows = await this.tenantContext.getClient().stockMovement.findMany({
       where: {
         ...(filter?.productId ? { productId: filter.productId } : {}),
         ...(filter?.warehouseId ? { warehouseId: filter.warehouseId } : {}),
