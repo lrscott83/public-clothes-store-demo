@@ -6,7 +6,7 @@ import type {
   PaymentChannel,
 } from '@store-mgmt/domain';
 import { rateFromDecimalString, rateToDecimalString } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 
 /** Shape shared by every row Prisma returns for the `ExchangeRate` model. */
 interface ExchangeRateRow {
@@ -31,13 +31,19 @@ function toDomain(row: ExchangeRateRow): DomainExchangeRate {
  * (`Decimal(18,6)`) column <-> the domain's scaled `bigint` at `RATE_SCALE`.
  * Exposes ONLY append + read — no update/delete method exists, so a rate
  * change is structurally always a new INSERT, never an UPDATE.
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5), not a
+ * directly-injected Prisma client. Every method resolves the client fresh —
+ * never cached on `this` — because the AsyncLocalStorage-scoped tenant
+ * context can differ per call; caching it at construction would freeze the
+ * repository to whichever tenant happened to be active when Nest built it.
  */
 @Injectable()
 export class PrismaCurrencyRepository implements ICurrencyRepository {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async appendRate(input: AppendRateInput): Promise<DomainExchangeRate> {
-    const row = await this.prisma.exchangeRate.create({
+    const row = await this.tenantContext.getClient().exchangeRate.create({
       data: {
         channel: input.channel,
         rate: rateToDecimalString(input.rate),
@@ -48,7 +54,7 @@ export class PrismaCurrencyRepository implements ICurrencyRepository {
   }
 
   async ratesForChannel(channel: PaymentChannel, at?: Date): Promise<DomainExchangeRate[]> {
-    const rows = await this.prisma.exchangeRate.findMany({
+    const rows = await this.tenantContext.getClient().exchangeRate.findMany({
       where: {
         channel,
         ...(at ? { effectiveFrom: { lte: at } } : {}),
@@ -59,7 +65,7 @@ export class PrismaCurrencyRepository implements ICurrencyRepository {
   }
 
   async latestRate(channel: PaymentChannel, at: Date): Promise<DomainExchangeRate | null> {
-    const row = await this.prisma.exchangeRate.findFirst({
+    const row = await this.tenantContext.getClient().exchangeRate.findFirst({
       where: { channel, effectiveFrom: { lte: at } },
       orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }],
     });

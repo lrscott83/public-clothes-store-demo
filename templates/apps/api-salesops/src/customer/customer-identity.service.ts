@@ -100,10 +100,13 @@ export class CustomerIdentityService {
 
     // Mapped field by field, never spread: the body carries `login`/`password`
     // (and whatever else a caller invented), none of which belong in customer
-    // master data. An explicit mapping is also the reason a smuggled `userId`
-    // cannot reach the repository — the link is the identity just minted.
+    // master data. An explicit mapping is also the reason a smuggled
+    // `companyUserId` cannot reach the repository — the link is the identity
+    // just minted. `companyUserId: user.id` because `CompanyUser.id` IS the
+    // master `User.id` (design.md D1) — same value the pre-reshape `userId`
+    // link used, only the field name and FK target changed.
     const customerInput = {
-      userId: user.id,
+      companyUserId: user.id,
       fullName: dto.fullName,
       documentId: dto.documentId,
       cellPhone: dto.cellPhone,
@@ -125,7 +128,9 @@ export class CustomerIdentityService {
   private toResponse(customer: DomainCustomer): CustomerResponseDto {
     return {
       id: customer.id,
-      userId: customer.userId,
+      // `CustomerResponseDto.userId` is the external API contract (unchanged)
+      // — sourced from the domain's `companyUserId` post-D1 reshape.
+      userId: customer.companyUserId,
       fullName: customer.fullName,
       documentId: customer.documentId,
       cellPhone: customer.cellPhone,

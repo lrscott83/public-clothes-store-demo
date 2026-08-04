@@ -20,7 +20,13 @@ export class DuplicateCustomerDocumentError extends Error {
   }
 }
 
-/** Thrown when `Customer.userId` does not reference an existing `User` (FK violation). */
+/**
+ * Thrown when `Customer.companyUserId` does not reference an existing tenant
+ * `CompanyUser` (FK violation). Named `...UserNotFoundError` from before the
+ * multi-tenant-by-schema reshape (design.md D1) moved the link from master
+ * `User` to tenant `CompanyUser` — kept as-is to avoid a wider rename of
+ * consumers outside this batch's scope.
+ */
 export class CustomerUserNotFoundError extends Error {
   constructor(message: string) {
     super(message);
@@ -28,7 +34,7 @@ export class CustomerUserNotFoundError extends Error {
   }
 }
 
-/** Thrown when `Customer.userId` would collide with an existing customer's — the 1:1 link is unique. */
+/** Thrown when `Customer.companyUserId` would collide with an existing customer's — the 1:1 link is unique. */
 export class DuplicateCustomerUserError extends Error {
   constructor(message: string) {
     super(message);

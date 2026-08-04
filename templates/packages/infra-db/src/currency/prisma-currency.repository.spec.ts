@@ -1,30 +1,33 @@
 import { rateFromDecimalString } from '@store-mgmt/domain';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { fakeTenantContext, useTenantSchema, assertAbsentFromPublicSchema } from '../tenant-schema.spec-helper.js';
 import { PrismaCurrencyRepository } from './prisma-currency.repository.js';
 
 /**
- * Integration tests against the real `store_mgmt` Postgres database (no
- * mocks): they exercise the actual Prisma <-> Decimal <-> bigint mapping and
- * the append-only guarantee at the SQL level, per design.md's testing
- * strategy for infra-db (jest + real Postgres).
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — no mocks, and no shared `public`
+ * schema (design.md D2: the tenant search_path holds ONLY the tenant schema,
+ * `747a2b6` dropped the `,public` fallback). They exercise the actual
+ * Prisma <-> Decimal <-> bigint mapping and the append-only guarantee at the
+ * SQL level, through `TenantContextService.getClient()` — the same client
+ * source the repository resolves in production (design.md D2/D5).
  */
 describe('PrismaCurrencyRepository', () => {
-  let prisma: TenantDefaultPrismaService;
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
   let repository: PrismaCurrencyRepository;
 
   beforeAll(() => {
-    prisma = new TenantDefaultPrismaService();
-    repository = new PrismaCurrencyRepository(prisma);
+    tenantContext = fakeTenantContext(getTenantSchema);
+    repository = new PrismaCurrencyRepository(tenantContext);
   });
 
   afterEach(async () => {
     // Full cleanup keeps every test isolated regardless of which of the 5
-    // fixed enum channels it used.
-    await prisma.exchangeRate.deleteMany({});
-  });
-
-  afterAll(async () => {
-    await prisma.$disconnect();
+    // fixed enum channels it used. One tenant schema is shared by the whole
+    // suite (created once in `beforeAll`), so rows accumulate across tests
+    // unless wiped here.
+    await tenantContext.getClient().exchangeRate.deleteMany({});
   });
 
   it('appendRate() is append-only: calling it twice for the same channel inserts 2 rows, never an UPDATE', async () => {
@@ -39,7 +42,7 @@ describe('PrismaCurrencyRepository', () => {
       effectiveFrom: new Date('2026-02-01T00:00:00.000Z'),
     });
 
-    const rows = await prisma.exchangeRate.findMany({ where: { channel: 'ZELLE' } });
+    const rows = await tenantContext.getClient().exchangeRate.findMany({ where: { channel: 'ZELLE' } });
 
     expect(rows).toHaveLength(2);
     // Prisma's `Decimal.toString()` normalizes trailing zeros (e.g. "360"
@@ -69,7 +72,7 @@ describe('PrismaCurrencyRepository', () => {
     expect(resolved?.effectiveFrom.toISOString()).toBe('2026-01-01T00:00:00.000Z');
   });
 
-  it('appendRate() returns the persisted row with its DB-generated UUID id', async () => {
+  it('appendRate() returns the persisted row with its DB-generated UUID id, scoped to the tenant schema alone', async () => {
     const appended = await repository.appendRate({
       channel: 'ZELLE',
       rate: 350455000n,
@@ -78,6 +81,12 @@ describe('PrismaCurrencyRepository', () => {
 
     expect(appended.id).toEqual(expect.any(String));
     expect(appended.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    // The trap this batch's instructions call out by name: a spec that never
+    // provisions a tenant schema, or that reaches a master/default client,
+    // can still pass for the wrong reason. Proves the row landed in the
+    // provisioned tenant schema, not in `public` (which still holds a
+    // same-named legacy table until task 14.2's reset).
+    await assertAbsentFromPublicSchema('exchange_rate', 'id', appended.id);
   });
 
   it('latestRate() and ratesForChannel() carry the persisted row id through, distinct per row', async () => {

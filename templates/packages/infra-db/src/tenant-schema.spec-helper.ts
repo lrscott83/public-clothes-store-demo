@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { Client as PgClient } from 'pg';
 import { schemaNameFor } from './tenant/schema-name.js';
 import { TenantDatabaseService } from './tenant/tenant-database.service.js';
 import { TenantPrismaFactory } from './tenant/tenant-prisma-factory.js';
+import type { TenantContextService } from './tenant/tenant-context.service.js';
 import type { PrismaClient } from '../generated/tenant/client.js';
 
 /**
@@ -91,4 +93,60 @@ export function useTenantSchema(): () => TenantSchemaHandle {
     }
     return handle;
   };
+}
+
+/**
+ * Phase 6's ~12 tenant-side repositories depend on `TenantContextService`
+ * (design.md D2/D5), not a directly-injected Prisma client — production code
+ * MUST resolve its client through the AsyncLocalStorage-scoped
+ * `getClient()`, never hold one at construction time. Repository specs don't
+ * need real ALS/guard-chain scoping (that's Phase 7's `TenantContextGuard` +
+ * `runInTenant` re-scoping) — they need `getClient()` to resolve to
+ * `useTenantSchema()`'s already-provisioned, already-disposed-in-`afterAll`
+ * client, so this fakes ONLY the one method repositories call, structurally
+ * cast to `TenantContextService` (same convention as
+ * `tenant-context.service.spec.ts`'s faked `TenantPrismaFactory`). Building a
+ * SECOND `TenantPrismaFactory`/pool bound to the same schema name would open
+ * a real second connection pool that nothing here ever disposes — this
+ * avoids that entirely by returning the exact client `useTenantSchema()`
+ * already owns and cleans up.
+ */
+export function fakeTenantContext(getTenantSchema: () => TenantSchemaHandle): TenantContextService {
+  return {
+    getClient: () => getTenantSchema().client,
+  } as unknown as TenantContextService;
+}
+
+/**
+ * Proves a repository spec is genuinely exercising the provisioned tenant
+ * schema, not silently resolving into `public` (the trap called out by this
+ * batch's instructions: `747a2b6` removed the `,public` search_path
+ * fallback, but a spec that never provisions a tenant schema — or reaches a
+ * master/default client — can still pass for the wrong reason). `public`
+ * still holds the pre-split legacy tables (same names/columns) until task
+ * 14.2's `migrate reset`, so a row written through a genuinely tenant-scoped
+ * client must NEVER be readable from `public` under the same identifying
+ * column value. Every repo spec touched in Phase 6 calls this at least once
+ * after a write.
+ */
+export async function assertAbsentFromPublicSchema(
+  table: string,
+  column: string,
+  value: string,
+): Promise<void> {
+  const client = new PgClient({ connectionString: process.env.DATABASE_URL ?? '' });
+  await client.connect();
+  try {
+    const { rows } = await client.query(
+      `SELECT 1 FROM public."${table}" WHERE "${column}" = $1`,
+      [value],
+    );
+    if (rows.length > 0) {
+      throw new Error(
+        `Row ${value} unexpectedly readable from public."${table}"."${column}" — tenant isolation broken`,
+      );
+    }
+  } finally {
+    await client.end();
+  }
 }

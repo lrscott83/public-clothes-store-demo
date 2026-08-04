@@ -3,17 +3,24 @@ import { InvalidCustomerError } from './errors.js';
 
 /**
  * Customer master-data entity. FLAT (single `fullName`, no address
- * hierarchy) — mirrors `Warehouse`. Only `fullName` and `userId` are
+ * hierarchy) — mirrors `Warehouse`. Only `fullName` and `companyUserId` are
  * required; every contact field is optional. Stores NO money field
  * (`creditLimit`/`balance`/`debt`) — a customer's debt is derived from
  * `SaleCredit` in a future change, never stored here. Every `Customer`
- * references exactly one `User` via a REQUIRED, UNIQUE `userId` FK (1:1) — a
- * `Customer` cannot exist without a corresponding `User` (login identity,
- * `backend-users-roles`).
+ * references exactly one tenant `CompanyUser` via a REQUIRED, UNIQUE
+ * `companyUserId` FK (1:1) — a `Customer` cannot exist without a
+ * corresponding `CompanyUser`.
+ *
+ * RESHAPED by `multi-tenant-by-schema` (design.md D1, spec salesops-customers
+ * "Customer FKs Tenant CompanyUser, Not Master User"): the link used to be
+ * `userId → User` (master schema). Prisma forbids a cross-schema `@relation`,
+ * so it becomes `companyUserId → CompanyUser` (tenant-side). Since
+ * `CompanyUser.id` IS the master `User.id` (D1's collapsed PK), the value a
+ * caller passes is unchanged — only the field name and its FK target moved.
  */
 export interface Customer {
   readonly id: string;
-  readonly userId: string;
+  readonly companyUserId: string;
   readonly fullName: string;
   readonly documentId: string | null;
   readonly cellPhone: string | null;
@@ -32,7 +39,7 @@ export interface Customer {
  */
 export interface CreateCustomerInput {
   readonly id?: string;
-  readonly userId: string;
+  readonly companyUserId: string;
   readonly fullName: string;
   readonly documentId?: string | null;
   readonly cellPhone?: string | null;
@@ -46,11 +53,11 @@ export interface CreateCustomerInput {
 
 /**
  * Validates and constructs a `Customer`. Enforces a non-empty,
- * non-whitespace `fullName` AND a non-empty, non-whitespace `userId` — the
- * required, unique link to the customer's `User` identity. Throws
- * `InvalidCustomerError` — never silently accepts a blank name/userId.
- * Whether `userId` actually references an EXISTING `User` (and the 1:1
- * uniqueness of that link) is enforced by the DB FK/unique index and
+ * non-whitespace `fullName` AND a non-empty, non-whitespace `companyUserId`
+ * — the required, unique link to the customer's tenant `CompanyUser`. Throws
+ * `InvalidCustomerError` — never silently accepts a blank name/companyUserId.
+ * Whether `companyUserId` actually references an EXISTING `CompanyUser` (and
+ * the 1:1 uniqueness of that link) is enforced by the DB FK/unique index and
  * surfaces as `CustomerUserNotFoundError`/`DuplicateCustomerUserError` at the
  * repository layer — pure domain code has no DB access to check existence.
  * Every absent contact field defaults to `null`; no "at least one contact"
@@ -61,14 +68,14 @@ export function createCustomer(input: CreateCustomerInput): Customer {
   if (!input.fullName || input.fullName.trim().length === 0) {
     throw new InvalidCustomerError('Customer fullName must not be empty or whitespace-only');
   }
-  if (!input.userId || input.userId.trim().length === 0) {
-    throw new InvalidCustomerError('Customer userId must not be empty or whitespace-only');
+  if (!input.companyUserId || input.companyUserId.trim().length === 0) {
+    throw new InvalidCustomerError('Customer companyUserId must not be empty or whitespace-only');
   }
 
   const now = new Date();
   return {
     id: input.id ?? randomUUID(),
-    userId: input.userId,
+    companyUserId: input.companyUserId,
     fullName: input.fullName,
     documentId: input.documentId ?? null,
     cellPhone: input.cellPhone ?? null,

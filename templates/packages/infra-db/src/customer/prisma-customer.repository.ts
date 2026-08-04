@@ -11,13 +11,13 @@ import {
   DuplicateCustomerDocumentError,
   DuplicateCustomerUserError,
 } from '@store-mgmt/domain';
-import { Prisma } from '../../generated/client/client.js';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
+import { Prisma } from '../../generated/tenant/client.js';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
 
 /** Shape shared by every row Prisma returns for the `Customer` model. */
 interface CustomerRow {
   readonly id: string;
-  readonly userId: string;
+  readonly companyUserId: string;
   readonly fullName: string;
   readonly documentId: string | null;
   readonly cellPhone: string | null;
@@ -32,7 +32,7 @@ interface CustomerRow {
 function toDomain(row: CustomerRow): DomainCustomer {
   return {
     id: row.id,
-    userId: row.userId,
+    companyUserId: row.companyUserId,
     fullName: row.fullName,
     documentId: row.documentId,
     cellPhone: row.cellPhone,
@@ -84,21 +84,25 @@ function isForeignKeyViolation(err: unknown): boolean {
  * `document_id` and translate it to the domain
  * `DuplicateCustomerDocumentError` (design.md's central decision) — there is
  * deliberately NO application-level pre-check, the unique index is the
- * single source of truth. `create` ALSO translates a P2002 on `user_id`
- * (the 1:1 link is unique) to `DuplicateCustomerUserError`, and a P2003 FK
- * violation on `user_id` (no such `User`) to `CustomerUserNotFoundError`
- * (backend-users-roles). `softDelete` flips `active`, never a hard DELETE.
- * Mirrors `PrismaWarehouseRepository`.
+ * single source of truth. `create` ALSO translates a P2002 on
+ * `company_user_id` (the 1:1 link is unique) to `DuplicateCustomerUserError`,
+ * and a P2003 FK violation on `company_user_id` (no such tenant
+ * `CompanyUser`) to `CustomerUserNotFoundError`. `softDelete` flips `active`,
+ * never a hard DELETE. Mirrors `PrismaWarehouseRepository`.
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
  */
 @Injectable()
 export class PrismaCustomerRepository implements ICustomerRepository {
-  constructor(private readonly prisma: TenantDefaultPrismaService) {}
+  constructor(private readonly tenantContext: TenantContextService) {}
 
   async create(input: CreateCustomerInput): Promise<DomainCustomer> {
     try {
-      const row = await this.prisma.customer.create({
+      const row = await this.tenantContext.getClient().customer.create({
         data: {
-          userId: input.userId,
+          companyUserId: input.companyUserId,
           fullName: input.fullName,
           documentId: input.documentId ?? null,
           cellPhone: input.cellPhone ?? null,
@@ -115,11 +119,13 @@ export class PrismaCustomerRepository implements ICustomerRepository {
           `documentId "${input.documentId}" is already in use`,
         );
       }
-      if (isUniqueViolation(err, 'user_id')) {
-        throw new DuplicateCustomerUserError(`userId "${input.userId}" already has a Customer`);
+      if (isUniqueViolation(err, 'company_user_id')) {
+        throw new DuplicateCustomerUserError(
+          `companyUserId "${input.companyUserId}" already has a Customer`,
+        );
       }
       if (isForeignKeyViolation(err)) {
-        throw new CustomerUserNotFoundError(`User "${input.userId}" does not exist`);
+        throw new CustomerUserNotFoundError(`CompanyUser "${input.companyUserId}" does not exist`);
       }
       throw err;
     }
@@ -127,7 +133,7 @@ export class PrismaCustomerRepository implements ICustomerRepository {
 
   async update(id: string, patch: CustomerUpdateInput): Promise<DomainCustomer> {
     try {
-      const row = await this.prisma.customer.update({
+      const row = await this.tenantContext.getClient().customer.update({
         where: { id },
         data: {
           ...(patch.fullName !== undefined ? { fullName: patch.fullName } : {}),
@@ -151,16 +157,16 @@ export class PrismaCustomerRepository implements ICustomerRepository {
   }
 
   async softDelete(id: string): Promise<void> {
-    await this.prisma.customer.update({ where: { id }, data: { active: false } });
+    await this.tenantContext.getClient().customer.update({ where: { id }, data: { active: false } });
   }
 
   async findById(id: string): Promise<DomainCustomer | null> {
-    const row = await this.prisma.customer.findUnique({ where: { id } });
+    const row = await this.tenantContext.getClient().customer.findUnique({ where: { id } });
     return row ? toDomain(row) : null;
   }
 
   async list(filter?: CustomerListFilter): Promise<DomainCustomer[]> {
-    const rows = await this.prisma.customer.findMany({
+    const rows = await this.tenantContext.getClient().customer.findMany({
       where: filter?.includeInactive ? {} : { active: true },
       orderBy: { fullName: 'asc' },
     });

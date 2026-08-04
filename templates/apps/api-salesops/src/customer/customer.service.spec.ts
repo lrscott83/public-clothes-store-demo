@@ -15,7 +15,7 @@ function buildRepoMock(): jest.Mocked<ICustomerRepository> {
 
 const sampleCustomer: DomainCustomer = {
   id: 'customer-uuid-1',
-  userId: 'user-uuid-1',
+  companyUserId: 'user-uuid-1',
   fullName: 'Ana Torres',
   documentId: null,
   cellPhone: null,

@@ -155,7 +155,7 @@ function buildCategoryRepoMock(): jest.Mocked<ICategoryRepository> {
 function customer(id: string, active = true): Customer {
   return {
     id,
-    userId: 'user-uuid-1',
+    companyUserId: 'user-uuid-1',
     fullName: 'Ana Torres',
     documentId: null,
     cellPhone: null,

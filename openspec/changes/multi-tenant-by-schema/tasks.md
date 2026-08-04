@@ -94,7 +94,7 @@ Three sub-commits by domain group — each is [RED: update spec to use 5.1's hel
 
 **Scope note added after WU3b (`f736b28`) — this phase is bigger than "switch the client source".** 3.5 bound the tenant repos to `TenantDefaultPrismaService`, which is a DI-identity placeholder that still wraps the **pre-split** generated client, not `generated/tenant`. It had to: the reshaped `Customer.companyUserId`, `WarehouseOperator.companyUserId` and collapsed-PK `CompanyUser` (D1) have no matching columns on the legacy tables still sitting in `public`, so binding the real tenant client then would have broken every fixture. So each sub-commit below must ALSO reshape the repo code and its fixtures onto the D1 shapes, against a real provisioned tenant schema from 5.1 — not merely swap the injected dependency. Budget accordingly; the ~300-lines-per-group estimate in the work-unit table predates this and is low.
 
-- [ ] 6.1 Currency + Customer repos.
+- [x] 6.1 Currency + Customer repos.
 - [ ] 6.2 Sales (Order) + Commission (×3) repos.
 - [ ] 6.3 Inventory (StockLevel, StockMovement, Warehouse) + Product/Category + WarehouseOperator repos.
 - [ ] 6.4 Add the lint boundary check as a local `pnpm lint` run per group (full eslint rule ships in Phase 14) to confirm no tenant repo imports the master `PrismaService`.

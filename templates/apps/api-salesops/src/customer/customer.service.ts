@@ -25,19 +25,29 @@ export class CustomerService {
   ) {}
 
   async create(input: CreateCustomerDto): Promise<CustomerResponseDto> {
-    createCustomer(input);
-    const created = await this.customerRepository.create(input);
+    // `CreateCustomerDto.userId` is the external API contract (unchanged) —
+    // the domain link is `companyUserId` since multi-tenant-by-schema's D1
+    // reshape (`Customer` now FKs the tenant `CompanyUser`, not the master
+    // `User`). `CompanyUser.id` IS the master `User.id`, so the value is
+    // identical; only the field name differs at this boundary.
+    const domainInput = { ...input, companyUserId: input.userId };
+    createCustomer(domainInput);
+    const created = await this.customerRepository.create(domainInput);
     return this.toResponse(created);
   }
 
   async update(id: string, patch: UpdateCustomerDto): Promise<CustomerResponseDto> {
     if (patch.fullName !== undefined) {
-      // `userId` is NOT part of `UpdateCustomerDto` (the 1:1 User link is
-      // set once at creation, never re-pointed via PATCH) — the factory
-      // requires it structurally, so a placeholder satisfies the type. The
-      // built `Customer` is discarded either way; only the `fullName`
-      // invariant check matters here.
-      createCustomer({ ...patch, fullName: patch.fullName, userId: 'update-invariant-check-only' });
+      // `companyUserId` is NOT part of `UpdateCustomerDto` (the 1:1
+      // CompanyUser link is set once at creation, never re-pointed via
+      // PATCH) — the factory requires it structurally, so a placeholder
+      // satisfies the type. The built `Customer` is discarded either way;
+      // only the `fullName` invariant check matters here.
+      createCustomer({
+        ...patch,
+        fullName: patch.fullName,
+        companyUserId: 'update-invariant-check-only',
+      });
     }
     const updated = await this.customerRepository.update(id, patch);
     return this.toResponse(updated);
@@ -60,7 +70,9 @@ export class CustomerService {
   private toResponse(customer: DomainCustomer): CustomerResponseDto {
     return {
       id: customer.id,
-      userId: customer.userId,
+      // `CustomerResponseDto.userId` is the external API contract (unchanged)
+      // — sourced from the domain's `companyUserId` post-D1 reshape.
+      userId: customer.companyUserId,
       fullName: customer.fullName,
       documentId: customer.documentId,
       cellPhone: customer.cellPhone,
