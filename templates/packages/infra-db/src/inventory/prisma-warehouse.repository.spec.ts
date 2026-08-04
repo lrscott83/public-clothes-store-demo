@@ -1,4 +1,4 @@
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaWarehouseRepository } from './prisma-warehouse.repository.js';
 
 /**
@@ -6,11 +6,11 @@ import { PrismaWarehouseRepository } from './prisma-warehouse.repository.js';
  * mocks) — same discipline as `prisma-category.repository.spec.ts`.
  */
 describe('PrismaWarehouseRepository', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let repository: PrismaWarehouseRepository;
 
   beforeAll(() => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     repository = new PrismaWarehouseRepository(prisma);
   });
 

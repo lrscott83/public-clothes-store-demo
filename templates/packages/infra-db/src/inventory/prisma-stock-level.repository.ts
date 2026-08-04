@@ -5,7 +5,7 @@ import type {
   StockLevel as DomainStockLevel,
   StockLevelListFilter,
 } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { applyReservationTx } from './apply-reservation.js';
 
 /** Shape shared by every row Prisma returns for the `StockLevel` model. */
@@ -45,7 +45,7 @@ function toDomain(row: StockLevelRow): DomainStockLevel {
  */
 @Injectable()
 export class PrismaStockLevelRepository implements IStockLevelRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async findById(id: string): Promise<DomainStockLevel | null> {
     const row = await this.prisma.stockLevel.findUnique({ where: { id } });

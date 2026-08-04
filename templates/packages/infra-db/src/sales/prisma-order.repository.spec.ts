@@ -5,7 +5,7 @@ import {
   createOrder,
   money,
 } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
 import { PrismaProductRepository } from '../product/prisma-product.repository.js';
 import { PrismaWarehouseRepository } from '../inventory/prisma-warehouse.repository.js';
@@ -19,7 +19,7 @@ import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 const AT = new Date('2026-07-22T00:00:00Z');
 
 describe('PrismaOrderRepository', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let repository: PrismaOrderRepository;
   let categoryRepository: PrismaCategoryRepository;
   let productRepository: PrismaProductRepository;
@@ -30,7 +30,7 @@ describe('PrismaOrderRepository', () => {
   let currencyRepository: PrismaCurrencyRepository;
 
   beforeAll(() => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     repository = new PrismaOrderRepository(prisma);
     categoryRepository = new PrismaCategoryRepository(prisma);
     productRepository = new PrismaProductRepository(prisma);

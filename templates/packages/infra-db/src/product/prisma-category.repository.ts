@@ -6,7 +6,7 @@ import type {
   CreateCategoryInput,
   ICategoryRepository,
 } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 
 /** Shape shared by every row Prisma returns for the `Category` model. */
 interface CategoryRow {
@@ -43,7 +43,7 @@ function toDomain(row: CategoryRow): DomainCategory {
  */
 @Injectable()
 export class PrismaCategoryRepository implements ICategoryRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async create(input: CreateCategoryInput): Promise<DomainCategory> {
     const row = await this.prisma.category.create({

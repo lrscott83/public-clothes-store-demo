@@ -1,4 +1,5 @@
-import { PrismaService } from '../prisma-client.js';
+import { PrismaMasterService } from '../master-prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCompanyRepository } from './prisma-company.repository.js';
 import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
@@ -8,13 +9,20 @@ import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
  * `ICompanyRepository` is deliberately READ-ONLY (design.md §4) — rows are
  * seeded directly via `prisma.company.create` in test setup, mirroring how
  * migration 001 + `company/seed.ts` are the only production writers.
+ * `Company` now lives on the master client (task 3.5); `company_user` still
+ * has a real, RESTRICT-ing FK to `company` (unchanged legacy table, see
+ * `TenantDefaultPrismaService`'s doc comment), so it must still be cleared
+ * before `company.deleteMany` — through a companion legacy client, since
+ * master's schema has no `companyUser` model to reach it with.
  */
 describe('PrismaCompanyRepository', () => {
-  let prisma: PrismaService;
+  let prisma: PrismaMasterService;
+  let legacyPrisma: TenantDefaultPrismaService;
   let repository: PrismaCompanyRepository;
 
   beforeAll(() => {
-    prisma = new PrismaService();
+    prisma = new PrismaMasterService();
+    legacyPrisma = new TenantDefaultPrismaService();
     repository = new PrismaCompanyRepository(prisma);
   });
 
@@ -22,19 +30,20 @@ describe('PrismaCompanyRepository', () => {
   // the "no Company exists" and "exactly one" assertions below would otherwise
   // depend on whether this database had been migrated yet.
   beforeEach(async () => {
-    await wipeCompanyUserDependents(prisma);
-    await prisma.companyUser.deleteMany({});
+    await wipeCompanyUserDependents(legacyPrisma);
+    await legacyPrisma.companyUser.deleteMany({});
     await prisma.company.deleteMany({});
   });
 
   afterEach(async () => {
-    await wipeCompanyUserDependents(prisma);
-    await prisma.companyUser.deleteMany({});
+    await wipeCompanyUserDependents(legacyPrisma);
+    await legacyPrisma.companyUser.deleteMany({});
     await prisma.company.deleteMany({});
   });
 
   afterAll(async () => {
     await prisma.$disconnect();
+    await legacyPrisma.$disconnect();
   });
 
   it('list() returns every persisted Company with schemaName null', async () => {

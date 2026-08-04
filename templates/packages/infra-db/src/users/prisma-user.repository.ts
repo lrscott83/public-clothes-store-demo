@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { IUserRepository, User as DomainUser, UserUpdateInput } from '@store-mgmt/domain';
 import { DuplicateLoginError, type CreateUserInput } from '@store-mgmt/domain';
-import { Prisma } from '../../generated/client/client.js';
-import { PrismaService } from '../prisma-client.js';
+import { Prisma } from '../../generated/master/client.js';
+import { PrismaMasterService } from '../master-prisma-client.js';
 
 /** Shape shared by every row Prisma returns for the `User` model (table `app_user`). */
 interface UserRow {
@@ -69,7 +69,7 @@ function isUniqueViolation(err: unknown, target: string): boolean {
  */
 @Injectable()
 export class PrismaUserRepository implements IUserRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaMasterService) {}
 
   async create(input: CreateUserInput): Promise<DomainUser> {
     try {

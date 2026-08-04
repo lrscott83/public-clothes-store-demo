@@ -50,3 +50,11 @@ export class InvalidMembershipError extends Error {
     this.name = 'InvalidMembershipError';
   }
 }
+
+/** Thrown when `createProvisioningIncident` input violates an invariant (companyId/step/reason). */
+export class InvalidProvisioningIncidentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidProvisioningIncidentError';
+  }
+}

@@ -1,5 +1,5 @@
 import { computeAccrual, money, moneyToDecimalString } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCommissionAccrualRepository } from './prisma-commission-accrual.repository.js';
 import { seedCommissionFixture, wipeCommissionFixture } from './commission-fixtures.spec-helper.js';
 import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
@@ -13,12 +13,12 @@ import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
  * the reference table happens to say today.
  */
 describe('PrismaCommissionAccrualRepository', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let repository: PrismaCommissionAccrualRepository;
   let categoryId: string;
 
   beforeAll(async () => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     repository = new PrismaCommissionAccrualRepository(prisma);
     const category = await prisma.category.upsert({
       where: { slug: 'commission-accrual-spec' },

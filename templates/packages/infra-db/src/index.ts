@@ -1,6 +1,13 @@
 export { PrismaService } from './prisma-client.js';
 export { InfraDbModule } from './infra-db.module.js';
 export type { PrismaClient } from '../generated/client/client.js';
+// Task 3.4/3.5 (WU3b): master + temporary tenant-labeled clients — see
+// `TenantDefaultPrismaService`'s doc comment for why it still wraps the OLD
+// generated client, not `generated/tenant`.
+export { PrismaMasterService } from './master-prisma-client.js';
+export { TenantDefaultPrismaService } from './tenant/tenant-default-prisma.service.js';
+export { PrismaMembershipRepository } from './company/prisma-membership.repository.js';
+export { PrismaProvisioningIncidentRepository } from './company/prisma-provisioning-incident.repository.js';
 export { PrismaCurrencyRepository } from './currency/prisma-currency.repository.js';
 export { PrismaCategoryRepository } from './product/prisma-category.repository.js';
 export { PrismaProductRepository } from './product/prisma-product.repository.js';

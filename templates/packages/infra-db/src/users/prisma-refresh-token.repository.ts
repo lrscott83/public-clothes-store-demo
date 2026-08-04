@@ -4,7 +4,7 @@ import type {
   IRefreshTokenRepository,
   RefreshToken as DomainRefreshToken,
 } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { PrismaMasterService } from '../master-prisma-client.js';
 
 /** Shape shared by every row Prisma returns for the `RefreshToken` model (table `refresh_token`). */
 interface RefreshTokenRow {
@@ -38,7 +38,7 @@ function toDomain(row: RefreshTokenRow): DomainRefreshToken {
  */
 @Injectable()
 export class PrismaRefreshTokenRepository implements IRefreshTokenRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaMasterService) {}
 
   async create(input: CreateRefreshTokenInput): Promise<DomainRefreshToken> {
     const row = await this.prisma.refreshToken.create({

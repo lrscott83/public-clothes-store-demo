@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Company as DomainCompany, ICompanyRepository } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { PrismaMasterService } from '../master-prisma-client.js';
 
 /** Shape shared by every row Prisma returns for the `Company` model. */
 interface CompanyRow {
@@ -33,7 +33,7 @@ function toDomain(row: CompanyRow): DomainCompany {
  */
 @Injectable()
 export class PrismaCompanyRepository implements ICompanyRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaMasterService) {}
 
   async list(): Promise<DomainCompany[]> {
     const rows = await this.prisma.company.findMany({ orderBy: { name: 'asc' } });

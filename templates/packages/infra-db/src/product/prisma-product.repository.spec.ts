@@ -3,7 +3,7 @@ import {
   moneyFromDecimalString,
   moneyToDecimalString,
 } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCategoryRepository } from './prisma-category.repository.js';
 import { PrismaProductRepository } from './prisma-product.repository.js';
 import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
@@ -14,13 +14,13 @@ import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
  * `prisma-category.repository.spec.ts`.
  */
 describe('PrismaProductRepository', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let repository: PrismaProductRepository;
   let categoryRepository: PrismaCategoryRepository;
   let categoryId: string;
 
   beforeAll(() => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     repository = new PrismaProductRepository(prisma);
     categoryRepository = new PrismaCategoryRepository(prisma);
   });

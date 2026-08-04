@@ -6,7 +6,7 @@ import type {
   PaymentChannel,
 } from '@store-mgmt/domain';
 import { rateFromDecimalString, rateToDecimalString } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 
 /** Shape shared by every row Prisma returns for the `ExchangeRate` model. */
 interface ExchangeRateRow {
@@ -34,7 +34,7 @@ function toDomain(row: ExchangeRateRow): DomainExchangeRate {
  */
 @Injectable()
 export class PrismaCurrencyRepository implements ICurrencyRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async appendRate(input: AppendRateInput): Promise<DomainExchangeRate> {
     const row = await this.prisma.exchangeRate.create({

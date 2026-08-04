@@ -1,5 +1,5 @@
 import { InsufficientStockError, InvalidStockLevelError } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaWarehouseRepository } from './prisma-warehouse.repository.js';
 import { PrismaStockLevelRepository } from './prisma-stock-level.repository.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
@@ -7,14 +7,14 @@ import { PrismaProductRepository } from '../product/prisma-product.repository.js
 import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
 
 describe('PrismaStockLevelRepository', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let repository: PrismaStockLevelRepository;
   let warehouseRepository: PrismaWarehouseRepository;
   let categoryRepository: PrismaCategoryRepository;
   let productRepository: PrismaProductRepository;
 
   beforeAll(() => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     repository = new PrismaStockLevelRepository(prisma);
     warehouseRepository = new PrismaWarehouseRepository(prisma);
     categoryRepository = new PrismaCategoryRepository(prisma);

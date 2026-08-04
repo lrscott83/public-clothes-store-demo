@@ -7,7 +7,7 @@ import type {
   StockMovementListFilter,
   StockMovementType,
 } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { applyStockMovementTx } from './apply-stock-movement.js';
 
 /** Shape shared by every row Prisma returns for the `StockMovement` model. */
@@ -51,7 +51,7 @@ function movementToDomain(row: StockMovementRow): DomainStockMovement {
  */
 @Injectable()
 export class PrismaStockMovementRepository implements IStockMovementRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async record(input: CreateStockMovementInput): Promise<RecordMovementResult> {
     return this.prisma.$transaction((tx) => applyStockMovementTx(tx, input));

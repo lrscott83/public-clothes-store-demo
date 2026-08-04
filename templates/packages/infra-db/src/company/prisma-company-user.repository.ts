@@ -6,7 +6,7 @@ import type {
   ICompanyUserRepository,
 } from '@store-mgmt/domain';
 import type { UserRoleValue } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 
 /** Shape shared by every row Prisma returns for the `CompanyUser` model. */
 interface CompanyUserRow {
@@ -45,7 +45,7 @@ function toDomain(row: CompanyUserRow): DomainCompanyUser {
  */
 @Injectable()
 export class PrismaCompanyUserRepository implements ICompanyUserRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async create(input: CreateCompanyUserInput): Promise<DomainCompanyUser> {
     const row = await this.prisma.companyUser.create({

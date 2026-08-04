@@ -1,5 +1,5 @@
 import { computeAccrual, money, moneyToDecimalString } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCommissionAccrualRepository } from './prisma-commission-accrual.repository.js';
 import { PrismaCommissionPaymentRepository } from './prisma-commission-payment.repository.js';
 import { seedCommissionFixture, wipeCommissionFixture } from './commission-fixtures.spec-helper.js';
@@ -13,13 +13,13 @@ import { seedCommissionFixture, wipeCommissionFixture } from './commission-fixtu
  * is the table where losing means paying somebody twice.
  */
 describe('PrismaCommissionPaymentRepository', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let accruals: PrismaCommissionAccrualRepository;
   let payments: PrismaCommissionPaymentRepository;
   let categoryId: string;
 
   beforeAll(async () => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     accruals = new PrismaCommissionAccrualRepository(prisma);
     payments = new PrismaCommissionPaymentRepository(prisma);
     const category = await prisma.category.upsert({

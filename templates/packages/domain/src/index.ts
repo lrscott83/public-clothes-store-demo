@@ -30,3 +30,16 @@ export { MEMBERSHIP_REPOSITORY } from './company/imembership.repository.js';
 export type { ResolveTenantAccessInput, TenantAccessResult } from './company/resolve-tenant-access.js';
 export { resolveTenantAccess } from './company/resolve-tenant-access.js';
 export { InvalidMembershipError } from './company/errors.js';
+
+// Task 3.4 (WU3b): `ProvisioningIncident` (design D7) — same "export
+// directly here, not through `company/index.js`" precedent as the block
+// above, kept together since both are master-schema, multi-tenant-by-schema
+// additions.
+export type {
+  ProvisioningIncident,
+  CreateProvisioningIncidentInput,
+} from './company/provisioning-incident.js';
+export { createProvisioningIncident } from './company/provisioning-incident.js';
+export type { IProvisioningIncidentRepository } from './company/iprovisioning-incident.repository.js';
+export { PROVISIONING_INCIDENT_REPOSITORY } from './company/iprovisioning-incident.repository.js';
+export { InvalidProvisioningIncidentError } from './company/errors.js';

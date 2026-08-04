@@ -1,5 +1,5 @@
 import { rateFromDecimalString } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCurrencyRepository } from './prisma-currency.repository.js';
 
 /**
@@ -9,11 +9,11 @@ import { PrismaCurrencyRepository } from './prisma-currency.repository.js';
  * strategy for infra-db (jest + real Postgres).
  */
 describe('PrismaCurrencyRepository', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let repository: PrismaCurrencyRepository;
 
   beforeAll(() => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     repository = new PrismaCurrencyRepository(prisma);
   });
 

@@ -72,8 +72,8 @@ Chain strategy: pending
 - [x] 3.1 (WU3a) Create `packages/infra-db/prisma/master/schema.prisma` (`User`, `Company`+`schemaName`, `Membership`, `TemplateCategory`, `TemplateProduct`, `ProvisioningIncident`, `RefreshToken`, `PasswordResetToken`, enum `MembershipStatus`) + its own `prisma.config.ts`.
 - [x] 3.2 (WU3a) Create `packages/infra-db/prisma/tenant/schema.prisma` (`CompanyUser` collapsed-PK, `Customer`/`WarehouseOperator` reshaped onto `companyUserId`, all remaining business tables + enums) + its own `prisma.config.ts`. `CompanyUser.company → Company` relation is dropped (D1). Both new schema files declare `provider` only in `datasource` — Prisma 7 rejects `url` in a schema file (P1012, confirmed by 11.1's spike).
 - [x] 3.3 (WU3a) Generate the master migration (`prisma migrate dev`) and `packages/infra-db/scripts/generate-tenant-schema-sql.ts` (`prisma migrate diff --from-empty`) producing committed `packages/infra-db/prisma/tenant-schema.sql`.
-- [ ] 3.4 (WU3b) Add `PrismaMembershipRepository`, `PrismaProvisioningIncidentRepository` (master-side, `packages/infra-db/src/company/`).
-- [ ] 3.5 (WU3b) Re-type the ~17 repository files' Prisma client import to the correct generated client (5 master repos unchanged in behavior; ~12 tenant repos temporarily bind a single default-schema client so the package compiles — full tenant-context wiring lands in Phase 6). Update `prisma/seed.js` to seed master only for now.
+- [x] 3.4 (WU3b) Add `PrismaMembershipRepository`, `PrismaProvisioningIncidentRepository` (master-side, `packages/infra-db/src/company/`).
+- [x] 3.5 (WU3b) Re-type the ~17 repository files' Prisma client import to the correct generated client (5 master repos unchanged in behavior; ~12 tenant repos temporarily bind a single default-schema client so the package compiles — full tenant-context wiring lands in Phase 6). Update `prisma/seed.js` to seed master only for now.
 
 No cutover/migration-of-existing-rows tasks anywhere in this phase or elsewhere — provisioning always starts from an empty schema (spec: "Provisioning Creates, Never Migrates, Existing Data").
 

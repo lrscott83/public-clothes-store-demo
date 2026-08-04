@@ -4,7 +4,7 @@ import type {
   IWarehouseOperatorRepository,
   WarehouseOperator as DomainWarehouseOperator,
 } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 
 /** Shape shared by every row Prisma returns for the `WarehouseOperator` model (table `warehouse_operator`). */
 interface WarehouseOperatorRow {
@@ -31,7 +31,7 @@ function toDomain(row: WarehouseOperatorRow): DomainWarehouseOperator {
  */
 @Injectable()
 export class PrismaWarehouseOperatorRepository implements IWarehouseOperatorRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async create(input: CreateWarehouseOperatorInput): Promise<DomainWarehouseOperator> {
     const row = await this.prisma.warehouseOperator.create({

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCompanyUserRepository } from './prisma-company-user.repository.js';
 import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
@@ -14,12 +14,12 @@ const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
  * reference any `User` row and still succeeding.
  */
 describe('PrismaCompanyUserRepository', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let repository: PrismaCompanyUserRepository;
   let companyId: string;
 
   beforeAll(() => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     repository = new PrismaCompanyUserRepository(prisma);
   });
 

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCustomerRepository } from './prisma-customer.repository.js';
 import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
@@ -12,11 +12,11 @@ const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
  * backend-users-roles) — `createTestUser` mints a fresh one per call.
  */
 describe('PrismaCustomerRepository', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let repository: PrismaCustomerRepository;
 
   beforeAll(() => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     repository = new PrismaCustomerRepository(prisma);
   });
 

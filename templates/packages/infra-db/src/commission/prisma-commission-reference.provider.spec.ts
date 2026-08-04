@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { moneyToDecimalString } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCommissionReferenceProvider } from './prisma-commission-reference.provider.js';
 
 /**
@@ -13,12 +13,12 @@ import { PrismaCommissionReferenceProvider } from './prisma-commission-reference
  * producing an accrual that looks perfectly complete.
  */
 describe('PrismaCommissionReferenceProvider', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let provider: PrismaCommissionReferenceProvider;
   let categoryId: string;
 
   beforeAll(async () => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     provider = new PrismaCommissionReferenceProvider(prisma);
     const category = await prisma.category.upsert({
       where: { slug: 'commission-spec' },

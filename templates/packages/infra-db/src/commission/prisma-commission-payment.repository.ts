@@ -5,7 +5,7 @@ import type {
   ICommissionPaymentRepository,
 } from '@store-mgmt/domain';
 import { moneyFromDecimalString, money, moneyToDecimalString } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 
 interface PaymentRow {
   readonly id: string;
@@ -40,7 +40,7 @@ function toDomain(row: PaymentRow): CommissionPayment {
  */
 @Injectable()
 export class PrismaCommissionPaymentRepository implements ICommissionPaymentRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async create(input: CreateCommissionPaymentInput): Promise<CommissionPayment> {
     const row = await this.prisma.commissionPayment.create({

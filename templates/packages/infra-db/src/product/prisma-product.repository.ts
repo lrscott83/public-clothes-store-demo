@@ -15,7 +15,7 @@ import {
   percentFromDecimalString,
   percentToDecimalString,
 } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 
 /** Shape shared by every row Prisma returns for the `Product` model. */
 interface ProductRow {
@@ -75,7 +75,7 @@ function toDomain(row: ProductRow): DomainProduct {
  */
 @Injectable()
 export class PrismaProductRepository implements IProductRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async create(input: CreateProductInput): Promise<DomainProduct> {
     const row = await this.prisma.product.create({

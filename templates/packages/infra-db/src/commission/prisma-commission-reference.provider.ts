@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ICommissionReferenceProvider, Money } from '@store-mgmt/domain';
 import { moneyFromDecimalString } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 
 /**
  * Prisma adapter for `ICommissionReferenceProvider`. A pure id lookup — every
@@ -14,7 +14,7 @@ import { PrismaService } from '../prisma-client.js';
  */
 @Injectable()
 export class PrismaCommissionReferenceProvider implements ICommissionReferenceProvider {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async commissionFor(productId: string): Promise<Money | undefined> {
     const row = await this.prisma.productCommissionReference.findUnique({ where: { productId } });

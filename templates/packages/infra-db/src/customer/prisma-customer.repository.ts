@@ -12,7 +12,7 @@ import {
   DuplicateCustomerUserError,
 } from '@store-mgmt/domain';
 import { Prisma } from '../../generated/client/client.js';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 
 /** Shape shared by every row Prisma returns for the `Customer` model. */
 interface CustomerRow {
@@ -92,7 +92,7 @@ function isForeignKeyViolation(err: unknown): boolean {
  */
 @Injectable()
 export class PrismaCustomerRepository implements ICustomerRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async create(input: CreateCustomerInput): Promise<DomainCustomer> {
     try {

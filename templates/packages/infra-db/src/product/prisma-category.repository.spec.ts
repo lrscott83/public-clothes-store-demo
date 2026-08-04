@@ -1,4 +1,4 @@
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCategoryRepository } from './prisma-category.repository.js';
 import { PrismaProductRepository } from './prisma-product.repository.js';
 import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
@@ -8,11 +8,11 @@ import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
  * mocks) — same discipline as `prisma-currency.repository.spec.ts`.
  */
 describe('PrismaCategoryRepository', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let repository: PrismaCategoryRepository;
 
   beforeAll(() => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     repository = new PrismaCategoryRepository(prisma);
   });
 

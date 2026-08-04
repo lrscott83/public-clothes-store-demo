@@ -1,14 +1,13 @@
-// SINGLE seed entrypoint (Prisma's `migrations.seed` config, prisma.config.ts):
-// seeds every Category + Product together from the MVP's catalog.json
-// (see src/product/seed.ts), the 3 Warehouse rows (see
-// src/inventory/seed.ts), the 4 cockpit User accounts (see
-// src/users/seed.ts), and the 5 demo Customer rows (see
-// src/customer/seed.ts, each linked to its own User) — NO StockLevel rows
-// are ever seeded (lazy creation on first movement). Order is
-// products -> warehouses -> users -> customers: customers depend on users
-// existing (Customer.userId, backend-users-roles), users depend on
-// warehouses for the warehouse.operator cockpit account's WarehouseOperator
-// link. All idempotent. Plain CommonJS requiring the package's own BUILT
+// SINGLE seed entrypoint (Prisma's `migrations.seed` config, prisma.config.ts).
+//
+// MASTER ONLY FOR NOW (SDD change multi-tenant-by-schema, task 3.5 — WU3b):
+// seeds just the master `Company` row (see src/company/seed.ts). The
+// product/warehouse/user/customer seeding this script used to run is
+// TENANT-side data — meaningless until a real tenant schema exists to hold
+// it (Phase 10's provisioning saga). Restoring it is explicitly Phase 9
+// (template catalog copy) / Phase 14.2 (full `prisma migrate reset && pnpm
+// seed` wiring: master seed -> provision one tenant via the saga -> seed
+// it), not this task. Plain CommonJS requiring the package's own BUILT
 // dist/ output (run `pnpm build` first) — same "consume via built dist, not
 // TS source" convention as every other cross-package import in this
 // monorepo.
@@ -27,42 +26,14 @@ if (fs.existsSync(envPath) && typeof process.loadEnvFile === 'function') {
 }
 
 const { PrismaService } = require(path.join(PACKAGE_ROOT, 'dist', 'src', 'prisma-client.js'));
-const { seedProducts } = require(path.join(PACKAGE_ROOT, 'dist', 'src', 'product', 'seed.js'));
-const { seedWarehouses } = require(path.join(PACKAGE_ROOT, 'dist', 'src', 'inventory', 'seed.js'));
-const { seedUsers } = require(path.join(PACKAGE_ROOT, 'dist', 'src', 'users', 'seed.js'));
-const { seedCustomers } = require(path.join(PACKAGE_ROOT, 'dist', 'src', 'customer', 'seed.js'));
-
-const CATALOG_PATH = path.join(
-  PACKAGE_ROOT,
-  '..',
-  '..',
-  'apps',
-  'salesops-mvp',
-  'app',
-  'data',
-  'catalog.json',
-);
+const { seedCompany } = require(path.join(PACKAGE_ROOT, 'dist', 'src', 'company', 'seed.js'));
 
 async function main() {
-  const catalog = JSON.parse(fs.readFileSync(CATALOG_PATH, 'utf8'));
   const prisma = new PrismaService();
 
   try {
-    const result = await seedProducts(prisma, catalog);
-    console.log(
-      `Seeded ${result.categoriesUpserted} categories and ${result.productsUpserted} products (idempotent upsert).`,
-    );
-
-    const inventoryResult = await seedWarehouses(prisma);
-    console.log(
-      `Seeded ${inventoryResult.warehousesUpserted} warehouses (idempotent upsert, no StockLevel rows).`,
-    );
-
-    const usersResult = await seedUsers(prisma);
-    console.log(`Seeded ${usersResult.usersUpserted} cockpit users (idempotent upsert).`);
-
-    const customerResult = await seedCustomers(prisma);
-    console.log(`Seeded ${customerResult.customersUpserted} customers (idempotent upsert, each linked to a User).`);
+    const result = await seedCompany(prisma);
+    console.log(`Seeded ${result.companiesUpserted} company (master, idempotent upsert).`);
   } finally {
     await prisma.$disconnect();
   }

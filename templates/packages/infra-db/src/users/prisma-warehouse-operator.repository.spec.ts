@@ -1,4 +1,4 @@
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaUserRepository } from './prisma-user.repository.js';
 import { PrismaWarehouseOperatorRepository } from './prisma-warehouse-operator.repository.js';
 import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
@@ -10,13 +10,13 @@ const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
  * mocks) — same discipline as `prisma-user.repository.spec.ts`.
  */
 describe('PrismaWarehouseOperatorRepository', () => {
-  let prisma: PrismaService;
+  let prisma: TenantDefaultPrismaService;
   let repository: PrismaWarehouseOperatorRepository;
   let users: PrismaUserRepository;
   let warehouseId: string;
 
   beforeAll(() => {
-    prisma = new PrismaService();
+    prisma = new TenantDefaultPrismaService();
     repository = new PrismaWarehouseOperatorRepository(prisma);
     users = new PrismaUserRepository(prisma);
   });

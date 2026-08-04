@@ -24,7 +24,7 @@ import {
   rateFromDecimalString,
   rateToDecimalString,
 } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { applyReservationTx } from '../inventory/apply-reservation.js';
 import { applyStockMovementTx } from '../inventory/apply-stock-movement.js';
 
@@ -209,7 +209,7 @@ function orderToDomain(row: OrderRow): DomainOrder {
  */
 @Injectable()
 export class PrismaOrderRepository implements IOrderRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async create(order: DomainOrder): Promise<DomainOrder> {
     // The `input as unknown as Order` cast that used to open this method is

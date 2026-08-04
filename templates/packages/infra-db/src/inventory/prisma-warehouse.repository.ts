@@ -6,7 +6,7 @@ import type {
   WarehouseListFilter,
   WarehouseUpdateInput,
 } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 
 /** Shape shared by every row Prisma returns for the `Warehouse` model. */
 interface WarehouseRow {
@@ -35,7 +35,7 @@ function toDomain(row: WarehouseRow): DomainWarehouse {
  */
 @Injectable()
 export class PrismaWarehouseRepository implements IWarehouseRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async create(input: CreateWarehouseInput): Promise<DomainWarehouse> {
     const row = await this.prisma.warehouse.create({

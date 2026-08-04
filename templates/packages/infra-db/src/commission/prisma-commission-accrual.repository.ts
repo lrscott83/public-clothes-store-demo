@@ -5,7 +5,7 @@ import type {
   ICommissionAccrualRepository,
 } from '@store-mgmt/domain';
 import { moneyFromDecimalString, moneyToDecimalString } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 
 /** Shape of a `commission_accrual` row with its children included. */
 interface AccrualRow {
@@ -71,7 +71,7 @@ const WITH_CHILDREN = { lines: true, unresolved: true } as const;
  */
 @Injectable()
 export class PrismaCommissionAccrualRepository implements ICommissionAccrualRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: TenantDefaultPrismaService) {}
 
   async create(accrual: CommissionAccrual): Promise<CommissionAccrual> {
     const existing = await this.findByOrderId(accrual.orderId);

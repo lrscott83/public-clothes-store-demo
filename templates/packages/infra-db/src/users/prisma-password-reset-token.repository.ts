@@ -4,7 +4,7 @@ import type {
   IPasswordResetTokenRepository,
   PasswordResetToken as DomainPasswordResetToken,
 } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { PrismaMasterService } from '../master-prisma-client.js';
 
 /** Shape shared by every row Prisma returns for the `PasswordResetToken` model (table `password_reset_token`). */
 interface PasswordResetTokenRow {
@@ -36,7 +36,7 @@ function toDomain(row: PasswordResetTokenRow): DomainPasswordResetToken {
  */
 @Injectable()
 export class PrismaPasswordResetTokenRepository implements IPasswordResetTokenRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaMasterService) {}
 
   async create(input: CreatePasswordResetTokenInput): Promise<DomainPasswordResetToken> {
     const row = await this.prisma.passwordResetToken.create({

@@ -1,5 +1,6 @@
 import { DuplicateLoginError } from '@store-mgmt/domain';
-import { PrismaService } from '../prisma-client.js';
+import { PrismaMasterService } from '../master-prisma-client.js';
+import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaUserRepository } from './prisma-user.repository.js';
 import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
@@ -8,14 +9,20 @@ const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
 /**
  * Integration tests against the real `store_mgmt` Postgres database (no
- * mocks) — same discipline as `prisma-customer.repository.spec.ts`.
+ * mocks) — same discipline as `prisma-customer.repository.spec.ts`. `User`
+ * now lives on the master client (task 3.5); the legacy `company_user`
+ * hygiene cleanup below still runs through `TenantDefaultPrismaService` —
+ * same physical table, see that class's doc comment — because master's
+ * schema has no `companyUser` model to reach it with.
  */
 describe('PrismaUserRepository', () => {
-  let prisma: PrismaService;
+  let prisma: PrismaMasterService;
+  let legacyPrisma: TenantDefaultPrismaService;
   let repository: PrismaUserRepository;
 
   beforeAll(() => {
-    prisma = new PrismaService();
+    prisma = new PrismaMasterService();
+    legacyPrisma = new TenantDefaultPrismaService();
     repository = new PrismaUserRepository(prisma);
   });
 
@@ -23,13 +30,14 @@ describe('PrismaUserRepository', () => {
     // `company_user` has NO FK to `app_user` (soft FK by design) — deleting
     // users alone would leave orphan assignments behind and trip the §7
     // backfill gate.
-    await wipeCompanyUserDependents(prisma);
-    await prisma.companyUser.deleteMany({});
+    await wipeCompanyUserDependents(legacyPrisma);
+    await legacyPrisma.companyUser.deleteMany({});
     await prisma.user.deleteMany({});
   });
 
   afterAll(async () => {
     await prisma.$disconnect();
+    await legacyPrisma.$disconnect();
   });
 
   it('create() persists a User with a real DB-generated UUID id and null email/cellPhone', async () => {
