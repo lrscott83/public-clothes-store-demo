@@ -108,7 +108,13 @@ export class TenantPrismaFactory implements OnModuleDestroy {
       connectionString: process.env.DATABASE_URL ?? '',
       max: this.max,
       idleTimeoutMillis: this.idleTimeoutMillis,
-      options: `-c search_path="${schemaName}",public`,
+      // The tenant schema ALONE — no `,public` fallback. Postgres resolves
+      // an unqualified name against each schema in order, so a trailing
+      // `public` would turn a missing tenant table into a silent read of
+      // whatever `public` holds (legacy business tables today, the master
+      // tables after 14.2's reset). A missing table must raise, not resolve
+      // somewhere else. Proven by `tenant-search-path-isolation.spec.ts`.
+      options: `-c search_path="${schemaName}"`,
     });
     const adapter = new PrismaPg(pool, { schema: schemaName });
     const client = new PrismaClient({ adapter });

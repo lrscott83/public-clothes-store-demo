@@ -72,7 +72,10 @@ describe('TenantPrismaFactory', () => {
     expect(entry).toBeDefined();
     expect(entry?.pool.options.max).toBe(3);
     expect(entry?.pool.options.idleTimeoutMillis).toBe(12_345);
-    expect(entry?.pool.options.options).toBe(`-c search_path="${schemaName}",public`);
+    // The tenant schema alone — a `,public` fallback would let a missing
+    // tenant table resolve out of `public` instead of raising. See
+    // `tenant-search-path-isolation.spec.ts` for the behavioural proof.
+    expect(entry?.pool.options.options).toBe(`-c search_path="${schemaName}"`);
   });
 
   it('defaults max/idleTimeoutMillis to explicit values (never pg\'s bare default of 10/no-timeout)', () => {

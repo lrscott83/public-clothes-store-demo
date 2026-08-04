@@ -44,13 +44,23 @@ This is the one decision this design takes beyond P2's literal text; it follows 
 | Option | Verdict |
 |---|---|
 | Single shared client + `SET LOCAL search_path` (poolops spec 045) | Rejected for now — needs Prisma `multiSchema`; poolops drafted it and never shipped it. Recorded as the known next step. |
-| **`Map<schemaName, {client, pool}>`, `new Pool({ max, idleTimeoutMillis, options: '-c search_path="<schema>",public' })` + `PrismaPg(pool, { schema })`** | **Chosen.** Same construction as `tenant-prisma-factory.ts:49-54`, plus: explicit `max` (default 5, env-tunable), idle timeout, LRU cap on the cache, and `disposeClient` actually called — from cache eviction and from `onModuleDestroy`, not only from process exit. |
+| **`Map<schemaName, {client, pool}>`, `new Pool({ max, idleTimeoutMillis, options: '-c search_path="<schema>"' })` + `PrismaPg(pool, { schema })`** | **Chosen.** Same construction as `tenant-prisma-factory.ts:49-54`, plus: explicit `max` (default 5, env-tunable), idle timeout, LRU cap on the cache, and `disposeClient` actually called — from cache eviction and from `onModuleDestroy`, not only from process exit. |
 
 Landmine 1 fixed: poolops passes no `max` (pg default 10), never evicts, and `disposeClient()` has
 zero call sites repo-wide.
 
 `getClient()` **throws** when no tenant context is active. It never falls back to the global
 `PrismaService`. That is what makes a missed re-scope a loud 500 instead of a silent cross-tenant read.
+
+**The search_path holds the tenant schema and nothing else — no trailing `,public`.** This corrects
+an earlier draft of this table that carried poolops's `,public` verbatim. Postgres resolves an
+unqualified name against each schema in the search_path in order, so a trailing `public` makes a
+missing tenant table resolve out of `public` — the legacy business tables today, the master tables
+(`User`, `Company`, `Membership`) after 14.2's reset — returning rows where the whole point of D2 is
+to raise. It bought nothing: `tenant-schema.sql` is self-contained (18 `CREATE TABLE`s, no extension
+or cross-schema references). `TenantDatabaseService.createSchema` drops it for the same reason.
+Owner decision 2026-08-04, after a probe table planted in `public` was read straight through a tenant
+client. Behavioural proof: `src/tenant/tenant-search-path-isolation.spec.ts`.
 
 ### D3 — `schemaName` is re-validated at every interpolation site.
 

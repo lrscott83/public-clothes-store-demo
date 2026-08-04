@@ -63,7 +63,11 @@ export class TenantDatabaseService {
       await client.query(`CREATE SCHEMA "${schemaName}"`);
       // Plain `SET`, not `SET LOCAL` — must still be in effect for the
       // multi-statement DDL query issued next on this same connection.
-      await client.query(`SET search_path TO "${schemaName}", public`);
+      // Tenant schema alone, no `public` fallback — the DDL is self-contained
+      // (18 CREATE TABLEs, no extension or cross-schema references), so if a
+      // statement ever fails to resolve here that is a real defect to surface,
+      // not something to satisfy quietly out of `public`.
+      await client.query(`SET search_path TO "${schemaName}"`);
       await client.query(this.tenantSchemaSql);
       await client.query('COMMIT');
     } catch (err) {
