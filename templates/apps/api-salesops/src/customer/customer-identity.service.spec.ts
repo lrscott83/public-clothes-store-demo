@@ -1,18 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  COMPANY_USER_REPOSITORY,
-  CUSTOMER_REPOSITORY,
-  DuplicateLoginError,
-  USER_REPOSITORY,
-  USER_ROLES,
-} from '@store-mgmt/domain';
+import { CUSTOMER_REPOSITORY, DuplicateLoginError, USER_REPOSITORY, USER_ROLES } from '@store-mgmt/domain';
+import { TenantContextService } from '@store-mgmt/infra-db';
 import { CustomerIdentityService } from './customer-identity.service.js';
 
 type RepoMock = Record<string, jest.Mock>;
 
-const ACTOR = { companyId: 'company-caller', companyUserId: 'company-user-caller' };
+const ACTOR = { companyUserId: 'company-user-caller' };
 
 const VALID_BODY = {
   fullName: 'Ana Torres',
@@ -39,37 +34,52 @@ const CREATED_CUSTOMER = {
 describe('CustomerIdentityService', () => {
   let service: CustomerIdentityService;
   let userRepository: RepoMock;
-  let companyUserRepository: RepoMock;
+  let companyUserCreate: jest.Mock;
   let customerRepository: RepoMock;
 
   beforeEach(async () => {
     userRepository = { create: jest.fn().mockResolvedValue(CREATED_USER) };
-    companyUserRepository = { create: jest.fn().mockResolvedValue({ id: 'assignment-1' }) };
+    companyUserCreate = jest.fn().mockResolvedValue({ id: 'user-minted-1' });
     customerRepository = { create: jest.fn().mockResolvedValue(CREATED_CUSTOMER) };
+    // `TenantContextService` stand-in: only `getClient()` is exercised here —
+    // the ACTIVE scope itself is the controller's job (`runInTenant`, design
+    // D5), not this service's, so `.run()` is never called from inside it.
+    const tenantContext = {
+      getClient: jest.fn().mockReturnValue({ companyUser: { create: companyUserCreate } }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomerIdentityService,
         { provide: USER_REPOSITORY, useValue: userRepository },
-        { provide: COMPANY_USER_REPOSITORY, useValue: companyUserRepository },
         { provide: CUSTOMER_REPOSITORY, useValue: customerRepository },
+        { provide: TenantContextService, useValue: tenantContext },
       ],
     }).compile();
 
     service = module.get(CustomerIdentityService);
   });
 
-  // R20 — an identity without an ACTIVE assignment is a dead login: since
-  // migration 002 dropped `app_user.roles`, `JwtStrategy` 403s
-  // `MISSING_COMPANY_USER` for a User with no assignment. Minting one without
-  // the other would hand the customer an account that can never authenticate.
-  describe('R20 — the minted identity can actually authenticate', () => {
-    it('gives the created User an ACTIVE CompanyUser assignment', async () => {
+  // R20 — an identity without a CompanyUser row cannot resolve tenant access
+  // (`resolveTenantAccess`/`TenantContextGuard`, design D1/D4). Minting the
+  // User without it would leave an account with no role assignment at all in
+  // the tenant it was created in.
+  describe('R20 — the minted identity gets a tenant CompanyUser row', () => {
+    it("writes the tenant CompanyUser through the caller's active tenant scope", async () => {
       await service.createWithIdentity(ACTOR, VALID_BODY);
 
-      expect(companyUserRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: CREATED_USER.id, status: 'ACTIVE' }),
-      );
+      expect(companyUserCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ id: CREATED_USER.id, role: USER_ROLES.user }),
+      });
+    });
+
+    it('never writes a companyId or userId column — company identity is the active schema, not a field (Collapsed-PK Shape)', async () => {
+      await service.createWithIdentity(ACTOR, VALID_BODY);
+
+      const [{ data }] = companyUserCreate.mock.calls[0] as [{ data: Record<string, unknown> }];
+      expect(data).not.toHaveProperty('companyId');
+      expect(data).not.toHaveProperty('userId');
+      expect(data).not.toHaveProperty('status');
     });
 
     it('hashes the password instead of storing it, and never echoes it back', async () => {
@@ -98,9 +108,9 @@ describe('CustomerIdentityService', () => {
         userId: 'the-owners-user-id',
       } as never);
 
-      expect(companyUserRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ role: USER_ROLES.user }),
-      );
+      expect(companyUserCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ role: USER_ROLES.user }),
+      });
       expect(userRepository.create).toHaveBeenCalledWith(
         expect.not.objectContaining({ id: 'the-owners-user-id' }),
       );
@@ -122,31 +132,33 @@ describe('CustomerIdentityService', () => {
     });
   });
 
-  // R23 — D10 #2/#3. Both the tenant scope and the audit trail come from the
-  // AUTHENTICATED actor and only from there.
-  describe('R23 — scoped and attributed to the caller', () => {
-    it("scopes the assignment to the caller's companyId and attributes it to the caller", async () => {
+  // R23 — D10 #2/#3. The audit trail comes from the AUTHENTICATED actor and
+  // only from there. Tenant SCOPE is no longer a field this service reads at
+  // all (design D5): it comes from the ACTIVE `runInTenant` scope the
+  // controller opened before calling in, proven generically by
+  // `run-in-tenant.ts`/`tenant-context.service.spec.ts` (Phase 4/7) for every
+  // handler, not re-proven per service. What this service still owns and
+  // must keep proving is attribution.
+  describe('R23 — attributed to the caller', () => {
+    it('attributes the CompanyUser assignment to the calling actor', async () => {
       await service.createWithIdentity(ACTOR, VALID_BODY);
 
-      expect(companyUserRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          companyId: ACTOR.companyId,
-          createdByCompanyUserId: ACTOR.companyUserId,
-        }),
-      );
+      expect(companyUserCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ createdByCompanyUserId: ACTOR.companyUserId }),
+      });
     });
 
-    it('never widens to another company when a second caller mints an identity', async () => {
-      const otherActor = { companyId: 'company-other', companyUserId: 'company-user-other' };
+    it('attributes each mint to ITS OWN caller, not a stale one from a prior call', async () => {
+      const otherActor = { companyUserId: 'company-user-other' };
 
       await service.createWithIdentity(ACTOR, VALID_BODY);
       await service.createWithIdentity(otherActor, { ...VALID_BODY, login: 'otra.persona' });
 
-      const companyIds = companyUserRepository.create.mock.calls.map(
-        ([input]: [{ companyId: string }]) => input.companyId,
+      const attributions = companyUserCreate.mock.calls.map(
+        ([{ data }]: [{ data: { createdByCompanyUserId: string } }]) => data.createdByCompanyUserId,
       );
-      expect(companyIds).toEqual([ACTOR.companyId, otherActor.companyId]);
-      expect(companyUserRepository.create).toHaveBeenCalledTimes(2);
+      expect(attributions).toEqual([ACTOR.companyUserId, otherActor.companyUserId]);
+      expect(companyUserCreate).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -160,16 +172,16 @@ describe('CustomerIdentityService', () => {
       await expect(service.createWithIdentity(ACTOR, VALID_BODY)).rejects.toBeInstanceOf(
         DuplicateLoginError,
       );
-      expect(companyUserRepository.create).not.toHaveBeenCalled();
+      expect(companyUserCreate).not.toHaveBeenCalled();
       expect(customerRepository.create).not.toHaveBeenCalled();
     });
 
-    it('leaves a login that 403s MISSING_COMPANY_USER — never a silently permissionless account — when write #2 fails', async () => {
-      companyUserRepository.create.mockRejectedValue(new Error('connection reset'));
+    it('leaves a User with no tenant CompanyUser row — never a silently permissionless account — when write #2 fails', async () => {
+      companyUserCreate.mockRejectedValue(new Error('connection reset'));
 
       await expect(service.createWithIdentity(ACTOR, VALID_BODY)).rejects.toThrow('connection reset');
-      // The User exists (write #1 committed) but has no assignment, which is
-      // exactly the state `JwtStrategy` rejects loudly.
+      // The User exists (write #1 committed) but has no tenant assignment,
+      // which is exactly the state `TenantContextGuard` rejects loudly.
       expect(userRepository.create).toHaveBeenCalledTimes(1);
       expect(customerRepository.create).not.toHaveBeenCalled();
     });
@@ -180,9 +192,9 @@ describe('CustomerIdentityService', () => {
         order.push('user');
         return CREATED_USER;
       });
-      companyUserRepository.create.mockImplementation(async () => {
+      companyUserCreate.mockImplementation(async () => {
         order.push('companyUser');
-        return { id: 'assignment-1' };
+        return { id: CREATED_USER.id };
       });
       customerRepository.create.mockImplementation(async () => {
         order.push('customer');
@@ -204,7 +216,7 @@ describe('CustomerIdentityService', () => {
 
     expect(customerRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        userId: CREATED_USER.id,
+        companyUserId: CREATED_USER.id,
         fullName: VALID_BODY.fullName,
         documentId: 'D-1',
         note: 'walk-in',

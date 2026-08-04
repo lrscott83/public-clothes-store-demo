@@ -9,7 +9,14 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, Roles, RolesGuard, type SanitizedUser } from '@store-mgmt/api-common';
+import {
+  JwtAuthGuard,
+  Roles,
+  RolesGuard,
+  TenantContextGuard,
+  createRunInTenant,
+  type SanitizedUser,
+} from '@store-mgmt/api-common';
 import {
   DuplicateCustomerDocumentError,
   DuplicateCustomerUserError,
@@ -18,12 +25,13 @@ import {
   InvalidUserError,
   USER_ROLES,
 } from '@store-mgmt/domain';
+import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
 import type { Request } from 'express';
 import { CustomerIdentityService } from './customer-identity.service.js';
 import type { CreateCustomerWithIdentityDto, CustomerResponseDto } from './dto/index.js';
 
-/** `Request` carrying the `req.user` populated by `JwtStrategy` — never carries `passwordHash`. */
-type AuthenticatedRequest = Request & { user: SanitizedUser };
+/** `Request` carrying the `req.user` populated by `JwtStrategy` and `req.tenant` set by `TenantContextGuard` — never carries `passwordHash`. */
+type AuthenticatedRequest = Request & { user: SanitizedUser; tenant: TenantContext };
 
 /** Minimum password length — the same floor `api-idp`'s `CreateUserDto` enforces via `@MinLength(8)`. */
 const MIN_PASSWORD_LENGTH = 8;
@@ -58,7 +66,7 @@ function assertMinLength(value: unknown, field: string, min: number): asserts va
  * no writes and no password hashing.
  */
 @Controller('customers')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)
 @Roles(
   USER_ROLES.owner,
   USER_ROLES.admin,
@@ -66,7 +74,14 @@ function assertMinLength(value: unknown, field: string, min: number): asserts va
   USER_ROLES.sales_agent,
 )
 export class CustomerIdentityController {
-  constructor(private readonly customerIdentityService: CustomerIdentityService) {}
+  private readonly runInTenant: ReturnType<typeof createRunInTenant>;
+
+  constructor(
+    private readonly customerIdentityService: CustomerIdentityService,
+    tenantContext: TenantContextService,
+  ) {
+    this.runInTenant = createRunInTenant(tenantContext);
+  }
 
   @Post('with-identity')
   @HttpCode(HttpStatus.CREATED)
@@ -78,14 +93,20 @@ export class CustomerIdentityController {
     assertNonBlank(body?.login, 'login');
     assertMinLength(body?.password, 'password', MIN_PASSWORD_LENGTH);
 
-    // Tenant scope and provenance come from the authenticated actor and ONLY
-    // from there. `companyId`/`companyUserId` are guaranteed present:
-    // `JwtStrategy` refuses to hand back a `req.user` at all without an ACTIVE
-    // `CompanyUser` assignment.
-    return this.withDomainErrorMapping(() =>
-      this.customerIdentityService.createWithIdentity(
-        { companyId: req.user.companyId, companyUserId: req.user.companyUserId },
-        body,
+    // Provenance (`createdByCompanyUserId`) comes from the authenticated
+    // actor and ONLY from there — `req.user.companyUserId` is guaranteed
+    // present: `JwtStrategy`/`TenantContextGuard` refuse to hand back a
+    // resolved `req.user` at all without an ACTIVE `CompanyUser` assignment.
+    // Tenant SCOPE is `req.tenant`, opened by `runInTenant` here, not a field
+    // on `actor` — the tenant CompanyUser write inside the service resolves
+    // its client from THIS scope (design D5); the service opens none of its
+    // own.
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(() =>
+        this.customerIdentityService.createWithIdentity(
+          { companyUserId: req.user.companyUserId },
+          body,
+        ),
       ),
     );
   }

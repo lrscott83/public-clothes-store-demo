@@ -2,7 +2,6 @@ import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesGuard } from '@store-mgmt/api-common';
 import {
-  COMPANY_USER_REPOSITORY,
   CUSTOMER_REPOSITORY,
   DuplicateCustomerDocumentError,
   DuplicateCustomerUserError,
@@ -10,8 +9,14 @@ import {
   USER_REPOSITORY,
   USER_ROLES,
 } from '@store-mgmt/domain';
+import { TenantContextService } from '@store-mgmt/infra-db';
 import request from 'supertest';
-import { SAMPLE_AUTH_USER, overrideJwtAuth } from '../test-support/auth-test-helpers.js';
+import {
+  SAMPLE_AUTH_USER,
+  mockTenantContextService,
+  overrideJwtAuth,
+  overrideTenantContext,
+} from '../test-support/auth-test-helpers.js';
 import { CustomerIdentityController } from './customer-identity.controller.js';
 import { CustomerIdentityService } from './customer-identity.service.js';
 
@@ -27,7 +32,7 @@ const CREATED_USER = { id: 'user-minted-1', login: 'ana.torres', fullName: 'Ana 
 
 const CREATED_CUSTOMER = {
   id: 'customer-1',
-  userId: 'user-minted-1',
+  companyUserId: 'user-minted-1',
   fullName: 'Ana Torres',
   documentId: null,
   cellPhone: null,
@@ -41,26 +46,34 @@ const CREATED_CUSTOMER = {
 
 /**
  * Builds the route with the REAL `CustomerIdentityService` and the REAL
- * `RolesGuard` — only the repositories are mocked. Mocking the service would
- * make the load-bearing assertion below (what role actually reaches the
- * assignment write) vacuous, and that assertion is the whole point of R21.
+ * `RolesGuard` — only the repositories (and the tenant Prisma client
+ * `TenantContextGuard`/`TenantContextService` stand in for) are mocked.
+ * Mocking the service would make the load-bearing assertion below (what role
+ * actually reaches the assignment write) vacuous, and that assertion is the
+ * whole point of R21.
  */
 async function buildApp(
-  repos: { user: RepoMock; companyUser: RepoMock; customer: RepoMock },
+  repos: { user: RepoMock; companyUserCreate: jest.Mock; customer: RepoMock },
   roles: number | null,
 ): Promise<INestApplication> {
-  const builder = overrideJwtAuth(
-    Test.createTestingModule({
-      controllers: [CustomerIdentityController],
-      providers: [
-        CustomerIdentityService,
-        RolesGuard,
-        { provide: USER_REPOSITORY, useValue: repos.user },
-        { provide: COMPANY_USER_REPOSITORY, useValue: repos.companyUser },
-        { provide: CUSTOMER_REPOSITORY, useValue: repos.customer },
-      ],
-    }),
-    roles,
+  const tenantContext = {
+    ...mockTenantContextService(),
+    getClient: jest.fn().mockReturnValue({ companyUser: { create: repos.companyUserCreate } }),
+  };
+  const builder = overrideTenantContext(
+    overrideJwtAuth(
+      Test.createTestingModule({
+        controllers: [CustomerIdentityController],
+        providers: [
+          CustomerIdentityService,
+          RolesGuard,
+          { provide: USER_REPOSITORY, useValue: repos.user },
+          { provide: CUSTOMER_REPOSITORY, useValue: repos.customer },
+          { provide: TenantContextService, useValue: tenantContext },
+        ],
+      }),
+      roles,
+    ),
   );
   const module: TestingModule = await builder.compile();
   const app = module.createNestApplication();
@@ -70,12 +83,12 @@ async function buildApp(
 
 describe('CustomerIdentityController', () => {
   let app: INestApplication;
-  let repos: { user: RepoMock; companyUser: RepoMock; customer: RepoMock };
+  let repos: { user: RepoMock; companyUserCreate: jest.Mock; customer: RepoMock };
 
   beforeEach(async () => {
     repos = {
       user: { create: jest.fn().mockResolvedValue(CREATED_USER) },
-      companyUser: { create: jest.fn().mockResolvedValue({ id: 'assignment-1' }) },
+      companyUserCreate: jest.fn().mockResolvedValue({ id: 'user-minted-1' }),
       customer: { create: jest.fn().mockResolvedValue(CREATED_CUSTOMER) },
     };
     app = await buildApp(repos, USER_ROLES.sales_agent);
@@ -119,9 +132,9 @@ describe('CustomerIdentityController', () => {
           .send({ ...VALID_BODY, ...extra });
 
         expect(response.status).toBe(201);
-        expect(repos.companyUser.create).toHaveBeenCalledWith(
-          expect.objectContaining({ role: USER_ROLES.user }),
-        );
+        expect(repos.companyUserCreate).toHaveBeenCalledWith({
+          data: expect.objectContaining({ role: USER_ROLES.user }),
+        });
       },
     );
 
@@ -135,7 +148,7 @@ describe('CustomerIdentityController', () => {
       // caller named — otherwise an agent could bind a customer record to the
       // owner's identity, which is precisely what A14 keeps off this route.
       expect(repos.customer.create).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: CREATED_USER.id }),
+        expect.objectContaining({ companyUserId: CREATED_USER.id }),
       );
       expect(repos.user.create).toHaveBeenCalledWith(
         expect.not.objectContaining({ id: 'the-owners-user-id' }),
@@ -158,7 +171,7 @@ describe('CustomerIdentityController', () => {
 
       expect(response.status).toBe(400);
       expect(repos.user.create).not.toHaveBeenCalled();
-      expect(repos.companyUser.create).not.toHaveBeenCalled();
+      expect(repos.companyUserCreate).not.toHaveBeenCalled();
       expect(repos.customer.create).not.toHaveBeenCalled();
     });
   });
@@ -248,11 +261,8 @@ describe('CustomerIdentityController', () => {
       .send({ ...VALID_BODY, createdByCompanyUserId: 'somebody-else', companyId: 'other-company' })
       .expect(201);
 
-    expect(repos.companyUser.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        companyId: SAMPLE_AUTH_USER.companyId,
-        createdByCompanyUserId: SAMPLE_AUTH_USER.companyUserId,
-      }),
-    );
+    expect(repos.companyUserCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ createdByCompanyUserId: SAMPLE_AUTH_USER.companyUserId }),
+    });
   });
 });

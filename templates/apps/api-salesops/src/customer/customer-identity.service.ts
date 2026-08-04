@@ -1,19 +1,19 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   Customer as DomainCustomer,
-  ICompanyUserRepository,
   ICustomerRepository,
   IUserRepository,
   UserRoleValue,
 } from '@store-mgmt/domain';
 import {
-  COMPANY_USER_REPOSITORY,
   CUSTOMER_REPOSITORY,
   USER_REPOSITORY,
   USER_ROLES,
   createCustomer,
+  createTenantCompanyUser,
   createUser,
 } from '@store-mgmt/domain';
+import { TenantContextService } from '@store-mgmt/infra-db';
 import bcrypt from 'bcrypt';
 import type { CreateCustomerWithIdentityDto, CustomerResponseDto } from './dto/index.js';
 
@@ -47,27 +47,59 @@ const CUSTOMER_IDENTITY_ROLE: UserRoleValue = USER_ROLES.user;
  * `userId` and stays closed to a `sales_agent` — and keeping them apart is
  * what lets the agent create customers without ever gaining the power to
  * attach one to somebody else's identity.
+ *
+ * `CompanyUser` write, Phase 8 / task 8.3: retired off the pre-reshape
+ * `COMPANY_USER_REPOSITORY` (`PrismaCompanyUserRepository`, bound to
+ * `TenantDefaultPrismaService` — the LEGACY, unmigrated `public.company_user`
+ * table). Once `TenantContextGuard` is wired onto this route (this same
+ * phase), the caller's REAL request is scoped to a tenant schema
+ * (`store_mgmt_tenant_<uuid>`), not `public` — writing through the old
+ * repository would silently mint a row nobody's tenant-scoped lookup ever
+ * finds. This service now writes the reshaped tenant `CompanyUser` directly
+ * through the ACTIVE `runInTenant(req.tenant, ...)` scope the controller
+ * opens (design D5), the same way `TenantContextGuard` itself reads tenant
+ * `CompanyUser` rows (`tenant-context.guard.ts`) — there is no repository
+ * port for tenant `CompanyUser` writes (only `packages/domain`'s validating
+ * constructor, `createTenantCompanyUser`), so this mirrors that guard
+ * precedent rather than inventing one.
+ *
+ * KNOWN GAP, flagged rather than half-fixed (tasks.md task 8.3's explicit
+ * stop condition): the reshaped access model requires BOTH an ACTIVE master
+ * `Membership` AND a tenant `CompanyUser` (`resolveTenantAccess`,
+ * `TenantContextGuard`) — this flow writes only the latter. Master
+ * `Membership` rows are created by the provisioning saga (design D7 step 4)
+ * and, per `packages/domain/src/company/models.ts`'s own doc comment,
+ * "later, invite-accept flows (out of scope for this change)". Minting a
+ * `Membership` here would be exactly that invite-accept flow, which
+ * design.md explicitly defers past this SDD change — so it is NOT done here.
+ * Net effect: the walk-in customer's own login cannot yet authenticate
+ * anywhere (it fails LOUD — `TenantContextGuard`'s `NO_ACTIVE_MEMBERSHIP`
+ * 403 — never silently). That is a real, pre-existing product gap this
+ * change surfaces but does not close; closing it needs the "later" flow
+ * design.md itself named.
  */
 @Injectable()
 export class CustomerIdentityService {
   constructor(
     @Inject(USER_REPOSITORY) private readonly userRepository: IUserRepository,
-    @Inject(COMPANY_USER_REPOSITORY)
-    private readonly companyUserRepository: ICompanyUserRepository,
     @Inject(CUSTOMER_REPOSITORY) private readonly customerRepository: ICustomerRepository,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   /**
-   * `actor` is the AUTHENTICATED caller (`req.user`), never request-body data.
-   * It supplies both the tenant scope and the provisioning audit trail.
+   * `actor` is derived from the AUTHENTICATED caller (`req.user`), never
+   * request-body data — it supplies the provisioning audit trail
+   * (`createdByCompanyUserId`). Tenant SCOPE is NOT a field here: the caller
+   * (`CustomerIdentityController`) already opened it via
+   * `runInTenant(req.tenant, ...)` before calling this method (design D5) —
+   * `this.tenantContext.getClient()` below resolves from THAT active scope.
    *
    * The three writes are NOT transactional, and the ORDER is the design:
    *  1. `User` — a duplicate login fires here, before anything is written, so
    *     the common failure costs nothing and leaves nothing behind.
-   *  2. `CompanyUser` — without it the login is dead: since `app_user.roles`
-   *     was dropped, `JwtStrategy` refuses a user with no ACTIVE assignment.
-   *     Failing here therefore leaves an account that 403s loudly, not one
-   *     that silently authenticates with no permissions.
+   *  2. `CompanyUser` — the tenant-scoped role assignment (see the KNOWN GAP
+   *     note on the class above: this alone is not yet sufficient for the new
+   *     login to authenticate).
    *  3. `Customer` — failing here leaves an ordinary `user`-role account with
    *     no customer row: harmless, and re-runnable under a different login.
    *
@@ -75,7 +107,7 @@ export class CustomerIdentityService {
    * needs no unit-of-work port.
    */
   async createWithIdentity(
-    actor: { readonly companyId: string; readonly companyUserId: string },
+    actor: { readonly companyUserId: string },
     dto: CreateCustomerWithIdentityDto,
   ): Promise<CustomerResponseDto> {
     const userInput = {
@@ -90,12 +122,26 @@ export class CustomerIdentityService {
     createUser(userInput);
     const user = await this.userRepository.create(userInput);
 
-    await this.companyUserRepository.create({
-      userId: user.id,
-      companyId: actor.companyId,
+    // Invariant check only, discarded (same pattern as `createUser` above) —
+    // `id` IS the master `User.id` just minted (design D1's collapsed PK),
+    // never independently generated.
+    createTenantCompanyUser({
+      id: user.id,
       role: CUSTOMER_IDENTITY_ROLE,
-      status: 'ACTIVE',
       createdByCompanyUserId: actor.companyUserId,
+    });
+    // Direct tenant Prisma write — no repository port exists for tenant
+    // `CompanyUser` (see the class doc comment). No `companyId`/`status`
+    // field: company identity is the ACTIVE `runInTenant` scope this call
+    // resolves from, not a column (spec: "CompanyUser Collapsed-PK Shape");
+    // status lives solely on master `Membership`, which this flow does not
+    // create (see the KNOWN GAP note above).
+    await this.tenantContext.getClient().companyUser.create({
+      data: {
+        id: user.id,
+        role: CUSTOMER_IDENTITY_ROLE,
+        createdByCompanyUserId: actor.companyUserId,
+      },
     });
 
     // Mapped field by field, never spread: the body carries `login`/`password`
