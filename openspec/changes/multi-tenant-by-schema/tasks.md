@@ -52,7 +52,7 @@ Chain strategy: pending
 | 12a | `test(api-salesops): rewire e2e auth helper + 7 e2e specs for real tenant resolution (P12)` | 8 | ~450 | **High — flagged**, could split per resource (customer/order/commission vs category/product/warehouse) if it drags |
 | 12b | `test(api-idp): rewire 2 e2e specs for real tenant resolution (P12)` | 3 | ~150 | Low |
 | 13 | `test: cross-schema isolation proof, two tenants in one run (P5)` | 2 | ~200 | Low — must stay its own commit, not bundled |
-| 14 | `chore: eslint tenant-repo boundary + pnpm seed wiring + flag stale architecture.md` | 4 | ~120 | Low |
+| 14 | `chore: eslint tenant-repo boundary + collapse TenantCompanyUser alias + pnpm seed wiring + flag stale architecture.md` | 6 | ~150 | Low |
 
 ---
 
@@ -96,6 +96,7 @@ Three sub-commits by domain group — each is [RED: update spec to use 5.1's hel
 - [ ] 6.2 Sales (Order) + Commission (×3) repos.
 - [ ] 6.3 Inventory (StockLevel, StockMovement, Warehouse) + Product/Category + WarehouseOperator repos.
 - [ ] 6.4 Add the lint boundary check as a local `pnpm lint` run per group (full eslint rule ships in Phase 14) to confirm no tenant repo imports the master `PrismaService`.
+- [ ] 6.5 **Retire the pre-reshape `CompanyUser` from every consumer this phase touches.** Phase 1 left two shapes of the same concept alive: the reshaped one in `packages/domain/src/company/models.ts`, exported from the package root aliased as `TenantCompanyUser`/`createTenantCompanyUser`/`CreateTenantCompanyUserInput` (commit `f376942`), and the pre-reshape one in `company-user.ts` still reachable through `company/index.ts`'s wildcard. Both compile, so importing the wrong one is silent. Every repo re-sourced in 6.1–6.3 must bind the reshaped shape. End this phase by writing down, in the commit body, exactly which consumers still hold the old shape — expected: `packages/api-common` guards (Phase 7) and the provisioning saga (Phase 10).
 
 ## Phase 7: Guard chain — D4 (tenant resolution moves the bitmask)
 
@@ -145,7 +146,8 @@ This is one work unit by explicit constraint — the invariant comment and its r
 
 - [ ] 14.1 `packages/eslint-config/backend-boundaries.config.js` — add the rule: tenant-side repos under `packages/infra-db/src/{currency,customer,sales,commission,inventory,product,users/warehouse-operator}/` may not import the master `PrismaService`.
 - [ ] 14.2 Final `prisma/seed.js` wiring: master seed → provision one tenant via the saga (Phase 10) → seed it. Confirm `prisma migrate reset && pnpm seed` reproduces full state (spec success criteria).
-- [ ] 14.3 Add a one-line flag comment (not a rewrite — out of scope per design §5) noting `docs/system/architecture.md`'s "HTTP backend: does not exist" line is stale relative to this change.
+- [ ] 14.3 **Collapse the `TenantCompanyUser` alias and delete the pre-reshape `CompanyUser`.** Closes what 6.5 started, once Phases 7 and 10 have moved the last consumers. Delete `packages/domain/src/company/company-user.ts` and its test, drop the aliases in `packages/domain/src/index.ts` so the reshaped type exports as plain `CompanyUser`, and let `company/index.ts`'s wildcard carry it again. **This task does not get deferred** — the alias is Phase 1 scaffolding with a stated expiry, not a permanent name. If `rg 'company-user'` still returns a live consumer at this point, that is a Phase 7/10 task left unfinished; fix it here rather than shipping two shapes.
+- [ ] 14.4 Add a one-line flag comment (not a rewrite — out of scope per design §5) noting `docs/system/architecture.md`'s "HTTP backend: does not exist" line is stale relative to this change.
 
 ---
 
