@@ -79,8 +79,8 @@ No cutover/migration-of-existing-rows tasks anywhere in this phase or elsewhere 
 
 ## Phase 4: Tenant client factory (D2)
 
-- [ ] 4.1 [RED] `packages/infra-db/src/tenant/tenant-prisma-factory.spec.ts`, `tenant-context.service.spec.ts` — bounded pool (`max`, idle timeout, LRU cap), `getClient()` throws with no active context, `disposeClient` called on eviction and `onModuleDestroy`.
-- [ ] 4.2 [GREEN] `packages/infra-db/src/tenant/tenant-prisma-factory.ts`, `tenant-context.service.ts`, `tenant-database.service.ts` (`createSchema`/`deleteSchema`/`schemaExists`, raw `pg.Client`, applies `tenant-schema.sql` — the generated DDL is schema-unqualified, so the client MUST `SET search_path` to the tenant schema first or it writes into `public`; confirmed by 11.1's spike). Satisfies spec: salesops-tenancy "Tenant Client Acquisition Fails Loud, Never Falls Back".
+- [x] 4.1 [RED] `packages/infra-db/src/tenant/tenant-prisma-factory.spec.ts`, `tenant-context.service.spec.ts` — bounded pool (`max`, idle timeout, LRU cap), `getClient()` throws with no active context, `disposeClient` called on eviction and `onModuleDestroy`. Scope enhanced with a third RED spec, `tenant-database.service.spec.ts`, proving 4.2's search_path correctness against the real DB (not explicitly listed here but required by this phase's own hard constraint).
+- [x] 4.2 [GREEN] `packages/infra-db/src/tenant/tenant-prisma-factory.ts`, `tenant-context.service.ts`, `tenant-database.service.ts` (`createSchema`/`deleteSchema`/`schemaExists`, raw `pg.Client`, applies `tenant-schema.sql` — the generated DDL is schema-unqualified, so the client MUST `SET search_path` to the tenant schema first or it writes into `public`; confirmed by 11.1's spike). Satisfies spec: salesops-tenancy "Tenant Client Acquisition Fails Loud, Never Falls Back".
 
 ## Phase 5: Test infra — schema-per-suite (P12, Option C scoped)
 
