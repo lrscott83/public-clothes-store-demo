@@ -56,9 +56,9 @@ export class PrismaMembershipRepository implements IMembershipRepository {
     return row ? toDomain(row) : null;
   }
 
-  async findActiveByUserId(userId: string): Promise<DomainMembership | null> {
-    const row = await this.prisma.membership.findFirst({ where: { userId, status: 'ACTIVE' } });
-    return row ? toDomain(row) : null;
+  async listActiveByUserId(userId: string): Promise<DomainMembership[]> {
+    const rows = await this.prisma.membership.findMany({ where: { userId, status: 'ACTIVE' } });
+    return rows.map(toDomain);
   }
 
   async listByCompany(companyId: string): Promise<DomainMembership[]> {

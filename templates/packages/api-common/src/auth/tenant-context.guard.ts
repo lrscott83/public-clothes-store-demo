@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -13,6 +14,7 @@ import {
   resolveTenantAccess,
   type ICompanyRepository,
   type IMembershipRepository,
+  type Membership,
   type TenantCompanyUser,
 } from '@store-mgmt/domain';
 import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
@@ -81,7 +83,7 @@ export class TenantContextGuard implements CanActivate {
     const requestedCompanyId = this.readCompanyIdHeader(request);
     const membership = requestedCompanyId
       ? await this.membershipRepository.findByUserAndCompany(user.id, requestedCompanyId)
-      : await this.membershipRepository.findActiveByUserId(user.id);
+      : await this.resolveSoleActiveMembership(user.id);
 
     if (!membership || membership.status !== 'ACTIVE') {
       this.logger.error(
@@ -130,6 +132,31 @@ export class TenantContextGuard implements CanActivate {
   private readCompanyIdHeader(request: TenantGuardRequest): string | undefined {
     const raw = request.headers[COMPANY_ID_HEADER];
     return Array.isArray(raw) ? raw[0] : raw;
+  }
+
+  /**
+   * The header-less fallback, and it is deliberately narrow: the spec allows
+   * it only when the caller has a *sole* ACTIVE membership. Two or more and
+   * there is no sole membership to fall back to — the request is ambiguous
+   * and the client must name the company. Answering it with whichever row
+   * the database happened to return first would serve one company's data
+   * under another company's intent, and it would look like a success.
+   *
+   * Zero is left to the caller's existing NO_ACTIVE_MEMBERSHIP path (403);
+   * only the ambiguous case is decided here, and it is a client error (400),
+   * not an authorization one — the caller may well be entitled to both.
+   */
+  private async resolveSoleActiveMembership(userId: string): Promise<Membership | null> {
+    const active = await this.membershipRepository.listActiveByUserId(userId);
+    if (active.length > 1) {
+      this.logger.error(
+        `AMBIGUOUS_MEMBERSHIP: user ${userId} has ${active.length} ACTIVE memberships and sent no ${COMPANY_ID_HEADER}`,
+      );
+      throw new BadRequestException(
+        `${COMPANY_ID_HEADER} header is required when the caller belongs to more than one company`,
+      );
+    }
+    return active[0] ?? null;
   }
 
   /**

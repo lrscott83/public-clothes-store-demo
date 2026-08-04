@@ -1,4 +1,4 @@
-import { ForbiddenException, InternalServerErrorException, Logger, type ExecutionContext } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, InternalServerErrorException, Logger, type ExecutionContext } from '@nestjs/common';
 import type { ICompanyRepository, IMembershipRepository, Membership, TenantCompanyUser } from '@store-mgmt/domain';
 import { USER_ROLES } from '@store-mgmt/domain';
 import type { TenantContext, TenantContextService } from '@store-mgmt/infra-db';
@@ -58,15 +58,15 @@ function makeCompanyRepository(overrides: { isActive?: boolean; schemaName?: str
 
 function makeMembershipRepository(opts: {
   findByUserAndCompany?: Membership | null;
-  findActiveByUserId?: Membership | null;
+  listActiveByUserId?: Membership[];
 } = {}) {
   const findByUserAndCompany = jest.fn().mockResolvedValue(
     opts.findByUserAndCompany === undefined ? membership() : opts.findByUserAndCompany,
   );
-  const findActiveByUserId = jest.fn().mockResolvedValue(
-    opts.findActiveByUserId === undefined ? membership() : opts.findActiveByUserId,
+  const listActiveByUserId = jest.fn().mockResolvedValue(
+    opts.listActiveByUserId === undefined ? [membership()] : opts.listActiveByUserId,
   );
-  return { findByUserAndCompany, findActiveByUserId } as unknown as IMembershipRepository;
+  return { findByUserAndCompany, listActiveByUserId } as unknown as IMembershipRepository;
 }
 
 /** Fake `TenantContextService` — `run()` executes `fn` immediately, `getClient()` returns a stub tenant client. */
@@ -123,20 +123,38 @@ describe('TenantContextGuard', () => {
     const result = await guard.canActivate(makeContext(request));
 
     expect(result).toBe(true);
-    expect(membershipRepository.findActiveByUserId).toHaveBeenCalledWith('user-1');
+    expect(membershipRepository.listActiveByUserId).toHaveBeenCalledWith('user-1');
     expect(membershipRepository.findByUserAndCompany).not.toHaveBeenCalled();
   });
 
-  it('does NOT resolve a tenant when the caller has multiple Memberships of mixed status and no header — only the sole ACTIVE one is used', async () => {
-    // Repository contract returns exactly one Membership from findActiveByUserId
-    // (the "sole ACTIVE" fallback, design D4) — this proves the guard trusts
-    // and uses that single result correctly when several rows of DIFFERENT
-    // statuses exist for the user, not that the guard itself detects
-    // ambiguity between multiple ACTIVE rows (see apply-progress notes: the
-    // repository's `findFirst` has no such ambiguity guard either — flagged
-    // separately, out of this guard's scope).
+  it('rejects with 400 when the caller has SEVERAL ACTIVE memberships and sent no X-Company-Id — never picks one arbitrarily', async () => {
+    // The spec says the fallback is the caller's *sole* ACTIVE Membership.
+    // With more than one there is no sole membership, so there is nothing to
+    // fall back to: the request is ambiguous and the client must say which
+    // company it means. Silently serving whichever row the database returned
+    // first is a cross-tenant read that looks like a success.
     const findUnique = jest.fn().mockResolvedValue(tenantCompanyUser());
-    const membershipRepository = makeMembershipRepository({ findActiveByUserId: membership({ id: 'm-active' }) });
+    const membershipRepository = makeMembershipRepository({
+      listActiveByUserId: [membership({ id: 'm-1' }), membership({ id: 'm-2' })],
+    });
+    const companyRepository = makeCompanyRepository();
+    const tenantContext = makeTenantContextService(findUnique);
+    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+
+    const request = { user: authUser(), headers: {} };
+
+    await expect(guard.canActivate(makeContext(request))).rejects.toThrow(BadRequestException);
+    expect(request.tenant).toBeUndefined();
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it('does NOT resolve a tenant when the caller has multiple Memberships of mixed status and no header — only the sole ACTIVE one is used', async () => {
+    // `listActiveByUserId` returns only ACTIVE rows, so a user with several
+    // memberships of DIFFERENT statuses still has exactly one to fall back
+    // to. That is the case here: the fallback works, unambiguously. The
+    // several-ACTIVE case is the test above, which rejects.
+    const findUnique = jest.fn().mockResolvedValue(tenantCompanyUser());
+    const membershipRepository = makeMembershipRepository({ listActiveByUserId: [membership({ id: 'm-active' })] });
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
     const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
@@ -301,6 +319,6 @@ describe('TenantContextGuard', () => {
     const request = { user: undefined, headers: {} };
 
     await expect(guard.canActivate(makeContext(request))).rejects.toThrow(ForbiddenException);
-    expect(membershipRepository.findActiveByUserId).not.toHaveBeenCalled();
+    expect(membershipRepository.listActiveByUserId).not.toHaveBeenCalled();
   });
 });

@@ -78,23 +78,39 @@ describe('PrismaMembershipRepository', () => {
     expect(found).toBeNull();
   });
 
-  it('findActiveByUserId() returns the sole ACTIVE Membership for a user', async () => {
+  it('listActiveByUserId() returns the sole ACTIVE Membership for a user', async () => {
     const { userId, companyId } = await createUserAndCompany();
     await repository.create({ userId, companyId, status: 'ACTIVE' });
 
-    const found = await repository.findActiveByUserId(userId);
+    const found = await repository.listActiveByUserId(userId);
 
-    expect(found).not.toBeNull();
-    expect(found?.companyId).toBe(companyId);
+    expect(found).toHaveLength(1);
+    expect(found[0].companyId).toBe(companyId);
   });
 
-  it('findActiveByUserId() returns null when the only Membership is not ACTIVE', async () => {
+  it('listActiveByUserId() returns empty when the only Membership is not ACTIVE', async () => {
     const { userId, companyId } = await createUserAndCompany();
     await repository.create({ userId, companyId, status: 'REVOKED' });
 
-    const found = await repository.findActiveByUserId(userId);
+    const found = await repository.listActiveByUserId(userId);
 
-    expect(found).toBeNull();
+    expect(found).toEqual([]);
+  });
+
+  it('listActiveByUserId() returns EVERY ACTIVE Membership, never just the first', async () => {
+    // The ambiguity the guard has to detect only exists if the repository
+    // reports it. A `findFirst` here would hand back one arbitrary company
+    // and the guard could not tell an unambiguous request from an ambiguous
+    // one.
+    const { userId, companyId } = await createUserAndCompany();
+    const second = await createUserAndCompany();
+    await repository.create({ userId, companyId, status: 'ACTIVE' });
+    await repository.create({ userId, companyId: second.companyId, status: 'ACTIVE' });
+
+    const found = await repository.listActiveByUserId(userId);
+
+    expect(found).toHaveLength(2);
+    expect(found.map((m) => m.companyId).sort()).toEqual([companyId, second.companyId].sort());
   });
 
   it('listByCompany() returns every Membership for a company', async () => {
