@@ -1,6 +1,11 @@
 import { Module } from '@nestjs/common';
-import { CUSTOMER_REPOSITORY, USER_REPOSITORY } from '@store-mgmt/domain';
-import { InfraDbModule, PrismaCustomerRepository, PrismaUserRepository } from '@store-mgmt/infra-db';
+import { CUSTOMER_REPOSITORY, MEMBERSHIP_REPOSITORY, USER_REPOSITORY } from '@store-mgmt/domain';
+import {
+  InfraDbModule,
+  PrismaCustomerRepository,
+  PrismaMembershipRepository,
+  PrismaUserRepository,
+} from '@store-mgmt/infra-db';
 import { CustomerIdentityController } from './customer-identity.controller.js';
 import { CustomerIdentityService } from './customer-identity.service.js';
 import { CustomerController } from './customer.controller.js';
@@ -28,6 +33,9 @@ import { CustomerService } from './customer.service.js';
     CustomerIdentityService,
     { provide: CUSTOMER_REPOSITORY, useClass: PrismaCustomerRepository },
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
+    // Master-side: the ACTIVE Membership half of the access grant that
+    // `CustomerIdentityService` writes alongside the tenant `CompanyUser`.
+    { provide: MEMBERSHIP_REPOSITORY, useClass: PrismaMembershipRepository },
   ],
 })
 export class CustomerModule {}

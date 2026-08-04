@@ -6,6 +6,7 @@ import {
   DuplicateCustomerDocumentError,
   DuplicateCustomerUserError,
   DuplicateLoginError,
+  MEMBERSHIP_REPOSITORY,
   USER_REPOSITORY,
   USER_ROLES,
 } from '@store-mgmt/domain';
@@ -53,7 +54,7 @@ const CREATED_CUSTOMER = {
  * whole point of R21.
  */
 async function buildApp(
-  repos: { user: RepoMock; companyUserCreate: jest.Mock; customer: RepoMock },
+  repos: { user: RepoMock; companyUserCreate: jest.Mock; customer: RepoMock; membership: RepoMock },
   roles: number | null,
 ): Promise<INestApplication> {
   const tenantContext = {
@@ -69,6 +70,7 @@ async function buildApp(
           RolesGuard,
           { provide: USER_REPOSITORY, useValue: repos.user },
           { provide: CUSTOMER_REPOSITORY, useValue: repos.customer },
+          { provide: MEMBERSHIP_REPOSITORY, useValue: repos.membership },
           { provide: TenantContextService, useValue: tenantContext },
         ],
       }),
@@ -83,13 +85,14 @@ async function buildApp(
 
 describe('CustomerIdentityController', () => {
   let app: INestApplication;
-  let repos: { user: RepoMock; companyUserCreate: jest.Mock; customer: RepoMock };
+  let repos: { user: RepoMock; companyUserCreate: jest.Mock; customer: RepoMock; membership: RepoMock };
 
   beforeEach(async () => {
     repos = {
       user: { create: jest.fn().mockResolvedValue(CREATED_USER) },
       companyUserCreate: jest.fn().mockResolvedValue({ id: 'user-minted-1' }),
       customer: { create: jest.fn().mockResolvedValue(CREATED_CUSTOMER) },
+      membership: { create: jest.fn().mockResolvedValue({ id: 'membership-1' }) },
     };
     app = await buildApp(repos, USER_ROLES.sales_agent);
   });

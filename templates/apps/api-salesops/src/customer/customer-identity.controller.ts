@@ -104,7 +104,7 @@ export class CustomerIdentityController {
     return this.runInTenant(req.tenant, () =>
       this.withDomainErrorMapping(() =>
         this.customerIdentityService.createWithIdentity(
-          { companyUserId: req.user.companyUserId },
+          { companyUserId: req.user.companyUserId, companyId: req.user.companyId },
           body,
         ),
       ),

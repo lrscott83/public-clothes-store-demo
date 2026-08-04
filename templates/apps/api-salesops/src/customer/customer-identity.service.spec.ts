@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Test, TestingModule } from '@nestjs/testing';
-import { CUSTOMER_REPOSITORY, DuplicateLoginError, USER_REPOSITORY, USER_ROLES } from '@store-mgmt/domain';
+import { CUSTOMER_REPOSITORY, DuplicateLoginError, MEMBERSHIP_REPOSITORY, USER_REPOSITORY, USER_ROLES } from '@store-mgmt/domain';
 import { TenantContextService } from '@store-mgmt/infra-db';
 import { CustomerIdentityService } from './customer-identity.service.js';
 
 type RepoMock = Record<string, jest.Mock>;
 
-const ACTOR = { companyUserId: 'company-user-caller' };
+const ACTOR = { companyUserId: 'company-user-caller', companyId: 'company-1' };
 
 const VALID_BODY = {
   fullName: 'Ana Torres',
@@ -35,12 +35,14 @@ describe('CustomerIdentityService', () => {
   let service: CustomerIdentityService;
   let userRepository: RepoMock;
   let companyUserCreate: jest.Mock;
+  let membershipRepository: RepoMock;
   let customerRepository: RepoMock;
 
   beforeEach(async () => {
     userRepository = { create: jest.fn().mockResolvedValue(CREATED_USER) };
     companyUserCreate = jest.fn().mockResolvedValue({ id: 'user-minted-1' });
     customerRepository = { create: jest.fn().mockResolvedValue(CREATED_CUSTOMER) };
+    membershipRepository = { create: jest.fn().mockResolvedValue({ id: 'membership-1' }) };
     // `TenantContextService` stand-in: only `getClient()` is exercised here —
     // the ACTIVE scope itself is the controller's job (`runInTenant`, design
     // D5), not this service's, so `.run()` is never called from inside it.
@@ -53,6 +55,7 @@ describe('CustomerIdentityService', () => {
         CustomerIdentityService,
         { provide: USER_REPOSITORY, useValue: userRepository },
         { provide: CUSTOMER_REPOSITORY, useValue: customerRepository },
+        { provide: MEMBERSHIP_REPOSITORY, useValue: membershipRepository },
         { provide: TenantContextService, useValue: tenantContext },
       ],
     }).compile();
@@ -140,6 +143,35 @@ describe('CustomerIdentityService', () => {
   // handler, not re-proven per service. What this service still owns and
   // must keep proving is attribution.
   describe('R23 — attributed to the caller', () => {
+    it('creates an ACTIVE master Membership so the minted login can actually authenticate', async () => {
+      // The pre-reshape flow wrote `status: 'ACTIVE'` on the CompanyUser row,
+      // and that status was what granted access. D1 moved status to the master
+      // Membership, so writing only the tenant CompanyUser mints credentials
+      // that resolveTenantAccess/TenantContextGuard reject with 403. The
+      // Membership here is the literal translation of the status column that
+      // was removed, not a new invite-accept capability.
+      await service.createWithIdentity(ACTOR, VALID_BODY);
+
+      expect(membershipRepository.create).toHaveBeenCalledWith({
+        userId: CREATED_USER.id,
+        companyId: ACTOR.companyId,
+        status: 'ACTIVE',
+      });
+    });
+
+    it('scopes the Membership to the ACTOR\'s company, never to request-body data', async () => {
+      const otherCompanyActor = { companyUserId: 'company-user-caller', companyId: 'company-9' };
+
+      await service.createWithIdentity(otherCompanyActor, {
+        ...VALID_BODY,
+        login: 'other.login',
+      } as typeof VALID_BODY & { companyId?: string });
+
+      expect(membershipRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ companyId: 'company-9' }),
+      );
+    });
+
     it('attributes the CompanyUser assignment to the calling actor', async () => {
       await service.createWithIdentity(ACTOR, VALID_BODY);
 
@@ -149,7 +181,7 @@ describe('CustomerIdentityService', () => {
     });
 
     it('attributes each mint to ITS OWN caller, not a stale one from a prior call', async () => {
-      const otherActor = { companyUserId: 'company-user-other' };
+      const otherActor = { companyUserId: 'company-user-other', companyId: 'company-1' };
 
       await service.createWithIdentity(ACTOR, VALID_BODY);
       await service.createWithIdentity(otherActor, { ...VALID_BODY, login: 'otra.persona' });

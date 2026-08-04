@@ -2,11 +2,13 @@ import { Inject, Injectable } from '@nestjs/common';
 import type {
   Customer as DomainCustomer,
   ICustomerRepository,
+  IMembershipRepository,
   IUserRepository,
   UserRoleValue,
 } from '@store-mgmt/domain';
 import {
   CUSTOMER_REPOSITORY,
+  MEMBERSHIP_REPOSITORY,
   USER_REPOSITORY,
   USER_ROLES,
   createCustomer,
@@ -63,26 +65,24 @@ const CUSTOMER_IDENTITY_ROLE: UserRoleValue = USER_ROLES.user;
  * constructor, `createTenantCompanyUser`), so this mirrors that guard
  * precedent rather than inventing one.
  *
- * KNOWN GAP, flagged rather than half-fixed (tasks.md task 8.3's explicit
- * stop condition): the reshaped access model requires BOTH an ACTIVE master
- * `Membership` AND a tenant `CompanyUser` (`resolveTenantAccess`,
- * `TenantContextGuard`) — this flow writes only the latter. Master
- * `Membership` rows are created by the provisioning saga (design D7 step 4)
- * and, per `packages/domain/src/company/models.ts`'s own doc comment,
- * "later, invite-accept flows (out of scope for this change)". Minting a
- * `Membership` here would be exactly that invite-accept flow, which
- * design.md explicitly defers past this SDD change — so it is NOT done here.
- * Net effect: the walk-in customer's own login cannot yet authenticate
- * anywhere (it fails LOUD — `TenantContextGuard`'s `NO_ACTIVE_MEMBERSHIP`
- * 403 — never silently). That is a real, pre-existing product gap this
- * change surfaces but does not close; closing it needs the "later" flow
- * design.md itself named.
+ * ACCESS REQUIRES TWO ROWS. The reshaped model grants access only when an
+ * ACTIVE master `Membership` AND a tenant `CompanyUser` both exist
+ * (`resolveTenantAccess`, `TenantContextGuard`). The pre-reshape flow wrote
+ * `status: 'ACTIVE'` on the `CompanyUser` row and that status WAS the grant;
+ * D1 moved status to `Membership`, so this flow writes both. The `Membership`
+ * here is the literal translation of the column D1 removed — not the
+ * invite-accept flow `packages/domain/src/company/models.ts` defers, which is
+ * a different thing: a user accepting access to someone else's company. This
+ * is a company minting a user inside its OWN tenant. Drop the `Membership`
+ * write and this endpoint hands out credentials that cannot authenticate
+ * anywhere.
  */
 @Injectable()
 export class CustomerIdentityService {
   constructor(
     @Inject(USER_REPOSITORY) private readonly userRepository: IUserRepository,
     @Inject(CUSTOMER_REPOSITORY) private readonly customerRepository: ICustomerRepository,
+    @Inject(MEMBERSHIP_REPOSITORY) private readonly membershipRepository: IMembershipRepository,
     private readonly tenantContext: TenantContextService,
   ) {}
 
@@ -107,7 +107,7 @@ export class CustomerIdentityService {
    * needs no unit-of-work port.
    */
   async createWithIdentity(
-    actor: { readonly companyUserId: string },
+    actor: { readonly companyUserId: string; readonly companyId: string },
     dto: CreateCustomerWithIdentityDto,
   ): Promise<CustomerResponseDto> {
     const userInput = {
@@ -142,6 +142,16 @@ export class CustomerIdentityService {
         role: CUSTOMER_IDENTITY_ROLE,
         createdByCompanyUserId: actor.companyUserId,
       },
+    });
+
+    // The master half of the access grant. `companyId` comes from the
+    // AUTHENTICATED actor (`req.user.companyId`, set by `TenantContextGuard`),
+    // never from the request body — a caller must not be able to mint a
+    // membership into a company it does not belong to.
+    await this.membershipRepository.create({
+      userId: user.id,
+      companyId: actor.companyId,
+      status: 'ACTIVE',
     });
 
     // Mapped field by field, never spread: the body carries `login`/`password`
