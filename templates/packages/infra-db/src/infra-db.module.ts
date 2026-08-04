@@ -16,8 +16,14 @@ import { TenantDatabaseService } from './tenant/tenant-database.service.js';
  *
  * `TenantPrismaFactory`/`TenantContextService`/`TenantDatabaseService`
  * (task 4.1/4.2, design.md D2/D6/D7) are the real per-tenant acquisition
- * path. They do not yet REPLACE `TenantDefaultPrismaService` as the
- * injected dependency of the ~13 tenant-side repos — that swap is Phase 6.
+ * path. Phase 6 (6.1-6.3) swapped them in for the ~12 repos design.md's
+ * file map actually scopes to it (currency, customer, sales/order,
+ * commission x3, inventory x3, product/category, warehouse-operator).
+ * `PrismaCompanyUserRepository` is NOT one of them (design.md file map: one
+ * of the 5 master-side repos left unchanged) — it still injects
+ * `TenantDefaultPrismaService` above, old shape and old client, until
+ * Phase 7/10 retire its callers (task 6.5 audited this — see tasks.md
+ * Phase 6's retirement inventory).
  */
 @Module({
   providers: [
