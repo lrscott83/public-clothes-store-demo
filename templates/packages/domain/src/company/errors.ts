@@ -35,10 +35,18 @@ export class MissingCompanyUserError extends Error {
   }
 }
 
-/** Thrown when `createCompanyUser` input violates an invariant (role/userId/companyId). */
+/** Thrown when `createCompanyUser` input violates an invariant (role/id). */
 export class InvalidCompanyUserError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'InvalidCompanyUserError';
+  }
+}
+
+/** Thrown when `createMembership` input violates an invariant (userId/companyId). */
+export class InvalidMembershipError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidMembershipError';
   }
 }

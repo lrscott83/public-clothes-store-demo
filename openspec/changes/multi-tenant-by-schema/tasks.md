@@ -58,9 +58,9 @@ Chain strategy: pending
 
 ## Phase 1: Domain foundations
 
-- [ ] 1.1 [RED] `packages/domain/src/company/models.test.ts` — failing tests for reshaped `CompanyUser` (no `userId`/`companyId`), `Membership` (status transitions), `resolveTenantAccess` policy (ACTIVE Membership + tenant CompanyUser → access; anything else → denied).
-- [ ] 1.2 [GREEN] `packages/domain/src/company/models.ts`, `imembership.repository.ts` (port), `resolve-tenant-access.ts` — implement to pass 1.1. Satisfies spec: salesops-companies "Master Membership Gates Company Access", "Membership Status Gates Company Access".
-- [ ] 1.3 Export new types from `packages/domain/src/index.ts`.
+- [x] 1.1 [RED] `packages/domain/src/company/models.test.ts` — failing tests for reshaped `CompanyUser` (no `userId`/`companyId`), `Membership` (status transitions), `resolveTenantAccess` policy (ACTIVE Membership + tenant CompanyUser → access; anything else → denied).
+- [x] 1.2 [GREEN] `packages/domain/src/company/models.ts`, `imembership.repository.ts` (port), `resolve-tenant-access.ts` — implement to pass 1.1. Satisfies spec: salesops-companies "Master Membership Gates Company Access", "Membership Status Gates Company Access".
+- [x] 1.3 Export new types from `packages/domain/src/index.ts`.
 
 ## Phase 2: schemaName helper (D3)
 
