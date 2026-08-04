@@ -125,6 +125,7 @@ This is one work unit by explicit constraint — the invariant comment and its r
 
 - [ ] 8.1 Add `TenantContextGuard` to `@UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)` on the 10 guarded `apps/api-salesops/src/**/*.controller.ts` files (health excluded — no guards).
 - [ ] 8.2 Wrap each tenant-touching handler body in `runInTenant(req.tenant, () => service.x(...))` — one line per handler, per D5. Update each controller's `*.controller.spec.ts` guard mocks accordingly.
+- [ ] 8.3 Retire the pre-reshape `CompanyUser` from `apps/api-salesops/src/customer/customer-identity.service.ts` (+ its 2 specs, `customer.module.ts`). **Added after 6.5's audit.** 6.1 touched this file for DTO mapping but it still mints role grants through the old shape, and 6.5 found no task named it. It needs this phase's tenant-context wiring to move, and it covers a non-owner signup path that Phase 10's saga does not — so if that path turns out to need saga work too, stop and say so rather than half-moving it.
 
 ## Phase 9: Catalog templating (P8/P9)
 
@@ -136,6 +137,7 @@ This is one work unit by explicit constraint — the invariant comment and its r
 - [ ] 10.1 [RED] `apps/api-idp/src/company/create-company.saga.spec.ts` — happy path (owner + populated catalog, no follow-up request needed), mid-saga failure rolls back prior steps, failing compensation writes `ProvisioningIncident`.
 - [ ] 10.2 [GREEN] `apps/api-idp/src/company/create-company.saga.ts` — 6 steps with reverse-order compensation (§D7), step 6 (catalog copy, Phase 9) AWAITED. Replace `AuthService.signup`'s `resolveSoleCompany` with explicit `Membership` lookup.
 - [ ] 10.3 `packages/infra-db/scripts/tenant-orphan-sweep.ts` — reconciles orphan schemas, dangling `Company.schemaName`, `Membership` with no tenant `CompanyUser`.
+- [ ] 10.4 Retire the pre-reshape `CompanyUser` from `apps/api-idp/src/users/users.service.ts` (+ spec, `users.module.ts`). **Added after 6.5's audit** — 6.5 predicted the remainder would be the api-common guards plus the saga, and it undercounted: `UsersService` holds the old shape and no task named it. While here, fix the two long-standing typecheck errors this file's spec carries (`users.service.spec.ts:30` missing `createdByCompanyUserId`, and its twin at `auth.service.spec.ts:82`) — they predate this change but Phase 10 is where these files get rewritten anyway.
 
 ## Phase 11: Migration tool + drift detection (D6)
 
