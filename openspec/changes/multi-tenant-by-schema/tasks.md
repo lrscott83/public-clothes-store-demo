@@ -64,8 +64,8 @@ Chain strategy: pending
 
 ## Phase 2: schemaName helper (D3)
 
-- [ ] 2.1 [RED] `packages/infra-db/src/tenant/schema-name.spec.ts` — `schemaNameFor(companyId)` UUID validation + format, `assertSchemaName(name)` rejection of malformed names.
-- [ ] 2.2 [GREEN] `packages/infra-db/src/tenant/schema-name.ts`. Satisfies spec: salesops-tenancy "Schema-Per-Tenant Topology" (validated-everywhere requirement).
+- [x] 2.1 [RED] `packages/infra-db/src/tenant/schema-name.spec.ts` — `schemaNameFor(companyId)` UUID validation + format, `assertSchemaName(name)` rejection of malformed names.
+- [x] 2.2 [GREEN] `packages/infra-db/src/tenant/schema-name.ts`. Satisfies spec: salesops-tenancy "Schema-Per-Tenant Topology" (validated-everywhere requirement).
 
 ## Phase 3: Prisma schema split
 
