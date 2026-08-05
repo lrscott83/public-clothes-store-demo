@@ -1,3 +1,4 @@
+import { DuplicateCompanySlugError } from '@store-mgmt/domain';
 import { PrismaMasterService } from '../master-prisma-client.js';
 import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCompanyRepository } from './prisma-company.repository.js';
@@ -6,9 +7,9 @@ import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 /**
  * Integration tests against the real `store_mgmt_test` Postgres database (no
  * mocks) — same discipline as `prisma-customer.repository.spec.ts`.
- * `ICompanyRepository` is deliberately READ-ONLY (design.md §4) — rows are
- * seeded directly via `prisma.company.create` in test setup, mirroring how
- * migration 001 + `company/seed.ts` are the only production writers.
+ * `create`/`setSchemaName`/`delete` are the provisioning saga's writes
+ * (design.md D7, `create-company.saga.ts`) — the ONLY writer of a `Company`
+ * row in production; `list`/`findById` stay pure reads.
  * `Company` now lives on the master client (task 3.5); `company_user` still
  * has a real, RESTRICT-ing FK to `company` (unchanged legacy table, see
  * `TenantDefaultPrismaService`'s doc comment), so it must still be cleared
@@ -102,6 +103,14 @@ describe('PrismaCompanyRepository', () => {
     const rolledBack = await repository.setSchemaName(created.id, null);
 
     expect(rolledBack.schemaName).toBeNull();
+  });
+
+  it('create() maps a duplicate slug (P2002) to DuplicateCompanySlugError, no application-level pre-check', async () => {
+    await repository.create({ name: 'Tienda Nueva', slug: 'tienda-nueva' });
+
+    await expect(repository.create({ name: 'Otra Tienda', slug: 'tienda-nueva' })).rejects.toBeInstanceOf(
+      DuplicateCompanySlugError,
+    );
   });
 
   it('delete() removes a Company row — step 1 compensation', async () => {

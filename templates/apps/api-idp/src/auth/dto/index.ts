@@ -5,5 +5,6 @@ export * from './refresh.dto.js';
 export * from './password-reset-request.dto.js';
 export * from './password-reset-confirm.dto.js';
 export * from './user-response.dto.js';
+export * from './signup-response.dto.js';
 export * from './login-response.dto.js';
 export * from './refresh-response.dto.js';

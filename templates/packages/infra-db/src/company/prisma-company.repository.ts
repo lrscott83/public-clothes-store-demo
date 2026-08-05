@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Company as DomainCompany, CreateCompanyInput, ICompanyRepository } from '@store-mgmt/domain';
+import { DuplicateCompanySlugError } from '@store-mgmt/domain';
+import { Prisma } from '../../generated/master/client.js';
 import { PrismaMasterService } from '../master-prisma-client.js';
 
 /** Shape shared by every row Prisma returns for the `Company` model. */
@@ -26,10 +28,40 @@ function toDomain(row: CompanyRow): DomainCompany {
 }
 
 /**
- * Prisma adapter for `ICompanyRepository`. `list()` is the input to
- * `resolveSoleCompany` at signup time. `create`/`setSchemaName`/`delete`
- * back the provisioning saga (design.md D7, `apps/api-idp/src/company/create-company.saga.ts`)
- * — the only writer of a `Company` row.
+ * True when `err` is a Prisma unique-constraint violation (P2002) on
+ * `target`. Mirrors `PrismaUserRepository.isUniqueViolation`/
+ * `PrismaCustomerRepository.isUniqueViolation` — the driver-adapter + WASM
+ * query compiler architecture surfaces the violated column(s) at
+ * `err.meta.driverAdapterError.cause.constraint.fields`, NOT the classic
+ * `err.meta.target`; both are checked.
+ */
+function isUniqueViolation(err: unknown, target: string): boolean {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') {
+    return false;
+  }
+
+  const meta = err.meta as
+    | {
+        target?: string | string[];
+        driverAdapterError?: { cause?: { constraint?: { fields?: string[] } } };
+      }
+    | undefined;
+
+  if (Array.isArray(meta?.target)) return meta.target.includes(target);
+  if (typeof meta?.target === 'string') return meta.target === target;
+
+  const fields = meta?.driverAdapterError?.cause?.constraint?.fields;
+  return Array.isArray(fields) && fields.includes(target);
+}
+
+/**
+ * Prisma adapter for `ICompanyRepository`. `create`/`setSchemaName`/`delete`
+ * back the provisioning saga (design.md D7,
+ * `apps/api-idp/src/company/create-company.saga.ts`) — the only writer of a
+ * `Company` row. `create` translates the P2002 unique violation on `slug` to
+ * the domain `DuplicateCompanySlugError` — no application-level pre-check,
+ * the unique index is the single source of truth (mirrors
+ * `PrismaUserRepository`'s `login` handling).
  */
 @Injectable()
 export class PrismaCompanyRepository implements ICompanyRepository {
@@ -46,10 +78,17 @@ export class PrismaCompanyRepository implements ICompanyRepository {
   }
 
   async create(input: CreateCompanyInput): Promise<DomainCompany> {
-    const row = await this.prisma.company.create({
-      data: { name: input.name, slug: input.slug },
-    });
-    return toDomain(row);
+    try {
+      const row = await this.prisma.company.create({
+        data: { name: input.name, slug: input.slug },
+      });
+      return toDomain(row);
+    } catch (err) {
+      if (isUniqueViolation(err, 'slug')) {
+        throw new DuplicateCompanySlugError(`slug "${input.slug}" is already in use`);
+      }
+      throw err;
+    }
   }
 
   async setSchemaName(id: string, schemaName: string | null): Promise<DomainCompany> {

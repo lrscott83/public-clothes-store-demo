@@ -13,7 +13,7 @@ import type { Request } from 'express';
 import { DuplicateLoginError, InvalidUserError, type User as DomainUser } from '@store-mgmt/domain';
 import { JwtAuthGuard } from '@store-mgmt/api-common';
 import { AuthService } from './auth.service.js';
-import type { LoginResponseDto, RefreshResponseDto, UserResponseDto } from './dto/index.js';
+import type { LoginResponseDto, RefreshResponseDto, SignupResponseDto } from './dto/index.js';
 // SECURITY (FIX 4): value imports (NOT `import type`) — the global
 // `ValidationPipe` needs the real class at runtime via `design:paramtypes`
 // for every DTO bound with `@Body()`; a type-only import erases the class
@@ -50,7 +50,7 @@ export class AuthController {
 
   @Post('signup')
   @HttpCode(HttpStatus.CREATED)
-  async signup(@Body() body: SignupDto): Promise<UserResponseDto> {
+  async signup(@Body() body: SignupDto): Promise<SignupResponseDto> {
     return this.withDomainErrorMapping(() => this.authService.signup(body));
   }
 

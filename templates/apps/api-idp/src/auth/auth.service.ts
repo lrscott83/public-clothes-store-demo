@@ -4,7 +4,6 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
-  InternalServerErrorException,
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -12,7 +11,6 @@ import { JwtService, type JwtSignOptions, type JwtVerifyOptions } from '@nestjs/
 import * as bcrypt from 'bcrypt';
 import type {
   CreateUserInput,
-  ICompanyRepository,
   ICompanyUserRepository,
   IPasswordResetTokenRepository,
   IRefreshTokenRepository,
@@ -21,24 +19,19 @@ import type {
   UserRoleValue,
 } from '@store-mgmt/domain';
 import {
-  AmbiguousCompanyError,
-  COMPANY_REPOSITORY,
   COMPANY_USER_REPOSITORY,
   DuplicateLoginError,
-  NoCompanyConfiguredError,
   PASSWORD_RESET_TOKEN_REPOSITORY,
   REFRESH_TOKEN_REPOSITORY,
   USER_REPOSITORY,
-  USER_ROLES,
   createUser,
-  resolveSoleCompany,
 } from '@store-mgmt/domain';
 import { REFRESH_TOKEN_CONFIG, type JwtAccessPayload } from '@store-mgmt/api-common';
 import type { LoginResponseDto } from './dto/login-response.dto.js';
 import type { RefreshResponseDto } from './dto/refresh-response.dto.js';
 import type { SignupDto } from './dto/signup.dto.js';
-import type { UserResponseDto } from './dto/user-response.dto.js';
-import { userToResponseDto } from './mappers/user.mapper.js';
+import type { SignupResponseDto } from './dto/signup-response.dto.js';
+import { userToResponseDto, userToSignupResponseDto } from './mappers/user.mapper.js';
 
 const SALT_ROUNDS = 10;
 const RESET_TOKEN_TTL_MINUTES = 15;
@@ -70,7 +63,6 @@ export class AuthService {
     @Inject(REFRESH_TOKEN_REPOSITORY) private readonly refreshTokenRepository: IRefreshTokenRepository,
     @Inject(PASSWORD_RESET_TOKEN_REPOSITORY)
     private readonly passwordResetTokenRepository: IPasswordResetTokenRepository,
-    @Inject(COMPANY_REPOSITORY) private readonly companyRepository: ICompanyRepository,
     @Inject(COMPANY_USER_REPOSITORY) private readonly companyUserRepository: ICompanyUserRepository,
   ) {}
 
@@ -98,20 +90,17 @@ export class AuthService {
   }
 
   /**
-   * Public self-registration. Always defaults to the `user` role (`roles`
-   * is NOT accepted here) — privilege assignment is an admin/owner-only
-   * action via the Users module. Duplicate `login` -> `ConflictException` (409).
-   *
-   * The signup's Company is resolved BEFORE any write (design A5): with zero
-   * or several Companies the request fails having created nothing. The two
-   * writes that follow are deliberately NOT transactional — a cross-aggregate
-   * transaction port is out of scope — so a failure between them leaves a user
-   * who cannot log in LOUDLY (`MISSING_COMPANY_USER` 403), recoverable by an
-   * admin, never a user with silently zero permissions.
+   * Public self-registration. Creates ONLY the `User` — no `Company`
+   * resolution, no `CompanyUser`/`Membership` write. A fresh registrant has
+   * no company yet; company creation is a SEPARATE, AUTHENTICATED action
+   * (`POST /companies`, `create-company.saga.ts`, design.md D7) — an
+   * already-registered user provisions and becomes the OWNER of their own
+   * company. This mirrors poolops-biz's `signUp()` (creates only `User`, no
+   * `resolveSoleCompany` equivalent) — see engram
+   * `reference/poolops-signup-company-split`. Duplicate `login` ->
+   * `ConflictException` (409).
    */
-  async signup(dto: SignupDto): Promise<UserResponseDto> {
-    const company = this.resolveSignupCompany(await this.companyRepository.list());
-
+  async signup(dto: SignupDto): Promise<SignupResponseDto> {
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
     const input: CreateUserInput = {
       login: dto.login,
@@ -135,37 +124,7 @@ export class AuthService {
       throw err;
     }
 
-    const assignment = await this.companyUserRepository.create({
-      userId: created.id,
-      companyId: company.id,
-      role: USER_ROLES.user,
-      status: 'ACTIVE',
-    });
-
-    return userToResponseDto(created, assignment.role);
-  }
-
-  /**
-   * Maps `resolveSoleCompany`'s pure-domain failures onto HTTP. Zero Companies
-   * is a MISCONFIGURED DEPLOYMENT, not a client error, so it is a 500 and is
-   * logged. More than one is a 409 rather than an arbitrary pick — it forces
-   * the Invitation flow to be designed deliberately instead of signups
-   * silently landing in whichever Company happened to sort first.
-   */
-  private resolveSignupCompany(companies: Awaited<ReturnType<ICompanyRepository['list']>>) {
-    try {
-      return resolveSoleCompany(companies);
-    } catch (err) {
-      if (err instanceof NoCompanyConfiguredError) {
-        this.logger.error(`NO_COMPANY_CONFIGURED: signup attempted with zero Companies configured`);
-        throw new InternalServerErrorException('No hay una empresa configurada');
-      }
-      if (err instanceof AmbiguousCompanyError) {
-        this.logger.error(`AMBIGUOUS_COMPANY: ${companies.length} Companies exist, cannot auto-assign a signup`);
-        throw new ConflictException('No se puede asignar automáticamente: hay más de una empresa');
-      }
-      throw err;
-    }
+    return userToSignupResponseDto(created);
   }
 
   /**

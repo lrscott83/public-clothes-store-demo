@@ -3,7 +3,6 @@ import { JwtModule, type JwtModuleOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { JWT_CONFIG, JwtStrategy } from '@store-mgmt/api-common';
 import {
-  COMPANY_REPOSITORY,
   COMPANY_USER_REPOSITORY,
   PASSWORD_RESET_TOKEN_REPOSITORY,
   REFRESH_TOKEN_REPOSITORY,
@@ -11,7 +10,6 @@ import {
 } from '@store-mgmt/domain';
 import {
   InfraDbModule,
-  PrismaCompanyRepository,
   PrismaCompanyUserRepository,
   PrismaPasswordResetTokenRepository,
   PrismaRefreshTokenRepository,
@@ -24,9 +22,12 @@ import { LocalStrategy } from './local.strategy.js';
 /**
  * Wires the auth kit's shared `JwtStrategy` (from `@store-mgmt/api-common`,
  * ADR-3) alongside this app's OWN `LocalStrategy` (the only app with one,
- * ADR-1). Binds the three identity ports this module needs directly —
- * mirrors `SalesModule`'s per-module repository binding convention
- * (`UsersModule` binds `USER_REPOSITORY` again independently).
+ * ADR-1). Binds the identity ports this module needs directly — mirrors
+ * `SalesModule`'s per-module repository binding convention (`UsersModule`
+ * binds `USER_REPOSITORY` again independently). `COMPANY_REPOSITORY` is
+ * deliberately NOT bound here — nothing in this module touches it anymore
+ * (see `AuthService.signup`); it lives in `CompanyModule` instead, which
+ * owns the provisioning saga that actually writes `Company` rows.
  */
 @Module({
   // `JWT_CONFIG.signOptions.expiresIn` is typed as a plain `string` in
@@ -43,10 +44,10 @@ import { LocalStrategy } from './local.strategy.js';
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
     { provide: REFRESH_TOKEN_REPOSITORY, useClass: PrismaRefreshTokenRepository },
     { provide: PASSWORD_RESET_TOKEN_REPOSITORY, useClass: PrismaPasswordResetTokenRepository },
-    // `COMPANY_USER_REPOSITORY` feeds `JwtStrategy`'s role resolution AND
-    // signup's assignment write; `COMPANY_REPOSITORY` feeds `resolveSoleCompany`.
-    // A missing binding fails at bootstrap, never per request (design §0.1).
-    { provide: COMPANY_REPOSITORY, useClass: PrismaCompanyRepository },
+    // `COMPANY_USER_REPOSITORY` feeds `resolveRole`'s login/refresh bitmask
+    // resolution — signup itself no longer touches it (no Company/CompanyUser
+    // write happens at signup time, see `AuthService.signup`). A missing
+    // binding fails at bootstrap, never per request (design §0.1).
     { provide: COMPANY_USER_REPOSITORY, useClass: PrismaCompanyUserRepository },
   ],
 })

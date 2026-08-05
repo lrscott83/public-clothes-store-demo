@@ -3,10 +3,13 @@ import type { Company, CreateCompanyInput } from './company.js';
 /**
  * Port for reading and provisioning `Company` rows. Zero dependency on any
  * persistence technology — domain and application code import this
- * interface, never a concrete Prisma class. `list()` is the input to
- * `resolveSoleCompany` at signup time. `create`/`setSchemaName`/`delete`
- * exist for the provisioning saga (design.md D7) — the ONLY writer of a
- * `Company` row; nothing else in this codebase creates or removes one.
+ * interface, never a concrete Prisma class. `create`/`setSchemaName`/`delete`
+ * exist for the provisioning saga (design.md D7, `create-company.saga.ts`) —
+ * the ONLY writer of a `Company` row; nothing else in this codebase creates
+ * or removes one. Signup no longer resolves a `Company` at all — it creates
+ * only a `User` (see `AuthService.signup`); a registered user later creates
+ * (and becomes owner of) their own `Company` via `POST /companies`, an
+ * authenticated action, mirroring poolops-biz's signup/company split.
  */
 export interface ICompanyRepository {
   list(): Promise<Company[]>;

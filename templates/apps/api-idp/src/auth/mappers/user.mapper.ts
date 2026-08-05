@@ -1,4 +1,5 @@
 import { RoleHelpers, type User as DomainUser, type UserRoleValue } from '@store-mgmt/domain';
+import type { SignupResponseDto } from '../dto/signup-response.dto.js';
 import type { UserResponseDto } from '../dto/user-response.dto.js';
 
 /**
@@ -24,6 +25,24 @@ export function userToResponseDto(user: DomainUser, roles: UserRoleValue): UserR
     isActive: user.isActive,
     roles,
     roleLabels: RoleHelpers.getRoleLabels(roles),
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Maps a freshly-signed-up `User` to its response shape — no `roles`
+ * parameter, unlike `userToResponseDto`: signup no longer assigns any
+ * `CompanyUser`/`Membership` (see `AuthService.signup`).
+ */
+export function userToSignupResponseDto(user: DomainUser): SignupResponseDto {
+  return {
+    id: user.id,
+    login: user.login,
+    fullName: user.fullName,
+    email: user.email,
+    cellPhone: user.cellPhone,
+    isActive: user.isActive,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };

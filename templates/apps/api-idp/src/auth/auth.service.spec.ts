@@ -1,10 +1,8 @@
-import { ConflictException, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import type {
-  Company,
   CompanyUser,
-  ICompanyRepository,
   ICompanyUserRepository,
   IPasswordResetTokenRepository,
   IRefreshTokenRepository,
@@ -68,41 +66,18 @@ function buildJwtServiceMock(): jest.Mocked<Pick<JwtService, 'sign' | 'verify'>>
   } as unknown as jest.Mocked<Pick<JwtService, 'sign' | 'verify'>>;
 }
 
-const TEST_COMPANY: Company = {
-  id: 'company-1',
-  name: 'Tienda Prueba',
-  slug: 'default',
-  isActive: true,
-  schemaName: null,
-  createdAt: new Date('2026-01-01T00:00:00.000Z'),
-  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-};
+const TEST_COMPANY_ID = 'company-1';
 
+/** Only used to shape `resolveRole`'s (login/refresh) `CompanyUser` fixture — signup no longer touches a Company at all. */
 function assignment(role: number): CompanyUser {
   return {
     id: 'cu-1',
     userId: 'user-1',
-    companyId: TEST_COMPANY.id,
+    companyId: TEST_COMPANY_ID,
     role,
     status: 'ACTIVE',
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-  };
-}
-
-/**
- * Default: exactly one Company exists — the only state signup can
- * auto-assign in. `create`/`setSchemaName`/`delete` are unused by
- * `AuthService` (they back the provisioning saga, `apps/api-idp/src/company/`,
- * design.md D7) — stubbed only to satisfy `ICompanyRepository`'s shape.
- */
-function buildCompanyRepoMock(): jest.Mocked<ICompanyRepository> {
-  return {
-    list: jest.fn().mockResolvedValue([TEST_COMPANY]),
-    findById: jest.fn().mockResolvedValue(TEST_COMPANY),
-    create: jest.fn(),
-    setSchemaName: jest.fn(),
-    delete: jest.fn(),
   };
 }
 
@@ -121,7 +96,6 @@ describe('AuthService', () => {
   let refreshTokenRepo: jest.Mocked<IRefreshTokenRepository>;
   let passwordResetTokenRepo: jest.Mocked<IPasswordResetTokenRepository>;
   let jwtService: jest.Mocked<Pick<JwtService, 'sign' | 'verify'>>;
-  let companyRepo: jest.Mocked<ICompanyRepository>;
   let companyUserRepo: jest.Mocked<ICompanyUserRepository>;
   let service: AuthService;
 
@@ -131,14 +105,12 @@ describe('AuthService', () => {
     refreshTokenRepo = buildRefreshTokenRepoMock();
     passwordResetTokenRepo = buildPasswordResetTokenRepoMock();
     jwtService = buildJwtServiceMock();
-    companyRepo = buildCompanyRepoMock();
     companyUserRepo = buildCompanyUserRepoMock();
     service = new AuthService(
       jwtService as unknown as JwtService,
       userRepo,
       refreshTokenRepo,
       passwordResetTokenRepo,
-      companyRepo,
       companyUserRepo,
     );
   });
@@ -210,7 +182,7 @@ describe('AuthService', () => {
   });
 
   describe('signup', () => {
-    it('creates a User via bcrypt-hashed password, defaulting to the "user" role', async () => {
+    it('creates a User via bcrypt-hashed password', async () => {
       (bcrypt.hash as jest.Mock).mockResolvedValue(VALID_HASH);
       userRepo.create.mockResolvedValue(baseUser);
 
@@ -238,55 +210,33 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
-    it('assigns the new user to the sole Company with the base `user` role', async () => {
+    /**
+     * Pins the poolops-precedent split (engram `reference/poolops-signup-company-split`):
+     * signup creates ONLY a `User` — no `Company` resolution, no
+     * `CompanyUser`/`Membership` write. Company creation is a SEPARATE,
+     * authenticated action (`POST /companies`, `create-company.saga.ts`).
+     */
+    it('creates ONLY the User — no CompanyUser/Membership write, no Company lookup', async () => {
       (bcrypt.hash as jest.Mock).mockResolvedValue(VALID_HASH);
       userRepo.create.mockResolvedValue(baseUser);
 
       const result = await service.signup({ login: 'jdoe', password: 'plaintext', fullName: 'John Doe' });
 
-      expect(companyUserRepo.create).toHaveBeenCalledWith({
-        userId: baseUser.id,
-        companyId: TEST_COMPANY.id,
-        role: 1,
-        status: 'ACTIVE',
+      expect(companyUserRepo.create).not.toHaveBeenCalled();
+      // The response carries plain identity only — no `roles`/`roleLabels`,
+      // since no role assignment exists yet at signup time.
+      expect(result).not.toHaveProperty('roles');
+      expect(result).not.toHaveProperty('roleLabels');
+      expect(result).toEqual({
+        id: baseUser.id,
+        login: baseUser.login,
+        fullName: baseUser.fullName,
+        email: baseUser.email,
+        cellPhone: baseUser.cellPhone,
+        isActive: baseUser.isActive,
+        createdAt: baseUser.createdAt.toISOString(),
+        updatedAt: baseUser.updatedAt.toISOString(),
       });
-      expect(result.roles).toBe(1);
-    });
-
-    it('zero Companies → 500, and NOTHING is written (resolution runs before any write, A5)', async () => {
-      (bcrypt.hash as jest.Mock).mockResolvedValue(VALID_HASH);
-      companyRepo.list.mockResolvedValue([]);
-
-      await expect(
-        service.signup({ login: 'jdoe', password: 'plaintext', fullName: 'John Doe' }),
-      ).rejects.toBeInstanceOf(InternalServerErrorException);
-
-      expect(userRepo.create).not.toHaveBeenCalled();
-      expect(companyUserRepo.create).not.toHaveBeenCalled();
-    });
-
-    it('more than one Company → 409, and NOTHING is written — never an arbitrary pick', async () => {
-      (bcrypt.hash as jest.Mock).mockResolvedValue(VALID_HASH);
-      companyRepo.list.mockResolvedValue([TEST_COMPANY, { ...TEST_COMPANY, id: 'company-2', slug: 'second' }]);
-
-      await expect(
-        service.signup({ login: 'jdoe', password: 'plaintext', fullName: 'John Doe' }),
-      ).rejects.toBeInstanceOf(ConflictException);
-
-      expect(userRepo.create).not.toHaveBeenCalled();
-      expect(companyUserRepo.create).not.toHaveBeenCalled();
-    });
-
-    it('writes the bitmask ONLY to the assignment — the `app_user` payload carries no role', async () => {
-      (bcrypt.hash as jest.Mock).mockResolvedValue(VALID_HASH);
-      userRepo.create.mockResolvedValue(baseUser);
-
-      await service.signup({ login: 'jdoe', password: 'plaintext', fullName: 'John Doe' });
-
-      // Migration 002 dropped `app_user.roles`; a second write path here would
-      // reintroduce exactly the drift the reframe exists to remove.
-      expect(userRepo.create).toHaveBeenCalledWith(expect.not.objectContaining({ roles: expect.anything() }));
-      expect(companyUserRepo.create).toHaveBeenCalledWith(expect.objectContaining({ role: 1 }));
     });
   });
 

@@ -5,19 +5,15 @@
  * discipline.
  */
 
-/** Thrown by `resolveSoleCompany` when zero `Company` rows exist — a misconfigured deployment. */
-export class NoCompanyConfiguredError extends Error {
+/**
+ * Thrown when `POST /companies` (`create-company.saga.ts` step 1) collides
+ * with an existing `Company.slug` — the unique index is the single source of
+ * truth, mirrors `DuplicateLoginError`/`DuplicateCustomerDocumentError`.
+ */
+export class DuplicateCompanySlugError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'NoCompanyConfiguredError';
-  }
-}
-
-/** Thrown by `resolveSoleCompany` when more than one `Company` row exists — today unreachable, forces the future Invitation flow to be designed deliberately. */
-export class AmbiguousCompanyError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'AmbiguousCompanyError';
+    this.name = 'DuplicateCompanySlugError';
   }
 }
 
