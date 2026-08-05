@@ -3,8 +3,11 @@
 // - Web apps (salesops-mvp, static-store) must never import backend-only
 //   packages (`@store-mgmt/infra-db`, `@store-mgmt/api-salesops`,
 //   `@store-mgmt/api-common`).
-// Usage: consumers spread `domainBoundaryRule` or `webBackendBoundaryRule`
-// into their own flat ESLint config.
+// - Tenant-side `infra-db` repositories must never import the master Prisma
+//   client (multi-tenant-by-schema, task 14.1 — enforces what task 6.4
+//   verified by hand).
+// Usage: consumers spread `domainBoundaryRule`, `webBackendBoundaryRule`, or
+// `tenantRepoBoundaryRule` into their own flat ESLint config.
 
 /** @type {import("eslint").Linter.Config} */
 export const domainBoundaryRule = {
@@ -50,6 +53,47 @@ export const webBackendBoundaryRule = {
             group: ["@store-mgmt/api-common", "@store-mgmt/api-common/*"],
             message:
               "Backend-only package. Web apps must not import @store-mgmt/api-common.",
+          },
+        ],
+      },
+    ],
+  },
+};
+
+// Design.md §3's file map names these files by exact glob:
+// `src/{currency,customer,sales,commission,inventory,product,users/warehouse-operator}/prisma-*.repository.ts`
+// — the ~12 tenant-side repository ADAPTERS (design D2/D5) Phase 6
+// re-sourced onto `TenantContextService.getClient()`. Deliberately narrower
+// than "every file under these directories": `product/copy-catalog.ts` and
+// `product/seed.ts` (`seedTemplateCatalog`), for example, sit in the same
+// directories but LEGITIMATELY read the master template catalog to copy it
+// into a tenant — they are provisioning/seed primitives, not tenant
+// repositories, and this rule must not fire on them.
+//
+// Applied to `packages/infra-db`'s own `eslint.config.mjs` (`files` globs
+// are relative to the linted package's root, per ESLint flat-config
+// convention) — meaningless in any other package, since none of them have
+// this directory shape.
+/** @type {import("eslint").Linter.Config} */
+export const tenantRepoBoundaryRule = {
+  files: [
+    "src/currency/prisma-*.repository.ts",
+    "src/customer/prisma-*.repository.ts",
+    "src/sales/prisma-*.repository.ts",
+    "src/commission/prisma-*.repository.ts",
+    "src/inventory/prisma-*.repository.ts",
+    "src/product/prisma-*.repository.ts",
+    "src/users/prisma-warehouse-operator.repository.ts",
+  ],
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
+            group: ["**/master-prisma-client.js", "**/master-prisma-client"],
+            message:
+              "Tenant-side repositories must resolve their Prisma client via TenantContextService.getClient() (design.md D2/D5), never the master PrismaMasterService — importing it here would silently bind a tenant repo to the wrong schema.",
           },
         ],
       },
