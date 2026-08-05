@@ -34,6 +34,16 @@ if (fs.existsSync(envPath)) {
 
 // Set TEST_URL in `.env` to point somewhere else; the literal below is just
 // a dev fallback, never shipped (this file is test-only, not part of dist).
+//
+// This is the BASE connection for the whole database, not one schema: the
+// master/default client reads it as-is (Postgres' own default search_path
+// resolves to `public`), and this app's per-suite tenant clients
+// (`TenantPrismaFactory`/`TenantDatabaseService`, task 12.4) reuse this SAME
+// URL as their `pg.Pool`'s `connectionString`, then set `search_path`
+// explicitly per connection (design.md D2) — so a `?schema=` query param
+// here would be silently ignored by them (`pg`/`@prisma/adapter-pg`'s
+// connectionString constructor never reads it; verified via
+// `pg-connection-string`'s parser) and previously implied a public-only
+// scoping this URL never actually had. Dropped rather than left misleading.
 process.env.DATABASE_URL =
-  process.env.TEST_URL ??
-  'postgresql://postgres:postgres@172.17.0.1:5432/store_mgmt_test?schema=public';
+  process.env.TEST_URL ?? 'postgresql://postgres:postgres@172.17.0.1:5432/store_mgmt_test';

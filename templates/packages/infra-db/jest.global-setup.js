@@ -39,6 +39,28 @@ module.exports = async function globalSetup() {
   const client = new Client({ connectionString: url });
   await client.connect();
   try {
+    // Phase 5 (SDD change multi-tenant-by-schema, task 12.5) added a SECOND
+    // source of "state that arrived before the run started": each e2e/spec
+    // suite now provisions its OWN real Postgres schema
+    // (`store_mgmt_tenant_<uuid>`, `schemaNameFor` — packages/infra-db/src/tenant/schema-name.ts)
+    // via `TenantDatabaseService`/`TenantPrismaFactory`, and drops it again
+    // in its own `afterAll`. That drop does NOT run if the process is killed
+    // mid-suite (confirmed during Phase 12's own batch — see engram
+    // `sdd/multi-tenant-by-schema/apply-progress`, "one orphan schema DID
+    // leak during debugging"), so a crashed prior run can leave one or more
+    // of these behind. Sweep them here too, same "leave nothing behind"
+    // job this file already does for `public` — matched by the EXACT
+    // format `schemaNameFor` produces (mirrors `SCHEMA_NAME_REGEX` in
+    // `schema-name.ts`), never by a loose prefix `LIKE`, so this can never
+    // match — and can therefore never drop — `public` or any other schema.
+    const { rows: staleTenantSchemas } = await client.query(
+      `SELECT schema_name FROM information_schema.schemata
+        WHERE schema_name ~ '^store_mgmt_tenant_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}$'`,
+    );
+    for (const { schema_name: schemaName } of staleTenantSchemas) {
+      await client.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+    }
+
     const { rows } = await client.query(
       `SELECT tablename FROM pg_tables
         WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`,
