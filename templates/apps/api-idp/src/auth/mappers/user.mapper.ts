@@ -31,9 +31,11 @@ export function userToResponseDto(user: DomainUser, roles: UserRoleValue): UserR
 }
 
 /**
- * Maps a freshly-signed-up `User` to its response shape — no `roles`
- * parameter, unlike `userToResponseDto`: signup no longer assigns any
- * `CompanyUser`/`Membership` (see `AuthService.signup`).
+ * Maps a `User` to the identity-only response shape — no `roles` parameter,
+ * unlike `userToResponseDto`. Used by both `AuthService.signup` (no
+ * `CompanyUser`/`Membership` exists yet) and `AuthService`'s login/refresh
+ * token issuance (a company-scoped role is no longer resolved at
+ * authentication time — see `SignupResponseDto`'s doc comment).
  */
 export function userToSignupResponseDto(user: DomainUser): SignupResponseDto {
   return {

@@ -1,9 +1,13 @@
 /**
- * Response shape for `POST /auth/signup`. Deliberately NARROWER than
- * `UserResponseDto` — no `roles`/`roleLabels` — because a fresh registration
- * has no `Company`/`CompanyUser`/`Membership` yet (see `AuthService.signup`,
- * `create-company.saga.ts`). Reporting a role here would be guessing a bit
- * that does not exist; `POST /companies` is the first place a role appears.
+ * Response shape for `POST /auth/signup`, and reused as `LoginResponseDto.user`
+ * (`POST /auth/login`, token refresh). Deliberately NARROWER than
+ * `UserResponseDto` — no `roles`/`roleLabels` — because neither a fresh
+ * registration nor an authentication event has a single, unambiguous
+ * company-scoped role to report: a user may hold zero, one, or several
+ * ACTIVE Memberships (design D4/D7), and picking one here would be exactly
+ * the guess `TenantContextGuard` refuses to make per request. `POST
+ * /companies`/`GET` endpoints behind `TenantContextGuard` are the first
+ * place a role appears.
  */
 export class SignupResponseDto {
   id!: string;

@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import {
   ConflictException,
-  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -11,15 +10,12 @@ import { JwtService, type JwtSignOptions, type JwtVerifyOptions } from '@nestjs/
 import * as bcrypt from 'bcrypt';
 import type {
   CreateUserInput,
-  ICompanyUserRepository,
   IPasswordResetTokenRepository,
   IRefreshTokenRepository,
   IUserRepository,
   User as DomainUser,
-  UserRoleValue,
 } from '@store-mgmt/domain';
 import {
-  COMPANY_USER_REPOSITORY,
   DuplicateLoginError,
   PASSWORD_RESET_TOKEN_REPOSITORY,
   REFRESH_TOKEN_REPOSITORY,
@@ -31,7 +27,7 @@ import type { LoginResponseDto } from './dto/login-response.dto.js';
 import type { RefreshResponseDto } from './dto/refresh-response.dto.js';
 import type { SignupDto } from './dto/signup.dto.js';
 import type { SignupResponseDto } from './dto/signup-response.dto.js';
-import { userToResponseDto, userToSignupResponseDto } from './mappers/user.mapper.js';
+import { userToSignupResponseDto } from './mappers/user.mapper.js';
 
 const SALT_ROUNDS = 10;
 const RESET_TOKEN_TTL_MINUTES = 15;
@@ -63,7 +59,6 @@ export class AuthService {
     @Inject(REFRESH_TOKEN_REPOSITORY) private readonly refreshTokenRepository: IRefreshTokenRepository,
     @Inject(PASSWORD_RESET_TOKEN_REPOSITORY)
     private readonly passwordResetTokenRepository: IPasswordResetTokenRepository,
-    @Inject(COMPANY_USER_REPOSITORY) private readonly companyUserRepository: ICompanyUserRepository,
   ) {}
 
   /**
@@ -125,22 +120,6 @@ export class AuthService {
     }
 
     return userToSignupResponseDto(created);
-  }
-
-  /**
-   * Resolves the role bitmask backing a login/refresh response DTO. Same
-   * fail-closed rule as `JwtStrategy`: a user with no ACTIVE assignment is
-   * authenticated but not provisioned, which is a 403 and never a silent zero.
-   */
-  private async resolveRole(user: DomainUser): Promise<UserRoleValue> {
-    const assignment = await this.companyUserRepository.findActiveByUserId(user.id);
-    if (!assignment || assignment.status !== 'ACTIVE') {
-      this.logger.error(
-        `MISSING_COMPANY_USER: user ${user.id} has no ACTIVE CompanyUser assignment (status: ${assignment?.status ?? 'none'})`,
-      );
-      throw new ForbiddenException('User is not assigned to any company');
-    }
-    return assignment.role;
   }
 
   /**
@@ -282,12 +261,14 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + parseRefreshTtlMs());
     await this.refreshTokenRepository.create({ token: rtid, userId: user.id, expiresAt });
 
-    // The login/refresh response carries the same `roles` field the rest of the
-    // API reports, so it must come from the CompanyUser assignment too — this
-    // call site was NOT in the design's inventory of six, it is the seventh.
-    const roles = await this.resolveRole(user);
-
-    return { accessToken, refreshToken, user: userToResponseDto(user, roles) };
+    // No role resolution here (design D4/D7): which company, if any, a user
+    // belongs to is no longer a global, login-time fact — a user may hold
+    // zero, one, or several ACTIVE Memberships, and picking one to report
+    // here would repeat the exact ambiguity `TenantContextGuard` (Phase 7)
+    // refuses to guess at. The `roles` bitmask is resolved per-request, per
+    // company, by `TenantContextGuard` — never by `AuthService`. Mirrors
+    // `signup`'s identity-only response (see `userToSignupResponseDto`).
+    return { accessToken, refreshToken, user: userToSignupResponseDto(user) };
   }
 }
 

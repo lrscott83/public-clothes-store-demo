@@ -3,14 +3,12 @@ import { JwtModule, type JwtModuleOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { JWT_CONFIG, JwtStrategy } from '@store-mgmt/api-common';
 import {
-  COMPANY_USER_REPOSITORY,
   PASSWORD_RESET_TOKEN_REPOSITORY,
   REFRESH_TOKEN_REPOSITORY,
   USER_REPOSITORY,
 } from '@store-mgmt/domain';
 import {
   InfraDbModule,
-  PrismaCompanyUserRepository,
   PrismaPasswordResetTokenRepository,
   PrismaRefreshTokenRepository,
   PrismaUserRepository,
@@ -28,6 +26,10 @@ import { LocalStrategy } from './local.strategy.js';
  * deliberately NOT bound here — nothing in this module touches it anymore
  * (see `AuthService.signup`); it lives in `CompanyModule` instead, which
  * owns the provisioning saga that actually writes `Company` rows.
+ * `COMPANY_USER_REPOSITORY` is ALSO no longer bound here (task 10.4) —
+ * `AuthService` no longer resolves a company-scoped role at login/refresh
+ * time at all (see `AuthService.issueTokens`), so nothing in this module
+ * depends on it any more.
  */
 @Module({
   // `JWT_CONFIG.signOptions.expiresIn` is typed as a plain `string` in
@@ -44,11 +46,6 @@ import { LocalStrategy } from './local.strategy.js';
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
     { provide: REFRESH_TOKEN_REPOSITORY, useClass: PrismaRefreshTokenRepository },
     { provide: PASSWORD_RESET_TOKEN_REPOSITORY, useClass: PrismaPasswordResetTokenRepository },
-    // `COMPANY_USER_REPOSITORY` feeds `resolveRole`'s login/refresh bitmask
-    // resolution — signup itself no longer touches it (no Company/CompanyUser
-    // write happens at signup time, see `AuthService.signup`). A missing
-    // binding fails at bootstrap, never per request (design §0.1).
-    { provide: COMPANY_USER_REPOSITORY, useClass: PrismaCompanyUserRepository },
   ],
 })
 export class AuthModule {}

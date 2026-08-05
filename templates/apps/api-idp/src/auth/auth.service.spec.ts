@@ -2,8 +2,6 @@ import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import type {
-  CompanyUser,
-  ICompanyUserRepository,
   IPasswordResetTokenRepository,
   IRefreshTokenRepository,
   IUserRepository,
@@ -66,37 +64,11 @@ function buildJwtServiceMock(): jest.Mocked<Pick<JwtService, 'sign' | 'verify'>>
   } as unknown as jest.Mocked<Pick<JwtService, 'sign' | 'verify'>>;
 }
 
-const TEST_COMPANY_ID = 'company-1';
-
-/** Only used to shape `resolveRole`'s (login/refresh) `CompanyUser` fixture — signup no longer touches a Company at all. */
-function assignment(role: number): CompanyUser {
-  return {
-    id: 'cu-1',
-    userId: 'user-1',
-    companyId: TEST_COMPANY_ID,
-    role,
-    status: 'ACTIVE',
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-  };
-}
-
-function buildCompanyUserRepoMock(): jest.Mocked<ICompanyUserRepository> {
-  return {
-    create: jest.fn().mockImplementation(({ role }: { role: number }) => Promise.resolve(assignment(role))),
-    findActiveByUserId: jest.fn().mockResolvedValue(assignment(1)),
-    findByUserAndCompany: jest.fn(),
-    updateRole: jest.fn(),
-    listByCompany: jest.fn().mockResolvedValue([assignment(1)]),
-  };
-}
-
 describe('AuthService', () => {
   let userRepo: jest.Mocked<IUserRepository>;
   let refreshTokenRepo: jest.Mocked<IRefreshTokenRepository>;
   let passwordResetTokenRepo: jest.Mocked<IPasswordResetTokenRepository>;
   let jwtService: jest.Mocked<Pick<JwtService, 'sign' | 'verify'>>;
-  let companyUserRepo: jest.Mocked<ICompanyUserRepository>;
   let service: AuthService;
 
   beforeEach(() => {
@@ -105,13 +77,11 @@ describe('AuthService', () => {
     refreshTokenRepo = buildRefreshTokenRepoMock();
     passwordResetTokenRepo = buildPasswordResetTokenRepoMock();
     jwtService = buildJwtServiceMock();
-    companyUserRepo = buildCompanyUserRepoMock();
     service = new AuthService(
       jwtService as unknown as JwtService,
       userRepo,
       refreshTokenRepo,
       passwordResetTokenRepo,
-      companyUserRepo,
     );
   });
 
@@ -179,6 +149,30 @@ describe('AuthService', () => {
       );
       expect(result.user).not.toHaveProperty('passwordHash');
     });
+
+    /**
+     * Task 10.4: `AuthService` no longer resolves a company-scoped role at
+     * login time (design D4/D7) — a caller may hold zero, one, or several
+     * ACTIVE Memberships, and `TenantContextGuard` is what disambiguates
+     * that per request. Pins the retirement of the pre-reshape
+     * `ICompanyUserRepository` read path this service used to depend on.
+     */
+    it('reports NO roles/roleLabels — a company-scoped role is resolved per-request, not at login', async () => {
+      refreshTokenRepo.create.mockResolvedValue({
+        id: 'rt-1',
+        token: 'rtid-abc',
+        userId: baseUser.id,
+        expiresAt: new Date('2999-01-01'),
+        isRevoked: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const result = await service.login(baseUser);
+
+      expect(result.user).not.toHaveProperty('roles');
+      expect(result.user).not.toHaveProperty('roleLabels');
+    });
   });
 
   describe('signup', () => {
@@ -215,6 +209,10 @@ describe('AuthService', () => {
      * signup creates ONLY a `User` — no `Company` resolution, no
      * `CompanyUser`/`Membership` write. Company creation is a SEPARATE,
      * authenticated action (`POST /companies`, `create-company.saga.ts`).
+     * Task 10.4 retired `AuthService`'s `ICompanyUserRepository` dependency
+     * entirely — there is no longer such a repository to assert against, so
+     * "no CompanyUser write" is now a structural fact (no such call can
+     * exist), pinned instead by the response shape below.
      */
     it('creates ONLY the User — no CompanyUser/Membership write, no Company lookup', async () => {
       (bcrypt.hash as jest.Mock).mockResolvedValue(VALID_HASH);
@@ -222,7 +220,6 @@ describe('AuthService', () => {
 
       const result = await service.signup({ login: 'jdoe', password: 'plaintext', fullName: 'John Doe' });
 
-      expect(companyUserRepo.create).not.toHaveBeenCalled();
       // The response carries plain identity only — no `roles`/`roleLabels`,
       // since no role assignment exists yet at signup time.
       expect(result).not.toHaveProperty('roles');
