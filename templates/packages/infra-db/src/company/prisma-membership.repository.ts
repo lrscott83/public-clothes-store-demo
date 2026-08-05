@@ -65,4 +65,8 @@ export class PrismaMembershipRepository implements IMembershipRepository {
     const rows = await this.prisma.membership.findMany({ where: { companyId } });
     return rows.map(toDomain);
   }
+
+  async delete(id: string): Promise<void> {
+    await this.prisma.membership.delete({ where: { id } });
+  }
 }

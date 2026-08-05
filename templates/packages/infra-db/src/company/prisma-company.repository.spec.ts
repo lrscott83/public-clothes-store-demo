@@ -76,4 +76,39 @@ describe('PrismaCompanyRepository', () => {
     const found = await repository.findById('00000000-0000-0000-0000-000000000000');
     expect(found).toBeNull();
   });
+
+  it('create() persists a new Company with schemaName NULL — provisioning saga step 1', async () => {
+    const created = await repository.create({ name: 'Tienda Nueva', slug: 'tienda-nueva' });
+
+    expect(created.id).toEqual(expect.any(String));
+    expect(created.name).toBe('Tienda Nueva');
+    expect(created.slug).toBe('tienda-nueva');
+    expect(created.schemaName).toBeNull();
+    expect(created.isActive).toBe(true);
+  });
+
+  it('setSchemaName() sets a non-null schemaName — provisioning saga step 3', async () => {
+    const created = await repository.create({ name: 'Tienda Nueva', slug: 'tienda-nueva' });
+
+    const updated = await repository.setSchemaName(created.id, 'store_mgmt_tenant_deadbeef');
+
+    expect(updated.schemaName).toBe('store_mgmt_tenant_deadbeef');
+  });
+
+  it('setSchemaName() clears schemaName back to NULL — step 3 compensation', async () => {
+    const created = await repository.create({ name: 'Tienda Nueva', slug: 'tienda-nueva' });
+    await repository.setSchemaName(created.id, 'store_mgmt_tenant_deadbeef');
+
+    const rolledBack = await repository.setSchemaName(created.id, null);
+
+    expect(rolledBack.schemaName).toBeNull();
+  });
+
+  it('delete() removes a Company row — step 1 compensation', async () => {
+    const created = await repository.create({ name: 'Tienda Nueva', slug: 'tienda-nueva' });
+
+    await repository.delete(created.id);
+
+    expect(await repository.findById(created.id)).toBeNull();
+  });
 });

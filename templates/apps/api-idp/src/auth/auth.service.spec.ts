@@ -90,11 +90,19 @@ function assignment(role: number): CompanyUser {
   };
 }
 
-/** Default: exactly one Company exists — the only state signup can auto-assign in. */
+/**
+ * Default: exactly one Company exists — the only state signup can
+ * auto-assign in. `create`/`setSchemaName`/`delete` are unused by
+ * `AuthService` (they back the provisioning saga, `apps/api-idp/src/company/`,
+ * design.md D7) — stubbed only to satisfy `ICompanyRepository`'s shape.
+ */
 function buildCompanyRepoMock(): jest.Mocked<ICompanyRepository> {
   return {
     list: jest.fn().mockResolvedValue([TEST_COMPANY]),
     findById: jest.fn().mockResolvedValue(TEST_COMPANY),
+    create: jest.fn(),
+    setSchemaName: jest.fn(),
+    delete: jest.fn(),
   };
 }
 

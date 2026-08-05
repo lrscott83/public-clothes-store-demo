@@ -133,4 +133,13 @@ describe('PrismaMembershipRepository', () => {
 
     expect(memberships).toEqual([]);
   });
+
+  it('delete() removes a Membership row — provisioning saga step 4 compensation', async () => {
+    const { userId, companyId } = await createUserAndCompany();
+    const membership = await repository.create({ userId, companyId });
+
+    await repository.delete(membership.id);
+
+    expect(await repository.findByUserAndCompany(userId, companyId)).toBeNull();
+  });
 });

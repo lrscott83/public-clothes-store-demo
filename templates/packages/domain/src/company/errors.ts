@@ -58,3 +58,11 @@ export class InvalidProvisioningIncidentError extends Error {
     this.name = 'InvalidProvisioningIncidentError';
   }
 }
+
+/** Thrown when `createCompany` input violates an invariant (name/slug). */
+export class InvalidCompanyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidCompanyError';
+  }
+}

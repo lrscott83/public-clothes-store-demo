@@ -19,6 +19,8 @@ export interface IMembershipRepository {
    */
   listActiveByUserId(userId: string): Promise<Membership[]>;
   listByCompany(companyId: string): Promise<Membership[]>;
+  /** Provisioning saga step 4's compensation (design.md D7) — undoes `create` when a later step fails. */
+  delete(id: string): Promise<void>;
 }
 
 /** DI token for `IMembershipRepository` — consumers inject by this symbol. */

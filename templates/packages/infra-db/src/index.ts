@@ -17,6 +17,9 @@ export {
   type TenantContext,
 } from './tenant/tenant-context.service.js';
 export { TenantDatabaseService } from './tenant/tenant-database.service.js';
+// Task 10.2 (Phase 10, D7): the provisioning saga (`apps/api-idp/src/company/`)
+// is the first consumer of this helper OUTSIDE `infra-db` itself.
+export { schemaNameFor, assertSchemaName } from './tenant/schema-name.js';
 export { PrismaMembershipRepository } from './company/prisma-membership.repository.js';
 export { PrismaProvisioningIncidentRepository } from './company/prisma-provisioning-incident.repository.js';
 export { PrismaCurrencyRepository } from './currency/prisma-currency.repository.js';
