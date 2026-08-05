@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
 import bcrypt from 'bcrypt';
-import type { PrismaService } from '../prisma-client.js';
+import type { IMembershipRepository } from '@store-mgmt/domain';
+import type { PrismaMasterService } from '../master-prisma-client.js';
+import type { PrismaClient as TenantPrismaClient } from '../../generated/tenant/client.js';
 import { DEV_PASSWORD, SALT_ROUNDS, deriveLogin } from '../users/seed.js';
-import { ensureDefaultCompanyId, seedCompanyUser } from '../company/seed.js';
+import { grantTenantRole } from '../company/grant-tenant-role.js';
 
 /**
  * The 5 seeded demo customers, sourced from the MVP's
@@ -51,38 +53,48 @@ function deterministicSeedId(fullName: string): string {
  * Idempotent seed of the 5 demo customers, keyed on `fullName` (the natural
  * key — `Customer.fullName` has no DB-level unique constraint per the
  * LOCKED model, so idempotency is enforced here via a
- * find-then-create-or-update, not a native Prisma `upsert`). Since
- * `backend-users-roles`, EVERY `Customer` requires a `User` — this finds or
- * creates a matching `app_user` (`login` = `deriveLogin(fullName, ...)`,
- * bcrypt-hashed dev password) per demo customer, keyed on the
- * User's own `login` (upsert), then links `userId` and gives that User an
- * ACTIVE `CompanyUser` in the implicit company with the `user` bit —
- * without it the account has no persisted authorization at all (migration
- * 002 dropped `app_user.roles`) and every login is rejected. Idempotent on all
- * sides. Re-running never duplicates rows. All other contact fields stay
+ * find-then-create-or-update, not a native Prisma `upsert`).
+ *
+ * task 14.2 reshape: `User` creation stays MASTER-side
+ * (`masterPrisma.user.upsert`); the role grant is now `grantTenantRole`
+ * (ACTIVE master `Membership` + tenant `CompanyUser`, design D1/D4 — this
+ * replaces the pre-split single `company_user` row the `user` bit used to
+ * carry alone); the `Customer` row itself is TENANT-side and now links via
+ * `companyUserId`, not `userId` (spec: salesops-customers "Customer FKs
+ * Tenant CompanyUser, Not Master User"). Idempotent on all three sides.
+ * Re-running never duplicates rows. All other contact fields stay
  * empty/null.
  */
-export async function seedCustomers(prisma: PrismaService): Promise<SeedCustomerResult> {
-  const companyId = await ensureDefaultCompanyId(prisma);
+export async function seedCustomers(
+  masterPrisma: PrismaMasterService,
+  membershipRepository: IMembershipRepository,
+  tenantClient: TenantPrismaClient,
+  companyId: string,
+): Promise<SeedCustomerResult> {
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, SALT_ROUNDS);
 
   for (const fullName of CUSTOMER_NAMES) {
     const login = deriveLogin(fullName, deterministicSeedId(fullName));
-    const user = await prisma.user.upsert({
+    const user = await masterPrisma.user.upsert({
       where: { login },
       update: {},
       create: { login, passwordHash, fullName },
     });
-    await seedCompanyUser(prisma, user.id, companyId, USER_ROLE_BIT);
+    const { companyUserId } = await grantTenantRole(membershipRepository, tenantClient, {
+      userId: user.id,
+      companyId,
+      role: USER_ROLE_BIT,
+      createdByCompanyUserId: null,
+    });
 
-    const existing = await prisma.customer.findFirst({ where: { fullName } });
+    const existing = await tenantClient.customer.findFirst({ where: { fullName } });
     if (existing) {
-      await prisma.customer.update({
+      await tenantClient.customer.update({
         where: { id: existing.id },
-        data: { active: true, userId: user.id },
+        data: { active: true, companyUserId },
       });
     } else {
-      await prisma.customer.create({ data: { fullName, active: true, userId: user.id } });
+      await tenantClient.customer.create({ data: { fullName, active: true, companyUserId } });
     }
   }
 

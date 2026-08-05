@@ -1,8 +1,6 @@
 import { DuplicateLoginError } from '@store-mgmt/domain';
 import { PrismaMasterService } from '../master-prisma-client.js';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaUserRepository } from './prisma-user.repository.js';
-import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
 /** Bcrypt hash shape accepted by the `passwordHash` invariant — never a real credential. */
 const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
@@ -10,34 +8,30 @@ const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 /**
  * Integration tests against the real `store_mgmt` Postgres database (no
  * mocks) — same discipline as `prisma-customer.repository.spec.ts`. `User`
- * now lives on the master client (task 3.5); the legacy `company_user`
- * hygiene cleanup below still runs through `TenantDefaultPrismaService` —
- * same physical table, see that class's doc comment — because master's
- * schema has no `companyUser` model to reach it with.
+ * lives on the master client (task 3.5). task 14.2: the legacy
+ * `TenantDefaultPrismaService`/`company_user` cleanup this spec used to
+ * need is GONE — `Membership`/`RefreshToken`/`PasswordResetToken` all
+ * `onDelete: Cascade` off `User` in `prisma/master/schema.prisma` (D1
+ * dropped `CompanyUser`'s own relation to `User`/`Company` entirely, and
+ * tenant `CompanyUser` rows live in a separate Postgres schema Prisma
+ * cannot even reach with a `@relation`), so a plain `user.deleteMany({})`
+ * needs no manual ordering.
  */
 describe('PrismaUserRepository', () => {
   let prisma: PrismaMasterService;
-  let legacyPrisma: TenantDefaultPrismaService;
   let repository: PrismaUserRepository;
 
   beforeAll(() => {
     prisma = new PrismaMasterService();
-    legacyPrisma = new TenantDefaultPrismaService();
     repository = new PrismaUserRepository(prisma);
   });
 
   afterEach(async () => {
-    // `company_user` has NO FK to `app_user` (soft FK by design) — deleting
-    // users alone would leave orphan assignments behind and trip the §7
-    // backfill gate.
-    await wipeCompanyUserDependents(legacyPrisma);
-    await legacyPrisma.companyUser.deleteMany({});
     await prisma.user.deleteMany({});
   });
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await legacyPrisma.$disconnect();
   });
 
   it('create() persists a User with a real DB-generated UUID id and null email/cellPhone', async () => {

@@ -1,76 +1,71 @@
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcrypt';
-import { PrismaService } from '../prisma-client.js';
-import { DEFAULT_COMPANY_SLUG } from '../company/seed.js';
-import { COCKPIT_LOGINS, deriveLogin, seedUsers } from './seed.js';
-import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
+import { COCKPIT_LOGINS, deriveLogin, grantCockpitRoles, seedCockpitUsers } from './seed.js';
+import { PrismaMasterService } from '../master-prisma-client.js';
+import { PrismaMembershipRepository } from '../company/prisma-membership.repository.js';
+import { useTenantSchema } from '../tenant-schema.spec-helper.js';
 
 /**
- * Integration test against the real `store_mgmt` Postgres database. Covers
- * the spec's "seed is idempotent" scenario (re-running never duplicates),
- * same discipline as `customer/seed.spec.ts`.
+ * Real Postgres, no mocks — split discipline mirrors task 14.2's split of
+ * the old single `seedUsers`: master `User` rows (`seedCockpitUsers`) and
+ * tenant grants (`grantCockpitRoles`, against a provisioned tenant schema,
+ * task 5.1) are exercised together, since that is how `prisma/seed.js`
+ * actually calls them.
  */
-describe('seedUsers', () => {
-  let prisma: PrismaService;
+describe('seedCockpitUsers + grantCockpitRoles', () => {
+  const getTenantSchema = useTenantSchema();
+  const masterPrisma = new PrismaMasterService();
+  const membershipRepository = new PrismaMembershipRepository(masterPrisma);
+  let companyId: string;
 
-  beforeAll(() => {
-    prisma = new PrismaService();
+  beforeAll(async () => {
+    await masterPrisma.$connect();
   });
 
-  // Wipe before AND after: migration 001 already seeds a `default`-slug
-  // Company, so the single-company assertions below must not inherit it.
-  // `company_user` goes first — `company` is its only hard FK parent.
   beforeEach(async () => {
-    await wipeCompanyUserDependents(prisma);
-    await prisma.companyUser.deleteMany({});
-    await prisma.company.deleteMany({});
+    const company = await masterPrisma.company.create({
+      data: { name: 'Tienda Prueba', slug: `cockpit-${randomUUID()}` },
+    });
+    companyId = company.id;
   });
 
   afterEach(async () => {
-    await prisma.warehouseOperator.deleteMany({});
-    await wipeCompanyUserDependents(prisma);
-    await prisma.companyUser.deleteMany({});
-    await prisma.company.deleteMany({});
-    await prisma.user.deleteMany({});
-    await prisma.warehouse.deleteMany({});
+    const { client } = getTenantSchema();
+    await client.warehouseOperator.deleteMany({});
+    await client.companyUser.deleteMany({});
+    await client.warehouse.deleteMany({});
+    await masterPrisma.membership.deleteMany({});
+    await masterPrisma.user.deleteMany({});
+    await masterPrisma.company.deleteMany({});
   });
 
   afterAll(async () => {
-    await prisma.$disconnect();
+    await masterPrisma.$disconnect();
   });
 
-  it('produces every cockpit account with bcrypt-hashed dev passwords', async () => {
-    await seedUsers(prisma);
+  it('seedCockpitUsers produces every cockpit account with bcrypt-hashed dev passwords', async () => {
+    const result = await seedCockpitUsers(masterPrisma);
 
-    const users = await prisma.user.findMany();
+    expect(result.usersUpserted).toBe(COCKPIT_LOGINS.length);
+    const users = await masterPrisma.user.findMany();
     expect(users).toHaveLength(COCKPIT_LOGINS.length);
     expect(users.map((u) => u.login).sort()).toEqual([...COCKPIT_LOGINS].sort());
     for (const user of users) {
       expect(user.passwordHash).toMatch(/^\$2[aby]\$/);
       await expect(bcrypt.compare('DevPass123!', user.passwordHash)).resolves.toBe(true);
     }
+    expect(result.ownerId).toBe(result.userIds['owner']);
   });
 
-  it('links warehouse.operator to a WarehouseOperator row scoped to a warehouse', async () => {
-    await seedUsers(prisma);
+  it('seedCockpitUsers is idempotent: running twice yields exactly one user per cockpit account', async () => {
+    await seedCockpitUsers(masterPrisma);
+    await seedCockpitUsers(masterPrisma);
 
-    const operator = await prisma.user.findUniqueOrThrow({ where: { login: 'warehouse.operator' } });
-    const link = await prisma.warehouseOperator.findUnique({ where: { userId: operator.id } });
-
-    expect(link).not.toBeNull();
-    expect(link?.warehouseId).toEqual(expect.any(String));
-  });
-
-  it('is idempotent: running the seed twice yields exactly one user per cockpit account, never duplicates', async () => {
-    await seedUsers(prisma);
-    await seedUsers(prisma);
-
-    const users = await prisma.user.findMany();
+    const users = await masterPrisma.user.findMany();
     expect(users).toHaveLength(COCKPIT_LOGINS.length);
   });
 
-  it('assigns every cockpit account an ACTIVE CompanyUser in the implicit company carrying its role bitmask', async () => {
-    // Literal expectations, not `app_user.roles`: after migration 002 that
-    // column is gone and `company_user.role` is the only source of truth.
+  it('grantCockpitRoles gives every account an ACTIVE Membership + tenant CompanyUser carrying its role bitmask', async () => {
     const expectedRoleByLogin: Record<string, number> = {
       admin: 16,
       owner: 8,
@@ -78,33 +73,46 @@ describe('seedUsers', () => {
       'sales.operator': 4,
       'sales.agent': 32,
     };
+    const { client } = getTenantSchema();
+    const users = await seedCockpitUsers(masterPrisma);
 
-    await seedUsers(prisma);
+    await grantCockpitRoles(membershipRepository, client, companyId, users);
 
-    const company = await prisma.company.findUniqueOrThrow({
-      where: { slug: DEFAULT_COMPANY_SLUG },
-    });
-    const users = await prisma.user.findMany();
-    const assignments = await prisma.companyUser.findMany();
-
-    expect(assignments).toHaveLength(COCKPIT_LOGINS.length);
-    for (const user of users) {
-      const assignment = assignments.find((a) => a.userId === user.id);
-      expect(assignment).toBeDefined();
-      expect(assignment?.companyId).toBe(company.id);
-      expect(assignment?.status).toBe('ACTIVE');
-      expect(assignment?.role).toBe(expectedRoleByLogin[user.login]);
+    const memberships = await masterPrisma.membership.findMany({ where: { companyId } });
+    const companyUsers = await client.companyUser.findMany();
+    expect(memberships).toHaveLength(COCKPIT_LOGINS.length);
+    expect(companyUsers).toHaveLength(COCKPIT_LOGINS.length);
+    for (const [login, userId] of Object.entries(users.userIds)) {
+      const membership = memberships.find((m) => m.userId === userId);
+      expect(membership?.status).toBe('ACTIVE');
+      const companyUser = companyUsers.find((cu) => cu.id === userId);
+      expect(companyUser?.role).toBe(expectedRoleByLogin[login]);
     }
   });
 
-  it('is idempotent on the assignment side: running the seed twice yields exactly one CompanyUser row per account', async () => {
-    await seedUsers(prisma);
-    await seedUsers(prisma);
+  it('grantCockpitRoles links warehouse.operator to a WarehouseOperator row scoped to a real warehouse', async () => {
+    const { client } = getTenantSchema();
+    const users = await seedCockpitUsers(masterPrisma);
 
-    const assignments = await prisma.companyUser.findMany();
-    const companies = await prisma.company.findMany();
-    expect(assignments).toHaveLength(COCKPIT_LOGINS.length);
-    expect(companies).toHaveLength(1);
+    await grantCockpitRoles(membershipRepository, client, companyId, users);
+
+    const operatorId = users.userIds['warehouse.operator']!;
+    const link = await client.warehouseOperator.findUnique({ where: { companyUserId: operatorId } });
+    expect(link).not.toBeNull();
+    expect(link?.warehouseId).toEqual(expect.any(String));
+  });
+
+  it('grantCockpitRoles is idempotent: running twice yields exactly one Membership/CompanyUser per account', async () => {
+    const { client } = getTenantSchema();
+    const users = await seedCockpitUsers(masterPrisma);
+
+    await grantCockpitRoles(membershipRepository, client, companyId, users);
+    await grantCockpitRoles(membershipRepository, client, companyId, users);
+
+    const memberships = await masterPrisma.membership.findMany({ where: { companyId } });
+    const companyUsers = await client.companyUser.findMany();
+    expect(memberships).toHaveLength(COCKPIT_LOGINS.length);
+    expect(companyUsers).toHaveLength(COCKPIT_LOGINS.length);
   });
 });
 

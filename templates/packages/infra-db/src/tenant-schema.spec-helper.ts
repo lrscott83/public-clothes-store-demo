@@ -26,8 +26,13 @@ import type { PrismaClient } from '../generated/tenant/client.js';
  * `beforeAll`/tests failed, so a broken suite never leaks a schema into the
  * shared dev/test database — Phase 13 will provision two tenants in one
  * process, and a leftover schema from an earlier failed run is exactly the
- * kind of cross-run contamination `db-cleanup.spec-helper.ts` already fights
- * for `public`.
+ * kind of cross-run contamination `jest.global-setup.js`'s sweep (task
+ * 12.5) exists to catch between runs, mirrored here per-suite.
+ * `db-cleanup.spec-helper.ts` (the pre-split RESTRICT-ordering cleanup
+ * helper it used to be compared against) was deleted in task 5.2 — with the
+ * schema split complete, master's own relations `onDelete: Cascade` and
+ * tenant-side rows are wiped by dropping the whole schema, so there was
+ * nothing left for it to centralize on either side.
  *
  * Usage — call once at the top of a `describe` block:
  *

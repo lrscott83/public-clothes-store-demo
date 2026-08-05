@@ -1,10 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createOrder, money, rateFromDecimalString, type ExchangeRate } from '@store-mgmt/domain';
-import type { PrismaService } from '../prisma-client.js';
 import type { TenantContextService } from '../tenant/tenant-context.service.js';
-import { seedWarehouses } from '../inventory/seed.js';
-import { seedCustomers } from '../customer/seed.js';
-import { seedUsers, SALES_AGENT_LOGIN } from '../users/seed.js';
+import type { PrismaClient as TenantPrismaClient, Prisma } from '../../generated/tenant/client.js';
 import { PrismaOrderRepository } from './prisma-order.repository.js';
 
 /**
@@ -51,6 +48,17 @@ export interface SeedOrdersResult {
  * order is looked up by its deterministic id first; if it already exists,
  * this function is a no-op for that slot.
  *
+ * task 14.2 reshape: takes an already-resolved TENANT client and the sales
+ * agent's tenant `CompanyUserId` directly, instead of re-deriving them by
+ * calling `seedWarehouses`/`seedCustomers`/`seedUsers` itself — those now
+ * run once, earlier, as their own steps in `prisma/seed.js`'s orchestration
+ * (master seed -> provision tenant -> grant cockpit roles -> seed
+ * customers -> seed orders), so calling them again here would just be
+ * redundant idempotent no-ops through an extra layer of indirection.
+ * `findFirstOrThrow` on the warehouse/customer lookups is deliberate — a
+ * seed that silently found nothing here would produce orders with garbage
+ * FKs instead of failing loud.
+ *
  * REUSES `PrismaOrderRepository` (not raw Prisma inserts) so every seeded
  * order goes through the SAME `createOrder()` factory + `confirm`/`deliver`
  * transitions the real app uses — the seeded `stock_level` rows end up
@@ -71,33 +79,25 @@ export interface SeedOrdersResult {
  * (out of scope this phase) would exempt credit-only orders from the
  * payment-sum check so `payments` can be genuinely empty.
  */
-export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResult> {
-  await seedWarehouses(prisma);
-  await seedCustomers(prisma);
-  // Demo orders are attributed to the cockpit `sales_agent`, so the seeded
-  // dataset carries the same attribution a real sale would. `findFirstOrThrow`
-  // rather than a null-tolerant lookup on purpose: a seed that silently wrote
-  // unattributed orders would look fine and then fail Phase 5's accrual gate
-  // with no clue why.
-  await seedUsers(prisma);
-  const salesAgentUser = await prisma.user.findUniqueOrThrow({ where: { login: SALES_AGENT_LOGIN } });
-  const salesAgentAssignment = await prisma.companyUser.findFirstOrThrow({
-    where: { userId: salesAgentUser.id, status: 'ACTIVE' },
-  });
-  const salesAgentCompanyUserId = salesAgentAssignment.id;
-
-  const warehouse = await prisma.warehouse.findFirstOrThrow({ orderBy: { name: 'asc' } });
-  const customers = await prisma.customer.findMany({ orderBy: { fullName: 'asc' }, take: 2 });
-  const customer = customers[0]!;
+export async function seedOrders(
+  tenantClient: TenantPrismaClient,
+  salesAgentCompanyUserId: string,
+): Promise<SeedOrdersResult> {
+  const warehouse = await tenantClient.warehouse.findFirstOrThrow({ orderBy: { name: 'asc' } });
+  const customers = await tenantClient.customer.findMany({ orderBy: { fullName: 'asc' }, take: 2 });
+  const customer = customers[0];
+  if (!customer) {
+    throw new Error('seedOrders: no Customer rows found — run seedCustomers against this tenant first');
+  }
   const secondCustomer = customers[1] ?? customer;
 
-  const category = await prisma.category.upsert({
+  const category = await tenantClient.category.upsert({
     where: { slug: DEMO_CATEGORY_SLUG },
     update: {},
     create: { name: 'Ventas Demo', slug: DEMO_CATEGORY_SLUG, order: 999, active: true },
   });
 
-  const productUsd = await prisma.product.upsert({
+  const productUsd = await tenantClient.product.upsert({
     where: { id: DEMO_PRODUCT_USD_ID },
     update: {},
     create: {
@@ -114,7 +114,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
       active: true,
     },
   });
-  const productMn = await prisma.product.upsert({
+  const productMn = await tenantClient.product.upsert({
     where: { id: DEMO_PRODUCT_MN_ID },
     update: {},
     create: {
@@ -132,9 +132,11 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
     },
   });
 
-  const existingMnRate = await prisma.exchangeRate.findFirst({ where: { channel: DEMO_MN_RATE_CHANNEL } });
+  const existingMnRate = await tenantClient.exchangeRate.findFirst({
+    where: { channel: DEMO_MN_RATE_CHANNEL },
+  });
   if (!existingMnRate) {
-    await prisma.exchangeRate.create({
+    await tenantClient.exchangeRate.create({
       data: {
         channel: DEMO_MN_RATE_CHANNEL,
         rate: '350.000000',
@@ -142,7 +144,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
       },
     });
   }
-  const rateRows = await prisma.exchangeRate.findMany({
+  const rateRows = await tenantClient.exchangeRate.findMany({
     where: { channel: DEMO_MN_RATE_CHANNEL },
     orderBy: { effectiveFrom: 'desc' },
   });
@@ -153,16 +155,8 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
     effectiveFrom: row.effectiveFrom,
   }));
 
-  // `seedOrders` is currently UNREACHABLE from `prisma/seed.js` (task 3.5's
-  // "master only for now" — see that file's header comment); this fake keeps
-  // `PrismaOrderRepository`'s constructor (task 6.2, `TenantContextService`)
-  // satisfied at the type level without rewriting this whole function onto a
-  // real tenant schema, which is Phase 9/14.2's job once seeding is wired
-  // through the provisioning saga. Points `getClient()` straight at the same
-  // `prisma` connection every other call in this function already uses, so
-  // behavior is unchanged if this ever runs again before then.
   const repository = new PrismaOrderRepository({
-    getClient: () => prisma,
+    getClient: () => tenantClient,
   } as unknown as TenantContextService);
   const at = new Date('2026-07-22T00:00:00Z');
   let ordersUpserted = 0;
@@ -199,8 +193,8 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
   // 2. Mixed USD/MN, transitions to `verified` (reserves stock).
   const mixedId = deterministicId('order:mixed-currency');
   if (!(await repository.findById(mixedId))) {
-    await ensureStock(prisma, productUsd.id, warehouse.id, 10);
-    await ensureStock(prisma, productMn.id, warehouse.id, 10);
+    await ensureStock(tenantClient, productUsd.id, warehouse.id, 10);
+    await ensureStock(tenantClient, productMn.id, warehouse.id, 10);
     const order = createOrder(
       {
         id: mixedId,
@@ -239,7 +233,7 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
   //    (reserves then consumes stock).
   const splitPaymentId = deterministicId('order:split-payment');
   if (!(await repository.findById(splitPaymentId))) {
-    await ensureStock(prisma, productUsd.id, warehouse.id, 10);
+    await ensureStock(tenantClient, productUsd.id, warehouse.id, 10);
     const order = createOrder(
       {
         id: splitPaymentId,
@@ -318,18 +312,18 @@ export async function seedOrders(prisma: PrismaService): Promise<SeedOrdersResul
 }
 
 async function ensureStock(
-  prisma: PrismaService,
+  tenantClient: TenantPrismaClient,
   productId: string,
   warehouseId: string,
   minOnHand: number,
 ): Promise<void> {
-  const level = await prisma.stockLevel.findUnique({
+  const level = await tenantClient.stockLevel.findUnique({
     where: { productId_warehouseId: { productId, warehouseId } },
   });
   if (level && level.onHand >= minOnHand) return;
 
   const missing = minOnHand - (level?.onHand ?? 0);
-  await prisma.$transaction(async (tx) => {
+  await tenantClient.$transaction(async (tx: Prisma.TransactionClient) => {
     const row = await tx.stockLevel.upsert({
       where: { productId_warehouseId: { productId, warehouseId } },
       update: {},

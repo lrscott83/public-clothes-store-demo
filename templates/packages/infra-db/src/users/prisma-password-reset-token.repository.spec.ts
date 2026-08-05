@@ -1,28 +1,24 @@
 import { PrismaMasterService } from '../master-prisma-client.js';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaPasswordResetTokenRepository } from './prisma-password-reset-token.repository.js';
 import { PrismaUserRepository } from './prisma-user.repository.js';
-import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
 const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
 /**
  * Integration tests against the real `store_mgmt` Postgres database (no
  * mocks) — same discipline as `prisma-refresh-token.repository.spec.ts`.
- * `PasswordResetToken` now lives on the master client (task 3.5); see that
- * spec's comment for why cleanup still needs a `TenantDefaultPrismaService`
- * too.
+ * `PasswordResetToken` lives on the master client (task 3.5) and
+ * `onDelete: Cascade`s off `User` — see that spec's comment for why no
+ * legacy cleanup is needed anymore (task 14.2).
  */
 describe('PrismaPasswordResetTokenRepository', () => {
   let prisma: PrismaMasterService;
-  let legacyPrisma: TenantDefaultPrismaService;
   let repository: PrismaPasswordResetTokenRepository;
   let users: PrismaUserRepository;
   let userId: string;
 
   beforeAll(() => {
     prisma = new PrismaMasterService();
-    legacyPrisma = new TenantDefaultPrismaService();
     repository = new PrismaPasswordResetTokenRepository(prisma);
     users = new PrismaUserRepository(prisma);
   });
@@ -33,18 +29,11 @@ describe('PrismaPasswordResetTokenRepository', () => {
   });
 
   afterEach(async () => {
-    await prisma.passwordResetToken.deleteMany({});
-    // `company_user` has NO FK to `app_user` (soft FK by design) — deleting
-    // users alone would leave orphan assignments behind and trip the §7
-    // backfill gate.
-    await wipeCompanyUserDependents(legacyPrisma);
-    await legacyPrisma.companyUser.deleteMany({});
     await prisma.user.deleteMany({});
   });
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await legacyPrisma.$disconnect();
   });
 
   it('create() persists a PasswordResetToken row, isUsed defaults to false', async () => {

@@ -1,49 +1,48 @@
-import { PrismaService } from '../prisma-client.js';
 import { seedWarehouses, WAREHOUSE_NAMES } from './seed.js';
+import { useTenantSchema } from '../tenant-schema.spec-helper.js';
 
 /**
- * Integration test against the real `store_mgmt` Postgres database. Covers
- * the spec's "Seed produces 3 active warehouses" and "No StockLevel rows
- * are seeded" scenarios, plus idempotency (re-running never duplicates).
+ * Real Postgres, against a provisioned tenant schema (task 5.1) — `Warehouse`
+ * is tenant-side (design.md §1). Covers the spec's "Seed produces 3 active
+ * warehouses" and "No StockLevel rows are seeded" scenarios, plus
+ * idempotency (re-running never duplicates). Row-level cleanup between
+ * `it`s, not a fresh schema per test — the schema itself is dropped once in
+ * `afterAll` by `useTenantSchema()`.
  */
 describe('seedWarehouses', () => {
-  let prisma: PrismaService;
-
-  beforeAll(() => {
-    prisma = new PrismaService();
-  });
+  const getTenantSchema = useTenantSchema();
 
   afterEach(async () => {
-    await prisma.stockMovement.deleteMany({});
-    await prisma.stockLevel.deleteMany({});
-    await prisma.warehouse.deleteMany({});
-  });
-
-  afterAll(async () => {
-    await prisma.$disconnect();
+    const { client } = getTenantSchema();
+    await client.stockMovement.deleteMany({});
+    await client.stockLevel.deleteMany({});
+    await client.warehouse.deleteMany({});
   });
 
   it('produces exactly 3 active Warehouse rows with the MVP names', async () => {
-    await seedWarehouses(prisma);
+    const { client } = getTenantSchema();
+    await seedWarehouses(client);
 
-    const warehouses = await prisma.warehouse.findMany();
+    const warehouses = await client.warehouse.findMany();
     expect(warehouses).toHaveLength(3);
     expect(warehouses.every((w) => w.active)).toBe(true);
     expect(warehouses.map((w) => w.name).sort()).toEqual([...WAREHOUSE_NAMES].sort());
   });
 
   it('seeds ZERO StockLevel rows', async () => {
-    await seedWarehouses(prisma);
+    const { client } = getTenantSchema();
+    await seedWarehouses(client);
 
-    const levels = await prisma.stockLevel.findMany();
+    const levels = await client.stockLevel.findMany();
     expect(levels).toHaveLength(0);
   });
 
   it('is idempotent: running the seed twice yields exactly 3 rows, never duplicates', async () => {
-    await seedWarehouses(prisma);
-    await seedWarehouses(prisma);
+    const { client } = getTenantSchema();
+    await seedWarehouses(client);
+    await seedWarehouses(client);
 
-    const warehouses = await prisma.warehouse.findMany();
+    const warehouses = await client.warehouse.findMany();
     expect(warehouses).toHaveLength(3);
   });
 });

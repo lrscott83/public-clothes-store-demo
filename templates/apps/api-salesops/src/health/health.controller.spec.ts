@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService } from '@store-mgmt/infra-db';
+import { PrismaMasterService } from '@store-mgmt/infra-db';
 import { HealthController } from './health.controller.js';
 
 describe('HealthController', () => {
@@ -10,7 +10,7 @@ describe('HealthController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [HealthController],
-      providers: [{ provide: PrismaService, useValue: prismaMock }],
+      providers: [{ provide: PrismaMasterService, useValue: prismaMock }],
     }).compile();
 
     const controller = module.get(HealthController);

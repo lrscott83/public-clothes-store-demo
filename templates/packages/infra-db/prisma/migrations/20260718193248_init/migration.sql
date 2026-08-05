@@ -1,4 +1,0 @@
--- Baseline migration for the backend scaffold.
--- No models yet: this migration establishes the schema/migration history
--- for the walking skeleton. The first domain module (Currency) adds the
--- first real models in its own migration.

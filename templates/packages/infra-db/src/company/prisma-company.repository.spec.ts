@@ -1,8 +1,6 @@
 import { DuplicateCompanySlugError } from '@store-mgmt/domain';
 import { PrismaMasterService } from '../master-prisma-client.js';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaCompanyRepository } from './prisma-company.repository.js';
-import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
 /**
  * Integration tests against the real `store_mgmt_test` Postgres database (no
@@ -10,41 +8,37 @@ import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
  * `create`/`setSchemaName`/`delete` are the provisioning saga's writes
  * (design.md D7, `create-company.saga.ts`) — the ONLY writer of a `Company`
  * row in production; `list`/`findById` stay pure reads.
- * `Company` now lives on the master client (task 3.5); `company_user` still
- * has a real, RESTRICT-ing FK to `company` (unchanged legacy table, see
- * `TenantDefaultPrismaService`'s doc comment), so it must still be cleared
- * before `company.deleteMany` — through a companion legacy client, since
- * master's schema has no `companyUser` model to reach it with.
+ *
+ * task 14.2: no legacy `company_user` cleanup anymore — `Membership` is the
+ * ONLY thing that still relates to `Company` on the master schema
+ * (`onDelete: Cascade`, `prisma/master/schema.prisma`), and the tenant
+ * `CompanyUser` D1 reshaped this table into lives in a separate Postgres
+ * schema Prisma cannot even express a `@relation` to. A plain
+ * `company.deleteMany({})` needs no manual ordering.
  */
 describe('PrismaCompanyRepository', () => {
   let prisma: PrismaMasterService;
-  let legacyPrisma: TenantDefaultPrismaService;
   let repository: PrismaCompanyRepository;
 
   beforeAll(() => {
     prisma = new PrismaMasterService();
-    legacyPrisma = new TenantDefaultPrismaService();
     repository = new PrismaCompanyRepository(prisma);
   });
 
-  // Wipe before AND after: migration 001 seeds a `default`-slug Company, so
-  // the "no Company exists" and "exactly one" assertions below would otherwise
-  // depend on whether this database had been migrated yet.
+  // Wipe before AND after: a fresh master schema seeds nothing (task 14.2's
+  // reset dropped the legacy migration that used to seed a `default`-slug
+  // Company), but this still guards the "no Company exists"/"exactly one"
+  // assertions below against leftovers from a sibling suite.
   beforeEach(async () => {
-    await wipeCompanyUserDependents(legacyPrisma);
-    await legacyPrisma.companyUser.deleteMany({});
     await prisma.company.deleteMany({});
   });
 
   afterEach(async () => {
-    await wipeCompanyUserDependents(legacyPrisma);
-    await legacyPrisma.companyUser.deleteMany({});
     await prisma.company.deleteMany({});
   });
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await legacyPrisma.$disconnect();
   });
 
   it('list() returns every persisted Company with schemaName null', async () => {

@@ -1,27 +1,24 @@
 import { PrismaMasterService } from '../master-prisma-client.js';
-import { TenantDefaultPrismaService } from '../tenant/tenant-default-prisma.service.js';
 import { PrismaRefreshTokenRepository } from './prisma-refresh-token.repository.js';
 import { PrismaUserRepository } from './prisma-user.repository.js';
-import { wipeCompanyUserDependents } from '../db-cleanup.spec-helper.js';
 
 const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
 
 /**
  * Integration tests against the real `store_mgmt` Postgres database (no
  * mocks) — same discipline as `prisma-user.repository.spec.ts`. `RefreshToken`
- * now lives on the master client (task 3.5); see that spec's comment for why
- * cleanup still needs a `TenantDefaultPrismaService` too.
+ * lives on the master client (task 3.5) and `onDelete: Cascade`s off
+ * `User` — see that spec's comment for why no legacy cleanup is needed
+ * anymore (task 14.2).
  */
 describe('PrismaRefreshTokenRepository', () => {
   let prisma: PrismaMasterService;
-  let legacyPrisma: TenantDefaultPrismaService;
   let repository: PrismaRefreshTokenRepository;
   let users: PrismaUserRepository;
   let userId: string;
 
   beforeAll(() => {
     prisma = new PrismaMasterService();
-    legacyPrisma = new TenantDefaultPrismaService();
     repository = new PrismaRefreshTokenRepository(prisma);
     users = new PrismaUserRepository(prisma);
   });
@@ -32,18 +29,11 @@ describe('PrismaRefreshTokenRepository', () => {
   });
 
   afterEach(async () => {
-    await prisma.refreshToken.deleteMany({});
-    // `company_user` has NO FK to `app_user` (soft FK by design) — deleting
-    // users alone would leave orphan assignments behind and trip the §7
-    // backfill gate.
-    await wipeCompanyUserDependents(legacyPrisma);
-    await legacyPrisma.companyUser.deleteMany({});
     await prisma.user.deleteMany({});
   });
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await legacyPrisma.$disconnect();
   });
 
   it('create() persists a RefreshToken row', async () => {

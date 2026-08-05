@@ -1,11 +1,14 @@
-export { PrismaService } from './prisma-client.js';
 export { InfraDbModule } from './infra-db.module.js';
-export type { PrismaClient } from '../generated/client/client.js';
-// Task 3.4/3.5 (WU3b): master + temporary tenant-labeled clients — see
-// `TenantDefaultPrismaService`'s doc comment for why it still wraps the OLD
-// generated client, not `generated/tenant`.
+export type { PrismaClient as TenantPrismaClient } from '../generated/tenant/client.js';
+export type { PrismaClient as MasterPrismaClient } from '../generated/master/client.js';
+// Task 3.4/3.5 (WU3b): the master client. `PrismaService`/
+// `TenantDefaultPrismaService` (the pre-split monolith client and its
+// legacy-cleanup-only sibling) were deleted in task 14.2 once
+// `prisma/schema.prisma`'s legacy schema+migrations were replaced by
+// `prisma/master/schema.prisma` as the package's default — every consumer
+// that used to bind either now binds `PrismaMasterService` or a resolved
+// tenant client instead.
 export { PrismaMasterService } from './master-prisma-client.js';
-export { TenantDefaultPrismaService } from './tenant/tenant-default-prisma.service.js';
 // Task 4.1/4.2 (Phase 4, D2/D6/D7): real per-tenant client acquisition.
 export {
   TenantPrismaFactory,
@@ -37,7 +40,10 @@ export { PrismaRefreshTokenRepository } from './users/prisma-refresh-token.repos
 export { PrismaPasswordResetTokenRepository } from './users/prisma-password-reset-token.repository.js';
 export { PrismaWarehouseOperatorRepository } from './users/prisma-warehouse-operator.repository.js';
 export { PrismaCompanyRepository } from './company/prisma-company.repository.js';
-export { seedCompany, DEFAULT_COMPANY_SLUG } from './company/seed.js';
+export { DEFAULT_COMPANY_SLUG, DEFAULT_COMPANY_NAME } from './company/seed.js';
+// Task 14.2: the demo-seed provisioning/role-grant primitives `prisma/seed.js` uses.
+export { provisionCompany, type ProvisionCompanyResult } from './company/provision-company.js';
+export { grantTenantRole, type GrantTenantRoleResult } from './company/grant-tenant-role.js';
 export { PrismaCommissionReferenceProvider } from './commission/prisma-commission-reference.provider.js';
 export { PrismaCommissionAccrualRepository } from './commission/prisma-commission-accrual.repository.js';
 export { PrismaCommissionPaymentRepository } from './commission/prisma-commission-payment.repository.js';

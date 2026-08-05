@@ -16,8 +16,8 @@ import { CustomerService } from './customer.service.js';
  * redundancy: Nest DI is module-scoped and (pre-Phase-8) `AuthModule`
  * exported nothing, so its bindings were invisible from this module. Binding
  * per-module is the pattern every feature module in this app already follows
- * (see `SalesModule`), and the adapters are stateless wrappers over the single
- * `PrismaService` that `InfraDbModule` provides.
+ * (see `SalesModule`), and the adapters are stateless wrappers over the
+ * `PrismaMasterService`/tenant client `InfraDbModule` provides.
  *
  * `COMPANY_USER_REPOSITORY`/`PrismaCompanyUserRepository` dropped (Phase 8,
  * task 8.3): `CustomerIdentityService` was this module's only consumer, and

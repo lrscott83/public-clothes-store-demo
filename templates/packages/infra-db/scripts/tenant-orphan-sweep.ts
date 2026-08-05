@@ -1,7 +1,7 @@
 // CLI wrapper for the design D7 orphan reconciliation tool (task 10.3). The
 // sweep logic lives in `src/tenant/tenant-orphan-sweep.ts` — it is library
 // code with its own real-Postgres spec; this file is only argument handling
-// and reporting, same split as `verify-order-attribution.ts`.
+// and reporting, same split as `scripts/tenant-migrate.ts`.
 //
 // Run directly on Node 24's native TypeScript type-stripping — no build
 // step, no ts-node/tsx, same spirit as `verify-company-user-backfill.ts`:

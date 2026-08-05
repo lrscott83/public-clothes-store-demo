@@ -1,5 +1,3 @@
-import type { PrismaService } from '../prisma-client.js';
-
 /**
  * Commission reference seed.
  *
@@ -40,6 +38,8 @@ import type { PrismaService } from '../prisma-client.js';
  * expressed in metres — an assumption about catalog units, recorded here rather
  * than encoded as machinery.
  */
+
+import type { PrismaClient as TenantPrismaClient } from '../../generated/tenant/client.js';
 
 export interface CommissionReferenceRow {
   /**
@@ -422,9 +422,15 @@ export interface SeedCommissionResult extends CommissionAssignmentReport {
  * report the design requires: what matched, what did not, what went unused.
  * Throws before writing anything if the table is ambiguous — a partially
  * seeded commission table is worse than none.
+ *
+ * `Product`/`ProductCommissionReference` are TENANT-side tables (design.md
+ * §1) — takes the tenant client directly (task 14.2's retype off the
+ * deleted legacy `PrismaService`). Still not wired into `prisma/seed.js` or
+ * any caller — a pre-existing gap this batch does not close, flagged rather
+ * than silently left inconsistent.
  */
 export async function seedCommissionReferences(
-  prisma: PrismaService,
+  prisma: TenantPrismaClient,
 ): Promise<SeedCommissionResult> {
   const products = await prisma.product.findMany({
     where: { active: true },

@@ -5,11 +5,11 @@ import {
   HttpStatus,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { PrismaService } from '@store-mgmt/infra-db';
+import { PrismaMasterService } from '@store-mgmt/infra-db';
 
 @Controller('health')
 export class HealthController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaMasterService) {}
 
   @Get()
   @HttpCode(HttpStatus.OK)

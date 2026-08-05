@@ -1,57 +1,86 @@
-import { PrismaService } from '../prisma-client.js';
+import { randomUUID } from 'node:crypto';
 import { seedOrders } from './seed.js';
-import { wipeCommissionTables } from '../db-cleanup.spec-helper.js';
+import { seedWarehouses } from '../inventory/seed.js';
+import { seedCustomers } from '../customer/seed.js';
+import { grantTenantRole } from '../company/grant-tenant-role.js';
+import { PrismaMasterService } from '../master-prisma-client.js';
+import { PrismaMembershipRepository } from '../company/prisma-membership.repository.js';
+import { useTenantSchema } from '../tenant-schema.spec-helper.js';
 
 /**
- * Integration test against the real `store_mgmt` Postgres database. Covers
- * the spec's demo-seed idempotency requirement: re-running never duplicates
- * the 4 demo orders (single-currency, mixed USD/MN, split-payment, credit
+ * Real Postgres, against a provisioned tenant schema (task 5.1). Covers the
+ * spec's demo-seed idempotency requirement: re-running never duplicates the
+ * 4 demo orders (single-currency, mixed USD/MN, split-payment, credit
  * sale), and the set spans `created`/`verified`/`delivered` across itself.
+ * `seedOrders` no longer provisions its own warehouse/customer/agent
+ * fixtures (task 14.2 reshape) — this suite seeds them directly, the same
+ * way `prisma/seed.js`'s orchestration does.
  */
 describe('seedOrders', () => {
-  let prisma: PrismaService;
+  const getTenantSchema = useTenantSchema();
+  const masterPrisma = new PrismaMasterService();
+  const membershipRepository = new PrismaMembershipRepository(masterPrisma);
+  let companyId: string;
+  let salesAgentCompanyUserId: string;
 
-  beforeAll(() => {
-    prisma = new PrismaService();
+  beforeAll(async () => {
+    await masterPrisma.$connect();
+  });
+
+  beforeEach(async () => {
+    const company = await masterPrisma.company.create({
+      data: { name: 'Tienda Prueba', slug: `sales-seed-${randomUUID()}` },
+    });
+    companyId = company.id;
+
+    const { client } = getTenantSchema();
+    await seedWarehouses(client);
+    await seedCustomers(masterPrisma, membershipRepository, client, companyId);
+    const agentUser = await masterPrisma.user.create({
+      data: { login: `sales.agent.${randomUUID()}`, passwordHash: 'x', fullName: 'Gestor de Ventas' },
+    });
+    const { companyUserId } = await grantTenantRole(membershipRepository, client, {
+      userId: agentUser.id,
+      companyId,
+      role: 32,
+      createdByCompanyUserId: null,
+    });
+    salesAgentCompanyUserId = companyUserId;
   });
 
   afterEach(async () => {
-    // Targeted cleanup — only rows `seedOrders` itself creates, so sibling
-    // spec files' own customer/warehouse fixtures (managed by their own
-    // idempotent seeds) are left untouched.
-    // First: commission rows RESTRICT the order delete below.
-    await wipeCommissionTables(prisma);
-    await prisma.orderPayment.deleteMany({});
-    await prisma.saleCredit.deleteMany({});
-    await prisma.orderLine.deleteMany({});
-    await prisma.order.deleteMany({});
-    await prisma.exchangeRate.deleteMany({ where: { channel: 'MN_TRANSFER' } });
-    await prisma.stockMovement.deleteMany({});
-    await prisma.stockLevel.deleteMany({});
-    await prisma.product.deleteMany({ where: { name: { startsWith: 'Producto Demo' } } });
-    await prisma.category.deleteMany({ where: { slug: 'sales-seed-demo' } });
-    await prisma.customer.deleteMany({});
-    // `seedOrders` -> `seedCustomers` mints/links an `app_user` per demo
-    // customer (backend-users-roles, Customer.userId 1:1) — clean those up
-    // too, same "only rows this seed itself creates" discipline as above.
-    // `company_user` has NO FK to `app_user` (soft FK by design) — deleting
-    // users alone would leave orphan assignments behind and trip the §7
-    // backfill gate.
-    await prisma.companyUser.deleteMany({});
-    await prisma.user.deleteMany({});
-    await prisma.warehouse.deleteMany({});
+    const { client } = getTenantSchema();
+    await client.commissionPayment.deleteMany({});
+    await client.commissionAccrual.deleteMany({});
+    await client.productCommissionReference.deleteMany({});
+    await client.orderPayment.deleteMany({});
+    await client.saleCredit.deleteMany({});
+    await client.orderLine.deleteMany({});
+    await client.order.deleteMany({});
+    await client.exchangeRate.deleteMany({});
+    await client.stockMovement.deleteMany({});
+    await client.stockLevel.deleteMany({});
+    await client.product.deleteMany({});
+    await client.category.deleteMany({});
+    await client.customer.deleteMany({});
+    await client.companyUser.deleteMany({});
+    await client.warehouse.deleteMany({});
+    await masterPrisma.membership.deleteMany({});
+    await masterPrisma.user.deleteMany({});
+    await masterPrisma.company.deleteMany({});
   });
 
   afterAll(async () => {
-    await prisma.$disconnect();
+    await masterPrisma.$disconnect();
   });
 
   it('creates the 4 demo orders spanning created/verified/delivered', async () => {
-    const result = await seedOrders(prisma);
+    const { client } = getTenantSchema();
+    const result = await seedOrders(client, salesAgentCompanyUserId);
 
     expect(result.ordersUpserted).toBe(4);
 
-    const orders = await prisma.order.findMany({ where: { customerName: { not: '' } } });
+    const orders = await client.order.findMany({ where: { customerName: { not: '' } } });
     const statuses = new Set(orders.map((o) => o.status));
     expect(statuses.has('created')).toBe(true);
     expect(statuses.has('verified')).toBe(true);
@@ -59,11 +88,12 @@ describe('seedOrders', () => {
   });
 
   it('is idempotent: running twice never duplicates the demo orders', async () => {
-    const first = await seedOrders(prisma);
-    const ordersAfterFirst = await prisma.order.count();
+    const { client } = getTenantSchema();
+    const first = await seedOrders(client, salesAgentCompanyUserId);
+    const ordersAfterFirst = await client.order.count();
 
-    const second = await seedOrders(prisma);
-    const ordersAfterSecond = await prisma.order.count();
+    const second = await seedOrders(client, salesAgentCompanyUserId);
+    const ordersAfterSecond = await client.order.count();
 
     expect(second.ordersUpserted).toBe(0);
     expect(ordersAfterSecond).toBe(ordersAfterFirst);
@@ -71,26 +101,24 @@ describe('seedOrders', () => {
   });
 
   it('attributes EVERY demo order to the cockpit sales agent — none left unattributed', async () => {
-    await seedOrders(prisma);
+    const { client } = getTenantSchema();
+    await seedOrders(client, salesAgentCompanyUserId);
 
-    const orders = await prisma.order.findMany();
-    const agentUser = await prisma.user.findUniqueOrThrow({ where: { login: 'sales.agent' } });
-    const assignment = await prisma.companyUser.findFirstOrThrow({
-      where: { userId: agentUser.id, status: 'ACTIVE' },
-    });
+    const orders = await client.order.findMany();
 
     // "Every", not "at least one": a seed that leaves some orders null would
     // still look healthy here while failing Phase 5's accrual gate later.
     expect(orders.length).toBeGreaterThan(0);
     for (const order of orders) {
-      expect(order.attributedCompanyUserId).toBe(assignment.id);
+      expect(order.attributedCompanyUserId).toBe(salesAgentCompanyUserId);
     }
   });
 
   it('the credit-sale demo order carries an attached SaleCredit', async () => {
-    await seedOrders(prisma);
+    const { client } = getTenantSchema();
+    await seedOrders(client, salesAgentCompanyUserId);
 
-    const saleCredit = await prisma.saleCredit.findFirst();
+    const saleCredit = await client.saleCredit.findFirst();
     expect(saleCredit).not.toBeNull();
     expect(Number(saleCredit?.paid.toString())).toBe(0);
   });
