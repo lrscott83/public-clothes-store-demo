@@ -186,7 +186,7 @@ This is one work unit by explicit constraint — the invariant comment and its r
 
 ## Phase 13: Cross-schema isolation proof (P5 — budgeted deliverable, not a chore)
 
-- [ ] 13.1 **NEW FILE, own commit, never bundled**: `apps/api-salesops/test/tenant-isolation.e2e-spec.ts` — provision two named tenant schemas (A, B) in one test run via Phase 10's saga (or Phase 4/5's provisioning path), write a row in A, run the same query scoped to B, assert B's result set does not contain A's row. Real `TenantContextGuard`, not stubbed. Satisfies spec: salesops-tenancy "Cross-Schema Isolation Is Proven, Not Assumed" — both scenarios ("Writes in tenant A are invisible to tenant B", "The test exercises the real guard, not a stub").
+- [x] 13.1 **NEW FILE, own commit, never bundled**: `apps/api-salesops/test/tenant-isolation.e2e-spec.ts` — provision two named tenant schemas (A, B) in one test run via Phase 10's saga (or Phase 4/5's provisioning path), write a row in A, run the same query scoped to B, assert B's result set does not contain A's row. Real `TenantContextGuard`, not stubbed. Satisfies spec: salesops-tenancy "Cross-Schema Isolation Is Proven, Not Assumed" — both scenarios ("Writes in tenant A are invisible to tenant B", "The test exercises the real guard, not a stub").
 
 ## Phase 14: Cleanup
 
