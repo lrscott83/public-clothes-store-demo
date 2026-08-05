@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Optional } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { assertSchemaName } from './schema-name.js';
@@ -60,7 +60,24 @@ export class TenantPrismaFactory implements OnModuleDestroy {
   // this IS the LRU order, no separate bookkeeping needed.
   private readonly cache = new Map<string, CacheEntry>();
 
-  constructor(options: TenantPrismaFactoryOptions = {}) {
+  /**
+   * `@Optional()` is load-bearing, not decorative — discovered while
+   * wiring Phase 12's e2e suite (SDD change multi-tenant-by-schema, task
+   * 12.2). `TenantPrismaFactoryOptions` is a plain interface: it erases at
+   * runtime, so `emitDecoratorMetadata` (`tsconfig.backend.json`) reports
+   * this parameter's design-time type as bare `Object`. Without
+   * `@Optional()`, Nest's real DI container (bootstrapping the FULL
+   * `AppModule` — the exact path every e2e spec exercises, and the one
+   * unit specs never did, since they always mocked or hand-constructed
+   * this class) tries to resolve a provider for the `Object` token, finds
+   * none, and throws "can't resolve dependencies" before the constructor's
+   * own `= {}` default ever gets a chance to apply. `@Optional()` tells
+   * Nest to inject `undefined` instead of throwing, which is exactly what
+   * lets the default parameter value take over — the intended behavior
+   * all along (this class always reads its real tuning from `envInt(...)`
+   * when no `options` are passed programmatically).
+   */
+  constructor(@Optional() options: TenantPrismaFactoryOptions = {}) {
     this.max = options.max ?? envInt('TENANT_POOL_MAX', DEFAULT_MAX);
     this.idleTimeoutMillis =
       options.idleTimeoutMillis ?? envInt('TENANT_POOL_IDLE_TIMEOUT_MS', DEFAULT_IDLE_TIMEOUT_MS);
