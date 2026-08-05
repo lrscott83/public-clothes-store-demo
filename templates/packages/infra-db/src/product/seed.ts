@@ -6,6 +6,7 @@ import {
   percentToDecimalString,
 } from '@store-mgmt/domain';
 import type { PrismaService } from '../prisma-client.js';
+import type { PrismaMasterService } from '../master-prisma-client.js';
 
 /** A single entry from the MVP's `catalog.json` `categories` array. */
 export interface CatalogCategory {
@@ -106,6 +107,92 @@ export async function seedProducts(prisma: PrismaService, catalog: Catalog): Pro
     );
 
     await prisma.product.upsert({
+      where: { id },
+      update: {
+        name: product.name,
+        description: product.description,
+        price,
+        priceCurrency: 'USD',
+        cost,
+        costCurrency: 'USD',
+        categoryId,
+        image: product.image,
+        order: productOrder,
+      },
+      create: {
+        id,
+        name: product.name,
+        description: product.description,
+        price,
+        priceCurrency: 'USD',
+        percentDiscountPrice: percentToDecimalString(0n),
+        discountPrice: discountPriceToDecimalString(0n),
+        cost,
+        costCurrency: 'USD',
+        categoryId,
+        image: product.image,
+        isNew: false,
+        order: productOrder,
+        active: true,
+      },
+    });
+    productOrder++;
+  }
+
+  return {
+    categoriesUpserted: catalog.categories.length,
+    productsUpserted: catalog.products.length,
+  };
+}
+
+/**
+ * Master-side sibling of `seedProducts` (design.md §1, P8; spec:
+ * salesops-products "Category Catalog Seed Load"). Seeds the SAME 11
+ * catalog.json slugs, once, as master `TemplateCategory`/`TemplateProduct`
+ * rows — the source every tenant's OWN `Category`/`Product` rows are copied
+ * from at provisioning time (`copy-catalog.ts`, D7 step 6), never a live
+ * reference. Identical idempotency strategy to `seedProducts`: `Category`
+ * (here `TemplateCategory`) upserted on its unique `slug`, `Product` (here
+ * `TemplateProduct`) upserted on the same deterministic UUID id — the two
+ * are independent tables (master vs tenant schema, no shared rows), so
+ * reusing `deterministicProductId` here does not collide with anything
+ * `seedProducts` writes on the tenant side.
+ */
+export async function seedTemplateCatalog(
+  prisma: PrismaMasterService,
+  catalog: Catalog,
+): Promise<SeedResult> {
+  const categoryIdBySlug = new Map<string, string>();
+
+  let categoryOrder = 1;
+  for (const category of catalog.categories) {
+    const row = await prisma.templateCategory.upsert({
+      where: { slug: category.id },
+      update: { name: category.name, order: categoryOrder },
+      create: { name: category.name, slug: category.id, order: categoryOrder, active: true },
+    });
+    categoryIdBySlug.set(category.id, row.id);
+    categoryOrder++;
+  }
+
+  let productOrder = 1;
+  for (const product of catalog.products) {
+    const categoryId = categoryIdBySlug.get(product.categoryId);
+    if (!categoryId) {
+      throw new Error(
+        `Seed catalog product "${product.id}" references unknown category slug "${product.categoryId}"`,
+      );
+    }
+
+    const id = deterministicProductId(product.id);
+    const price = moneyToDecimalString(moneyFromDecimalString(product.price.toFixed(2), 'USD'));
+    // SYNTHETIC placeholder until a real supplier-cost source exists (open
+    // input #4, design.md) — never presented as real cost data.
+    const cost = moneyToDecimalString(
+      moneyFromDecimalString((product.price * 0.6).toFixed(2), 'USD'),
+    );
+
+    await prisma.templateProduct.upsert({
       where: { id },
       update: {
         name: product.name,
