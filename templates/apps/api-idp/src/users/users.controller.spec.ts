@@ -1,7 +1,8 @@
 import { UnauthorizedException, type ExecutionContext, type INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { JwtAuthGuard, RolesGuard } from '@store-mgmt/api-common';
+import { JwtAuthGuard, RolesGuard, TenantContextGuard, type SanitizedUser } from '@store-mgmt/api-common';
 import { USER_ROLES } from '@store-mgmt/domain';
+import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import { UsersController } from './users.controller.js';
 import { UsersService } from './users.service.js';
@@ -14,6 +15,27 @@ type UsersServiceMock = {
   deactivate: jest.Mock;
 };
 
+/** `req.user` shape after a REAL `JwtStrategy.validate` + `TenantContextGuard` — mirrors `apps/api-salesops/src/test-support/auth-test-helpers.ts`'s `SAMPLE_AUTH_USER`. */
+const SAMPLE_AUTH_USER: Omit<SanitizedUser, 'roles'> = {
+  id: 'user-1',
+  login: 'jdoe',
+  fullName: 'John Doe',
+  email: null,
+  cellPhone: null,
+  isActive: true,
+  companyId: 'company-1',
+  companyUserId: 'company-user-1',
+  createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+};
+
+/** `req.tenant` shape set by a REAL `TenantContextGuard` (design D5). */
+const SAMPLE_TENANT: TenantContext = {
+  companyId: SAMPLE_AUTH_USER.companyId,
+  schemaName: 'store_mgmt_tenant_company_1',
+};
+
+/** Shape `UsersService`'s (mocked) methods return — a `UserResponseDto`, distinct from the auth identity above. */
 const sampleUser = {
   id: 'user-1',
   login: 'jdoe',
@@ -27,24 +49,43 @@ const sampleUser = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
-/** Builds a test app with `JwtAuthGuard`/`RolesGuard` overridden to inject `req.user` with the given `roles`, exercising the REAL `RolesGuard` logic (not a bypass). */
+/**
+ * Builds a test app with `JwtAuthGuard`/`TenantContextGuard` overridden to
+ * inject `req.user`/`req.tenant`, and `TenantContextService` stubbed so the
+ * controller's REAL `runInTenant(...)` closure has something to call —
+ * exercising the REAL `RolesGuard` logic (not a bypass) and the REAL
+ * per-handler tenant-scoping wiring (design D5). Mirrors
+ * `apps/api-salesops/src/test-support/auth-test-helpers.ts`.
+ */
 async function buildApp(
   service: UsersServiceMock,
   callerRoles: number | null,
 ): Promise<INestApplication> {
   const module: TestingModule = await Test.createTestingModule({
     controllers: [UsersController],
-    providers: [{ provide: UsersService, useValue: service }, RolesGuard],
+    providers: [
+      { provide: UsersService, useValue: service },
+      RolesGuard,
+      { provide: TenantContextService, useValue: { run: jest.fn((_ctx: TenantContext, fn: () => unknown) => fn()) } },
+    ],
   })
     .overrideGuard(JwtAuthGuard)
     .useValue({
       canActivate: (context: ExecutionContext) => {
         if (callerRoles === null) {
-        // Simulates the real `JwtAuthGuard` rejecting an unauthenticated request -> 401.
-        throw new UnauthorizedException();
-      }
+          // Simulates the real `JwtAuthGuard` rejecting an unauthenticated request -> 401.
+          throw new UnauthorizedException();
+        }
         const req = context.switchToHttp().getRequest();
-        req.user = { ...sampleUser, roles: callerRoles };
+        req.user = { ...SAMPLE_AUTH_USER, roles: callerRoles };
+        return true;
+      },
+    })
+    .overrideGuard(TenantContextGuard)
+    .useValue({
+      canActivate: (context: ExecutionContext) => {
+        const req = context.switchToHttp().getRequest();
+        req.tenant = SAMPLE_TENANT;
         return true;
       },
     })
@@ -112,6 +153,21 @@ describe('UsersController', () => {
     await app.close();
   });
 
+  it('POST /users scopes the write to the CALLER\'s company/companyUserId, never the request body', async () => {
+    service.create.mockResolvedValue(sampleUser);
+    const app = await buildApp(service, USER_ROLES.owner);
+
+    await request(app.getHttpServer())
+      .post('/users')
+      .send({ login: 'newuser', password: 'plaintext', fullName: 'New User' });
+
+    expect(service.create).toHaveBeenCalledWith(
+      { companyId: SAMPLE_AUTH_USER.companyId, companyUserId: SAMPLE_AUTH_USER.companyUserId },
+      expect.objectContaining({ login: 'newuser' }),
+    );
+    await app.close();
+  });
+
   it('GET /users/:id returns 200', async () => {
     service.findById.mockResolvedValue(sampleUser);
     const app = await buildApp(service, USER_ROLES.owner);
@@ -128,6 +184,7 @@ describe('UsersController', () => {
       .send({ roles: USER_ROLES.warehouse_operator });
     expect(response.status).toBe(200);
     expect(response.body.roles).toBe(USER_ROLES.warehouse_operator);
+    expect(service.update).toHaveBeenCalledWith('user-1', expect.objectContaining({ roles: USER_ROLES.warehouse_operator }));
     await app.close();
   });
 
