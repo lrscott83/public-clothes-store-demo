@@ -155,6 +155,13 @@ Migration is **incremental, module by module**, without rewriting the UI. The se
 (`seed-store.ts`) is the point where the seed gets replaced by real modules. See
 [estrategia-backend-por-modulos.md](../plans/estrategia-backend-por-modulos.md).
 
+> **STALE (flagged, not fixed — SDD change `multi-tenant-by-schema`, task 14.4,
+> design.md §5):** the table above says "HTTP backend: does not exist" and lists
+> no `infra-*`/`api-*` packages. Both are now false — `packages/infra-db`,
+> `packages/api-common`, `apps/api-idp`, and `apps/api-salesops` all exist and
+> are the backend of record. Rewriting this table is out of scope for that
+> change; this note exists so the gap is visible rather than silently stale.
+
 ## Checklist: adding a new component
 
 - [ ] I found the row in **Where does X go?** — I know if it's a package or an app.
