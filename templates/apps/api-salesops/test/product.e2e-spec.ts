@@ -1,23 +1,36 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { USER_ROLES } from '@store-mgmt/domain';
-import { PrismaService } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
-import { authHeader, createAuthedUser } from './support/auth-e2e-helper.js';
+import {
+  authHeader,
+  companyIdHeader,
+  createAuthedUser,
+  dropTenantSchemas,
+  getTenantServices,
+  tenantClientFor,
+  type AuthedUser,
+  type TenantPrismaClient,
+  type TenantServices,
+} from './support/auth-e2e-helper.js';
 
 /**
- * Full HTTP lifecycle against the real `store_mgmt` Postgres database (no
- * mocks). Guards the MONEY invariants on the REAL path: `createProduct()` /
- * the atomic field guards must run inside `ProductService`, so a non-positive
- * price / negative cost is rejected with 400 and never persisted -- a
- * regression test for the factory-bypass bug (same class as the Customer C1 /
- * Warehouse W1). Writes are `owner`/`admin`-only (backend-users-roles).
+ * Full HTTP lifecycle against a real, provisioned tenant schema (no mocks,
+ * no `overrideGuard` — the REAL `TenantContextGuard` resolves `admin` from
+ * the `X-Company-Id` header, spec: salesops-tenancy "The test exercises the
+ * real guard, not a stub"). Guards the MONEY invariants on the REAL path:
+ * `createProduct()` / the atomic field guards must run inside
+ * `ProductService`, so a non-positive price / negative cost is rejected
+ * with 400 and never persisted -- a regression test for the factory-bypass
+ * bug (same class as the Customer C1 / Warehouse W1). Writes are
+ * `owner`/`admin`-only (backend-users-roles).
  */
 describe('Product (e2e)', () => {
   let app: INestApplication;
-  let prisma: PrismaService;
-  let adminToken: string;
+  let services: TenantServices;
+  let tenant: TenantPrismaClient;
+  let admin: AuthedUser;
   let categoryId: string;
 
   const validProduct = () => ({
@@ -38,35 +51,36 @@ describe('Product (e2e)', () => {
     app = moduleFixture.createNestApplication();
     await app.init();
 
-    prisma = moduleFixture.get(PrismaService);
-    adminToken = (await createAuthedUser(prisma, USER_ROLES.admin)).token;
+    services = getTenantServices(moduleFixture);
+    admin = await createAuthedUser(services, USER_ROLES.admin);
+    tenant = tenantClientFor(services, admin.companyId);
   });
 
   beforeEach(async () => {
     const category = await request(app.getHttpServer())
       .post('/categories')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(admin.companyId))
       .send({ name: 'Cafeteras', slug: 'cafeteras-prod-e2e', order: 1 });
     categoryId = category.body.id;
   });
 
   afterEach(async () => {
-    await prisma.product.deleteMany({});
-    await prisma.category.deleteMany({});
+    await tenant.product.deleteMany({});
+    await tenant.category.deleteMany({});
   });
 
   afterAll(async () => {
-    // `company_user` has NO FK to `app_user` (soft FK by design), so deleting
-    // users without this leaves orphan assignments accumulating across runs.
-    await prisma.companyUser.deleteMany({});
-    await prisma.user.deleteMany({});
+    await dropTenantSchemas(services, [admin.companyId]);
+    await services.masterPrisma.user.deleteMany({});
     await app.close();
   });
 
   it('creates a product -> 201', async () => {
     const response = await request(app.getHttpServer())
       .post('/products')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(admin.companyId))
       .send(validProduct());
 
     expect(response.status).toBe(201);
@@ -76,40 +90,45 @@ describe('Product (e2e)', () => {
   it('rejects a non-positive price -> 400, never persisted', async () => {
     const response = await request(app.getHttpServer())
       .post('/products')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(admin.companyId))
       .send({ ...validProduct(), price: { amount: '0.00', currency: 'USD' } });
 
     expect(response.status).toBe(400);
-    const rows = await prisma.product.findMany({});
+    const rows = await tenant.product.findMany({});
     expect(rows).toHaveLength(0);
   });
 
   it('rejects a negative cost -> 400, never persisted', async () => {
     const response = await request(app.getHttpServer())
       .post('/products')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(admin.companyId))
       .send({ ...validProduct(), cost: { amount: '-1.00', currency: 'USD' } });
 
     expect(response.status).toBe(400);
-    const rows = await prisma.product.findMany({});
+    const rows = await tenant.product.findMany({});
     expect(rows).toHaveLength(0);
   });
 
   it('rejects clearing price to zero on update -> 400, original price untouched', async () => {
     const created = await request(app.getHttpServer())
       .post('/products')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(admin.companyId))
       .send(validProduct());
 
     const response = await request(app.getHttpServer())
       .patch(`/products/${created.body.id}`)
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(admin.companyId))
       .send({ price: { amount: '0.00', currency: 'USD' } });
 
     expect(response.status).toBe(400);
     const found = await request(app.getHttpServer())
       .get(`/products/${created.body.id}`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(admin.companyId));
     expect(found.body.price).toEqual({ amount: '100.00', currency: 'USD' });
   });
 
@@ -120,9 +139,12 @@ describe('Product (e2e)', () => {
     });
 
     it('admits a plain "user" caller on a read route', async () => {
-      const { token } = await createAuthedUser(prisma, USER_ROLES.user);
+      const { token } = await createAuthedUser(services, USER_ROLES.user, admin.companyId);
 
-      const response = await request(app.getHttpServer()).get('/products').set(...authHeader(token));
+      const response = await request(app.getHttpServer())
+        .get('/products')
+        .set(...authHeader(token))
+        .set(...companyIdHeader(admin.companyId));
       expect(response.status).toBe(200);
     });
   });
