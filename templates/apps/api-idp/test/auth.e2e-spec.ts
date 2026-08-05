@@ -1,20 +1,36 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService } from '@store-mgmt/infra-db';
+import { PrismaMasterService } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import { AppModule } from '../src/app/app.module.js';
+import {
+  authHeader,
+  companyIdHeader,
+  createCompany,
+  dropCompanies,
+  getTenantServices,
+  signupAndLogin,
+  uniqueLogin,
+  type TenantServices,
+} from './support/auth-e2e-helper.js';
 
 /**
  * Full HTTP lifecycle against the real `store_mgmt` Postgres database (no
- * mocks) — same discipline as `apps/api-salesops`'s e2e suites. Covers the
- * spec's full signup -> login -> refresh-rotation -> reuse-detection ->
- * change-password -> password-reset lifecycle end-to-end, plus the
- * unknown-login/wrong-password enumeration-safety scenario and a protected
- * route (`@Roles`-guarded `GET /users`) via the REAL `JwtAuthGuard`/`RolesGuard`.
+ * mocks, no `overrideGuard` — same discipline as `apps/api-salesops`'s e2e
+ * suites, task 12.4). Covers the spec's full signup -> login ->
+ * refresh-rotation -> reuse-detection -> change-password -> password-reset
+ * lifecycle end-to-end, the unknown-login/wrong-password enumeration-safety
+ * scenario, and a protected route (`@Roles`-guarded `GET /users`) via the
+ * REAL `JwtAuthGuard` -> `TenantContextGuard` -> `RolesGuard` chain (design
+ * D4) — `POST /companies`'s real saga is what puts a caller in a company at
+ * all now; there is no `ensureCompany`/direct-DB shortcut left (design D7:
+ * `AuthService.signup` mints ONLY a `User`, no `Company` auto-assignment).
  */
 describe('Auth (e2e)', () => {
   let app: INestApplication;
-  let prisma: PrismaService;
+  let masterPrisma: PrismaMasterService;
+  let services: TenantServices;
+  let createdCompanyIds: string[];
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -24,54 +40,26 @@ describe('Auth (e2e)', () => {
     app = moduleFixture.createNestApplication();
     await app.init();
 
-    prisma = moduleFixture.get(PrismaService);
+    masterPrisma = moduleFixture.get(PrismaMasterService);
+    services = getTenantServices(moduleFixture);
   });
 
-  /**
-   * `AuthService.signup` auto-assigns to the SOLE Company and fails loudly
-   * when none exists, so every spec here needs exactly one. Upserted by slug
-   * rather than created, because the row survives the per-test user cleanup.
-   */
-  async function ensureCompany(): Promise<string> {
-    const company = await prisma.company.upsert({
-      where: { slug: 'default' },
-      update: {},
-      create: { name: 'Tienda Prueba', slug: 'default' },
-    });
-    return company.id;
-  }
-
-  /** Assigns a directly-minted user (one that did not go through signup). */
-  async function assignToCompany(userId: string, role: number): Promise<void> {
-    await prisma.companyUser.create({
-      data: { userId, companyId: await ensureCompany(), role, status: 'ACTIVE' },
-    });
-  }
-
-  beforeEach(async () => {
-    await ensureCompany();
+  beforeEach(() => {
+    createdCompanyIds = [];
   });
 
   afterEach(async () => {
-    await prisma.refreshToken.deleteMany({});
-    await prisma.passwordResetToken.deleteMany({});
-    // `company_user` has NO FK to `app_user` (soft FK by design) — without
-    // this, every run leaves orphan assignments behind.
-    const stale = await prisma.user.findMany({
-      where: { login: { startsWith: 'e2e.' } },
-      select: { id: true },
-    });
-    await prisma.companyUser.deleteMany({ where: { userId: { in: stale.map((u) => u.id) } } });
-    await prisma.user.deleteMany({ where: { login: { startsWith: 'e2e.' } } });
+    await dropCompanies(services, createdCompanyIds);
+    await masterPrisma.refreshToken.deleteMany({});
+    await masterPrisma.passwordResetToken.deleteMany({});
+    // `Membership` cascades from `User` (master/schema.prisma:131,
+    // `onDelete: Cascade`) — no separate cleanup needed for it.
+    await masterPrisma.user.deleteMany({ where: { login: { startsWith: 'e2e.' } } });
   });
 
   afterAll(async () => {
     await app.close();
   });
-
-  function uniqueLogin(tag: string): string {
-    return `e2e.${tag}.${Date.now()}.${Math.floor(Math.random() * 1_000_000)}`;
-  }
 
   it('full lifecycle: signup -> login -> refresh rotation -> reuse-detection revokes family', async () => {
     const login = uniqueLogin('lifecycle');
@@ -82,7 +70,11 @@ describe('Auth (e2e)', () => {
     expect(signupResponse.status).toBe(201);
     expect(signupResponse.body.login).toBe(login);
     expect(signupResponse.body).not.toHaveProperty('passwordHash');
-    expect(signupResponse.body.roles).toBe(1); // defaults to "user"
+    // `SignupResponseDto` is identity-only (design D4/D7) — a fresh
+    // registrant belongs to zero companies, so there is no single
+    // company-scoped role to report here; `TenantContextGuard` is the only
+    // place a role appears, per request, per company.
+    expect(signupResponse.body).not.toHaveProperty('roles');
 
     const loginResponse = await request(app.getHttpServer())
       .post('/auth/login')
@@ -184,8 +176,8 @@ describe('Auth (e2e)', () => {
 
     // Obtain the token OUT-OF-BAND (as the "email delivery" would in
     // production) — read it directly from the DB via Prisma.
-    const user = await prisma.user.findUniqueOrThrow({ where: { login } });
-    const persistedToken = await prisma.passwordResetToken.findFirstOrThrow({
+    const user = await masterPrisma.user.findUniqueOrThrow({ where: { login } });
+    const persistedToken = await masterPrisma.passwordResetToken.findFirstOrThrow({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
     });
@@ -263,59 +255,77 @@ describe('Auth (e2e)', () => {
     expect(response.status).toBe(409);
   });
 
-  describe('protected route via RolesGuard (GET /users)', () => {
+  /**
+   * `GET /users` now sits behind the FULL D4 chain
+   * (`JwtAuthGuard -> TenantContextGuard -> RolesGuard`), not just
+   * `RolesGuard` alone — the pre-reshape version only ever needed a
+   * directly-minted `CompanyUser` row to reach the (mocked-away) tenant
+   * step. There are two distinct ways in for a 403 now, and this block
+   * exercises both separately rather than folding them into one case: a
+   * caller with NO company membership at all never reaches `RolesGuard`
+   * (`TenantContextGuard` rejects first), while a caller who DOES belong to
+   * a company but only as `user` reaches `RolesGuard` and is rejected
+   * there — same status code, different guard, different regression this
+   * spec is pinning.
+   */
+  describe('protected route via the full guard chain (GET /users)', () => {
     it('rejects an unauthenticated request -> 401', async () => {
       const response = await request(app.getHttpServer()).get('/users');
       expect(response.status).toBe(401);
     });
 
-    it('rejects an authenticated caller holding only "user" -> 403', async () => {
-      const login = uniqueLogin('plain');
-      await request(app.getHttpServer())
-        .post('/auth/signup')
-        .send({ login, password: 'PlainUserPass1!', fullName: 'E2E Plain User' });
-      const loginResponse = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({ login, password: 'PlainUserPass1!' });
+    it('rejects an authenticated caller with NO company membership at all -> 403 (TenantContextGuard)', async () => {
+      const { accessToken } = await signupAndLogin(app, 'nocompany');
 
-      const response = await request(app.getHttpServer())
-        .get('/users')
-        .set('Authorization', `Bearer ${loginResponse.body.accessToken}`);
+      const response = await request(app.getHttpServer()).get('/users').set(...authHeader(accessToken));
       expect(response.status).toBe(403);
     });
 
-    it('admits an admin/owner caller -> 200', async () => {
-      const login = uniqueLogin('owner');
-      const passwordHash = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
-      const owner = await prisma.user.create({
-        data: { login, passwordHash, fullName: 'E2E Owner User' },
-      });
-      await assignToCompany(owner.id, 8);
-      // Sign in via bcrypt-verified login requires the REAL password, not
-      // the sentinel hash above — mint the user directly with a known
-      // password hash instead, then log in with that plaintext.
-      await prisma.user.update({
-        where: { login },
-        data: {
-          passwordHash: await hashDevPassword('OwnerPass1!'),
-        },
-      });
+    it('rejects an authenticated caller holding only "user" in their company -> 403 (RolesGuard)', async () => {
+      const owner = await signupAndLogin(app, 'roleowner');
+      const company = await createCompany(app, owner.accessToken, 'roleowner');
+      createdCompanyIds.push(company.companyId);
 
-      const loginResponse = await request(app.getHttpServer())
+      const plainLogin = uniqueLogin('plainmember');
+      const createResponse = await request(app.getHttpServer())
+        .post('/users')
+        .set(...authHeader(owner.accessToken))
+        .set(...companyIdHeader(company.companyId))
+        .send({ login: plainLogin, password: 'PlainMember1!', fullName: 'E2E Plain Member' });
+      expect(createResponse.status).toBe(201);
+
+      const memberLoginResponse = await request(app.getHttpServer())
         .post('/auth/login')
-        .send({ login, password: 'OwnerPass1!' });
-      expect(loginResponse.status).toBe(200);
+        .send({ login: plainLogin, password: 'PlainMember1!' });
+      expect(memberLoginResponse.status).toBe(200);
 
       const response = await request(app.getHttpServer())
         .get('/users')
-        .set('Authorization', `Bearer ${loginResponse.body.accessToken}`);
+        .set(...authHeader(memberLoginResponse.body.accessToken))
+        .set(...companyIdHeader(company.companyId));
+      expect(response.status).toBe(403);
+    });
+
+    it('admits the company owner -> 200', async () => {
+      const owner = await signupAndLogin(app, 'admitowner');
+      const company = await createCompany(app, owner.accessToken, 'admitowner');
+      createdCompanyIds.push(company.companyId);
+
+      const response = await request(app.getHttpServer())
+        .get('/users')
+        .set(...authHeader(owner.accessToken))
+        .set(...companyIdHeader(company.companyId));
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
     });
+
+    it('admits the company owner via the header-less sole-ACTIVE-membership fallback -> 200', async () => {
+      const owner = await signupAndLogin(app, 'soleowner');
+      const company = await createCompany(app, owner.accessToken, 'soleowner');
+      createdCompanyIds.push(company.companyId);
+
+      const response = await request(app.getHttpServer()).get('/users').set(...authHeader(owner.accessToken));
+      expect(response.status).toBe(200);
+    });
   });
 });
-
-async function hashDevPassword(password: string): Promise<string> {
-  const bcrypt = await import('bcrypt');
-  return bcrypt.hash(password, 10);
-}
