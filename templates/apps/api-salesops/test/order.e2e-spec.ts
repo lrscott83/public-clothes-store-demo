@@ -1,29 +1,41 @@
-import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { USER_ROLES } from '@store-mgmt/domain';
-import { PrismaService } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
-import { authHeader, createAuthedUser, createAuthedWarehouseOperator } from './support/auth-e2e-helper.js';
-
-/** Bcrypt hash shape accepted by the domain `passwordHash` invariant -- never a real credential. */
-const VALID_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV';
+import {
+  authHeader,
+  companyIdHeader,
+  createAuthedUser,
+  createAuthedWarehouseOperator,
+  createLinkedCompanyMember,
+  dropTenantSchemas,
+  getTenantServices,
+  tenantClientFor,
+  type AuthedUser,
+  type TenantPrismaClient,
+  type TenantServices,
+} from './support/auth-e2e-helper.js';
 
 /**
- * Full HTTP lifecycle against the real `store_mgmt` Postgres database (no
- * mocks) -- same discipline as the domain/infra-db suites. Covers the
- * spec's stock-bridge (reserve/consume/release), currency-derivation,
- * split-payment, and 4-state-machine scenarios end-to-end (design.md
- * decision #3/#4/#8). All requests authenticate as `admin` (super-root --
- * bypasses both the role matrix and the warehouse-operator scope) so the
- * business-logic assertions stay focused; the dedicated `RolesGuard
- * enforcement` block at the bottom exercises the role matrix + scope itself.
+ * Full HTTP lifecycle against a real, provisioned tenant schema (no mocks,
+ * no `overrideGuard` — the REAL `TenantContextGuard` resolves `admin` from
+ * the `X-Company-Id` header, spec: salesops-tenancy "The test exercises the
+ * real guard, not a stub") -- same discipline as the domain/infra-db
+ * suites. Covers the spec's stock-bridge (reserve/consume/release),
+ * currency-derivation, split-payment, and 4-state-machine scenarios
+ * end-to-end (design.md decision #3/#4/#8). All requests authenticate as
+ * `admin` (super-root -- bypasses both the role matrix and the
+ * warehouse-operator scope) so the business-logic assertions stay focused;
+ * the dedicated `RolesGuard enforcement` block at the bottom exercises the
+ * role matrix + scope itself.
  */
 describe('Sales (e2e)', () => {
   let app: INestApplication;
-  let prisma: PrismaService;
-  let adminToken: string;
+  let services: TenantServices;
+  let tenant: TenantPrismaClient;
+  let companyId: string;
+  let admin: AuthedUser;
 
   let categoryId: string;
   let warehouseId: string;
@@ -43,43 +55,53 @@ describe('Sales (e2e)', () => {
     app = moduleFixture.createNestApplication();
     await app.init();
 
-    prisma = moduleFixture.get(PrismaService);
+    services = getTenantServices(moduleFixture);
+    // One tenant provisioned once for the whole suite — every fixture below
+    // (categories, warehouses, customers, products, admin/agent/operator
+    // callers) lives in this SAME schema, re-seeded every test.
+    const seed = await createAuthedUser(services, USER_ROLES.admin);
+    companyId = seed.companyId;
+    tenant = tenantClientFor(services, companyId);
   });
 
   afterAll(async () => {
+    await dropTenantSchemas(services, [companyId]);
     await app.close();
   });
 
   beforeEach(async () => {
-    adminToken = (await createAuthedUser(prisma, USER_ROLES.admin)).token;
+    admin = await createAuthedUser(services, USER_ROLES.admin, companyId);
 
     const category = await request(app.getHttpServer())
       .post('/categories')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({ name: 'Sales E2E', slug: 'sales-e2e', order: 1 });
     categoryId = category.body.id;
 
     const warehouse = await request(app.getHttpServer())
       .post('/warehouses')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({ name: 'Depósito Sales E2E' });
     warehouseId = warehouse.body.id;
 
-    // Every Customer now requires an existing User (backend-users-roles,
-    // Customer.userId 1:1) — mint one for this fixture, unique login per
-    // run since `beforeEach` re-creates it every test.
-    const user = await prisma.user.create({
-      data: { login: `sales.e2e.${randomUUID()}`, passwordHash: VALID_HASH, fullName: 'Cliente Sales E2E' },
-    });
+    // Every Customer now requires an existing tenant CompanyUser
+    // (backend-users-roles, D1's `companyUserId` 1:1) — mint one for this
+    // fixture, unique login per run since `beforeEach` re-creates it every
+    // test.
+    const linkedUserId = await createLinkedCompanyMember(services, companyId, 'Cliente Sales E2E');
     const customer = await request(app.getHttpServer())
       .post('/customers')
-      .set(...authHeader(adminToken))
-      .send({ fullName: 'Cliente Sales E2E', userId: user.id });
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
+      .send({ fullName: 'Cliente Sales E2E', userId: linkedUserId });
     customerId = customer.body.id;
 
     const usdProduct = await request(app.getHttpServer())
       .post('/products')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         name: 'Producto USD',
         description: 'Producto en USD',
@@ -93,7 +115,8 @@ describe('Sales (e2e)', () => {
 
     const mnProduct = await request(app.getHttpServer())
       .post('/products')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         name: 'Producto MN',
         description: 'Producto en MN',
@@ -107,7 +130,8 @@ describe('Sales (e2e)', () => {
 
     const eurProduct = await request(app.getHttpServer())
       .post('/products')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         name: 'Producto EUR',
         description: 'Producto en EUR',
@@ -123,7 +147,8 @@ describe('Sales (e2e)', () => {
     // (needed by the "missing rate" scenario further below).
     await request(app.getHttpServer())
       .post('/currency/rates')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({ channel: 'MN_CASH', rate: '350.000000', effectiveFrom: '2020-01-01T00:00:00.000Z' });
   });
 
@@ -133,27 +158,27 @@ describe('Sales (e2e)', () => {
     // nobody can erase evidence of what an agent earned by tidying up orders.
     // The consequence lands here: the accrual (and any payment settling it)
     // must go before the order it belongs to.
-    await prisma.commissionPayment.deleteMany({});
-    await prisma.commissionAccrual.deleteMany({});
-    await prisma.productCommissionReference.deleteMany({});
+    await tenant.commissionPayment.deleteMany({});
+    await tenant.commissionAccrual.deleteMany({});
+    await tenant.productCommissionReference.deleteMany({});
     // `Order` cascades to `OrderLine`/`OrderPayment`/`SaleCredit` on delete
     // (schema.prisma `onDelete: Cascade`) — one deleteMany clears the whole
-    // aggregate tree. `User` cascades to `WarehouseOperator` the same way.
-    await prisma.order.deleteMany({});
-    await prisma.stockMovement.deleteMany({});
-    await prisma.stockLevel.deleteMany({});
-    await prisma.product.deleteMany({});
-    await prisma.category.deleteMany({});
+    // aggregate tree. `CompanyUser` cascades to `WarehouseOperator` the same way.
+    await tenant.order.deleteMany({});
+    await tenant.stockMovement.deleteMany({});
+    await tenant.stockLevel.deleteMany({});
+    await tenant.product.deleteMany({});
+    await tenant.category.deleteMany({});
     // `WarehouseOperator.warehouseId` has no `onDelete: Cascade` (only the
-    // `userId` side does) — must clear it BEFORE `warehouse.deleteMany`.
-    await prisma.warehouseOperator.deleteMany({});
-    await prisma.warehouse.deleteMany({});
-    await prisma.customer.deleteMany({});
+    // `companyUserId` side does) — must clear it BEFORE `warehouse.deleteMany`.
+    await tenant.warehouseOperator.deleteMany({});
+    await tenant.warehouse.deleteMany({});
+    await tenant.customer.deleteMany({});
     // `company_user` has NO FK to `app_user` (soft FK by design), so deleting
     // users without this leaves orphan assignments accumulating across runs.
-    await prisma.companyUser.deleteMany({});
-    await prisma.user.deleteMany({});
-    await prisma.exchangeRate.deleteMany({});
+    await tenant.companyUser.deleteMany({});
+    await services.masterPrisma.user.deleteMany({});
+    await tenant.exchangeRate.deleteMany({});
   });
 
   /**
@@ -169,7 +194,8 @@ describe('Sales (e2e)', () => {
   ): Promise<void> {
     await request(app.getHttpServer())
       .post('/stock/movements')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({ productId, warehouseId: intoWarehouseId, type: 'purchase_in', quantity })
       .expect(201);
   }
@@ -177,7 +203,8 @@ describe('Sales (e2e)', () => {
   async function getStockLevel(productId: string): Promise<{ onHand: string; reserved: string; available: string }> {
     const response = await request(app.getHttpServer())
       .get('/stock')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .query({ productId, warehouseId });
     return response.body;
   }
@@ -188,7 +215,8 @@ describe('Sales (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Cliente Sales E2E',
@@ -215,7 +243,8 @@ describe('Sales (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Cliente Sales E2E',
@@ -245,7 +274,8 @@ describe('Sales (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Cliente Sales E2E',
@@ -259,7 +289,8 @@ describe('Sales (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/confirm`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
 
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('verified');
@@ -276,7 +307,8 @@ describe('Sales (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Cliente Sales E2E',
@@ -289,12 +321,14 @@ describe('Sales (e2e)', () => {
       });
     await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/confirm`)
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .expect(200);
 
     const response = await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/deliver`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
 
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('delivered');
@@ -311,7 +345,8 @@ describe('Sales (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Cliente Sales E2E',
@@ -324,12 +359,14 @@ describe('Sales (e2e)', () => {
       });
     await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/confirm`)
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .expect(200);
 
     const response = await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/cancel`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
 
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('cancelled');
@@ -344,7 +381,8 @@ describe('Sales (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Cliente Sales E2E',
@@ -359,7 +397,8 @@ describe('Sales (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/cancel`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
 
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('cancelled');
@@ -374,7 +413,8 @@ describe('Sales (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         warehouseId,
@@ -387,7 +427,8 @@ describe('Sales (e2e)', () => {
 
     const patched = await request(app.getHttpServer())
       .patch(`/orders/${created.body.id}`)
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({ customerName: 'Nombre Falsificado' });
 
     expect(patched.status).toBe(200);
@@ -399,7 +440,8 @@ describe('Sales (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         warehouseId,
@@ -410,14 +452,16 @@ describe('Sales (e2e)', () => {
 
     const patched = await request(app.getHttpServer())
       .patch(`/orders/${created.body.id}`)
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({ deliveryMode: 'banana' });
 
     expect(patched.status).toBe(400);
 
     const found = await request(app.getHttpServer())
       .get(`/orders/${created.body.id}`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
     expect(found.body.deliveryMode).toBe('pickup');
   });
 
@@ -429,7 +473,8 @@ describe('Sales (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Nombre Falsificado',
@@ -456,11 +501,12 @@ describe('Sales (e2e)', () => {
   });
 
   it('creation referencing an unknown product -> 400, no order written', async () => {
-    const beforeCount = await prisma.order.count();
+    const beforeCount = await tenant.order.count();
 
     const response = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         warehouseId,
@@ -471,16 +517,17 @@ describe('Sales (e2e)', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toMatch(/product .* not found/i);
-    expect(await prisma.order.count()).toBe(beforeCount);
+    expect(await tenant.order.count()).toBe(beforeCount);
   });
 
   it('creation for an unknown customer -> 400, no order written', async () => {
     await stockIn(usdProductId, '10');
-    const beforeCount = await prisma.order.count();
+    const beforeCount = await tenant.order.count();
 
     const response = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId: '33333333-3333-4333-8333-333333333333',
         warehouseId,
@@ -491,7 +538,7 @@ describe('Sales (e2e)', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toMatch(/customer .* not found/i);
-    expect(await prisma.order.count()).toBe(beforeCount);
+    expect(await tenant.order.count()).toBe(beforeCount);
   });
 
   it('creation against a soft-deleted warehouse -> 400, even though it still holds stock', async () => {
@@ -500,18 +547,21 @@ describe('Sales (e2e)', () => {
     // not qualify — and the stock still sitting there would make it look fine.
     const retired = await request(app.getHttpServer())
       .post('/warehouses')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({ name: 'Depósito Retirado E2E' });
     await stockIn(usdProductId, '10', retired.body.id);
     await request(app.getHttpServer())
       .delete(`/warehouses/${retired.body.id}`)
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .expect(200);
 
-    const beforeCount = await prisma.order.count();
+    const beforeCount = await tenant.order.count();
     const response = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Cliente Sales E2E',
@@ -525,15 +575,16 @@ describe('Sales (e2e)', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toMatch(/inactive/i);
-    expect(await prisma.order.count()).toBe(beforeCount);
+    expect(await tenant.order.count()).toBe(beforeCount);
   });
 
   it('creation against an unknown warehouse -> 400 naming the warehouse, never a stock shortage', async () => {
-    const beforeCount = await prisma.order.count();
+    const beforeCount = await tenant.order.count();
 
     const response = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Cliente Sales E2E',
@@ -547,16 +598,17 @@ describe('Sales (e2e)', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toMatch(/not found/i);
-    expect(await prisma.order.count()).toBe(beforeCount);
+    expect(await tenant.order.count()).toBe(beforeCount);
   });
 
   it('creation against a warehouse that cannot cover the basket -> 409, no order written', async () => {
     await stockIn(usdProductId, '2');
-    const beforeCount = await prisma.order.count();
+    const beforeCount = await tenant.order.count();
 
     const response = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Cliente Sales E2E',
@@ -569,7 +621,7 @@ describe('Sales (e2e)', () => {
       });
 
     expect(response.status).toBe(409);
-    expect(await prisma.order.count()).toBe(beforeCount);
+    expect(await tenant.order.count()).toBe(beforeCount);
 
     // Nothing was held while checking.
     const level = await getStockLevel(usdProductId);
@@ -599,11 +651,13 @@ describe('Sales (e2e)', () => {
 
     const first = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send(body);
     const second = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send(body);
 
     expect(first.status).toBe(201);
@@ -613,19 +667,22 @@ describe('Sales (e2e)', () => {
     // The winner reserves for real.
     await request(app.getHttpServer())
       .post(`/orders/${first.body.id}/confirm`)
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .expect(200);
     expect((await getStockLevel(usdProductId)).reserved).toBe('5');
 
     // The loser is rejected at confirm, stays `created`, and reserves nothing.
     const loser = await request(app.getHttpServer())
       .post(`/orders/${second.body.id}/confirm`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
     expect(loser.status).toBe(409);
 
     const found = await request(app.getHttpServer())
       .get(`/orders/${second.body.id}`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
     expect(found.body.status).toBe('created');
 
     const level = await getStockLevel(usdProductId);
@@ -634,11 +691,12 @@ describe('Sales (e2e)', () => {
   });
 
   it('cross-currency line/payment with no resolvable rate -> 409 RateNotFoundError, no partial commit', async () => {
-    const beforeCount = await prisma.order.count();
+    const beforeCount = await tenant.order.count();
 
     const response = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Cliente Sales E2E',
@@ -652,7 +710,7 @@ describe('Sales (e2e)', () => {
 
     expect(response.status).toBe(409);
 
-    const afterCount = await prisma.order.count();
+    const afterCount = await tenant.order.count();
     expect(afterCount).toBe(beforeCount);
   });
 
@@ -661,7 +719,8 @@ describe('Sales (e2e)', () => {
 
     const created = await request(app.getHttpServer())
       .post('/orders')
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .send({
         customerId,
         customerName: 'Cliente Sales E2E',
@@ -674,22 +733,27 @@ describe('Sales (e2e)', () => {
       });
     await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/confirm`)
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .expect(200);
     await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/deliver`)
-      .set(...authHeader(adminToken))
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
       .expect(200);
 
     const confirmResponse = await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/confirm`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
     const deliverResponse = await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/deliver`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
     const cancelResponse = await request(app.getHttpServer())
       .post(`/orders/${created.body.id}/cancel`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
 
     expect(confirmResponse.status).toBe(409);
     expect(deliverResponse.status).toBe(409);
@@ -701,13 +765,16 @@ describe('Sales (e2e)', () => {
 
     const confirmResponse = await request(app.getHttpServer())
       .post(`/orders/${unknownId}/confirm`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
     const deliverResponse = await request(app.getHttpServer())
       .post(`/orders/${unknownId}/deliver`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
     const cancelResponse = await request(app.getHttpServer())
       .post(`/orders/${unknownId}/cancel`)
-      .set(...authHeader(adminToken));
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
 
     expect(confirmResponse.status).toBe(404);
     expect(deliverResponse.status).toBe(404);
@@ -721,20 +788,24 @@ describe('Sales (e2e)', () => {
     });
 
     it('rejects a plain "user" caller with 403', async () => {
-      const { token } = await createAuthedUser(prisma, USER_ROLES.user);
+      const { token } = await createAuthedUser(services, USER_ROLES.user, companyId);
 
-      const response = await request(app.getHttpServer()).get('/orders').set(...authHeader(token));
+      const response = await request(app.getHttpServer())
+        .get('/orders')
+        .set(...authHeader(token))
+        .set(...companyIdHeader(companyId));
       expect(response.status).toBe(403);
     });
 
     it('stamps the REAL authenticated agent as the attribution, ignoring the payload', async () => {
       await stockIn(usdProductId, '10');
-      const agent = await createAuthedUser(prisma, USER_ROLES.sales_agent);
-      const impostor = await createAuthedUser(prisma, USER_ROLES.sales_agent);
+      const agent = await createAuthedUser(services, USER_ROLES.sales_agent, companyId);
+      const impostor = await createAuthedUser(services, USER_ROLES.sales_agent, companyId);
 
       const created = await request(app.getHttpServer())
         .post('/orders')
         .set(...authHeader(agent.token))
+        .set(...companyIdHeader(companyId))
         .send({
           customerId,
           warehouseId,
@@ -750,14 +821,14 @@ describe('Sales (e2e)', () => {
       expect(created.body.attributedCompanyUserId).toBe(agent.companyUserId);
 
       // Persisted, not just echoed back.
-      const row = await prisma.order.findUniqueOrThrow({ where: { id: created.body.id } });
+      const row = await tenant.order.findUniqueOrThrow({ where: { id: created.body.id } });
       expect(row.attributedCompanyUserId).toBe(agent.companyUserId);
     });
 
     it('a sales_agent sees only their OWN orders on GET /orders, and 403s on another agent\'s', async () => {
       await stockIn(usdProductId, '10');
-      const mine = await createAuthedUser(prisma, USER_ROLES.sales_agent);
-      const theirs = await createAuthedUser(prisma, USER_ROLES.sales_agent);
+      const mine = await createAuthedUser(services, USER_ROLES.sales_agent, companyId);
+      const theirs = await createAuthedUser(services, USER_ROLES.sales_agent, companyId);
 
       const orderBody = {
         customerId,
@@ -769,15 +840,20 @@ describe('Sales (e2e)', () => {
       const myOrder = await request(app.getHttpServer())
         .post('/orders')
         .set(...authHeader(mine.token))
+        .set(...companyIdHeader(companyId))
         .send(orderBody)
         .expect(201);
       const theirOrder = await request(app.getHttpServer())
         .post('/orders')
         .set(...authHeader(theirs.token))
+        .set(...companyIdHeader(companyId))
         .send(orderBody)
         .expect(201);
 
-      const list = await request(app.getHttpServer()).get('/orders').set(...authHeader(mine.token));
+      const list = await request(app.getHttpServer())
+        .get('/orders')
+        .set(...authHeader(mine.token))
+        .set(...companyIdHeader(companyId));
       expect(list.status).toBe(200);
       const ids = (list.body as { id: string }[]).map((o) => o.id);
       expect(ids).toContain(myOrder.body.id);
@@ -785,17 +861,19 @@ describe('Sales (e2e)', () => {
 
       const forbidden = await request(app.getHttpServer())
         .get(`/orders/${theirOrder.body.id}`)
-        .set(...authHeader(mine.token));
+        .set(...authHeader(mine.token))
+        .set(...companyIdHeader(companyId));
       expect(forbidden.status).toBe(403);
 
       // The write path is scoped with the read path, and nothing is written.
       const forbiddenPatch = await request(app.getHttpServer())
         .patch(`/orders/${theirOrder.body.id}`)
         .set(...authHeader(mine.token))
+        .set(...companyIdHeader(companyId))
         .send({ deliveryMode: 'delivery' });
       expect(forbiddenPatch.status).toBe(403);
 
-      const untouched = await prisma.order.findUniqueOrThrow({
+      const untouched = await tenant.order.findUniqueOrThrow({
         where: { id: theirOrder.body.id },
       });
       expect(untouched.deliveryMode).toBe('pickup');
@@ -803,11 +881,12 @@ describe('Sales (e2e)', () => {
 
     it('a "sales_operator" caller creates an order -> 201, but cannot deliver it (403 — warehouse-floor action)', async () => {
       await stockIn(usdProductId, '10');
-      const { token: salesToken } = await createAuthedUser(prisma, USER_ROLES.sales_operator);
+      const { token: salesToken } = await createAuthedUser(services, USER_ROLES.sales_operator, companyId);
 
       const created = await request(app.getHttpServer())
         .post('/orders')
         .set(...authHeader(salesToken))
+        .set(...companyIdHeader(companyId))
         .send({
           customerId,
           customerName: 'Cliente Sales E2E',
@@ -822,17 +901,19 @@ describe('Sales (e2e)', () => {
 
       const deliverResponse = await request(app.getHttpServer())
         .post(`/orders/${created.body.id}/deliver`)
-        .set(...authHeader(salesToken));
+        .set(...authHeader(salesToken))
+        .set(...companyIdHeader(companyId));
       expect(deliverResponse.status).toBe(403);
     });
 
     it('a "warehouse_operator" scoped to the order\'s OWN warehouse can deliver it -> 200', async () => {
       await stockIn(usdProductId, '10');
-      const { token: operatorToken } = await createAuthedWarehouseOperator(prisma, warehouseId);
+      const { token: operatorToken } = await createAuthedWarehouseOperator(services, companyId, warehouseId);
 
       const created = await request(app.getHttpServer())
         .post('/orders')
-        .set(...authHeader(adminToken))
+        .set(...authHeader(admin.token))
+        .set(...companyIdHeader(companyId))
         .send({
           customerId,
           customerName: 'Cliente Sales E2E',
@@ -845,12 +926,14 @@ describe('Sales (e2e)', () => {
         });
       await request(app.getHttpServer())
         .post(`/orders/${created.body.id}/confirm`)
-        .set(...authHeader(adminToken))
+        .set(...authHeader(admin.token))
+        .set(...companyIdHeader(companyId))
         .expect(200);
 
       const response = await request(app.getHttpServer())
         .post(`/orders/${created.body.id}/deliver`)
-        .set(...authHeader(operatorToken));
+        .set(...authHeader(operatorToken))
+        .set(...companyIdHeader(companyId));
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('delivered');
@@ -860,13 +943,15 @@ describe('Sales (e2e)', () => {
       await stockIn(usdProductId, '10');
       const otherWarehouse = await request(app.getHttpServer())
         .post('/warehouses')
-        .set(...authHeader(adminToken))
+        .set(...authHeader(admin.token))
+        .set(...companyIdHeader(companyId))
         .send({ name: 'Otro Depósito E2E' });
-      const { token: operatorToken } = await createAuthedWarehouseOperator(prisma, otherWarehouse.body.id);
+      const { token: operatorToken } = await createAuthedWarehouseOperator(services, companyId, otherWarehouse.body.id);
 
       const created = await request(app.getHttpServer())
         .post('/orders')
-        .set(...authHeader(adminToken))
+        .set(...authHeader(admin.token))
+        .set(...companyIdHeader(companyId))
         .send({
           customerId,
           customerName: 'Cliente Sales E2E',
@@ -879,12 +964,14 @@ describe('Sales (e2e)', () => {
         });
       await request(app.getHttpServer())
         .post(`/orders/${created.body.id}/confirm`)
-        .set(...authHeader(adminToken))
+        .set(...authHeader(admin.token))
+        .set(...companyIdHeader(companyId))
         .expect(200);
 
       const response = await request(app.getHttpServer())
         .post(`/orders/${created.body.id}/deliver`)
-        .set(...authHeader(operatorToken));
+        .set(...authHeader(operatorToken))
+        .set(...companyIdHeader(companyId));
 
       expect(response.status).toBe(403);
     });
@@ -892,7 +979,8 @@ describe('Sales (e2e)', () => {
     it('GET /orders filters to the warehouse_operator\'s own warehouse', async () => {
       const otherWarehouse = await request(app.getHttpServer())
         .post('/warehouses')
-        .set(...authHeader(adminToken))
+        .set(...authHeader(admin.token))
+        .set(...companyIdHeader(companyId))
         .send({ name: 'Otro Depósito Lista E2E' });
 
       await stockIn(usdProductId, '10');
@@ -900,7 +988,8 @@ describe('Sales (e2e)', () => {
 
       const ownOrder = await request(app.getHttpServer())
         .post('/orders')
-        .set(...authHeader(adminToken))
+        .set(...authHeader(admin.token))
+        .set(...companyIdHeader(companyId))
         .send({
           customerId,
           customerName: 'Cliente Sales E2E',
@@ -913,7 +1002,8 @@ describe('Sales (e2e)', () => {
         });
       const otherOrder = await request(app.getHttpServer())
         .post('/orders')
-        .set(...authHeader(adminToken))
+        .set(...authHeader(admin.token))
+        .set(...companyIdHeader(companyId))
         .send({
           customerId,
           customerName: 'Cliente Sales E2E',
@@ -925,9 +1015,12 @@ describe('Sales (e2e)', () => {
           payments: [{ channel: 'ZELLE', amount: { amount: '100.00', currency: 'USD' } }],
         });
 
-      const { token: operatorToken } = await createAuthedWarehouseOperator(prisma, warehouseId);
+      const { token: operatorToken } = await createAuthedWarehouseOperator(services, companyId, warehouseId);
 
-      const response = await request(app.getHttpServer()).get('/orders').set(...authHeader(operatorToken));
+      const response = await request(app.getHttpServer())
+        .get('/orders')
+        .set(...authHeader(operatorToken))
+        .set(...companyIdHeader(companyId));
 
       expect(response.status).toBe(200);
       const ids = response.body.map((o: { id: string }) => o.id);

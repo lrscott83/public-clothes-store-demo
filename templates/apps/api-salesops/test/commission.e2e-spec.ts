@@ -2,13 +2,28 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { USER_ROLES } from '@store-mgmt/domain';
-import { PrismaService } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
-import { authHeader, createAuthedUser } from './support/auth-e2e-helper.js';
+import {
+  authHeader,
+  companyIdHeader,
+  createAuthedUser,
+  createLinkedCompanyMember,
+  dropTenantSchemas,
+  getTenantServices,
+  tenantClientFor,
+  type AuthedUser,
+  type TenantPrismaClient,
+  type TenantServices,
+} from './support/auth-e2e-helper.js';
 
 /**
- * Full HTTP lifecycle against the real database.
+ * Full HTTP lifecycle against a real, provisioned tenant schema (no mocks,
+ * no `overrideGuard` — the REAL `TenantContextGuard` resolves every caller
+ * from the `X-Company-Id` header, spec: salesops-tenancy "The test
+ * exercises the real guard, not a stub"). Every agent/owner minted below
+ * shares the SAME company (`companyId`, provisioned once in `beforeAll`) —
+ * required for "shows an owner the whole company" below to mean anything.
  *
  * The claim these cases exist to defend is INDEPENDENCE: paying an agent must
  * leave the customer's order untouched. That cannot be shown with mocks — the
@@ -17,7 +32,9 @@ import { authHeader, createAuthedUser } from './support/auth-e2e-helper.js';
  */
 describe('Commission (e2e)', () => {
   let app: INestApplication;
-  let prisma: PrismaService;
+  let services: TenantServices;
+  let tenant: TenantPrismaClient;
+  let companyId: string;
   let categoryId: string;
 
   beforeAll(async () => {
@@ -26,51 +43,53 @@ describe('Commission (e2e)', () => {
     }).compile();
     app = moduleFixture.createNestApplication();
     await app.init();
-    prisma = moduleFixture.get(PrismaService);
-    const category = await prisma.category.upsert({
-      where: { slug: 'commission-e2e' },
-      update: {},
-      create: { name: 'Commission E2E', slug: 'commission-e2e', order: 905, active: true },
+    services = getTenantServices(moduleFixture);
+
+    const seed = await createAuthedUser(services, USER_ROLES.owner);
+    companyId = seed.companyId;
+    tenant = tenantClientFor(services, companyId);
+
+    const category = await tenant.category.create({
+      data: { name: 'Commission E2E', slug: 'commission-e2e', order: 905, active: true },
     });
     categoryId = category.id;
   });
 
   afterEach(async () => {
-    await prisma.commissionPayment.deleteMany({});
-    await prisma.commissionAccrual.deleteMany({});
-    await prisma.productCommissionReference.deleteMany({});
-    await prisma.orderLine.deleteMany({});
-    await prisma.order.deleteMany({});
-    await prisma.product.deleteMany({ where: { categoryId } });
-    await prisma.warehouse.deleteMany({
+    await tenant.commissionPayment.deleteMany({});
+    await tenant.commissionAccrual.deleteMany({});
+    await tenant.productCommissionReference.deleteMany({});
+    await tenant.orderLine.deleteMany({});
+    await tenant.order.deleteMany({});
+    await tenant.product.deleteMany({ where: { categoryId } });
+    await tenant.warehouse.deleteMany({
       where: { stockLevels: { none: {} }, movements: { none: {} }, orders: { none: {} } },
     });
-    await prisma.customer.deleteMany({});
-    await prisma.companyUser.deleteMany({ where: { createdByCompanyUserId: { not: null } } });
-    await prisma.companyUser.deleteMany({});
-    await prisma.user.deleteMany({});
+    await tenant.customer.deleteMany({});
+    await tenant.companyUser.deleteMany({ where: { createdByCompanyUserId: { not: null } } });
+    // Wipes EVERY CompanyUser in the tenant, including `beforeAll`'s throwaway
+    // seed owner — safe, because `companyId`/`tenant` (the schema itself) are
+    // independent of any specific CompanyUser row surviving, and every caller
+    // used inside an `it()` is minted fresh via `createAuthedUser(..., companyId)`.
+    await tenant.companyUser.deleteMany({});
+    await services.masterPrisma.user.deleteMany({});
   });
 
   afterAll(async () => {
-    await prisma.category.deleteMany({ where: { id: categoryId } });
+    await tenant.category.deleteMany({ where: { id: categoryId } });
+    await dropTenantSchemas(services, [companyId]);
     await app.close();
   });
 
   /** A delivered, attributed order with a commission reference — i.e. an accrual waiting to happen. */
-  async function seedAccruedSale() {
-    const agent = await createAuthedUser(prisma, USER_ROLES.sales_agent);
-    const customerUser = await prisma.user.create({
-      data: {
-        login: `e2e.${randomUUID()}`,
-        passwordHash: '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV',
-        fullName: 'Cliente E2E',
-      },
+  async function seedAccruedSale(): Promise<{ agent: AuthedUser; order: { id: string }; accrual: { id: string } }> {
+    const agent = await createAuthedUser(services, USER_ROLES.sales_agent, companyId);
+    const customerUserId = await createLinkedCompanyMember(services, companyId, 'Cliente E2E');
+    const customer = await tenant.customer.create({
+      data: { fullName: 'Cliente E2E', companyUserId: customerUserId },
     });
-    const customer = await prisma.customer.create({
-      data: { fullName: 'Cliente E2E', userId: customerUser.id },
-    });
-    const warehouse = await prisma.warehouse.create({ data: { name: `Almacén ${randomUUID()}` } });
-    const product = await prisma.product.create({
+    const warehouse = await tenant.warehouse.create({ data: { name: `Almacén ${randomUUID()}` } });
+    const product = await tenant.product.create({
       data: {
         name: `Producto ${randomUUID()}`,
         description: 'commission e2e fixture',
@@ -83,11 +102,11 @@ describe('Commission (e2e)', () => {
         order: 1,
       },
     });
-    await prisma.productCommissionReference.create({
+    await tenant.productCommissionReference.create({
       data: { productId: product.id, amountMn: '300.00' },
     });
 
-    const order = await prisma.order.create({
+    const order = await tenant.order.create({
       data: {
         customerId: customer.id,
         customerName: customer.fullName,
@@ -122,7 +141,7 @@ describe('Commission (e2e)', () => {
       include: { lines: true },
     });
 
-    const accrual = await prisma.commissionAccrual.create({
+    const accrual = await tenant.commissionAccrual.create({
       data: {
         orderId: order.id,
         attributedCompanyUserId: agent.companyUserId,
@@ -148,33 +167,35 @@ describe('Commission (e2e)', () => {
   // R14 — the half that only end-to-end can show.
   it('recording a payment leaves the order byte-for-byte unchanged', async () => {
     const { order, accrual } = await seedAccruedSale();
-    const { token } = await createAuthedUser(prisma, USER_ROLES.owner);
-    const before = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    const { token } = await createAuthedUser(services, USER_ROLES.owner, companyId);
+    const before = await tenant.order.findUniqueOrThrow({ where: { id: order.id } });
 
     const response = await request(app.getHttpServer())
       .post('/commissions/payments')
       .set(...authHeader(token))
+      .set(...companyIdHeader(companyId))
       .send({ accrualId: accrual.id, note: 'Pago quincenal' });
 
     expect(response.status).toBe(201);
     expect(response.body.amount).toEqual({ amount: '600.00', currency: 'MN' });
 
-    const after = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    const after = await tenant.order.findUniqueOrThrow({ where: { id: order.id } });
     expect(after).toEqual(before);
     expect(after.status).toBe('delivered');
   });
 
   it('pays the accrual total, ignoring any amount the caller sends', async () => {
     const { accrual } = await seedAccruedSale();
-    const { token } = await createAuthedUser(prisma, USER_ROLES.owner);
+    const { token } = await createAuthedUser(services, USER_ROLES.owner, companyId);
 
     const response = await request(app.getHttpServer())
       .post('/commissions/payments')
       .set(...authHeader(token))
+      .set(...companyIdHeader(companyId))
       .send({ accrualId: accrual.id, amount: '999999.00' });
 
     expect(response.status).toBe(201);
-    const stored = await prisma.commissionPayment.findUniqueOrThrow({
+    const stored = await tenant.commissionPayment.findUniqueOrThrow({
       where: { accrualId: accrual.id },
     });
     expect(stored.amount.toString()).toBe('600');
@@ -182,20 +203,22 @@ describe('Commission (e2e)', () => {
 
   it('rejects a second payment on the same accrual -> 409, with only one payment stored', async () => {
     const { accrual } = await seedAccruedSale();
-    const { token } = await createAuthedUser(prisma, USER_ROLES.owner);
+    const { token } = await createAuthedUser(services, USER_ROLES.owner, companyId);
     await request(app.getHttpServer())
       .post('/commissions/payments')
       .set(...authHeader(token))
+      .set(...companyIdHeader(companyId))
       .send({ accrualId: accrual.id })
       .expect(201);
 
     const second = await request(app.getHttpServer())
       .post('/commissions/payments')
       .set(...authHeader(token))
+      .set(...companyIdHeader(companyId))
       .send({ accrualId: accrual.id });
 
     expect(second.status).toBe(409);
-    expect(await prisma.commissionPayment.count({ where: { accrualId: accrual.id } })).toBe(1);
+    expect(await tenant.commissionPayment.count({ where: { accrualId: accrual.id } })).toBe(1);
   });
 
   it('scopes an agent to their own accruals, never a colleague\'s', async () => {
@@ -204,7 +227,8 @@ describe('Commission (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .get('/commissions/accruals')
-      .set(...authHeader(mine.agent.token));
+      .set(...authHeader(mine.agent.token))
+      .set(...companyIdHeader(companyId));
 
     expect(response.status).toBe(200);
     expect(response.body).toHaveLength(1);
@@ -214,27 +238,30 @@ describe('Commission (e2e)', () => {
   it('shows an owner the whole company', async () => {
     await seedAccruedSale();
     await seedAccruedSale();
-    const { token } = await createAuthedUser(prisma, USER_ROLES.owner);
+    const { token } = await createAuthedUser(services, USER_ROLES.owner, companyId);
 
     const response = await request(app.getHttpServer())
       .get('/commissions/accruals')
-      .set(...authHeader(token));
+      .set(...authHeader(token))
+      .set(...companyIdHeader(companyId));
 
     expect(response.body).toHaveLength(2);
   });
 
   it('reports accrued, paid and outstanding per agent', async () => {
     const { agent, accrual } = await seedAccruedSale();
-    const { token } = await createAuthedUser(prisma, USER_ROLES.owner);
+    const { token } = await createAuthedUser(services, USER_ROLES.owner, companyId);
     await request(app.getHttpServer())
       .post('/commissions/payments')
       .set(...authHeader(token))
+      .set(...companyIdHeader(companyId))
       .send({ accrualId: accrual.id })
       .expect(201);
 
     const response = await request(app.getHttpServer())
       .get('/commissions/report')
-      .set(...authHeader(token));
+      .set(...authHeader(token))
+      .set(...companyIdHeader(companyId));
 
     const row = response.body.find(
       (r: { companyUserId: string }) => r.companyUserId === agent.companyUserId,
@@ -250,9 +277,10 @@ describe('Commission (e2e)', () => {
     const response = await request(app.getHttpServer())
       .post('/commissions/payments')
       .set(...authHeader(agent.token))
+      .set(...companyIdHeader(companyId))
       .send({ accrualId: accrual.id });
 
     expect(response.status).toBe(403);
-    expect(await prisma.commissionPayment.count()).toBe(0);
+    expect(await tenant.commissionPayment.count()).toBe(0);
   });
 });
