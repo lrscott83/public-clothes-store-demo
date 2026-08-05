@@ -7,23 +7,21 @@ import { TenantContextService } from './tenant/tenant-context.service.js';
 import { TenantDatabaseService } from './tenant/tenant-database.service.js';
 
 /**
- * `PrismaService` stays registered (still injected by
- * `PrismaCompanyUserRepository`'s remaining old-shape consumers, and by
- * `prisma/seed.js` — task 3.5). `PrismaMasterService` and
- * `TenantDefaultPrismaService` are the master/tenant-labeled clients
- * (task 3.4/3.5) — see `TenantDefaultPrismaService`'s doc comment for why
- * the latter is still a temporary wrapper, not the real per-tenant factory.
+ * `PrismaService` stays registered (still injected by `prisma/seed.js` —
+ * task 3.5). `PrismaMasterService` and `TenantDefaultPrismaService` are the
+ * master/tenant-labeled clients (task 3.4/3.5) — see
+ * `TenantDefaultPrismaService`'s doc comment for why the latter is now a
+ * legacy-cleanup-only helper, not a production DI consumer.
  *
  * `TenantPrismaFactory`/`TenantContextService`/`TenantDatabaseService`
  * (task 4.1/4.2, design.md D2/D6/D7) are the real per-tenant acquisition
  * path. Phase 6 (6.1-6.3) swapped them in for the ~12 repos design.md's
  * file map actually scopes to it (currency, customer, sales/order,
  * commission x3, inventory x3, product/category, warehouse-operator).
- * `PrismaCompanyUserRepository` is NOT one of them (design.md file map: one
- * of the 5 master-side repos left unchanged) — it still injects
- * `TenantDefaultPrismaService` above, old shape and old client, until
- * Phase 7/10 retire its callers (task 6.5 audited this — see tasks.md
- * Phase 6's retirement inventory).
+ * `PrismaCompanyUserRepository`, the last consumer still binding
+ * `TenantDefaultPrismaService` in production wiring, was deleted in task
+ * 14.3 once Phases 7/8/10 retired its own callers (task 6.5's retirement
+ * inventory, tasks.md Phase 6).
  */
 @Module({
   providers: [

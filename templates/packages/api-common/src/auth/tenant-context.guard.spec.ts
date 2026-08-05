@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, InternalServerErrorException, Logger, type ExecutionContext } from '@nestjs/common';
-import type { ICompanyRepository, IMembershipRepository, Membership, TenantCompanyUser } from '@store-mgmt/domain';
+import type { CompanyUser, ICompanyRepository, IMembershipRepository, Membership } from '@store-mgmt/domain';
 import { USER_ROLES } from '@store-mgmt/domain';
 import type { TenantContext, TenantContextService } from '@store-mgmt/infra-db';
 import { TenantContextGuard } from './tenant-context.guard.js';
@@ -17,7 +17,7 @@ function membership(overrides: Partial<Membership> = {}): Membership {
   };
 }
 
-function tenantCompanyUser(overrides: Partial<TenantCompanyUser> = {}): TenantCompanyUser {
+function tenantCompanyUser(overrides: Partial<CompanyUser> = {}): CompanyUser {
   return {
     id: 'user-1',
     role: USER_ROLES.owner,

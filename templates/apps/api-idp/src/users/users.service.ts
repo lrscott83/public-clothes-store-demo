@@ -12,7 +12,7 @@ import {
   MEMBERSHIP_REPOSITORY,
   USER_REPOSITORY,
   USER_ROLES,
-  createTenantCompanyUser,
+  createCompanyUser,
   createUser,
 } from '@store-mgmt/domain';
 import { TenantContextService } from '@store-mgmt/infra-db';
@@ -38,7 +38,7 @@ const SALT_ROUNDS = 10;
  * tenant `CompanyUser` write goes straight through
  * `TenantContextService.getClient()` — no repository port exists for it,
  * only `packages/domain`'s validating constructor
- * (`createTenantCompanyUser`) — because that write is only ever valid INSIDE
+ * (`createCompanyUser`) — because that write is only ever valid INSIDE
  * an already-open tenant scope, and there is no schema-agnostic way to
  * express "the tenant CompanyUser repository" as a DI-bound singleton.
  *
@@ -98,7 +98,7 @@ export class UsersService {
 
     // Invariant check only, discarded (mirrors CustomerIdentityService) —
     // `id` IS the master `User.id` just minted (design D1's collapsed PK).
-    createTenantCompanyUser({ id: created.id, role, createdByCompanyUserId: actor.companyUserId });
+    createCompanyUser({ id: created.id, role, createdByCompanyUserId: actor.companyUserId });
     await this.tenantContext.getClient().companyUser.create({
       data: { id: created.id, role, createdByCompanyUserId: actor.companyUserId },
     });

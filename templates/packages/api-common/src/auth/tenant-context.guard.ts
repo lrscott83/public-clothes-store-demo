@@ -12,10 +12,10 @@ import {
   COMPANY_REPOSITORY,
   MEMBERSHIP_REPOSITORY,
   resolveTenantAccess,
+  type CompanyUser,
   type ICompanyRepository,
   type IMembershipRepository,
   type Membership,
-  type TenantCompanyUser,
 } from '@store-mgmt/domain';
 import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
 import type { AuthenticatedUser, SanitizedUser } from './jwt.strategy.js';
@@ -165,7 +165,7 @@ export class TenantContextGuard implements CanActivate {
    * class as a genuinely missing row (which `findUnique` reports as `null`,
    * not a rejection).
    */
-  private async findTenantCompanyUser(userId: string): Promise<TenantCompanyUser | null> {
+  private async findTenantCompanyUser(userId: string): Promise<CompanyUser | null> {
     try {
       return await this.tenantContext.getClient().companyUser.findUnique({ where: { id: userId } });
     } catch (err) {

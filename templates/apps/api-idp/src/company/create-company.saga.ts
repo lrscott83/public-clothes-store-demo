@@ -11,7 +11,7 @@ import {
   PROVISIONING_INCIDENT_REPOSITORY,
   USER_ROLES,
   createCompany,
-  createTenantCompanyUser,
+  createCompanyUser,
 } from '@store-mgmt/domain';
 import {
   copyCatalog,
@@ -119,7 +119,7 @@ export class CreateCompanySaga {
           // Step 5 — tenant CompanyUser (owner role). Invariant check only,
           // discarded (mirrors CustomerIdentityService, Phase 8) — no
           // repository port exists for tenant CompanyUser writes.
-          createTenantCompanyUser({ id: input.ownerId, role: USER_ROLES.owner, createdByCompanyUserId: null });
+          createCompanyUser({ id: input.ownerId, role: USER_ROLES.owner, createdByCompanyUserId: null });
           const created = await this.tenantContext.getClient().companyUser.create({
             data: { id: input.ownerId, role: USER_ROLES.owner, createdByCompanyUserId: null },
           });

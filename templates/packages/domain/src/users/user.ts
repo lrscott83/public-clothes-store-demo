@@ -10,7 +10,7 @@ const BCRYPT_HASH_SHAPE = /^\$2[aby]\$/;
  * `passwordHash` is required and must be bcrypt-shaped — plaintext passwords
  * never reach this entity. Carries NO role bitmask: authorization is a
  * property of the `(user, company)` pair and lives on `CompanyUser` (see
- * `company/company-user.ts`). No `isEmailVerified` field exists
+ * `company/models.ts`). No `isEmailVerified` field exists
  * (owner-locked non-goal).
  */
 export interface User {

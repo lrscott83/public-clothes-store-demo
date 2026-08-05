@@ -11,8 +11,8 @@ import {
   MEMBERSHIP_REPOSITORY,
   USER_REPOSITORY,
   USER_ROLES,
+  createCompanyUser,
   createCustomer,
-  createTenantCompanyUser,
   createUser,
 } from '@store-mgmt/domain';
 import { TenantContextService } from '@store-mgmt/infra-db';
@@ -62,7 +62,7 @@ const CUSTOMER_IDENTITY_ROLE: UserRoleValue = USER_ROLES.user;
  * opens (design D5), the same way `TenantContextGuard` itself reads tenant
  * `CompanyUser` rows (`tenant-context.guard.ts`) — there is no repository
  * port for tenant `CompanyUser` writes (only `packages/domain`'s validating
- * constructor, `createTenantCompanyUser`), so this mirrors that guard
+ * constructor, `createCompanyUser`), so this mirrors that guard
  * precedent rather than inventing one.
  *
  * ACCESS REQUIRES TWO ROWS. The reshaped model grants access only when an
@@ -125,7 +125,7 @@ export class CustomerIdentityService {
     // Invariant check only, discarded (same pattern as `createUser` above) —
     // `id` IS the master `User.id` just minted (design D1's collapsed PK),
     // never independently generated.
-    createTenantCompanyUser({
+    createCompanyUser({
       id: user.id,
       role: CUSTOMER_IDENTITY_ROLE,
       createdByCompanyUserId: actor.companyUserId,
