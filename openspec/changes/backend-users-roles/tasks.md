@@ -128,11 +128,11 @@ but follows directly from design.md §6's locked matrix.
 
 ## Phase 6: Cross-cutting Verification
 
-- [ ] 6.1 `pnpm --filter @store-mgmt/domain lint && pnpm --filter @store-mgmt/infra-db lint && pnpm --filter @store-mgmt/api-common lint && pnpm --filter @store-mgmt/api-idp lint && pnpm --filter @store-mgmt/api-salesops lint` — `backend-boundaries --max-warnings 0` stays green; confirm `domain` never imports `infra-*`/`api-*`; confirm web apps never import `api-common`/`infra-db`/`api-salesops`.
-- [ ] 6.2 `rg -n "bcrypt|passwordHash" templates/packages/domain/src/users/` — confirm hashing itself never runs in the domain (only the bcrypt-shape invariant check); hashing lives in `api-idp`'s `auth.service.ts`.
-- [ ] 6.3 Run all suites together (domain vitest; infra-db jest w/ real Postgres; api-common jest; api-idp jest+e2e; api-salesops jest+e2e); confirm every scenario in `specs/salesops-identity/spec.md` and the `salesops-customers` delta spec is covered by at least one test.
-- [ ] 6.4 Confirm `typecheck`/`build` green across all five packages/apps together (domain → infra-db → api-common rebuilt first, so `api-idp`/`api-salesops` e2e sees fresh dist, per strict-TDD note).
-- [ ] 6.5 Commit work-unit by work-unit per the table above, then push the branch — no PR opened, per owner delivery decision (Engram `sdd-init/public-clothes-store-demo`).
+- [x] 6.1 [PASS 2026-08-06] All five lint with `--max-warnings 0` (verified in each package.json), exit 0, 1 pre-existing warning each. Boundaries confirmed by direct search, not by trusting the rule: `rg '@store-mgmt/(infra|api)' packages/domain/src` → **0 hits**; `rg '@store-mgmt/(api-common|infra-db|api-salesops)' apps/salesops-mvp/app apps/static-store/app` → **0 hits**. `pnpm --filter @store-mgmt/domain lint && pnpm --filter @store-mgmt/infra-db lint && pnpm --filter @store-mgmt/api-common lint && pnpm --filter @store-mgmt/api-idp lint && pnpm --filter @store-mgmt/api-salesops lint` — `backend-boundaries --max-warnings 0` stays green; confirm `domain` never imports `infra-*`/`api-*`; confirm web apps never import `api-common`/`infra-db`/`api-salesops`.
+- [x] 6.2 [PASS 2026-08-06] `packages/domain/src/users/` mentions `passwordHash` only as a required field + the `BCRYPT_HASH_SHAPE.test()` invariant ("plaintext passwords are never accepted") and the port's SECURITY FIX 4 comments (`UserUpdateInput` omits it; `updatePassword` is the only path that changes it). Search for real hashing across the whole domain — `bcrypt.hash|bcrypt.compare|genSalt` — returned **0 hits**. Hashing lives in `apps/api-idp/src/auth/auth.service.ts` (`bcrypt.compare` L75, `bcrypt.hash` L99). Original task text: `rg -n "bcrypt|passwordHash" templates/packages/domain/src/users/` — confirm hashing itself never runs in the domain (only the bcrypt-shape invariant check); hashing lives in `api-idp`'s `auth.service.ts`.
+- [x] 6.3 [PASS 2026-08-06] Unit: domain 294, infra-db 299 (real Postgres), api-common 43, api-idp 68, api-salesops 318 = **1022 passed, 0 failed**. E2E (real Postgres): api-idp 13, api-salesops 85 = **98 passed**. Scenario coverage: `salesops-identity` has 7 requirements / 33 scenarios and `salesops-customers` 3 / 11; every one of the **9 testable requirements** has at least one covering spec file (the 7th identity requirement is "Deferred / Non-Goals" and is untestable by definition) — Identity Entity 3 domain + 5 infra, Bitmask Multi-Role 1, Auth Mechanism 2 unit + 2 e2e, Role Resolution 4 api-common, RolesGuard Enforcement 10, Warehouse Scope 3, Customer userId 4, Buyer Auth 2. Original task text: Run all suites together (domain vitest; infra-db jest w/ real Postgres; api-common jest; api-idp jest+e2e; api-salesops jest+e2e); confirm every scenario in `specs/salesops-identity/spec.md` and the `salesops-customers` delta spec is covered by at least one test.
+- [x] 6.4 [PASS 2026-08-06] Root `pnpm run typecheck` → **14/14 tasks**, 0 TS errors. Root `pnpm run build` → **9/9 tasks**. Turbo builds `domain` → `infra-db` → `api-common` before the apps, so both e2e runs above saw fresh dist. Original task text: Confirm `typecheck`/`build` green across all five packages/apps together (domain → infra-db → api-common rebuilt first, so `api-idp`/`api-salesops` e2e sees fresh dist, per strict-TDD note).
+- [x] 6.5 [DONE, historically] Work units 1-5 all shipped and are in the branch history (`packages/api-common`, `apps/api-idp`, the infra-db identity repos, and the guard/`@Roles()` wiring in `api-salesops` all exist). Branch `salesops-multi-tenant-by-schema` is pushed; **no PR opened**, per the owner delivery decision. Original task text: Commit work-unit by work-unit per the table above, then push the branch — no PR opened, per owner delivery decision (Engram `sdd-init/public-clothes-store-demo`).
 
 ## Out of Scope (per design.md §8)
 
@@ -140,3 +140,17 @@ Multi-tenant-by-schema machinery (Company/Membership/tenant-context/schema-routi
 `gestor` role · fine-grained owner-finance permissions · email verification ·
 transactional email delivery (reset token surfaced via response/log only) ·
 actor-tracking wiring into `Order` (`createdBy`/`verifiedBy`).
+
+---
+
+## Phase 6 verification note (2026-08-06)
+
+Phase 6 was executed on 2026-08-06, well after the change's own apply run. In between,
+`multi-tenant-by-schema` substantially reworked the code these checks cover — the guard
+chain gained `TenantContextGuard`, the repositories were re-sourced onto the tenant
+client, and `JwtStrategy` stopped resolving a company-scoped role at login.
+
+So these results confirm that this change's requirements **still hold against the
+current tree**. They are not a replay of the July state, and should not be read as one.
+That is arguably the more useful claim — the contract survived a major reshape — but it
+is a different claim, and it is stated here rather than left implicit.
