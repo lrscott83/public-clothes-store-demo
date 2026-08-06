@@ -11,6 +11,7 @@ export * from './sales/index.js';
 export * from './users/index.js';
 export * from './company/index.js';
 export * from './commission/index.js';
+export * from './delivery/index.js';
 
 // Multi-tenant-by-schema (design D1): reshaped `CompanyUser`, `Membership`,
 // and the `resolveTenantAccess` policy now export as plain names through
