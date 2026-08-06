@@ -3,6 +3,7 @@ import type { ExchangeRate } from '@store-mgmt/domain';
 import {
   InsufficientStockError,
   InvalidOrderStateError,
+  InvalidStockLevelError,
   createOrder,
   money,
 } from '@store-mgmt/domain';
@@ -61,6 +62,10 @@ describe('PrismaOrderRepository', () => {
     await prisma.commissionPayment.deleteMany({});
     await prisma.commissionAccrual.deleteMany({});
     await prisma.productCommissionReference.deleteMany({});
+    // `delivery_assignment.order_id` is ON DELETE RESTRICT too (Phase 5) —
+    // must clear it (and its carrier, same FK style) BEFORE `order.deleteMany`.
+    await prisma.deliveryAssignment.deleteMany({});
+    await prisma.carrier.deleteMany({});
     await prisma.orderPayment.deleteMany({});
     await prisma.saleCredit.deleteMany({});
     await prisma.orderLine.deleteMany({});
@@ -133,13 +138,14 @@ describe('PrismaOrderRepository', () => {
     customerName: string,
     quantity = 2,
     rates: ExchangeRate[] = [],
+    deliveryMode: 'pickup' | 'delivery' = 'pickup',
   ) {
     return createOrder(
       {
         customerId,
         customerName,
         warehouseId,
-        deliveryMode: 'pickup',
+        deliveryMode,
         attributedCompanyUserId,
         lines: [
           {
@@ -430,6 +436,118 @@ describe('PrismaOrderRepository', () => {
       // The reservation survived, so the verified order still delivers cleanly.
       const delivered = await repository.deliver(created.id);
       expect(delivered.status).toBe('delivered');
+    });
+  });
+
+  describe('deliver closes any open DeliveryAssignment atomically (Phase 5, design §2B/ADR-2)', () => {
+    async function seedCarrier() {
+      return tenantContext.getClient().carrier.create({ data: { name: `Transportes ${randomUUID()}` } });
+    }
+
+    it('closes an in_transit assignment to delivered when a delivery-mode order is delivered', async () => {
+      const { product, warehouse, customer } = await seedFixtures();
+      await stockIn(product.id, warehouse.id, 10);
+      const order = buildSingleLineOrder(
+        product.id,
+        product.name,
+        'Cafeteras',
+        warehouse.id,
+        customer.id,
+        customer.fullName,
+        4,
+        [],
+        'delivery',
+      );
+      const created = await repository.create(order);
+      await repository.confirm(created.id);
+
+      const carrier = await seedCarrier();
+      const assignment = await tenantContext.getClient().deliveryAssignment.create({
+        data: { orderId: created.id, carrierId: carrier.id, status: 'in_transit', assignedAt: AT },
+      });
+
+      const delivered = await repository.deliver(created.id);
+      expect(delivered.status).toBe('delivered');
+
+      const reloadedAssignment = await tenantContext
+        .getClient()
+        .deliveryAssignment.findUnique({ where: { id: assignment.id } });
+      expect(reloadedAssignment?.status).toBe('delivered');
+      expect(reloadedAssignment?.deliveredAt).not.toBeNull();
+    });
+
+    it('is a no-op for a delivery-mode order with no assignment — 0 rows is not an error', async () => {
+      const { product, warehouse, customer } = await seedFixtures();
+      await stockIn(product.id, warehouse.id, 10);
+      const order = buildSingleLineOrder(
+        product.id,
+        product.name,
+        'Cafeteras',
+        warehouse.id,
+        customer.id,
+        customer.fullName,
+        4,
+        [],
+        'delivery',
+      );
+      const created = await repository.create(order);
+      await repository.confirm(created.id);
+
+      const delivered = await repository.deliver(created.id);
+
+      expect(delivered.status).toBe('delivered');
+      expect(delivered.deliveredAt).not.toBeNull();
+    });
+
+    it('rolls back the WHOLE transaction — including the assignment close — when a later step fails', async () => {
+      const { product, warehouse, customer } = await seedFixtures();
+      await stockIn(product.id, warehouse.id, 10);
+      const order = buildSingleLineOrder(
+        product.id,
+        product.name,
+        'Cafeteras',
+        warehouse.id,
+        customer.id,
+        customer.fullName,
+        4,
+        [],
+        'delivery',
+      );
+      const created = await repository.create(order);
+      await repository.confirm(created.id);
+
+      const carrier = await seedCarrier();
+      const assignment = await tenantContext.getClient().deliveryAssignment.create({
+        data: { orderId: created.id, carrierId: carrier.id, status: 'in_transit', assignedAt: AT },
+      });
+
+      // Corrupt the reservation DIRECTLY (bypassing every app-level guard,
+      // typed `.update()` — not the raw guarded UPDATE — so this write
+      // itself does not go through `applyReservationTx`) so that
+      // `applyReservationTx('release')`, which runs AFTER the assignment
+      // close inside `deliver()`, finds `reserved=0` and its own guarded
+      // UPDATE affects 0 rows, throwing `InvalidStockLevelError`. This
+      // forces a genuine Postgres-level failure INSIDE `deliver()`'s
+      // transaction, strictly AFTER the close already ran (uncommitted),
+      // proving the whole transaction unwinds together — no partial state.
+      await tenantContext.getClient().stockLevel.update({
+        where: { productId_warehouseId: { productId: product.id, warehouseId: warehouse.id } },
+        data: { reserved: 0 },
+      });
+
+      await expect(repository.deliver(created.id)).rejects.toThrow(InvalidStockLevelError);
+
+      const stillVerified = await repository.findById(created.id);
+      expect(stillVerified?.status).toBe('verified');
+
+      const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
+      expect(level?.onHand).toBe(10); // untouched
+      expect(level?.reserved).toBe(0); // still our corrupted value — the failed release never committed
+
+      const reloadedAssignment = await tenantContext
+        .getClient()
+        .deliveryAssignment.findUnique({ where: { id: assignment.id } });
+      expect(reloadedAssignment?.status).toBe('in_transit'); // the close rolled back too
     });
   });
 

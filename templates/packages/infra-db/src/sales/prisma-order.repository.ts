@@ -27,6 +27,7 @@ import {
 import { TenantContextService } from '../tenant/tenant-context.service.js';
 import { applyReservationTx } from '../inventory/apply-reservation.js';
 import { applyStockMovementTx } from '../inventory/apply-stock-movement.js';
+import { closeAssignmentOnDeliveryTx } from '../delivery/close-assignment-on-delivery.js';
 
 /** Row shapes shared by every Prisma read of the `Order` aggregate. */
 interface OrderLineRow {
@@ -205,7 +206,11 @@ function orderToDomain(row: OrderRow): DomainOrder {
  * INSIDE the transaction and throws `InvalidOrderStateError` on a mismatch;
  * any stock-guard failure (`InsufficientStockError`/`NegativeStockError`)
  * rolls back the WHOLE transaction, including the status change and any
- * earlier per-line mutation in the same call.
+ * earlier per-line mutation in the same call. `deliver` additionally closes
+ * any open `DeliveryAssignment` for the order in the SAME transaction, via
+ * `closeAssignmentOnDeliveryTx` (delivery module, Phase 5, design.md §2B) —
+ * the same guarded-UPDATE-inside-this-transaction shape, one more `*Tx`
+ * helper from another concept's infra folder, same precedent.
  *
  * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
  * resolved fresh per call, never cached on `this` (see
@@ -375,6 +380,23 @@ export class PrismaOrderRepository implements IOrderRepository {
       if (orderRow.status !== 'verified') {
         throw new InvalidOrderStateError(id, 'verified', orderRow.status);
       }
+
+      // Direction B of the two-way Sales<->Delivery relationship
+      // (design.md §2B, delivery-assignment-seam.md) — a TRANSACTION, not
+      // Commission's try/catch (ADR-2): an assignment left `in_transit`
+      // behind a `delivered` order is not an independently-recoverable fact
+      // like commission, it is a stale PROJECTION of this same event that
+      // would poison every capacity read forever. If ANYTHING below fails,
+      // this call (already uncommitted) unwinds with everything else — order
+      // stays `verified`, stock untouched, assignment still `in_transit`.
+      // Run FIRST rather than last (design §10's diagram shows it after the
+      // stock effects, but statement order inside one atomic transaction has
+      // no observable effect on the all-or-nothing outcome) — this keeps the
+      // guarded UPDATE's blast radius identical regardless of how many lines
+      // the order has. 0 rows affected is the NORMAL case (pickup orders,
+      // or an already-closed assignment) — never an error, never
+      // `findUniqueOrThrow` (see the helper's own doc comment).
+      await closeAssignmentOnDeliveryTx(tx, id);
 
       for (const line of orderRow.lines) {
         // Release BEFORE sale_out — load-bearing ordering (design.md

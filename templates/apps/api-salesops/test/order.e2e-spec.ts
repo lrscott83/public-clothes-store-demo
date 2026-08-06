@@ -161,6 +161,10 @@ describe('Sales (e2e)', () => {
     await tenant.commissionPayment.deleteMany({});
     await tenant.commissionAccrual.deleteMany({});
     await tenant.productCommissionReference.deleteMany({});
+    // `delivery_assignment.order_id` is ON DELETE RESTRICT too (Phase 5) —
+    // must clear it (and its carrier, same FK style) BEFORE the order.
+    await tenant.deliveryAssignment.deleteMany({});
+    await tenant.carrier.deleteMany({});
     // `Order` cascades to `OrderLine`/`OrderPayment`/`SaleCredit` on delete
     // (schema.prisma `onDelete: Cascade`) — one deleteMany clears the whole
     // aggregate tree. `CompanyUser` cascades to `WarehouseOperator` the same way.
@@ -338,6 +342,86 @@ describe('Sales (e2e)', () => {
     expect(level.onHand).toBe('5');
     expect(level.reserved).toBe('0');
     expect(level.available).toBe('5');
+  });
+
+  it('the D5 door: POST /orders/:id/deliver on a delivery-mode order with an in_transit assignment closes it too (Phase 5, design §2B)', async () => {
+    await stockIn(usdProductId, '10');
+
+    const created = await request(app.getHttpServer())
+      .post('/orders')
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
+      .send({
+        customerId,
+        customerName: 'Cliente Sales E2E',
+        warehouseId,
+        deliveryMode: 'delivery',
+        lines: [
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 2 },
+        ],
+        payments: [{ channel: 'ZELLE', amount: { amount: '200.00', currency: 'USD' } }],
+      });
+    expect(created.body.deliveryMode).toBe('delivery');
+
+    await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/confirm`)
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
+      .expect(200);
+
+    // No HTTP surface for Carrier/DeliveryAssignment writes exists yet
+    // (that's Phase 6) — seed the assignment directly against the tenant
+    // client, same discipline `commission.e2e-spec.ts` uses for entities its
+    // own phase doesn't expose via HTTP.
+    const carrier = await tenant.carrier.create({ data: { name: 'Transportes D5 E2E' } });
+    const assignment = await tenant.deliveryAssignment.create({
+      data: { orderId: created.body.id, carrierId: carrier.id, status: 'in_transit', assignedAt: new Date() },
+    });
+
+    const response = await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/deliver`)
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('delivered');
+
+    const reloadedAssignment = await tenant.deliveryAssignment.findUnique({ where: { id: assignment.id } });
+    expect(reloadedAssignment?.status).toBe('delivered');
+    expect(reloadedAssignment?.deliveredAt).not.toBeNull();
+  });
+
+  it('direct deliver still works unchanged for a delivery-mode order with NO assignment (0 rows is not an error)', async () => {
+    await stockIn(usdProductId, '10');
+
+    const created = await request(app.getHttpServer())
+      .post('/orders')
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
+      .send({
+        customerId,
+        customerName: 'Cliente Sales E2E',
+        warehouseId,
+        deliveryMode: 'delivery',
+        lines: [
+          { productId: usdProductId, productName: 'Producto USD', categoryName: 'Sales E2E', price: { amount: '100.00', currency: 'USD' }, quantity: 2 },
+        ],
+        payments: [{ channel: 'ZELLE', amount: { amount: '200.00', currency: 'USD' } }],
+      });
+
+    await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/confirm`)
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId))
+      .expect(200);
+
+    const response = await request(app.getHttpServer())
+      .post(`/orders/${created.body.id}/deliver`)
+      .set(...authHeader(admin.token))
+      .set(...companyIdHeader(companyId));
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('delivered');
   });
 
   it('cancel from verified releases the reservation, onHand untouched', async () => {

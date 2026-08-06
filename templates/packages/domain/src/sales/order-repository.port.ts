@@ -37,7 +37,13 @@ export interface IOrderRepository {
   list(filter?: OrderListFilter): Promise<Order[]>;
   /** `created -> verified`: freezes rate+totals AND reserves stock per line. */
   confirm(id: string): Promise<Order>;
-  /** `verified -> delivered`: releases the reservation THEN consumes stock (`sale_out`) per line. */
+  /**
+   * `verified -> delivered`: releases the reservation THEN consumes stock
+   * (`sale_out`) per line. Also closes any open `DeliveryAssignment` for the
+   * order, in the same transaction (delivery module, Phase 5 — see
+   * `packages/domain/src/delivery/delivery-assignment-seam.md` for the
+   * two-way Sales<->Delivery relationship this fulfils).
+   */
   deliver(id: string): Promise<Order>;
   /** `created|verified -> cancelled`: releases the reservation per line when source is `verified`; no-op when source is `created`. */
   cancel(id: string): Promise<Order>;

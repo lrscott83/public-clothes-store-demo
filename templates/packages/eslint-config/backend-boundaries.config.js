@@ -74,6 +74,36 @@ export const webBackendBoundaryRule = {
 // are relative to the linted package's root, per ESLint flat-config
 // convention) — meaningless in any other package, since none of them have
 // this directory shape.
+// design.md §2 ADR-1's Direction B (Sales -> Delivery) is DELIBERATELY not a
+// NestJS import — it is an infra-db `*Tx` helper invoked inside
+// `PrismaOrderRepository.deliver`'s own transaction (delivery module,
+// Phase 5, `packages/domain/src/delivery/delivery-assignment-seam.md`). This
+// rule is what stops a future `SalesModule -> DeliveryModule` import from
+// quietly making that avoided cycle real — a boundary documented only in a
+// doc breaks on its own (architecture.md:132-141).
+//
+// Applied to `apps/api-salesops`'s own `eslint.config.mjs` (`files` globs
+// are relative to the linted package's root, per ESLint flat-config
+// convention) — meaningless in any other package.
+/** @type {import("eslint").Linter.Config} */
+export const salesForbidsDeliveryImportRule = {
+  files: ["src/sales/**/*.ts"],
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
+            group: ["**/delivery/*", "**/delivery/**"],
+            message:
+              "Sales must not import Delivery (design.md §2 ADR-1). The Sales -> Delivery direction is an infra-db transactional helper called inside PrismaOrderRepository.deliver's own transaction, never a NestJS import — importing DeliveryModule (or anything under delivery/) from Sales would create the real module cycle this design deliberately avoids.",
+          },
+        ],
+      },
+    ],
+  },
+};
+
 /** @type {import("eslint").Linter.Config} */
 export const tenantRepoBoundaryRule = {
   files: [
