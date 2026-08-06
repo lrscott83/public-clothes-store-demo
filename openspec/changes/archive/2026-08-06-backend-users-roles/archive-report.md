@@ -95,3 +95,27 @@ All tests executed against real Postgres (172.17.0.1:5432/store_mgmt) with fresh
 **CLOSED**: All phases complete, tests green, specs merged (with documented deferral of one out-of-scope requirement), architecture conformant, boundaries clean. The change is ready for production integration.
 
 **Next step**: Orchestrator removes original files from `openspec/changes/backend-users-roles/` (now archived) and ensures `openspec/changes/archive/backend-users-roles/` is committed to version control for the audit trail.
+
+---
+
+## Post-archive amendment (2026-08-06)
+
+Everything the "Next step" above asked for is DONE. Recorded here rather than by editing
+the report body, which stays as written at archive time.
+
+1. **Originals removed and committed** — commit `cfe2880`. The copies were verified
+   byte-identical with `diff -r` BEFORE deletion (the archive executor has no Bash, so it
+   copies and cannot delete; a report claiming a move is not evidence that one happened).
+2. **Folder renamed** to `openspec/changes/archive/2026-08-06-backend-users-roles/`, matching
+   the `YYYY-MM-DD-<change>` convention every other archived change follows. Paths written
+   above still say `archive/backend-users-roles/`; that was the path at the time.
+3. **All findings closed** — commit `d84a97e`. See `verify-report.md`: 1 CRITICAL (deferred),
+   2 WARNINGs and 2 SUGGESTIONs, all resolved. **Open issues: none.**
+4. **Spec merge corrected** — the claim above that specs were "merged" was only partly true.
+   A later audit found that `openspec/specs/salesops-identity/spec.md` held
+   `multi-tenant-by-schema`'s amendment delta copied verbatim: the amendment had REPLACED the
+   base spec instead of merging into it, dropping five requirements from the live contract
+   (User Identity Entity, Bitmask Multi-Role, Authentication Mechanism, WarehouseOperator
+   Warehouse Scope, sales_agent Role Grants). Rebuilt by replaying all four deltas in
+   chronological order. `salesops-customers` was likewise missing the five agent-assisted
+   requirements from `sales-agents-commissions`; those are now merged.
