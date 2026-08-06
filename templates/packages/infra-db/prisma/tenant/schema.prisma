@@ -140,6 +140,10 @@ model Warehouse {
   orders             Order[]
   // Inverse relation only — added by the Users/Roles module (backend-users-roles).
   warehouseOperators WarehouseOperator[]
+  // Inverse relation only — added by the Delivery module (SDD change
+  // delivery). `CarrierWarehouse` coverage join; Warehouse carries zero
+  // Delivery scalar fields.
+  carriers           CarrierWarehouse[]
 
   @@map("warehouse")
 }
@@ -281,6 +285,12 @@ model Order {
   // Inverse relation only — added by the Commission module. 0..1 per order
   // (`commission_accrual.order_id` is UNIQUE, the idempotency key).
   commissionAccrual     CommissionAccrual?
+  // Inverse relation only — added by the Delivery module (SDD change
+  // delivery). 0..1 per order (`delivery_assignment.order_id` is UNIQUE,
+  // mirrors `commissionAccrual`'s idempotency guarantee). `null` for pickup
+  // orders and for orders delivered before this module existed — never a
+  // 404, never backfilled.
+  deliveryAssignment    DeliveryAssignment?
   payments              OrderPayment[]
   saleCredit            SaleCredit?
   /// RESTRICT, not SET NULL: an assignment that has sales against it must not be deletable,
@@ -514,4 +524,80 @@ model CompanyUser {
 
   @@index([createdByCompanyUserId])
   @@map("company_user")
+}
+
+// Eighth domain module: Delivery (SDD change delivery). `Carrier` is tenant
+// master data (mirrors `Warehouse`: flat, soft-delete via `active`, no hard
+// DELETE). `CarrierWarehouse` expresses coverage as a plain join table —
+// ZERO `zone`/geography field anywhere (D2) — supporting 0/1/N warehouses
+// per carrier uniformly; absence of a row means "no declared coverage", not
+// "serves everywhere" (design §5). `DeliveryAssignment` bridges an `Order`
+// to a `Carrier`, `order_id` UNIQUE (0..1 per order, D1) — its `status` is
+// the ONLY in-transit lifecycle state anywhere in this schema; `Order`
+// itself gains no scalar column, only the inverse relation above. Capacity
+// is NEVER stored: no `capacity`/`maxOrdersPerDay` column exists on
+// `Carrier` — it is always computed live from `DeliveryAssignment` rows
+// (`computeCarrierCapacity`, design §4/ADR-3). The delivered edge has
+// exactly ONE writer, `closeAssignmentOnDeliveryTx` (Phase 5) — there is no
+// repository `markDelivered` method by design (design §8).
+
+enum DeliveryAssignmentStatus {
+  in_transit
+  delivered
+}
+
+model Carrier {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  warehouses  CarrierWarehouse[]
+  assignments DeliveryAssignment[]
+
+  @@map("carrier")
+}
+
+/// Coverage join row. Deliberately flat — no `zone`/geography dimension (D2).
+/// `@@unique([carrierId, warehouseId])` supports 0, 1, or N warehouses per
+/// carrier uniformly; coverage is advisory on reads only (design §5), never
+/// enforced as a hard block on `DeliveryAssignment` creation.
+model CarrierWarehouse {
+  id          String   @id @default(uuid()) @db.Uuid
+  carrierId   String   @map("carrier_id") @db.Uuid
+  warehouseId String   @map("warehouse_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  carrier   Carrier   @relation(fields: [carrierId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([carrierId, warehouseId])
+  @@index([warehouseId])
+  @@map("carrier_warehouse")
+}
+
+/// Two-state bridge, `order_id` UNIQUE — the idempotency guarantee (0..1 per
+/// order, D1). `status` is exactly `in_transit | delivered`, no third state.
+/// `onDelete: Restrict` on both FKs, per spec: an assignment referencing a
+/// deleted order or carrier would silently erase which carrier had which
+/// order — Carrier/Order are both soft-delete-only master data/events, so
+/// this only ever fires as a loud signal something upstream is wrong.
+model DeliveryAssignment {
+  id          String                   @id @default(uuid()) @db.Uuid
+  orderId     String                   @unique @map("order_id") @db.Uuid
+  carrierId   String                   @map("carrier_id") @db.Uuid
+  status      DeliveryAssignmentStatus @default(in_transit)
+  assignedAt  DateTime                 @map("assigned_at")
+  deliveredAt DateTime?                @map("delivered_at")
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  carrier Carrier @relation(fields: [carrierId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([carrierId])
+  @@index([status])
+  @@map("delivery_assignment")
 }

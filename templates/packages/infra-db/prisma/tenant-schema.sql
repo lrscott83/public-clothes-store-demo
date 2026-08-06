@@ -24,6 +24,9 @@ CREATE TYPE "OrderStatus" AS ENUM ('created', 'verified', 'delivered', 'cancelle
 -- CreateEnum
 CREATE TYPE "DeliveryMode" AS ENUM ('pickup', 'delivery');
 
+-- CreateEnum
+CREATE TYPE "DeliveryAssignmentStatus" AS ENUM ('in_transit', 'delivered');
+
 -- CreateTable
 CREATE TABLE "exchange_rate" (
     "id" UUID NOT NULL,
@@ -289,6 +292,42 @@ CREATE TABLE "company_user" (
     CONSTRAINT "company_user_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "carrier" (
+    "id" UUID NOT NULL,
+    "name" TEXT NOT NULL,
+    "phone" TEXT,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "carrier_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "carrier_warehouse" (
+    "id" UUID NOT NULL,
+    "carrier_id" UUID NOT NULL,
+    "warehouse_id" UUID NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "carrier_warehouse_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "delivery_assignment" (
+    "id" UUID NOT NULL,
+    "order_id" UUID NOT NULL,
+    "carrier_id" UUID NOT NULL,
+    "status" "DeliveryAssignmentStatus" NOT NULL DEFAULT 'in_transit',
+    "assigned_at" TIMESTAMP(3) NOT NULL,
+    "delivered_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "delivery_assignment_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "exchange_rate_channel_effective_from_idx" ON "exchange_rate"("channel", "effective_from");
 
@@ -351,6 +390,21 @@ CREATE INDEX "warehouse_operator_warehouse_id_idx" ON "warehouse_operator"("ware
 
 -- CreateIndex
 CREATE INDEX "company_user_created_by_company_user_id_idx" ON "company_user"("created_by_company_user_id");
+
+-- CreateIndex
+CREATE INDEX "carrier_warehouse_warehouse_id_idx" ON "carrier_warehouse"("warehouse_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "carrier_warehouse_carrier_id_warehouse_id_key" ON "carrier_warehouse"("carrier_id", "warehouse_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "delivery_assignment_order_id_key" ON "delivery_assignment"("order_id");
+
+-- CreateIndex
+CREATE INDEX "delivery_assignment_carrier_id_idx" ON "delivery_assignment"("carrier_id");
+
+-- CreateIndex
+CREATE INDEX "delivery_assignment_status_idx" ON "delivery_assignment"("status");
 
 -- AddForeignKey
 ALTER TABLE "product" ADD CONSTRAINT "product_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "category"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -423,6 +477,18 @@ ALTER TABLE "warehouse_operator" ADD CONSTRAINT "warehouse_operator_warehouse_id
 
 -- AddForeignKey
 ALTER TABLE "company_user" ADD CONSTRAINT "company_user_created_by_company_user_id_fkey" FOREIGN KEY ("created_by_company_user_id") REFERENCES "company_user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "carrier_warehouse" ADD CONSTRAINT "carrier_warehouse_carrier_id_fkey" FOREIGN KEY ("carrier_id") REFERENCES "carrier"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "carrier_warehouse" ADD CONSTRAINT "carrier_warehouse_warehouse_id_fkey" FOREIGN KEY ("warehouse_id") REFERENCES "warehouse"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "delivery_assignment" ADD CONSTRAINT "delivery_assignment_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "sales_order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "delivery_assignment" ADD CONSTRAINT "delivery_assignment_carrier_id_fkey" FOREIGN KEY ("carrier_id") REFERENCES "carrier"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 
 -- AddCheck (defense-in-depth backstop for the guarded conditional UPDATE in
