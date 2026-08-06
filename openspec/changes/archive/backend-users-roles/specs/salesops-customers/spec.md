@@ -96,6 +96,19 @@ a prescription of the migration mechanics.
 
 ### Requirement: Self-Service Buyer Authentication Flow
 
+> **DEFERRED — descoped from `backend-users-roles` on 2026-08-06 by owner decision.**
+>
+> This requirement was never carried into the merged `openspec/specs/salesops-customers/spec.md`,
+> and neither `proposal.md`, `design.md`, nor `tasks.md` ever covered it — it entered this
+> change's delta spec as scope creep during the spec phase and no phase caught it.
+>
+> **Why deferred, not implemented:** the flow it describes is storefront + checkout territory
+> (`apps/static-store`, `packages/storefront`), which is frozen as LEGACY and must not be
+> touched. There is no payment step anywhere in the backend for authentication to gate.
+>
+> It is NOT part of this change's contract and does NOT block archive. Reinstating it means
+> opening a new change once a live checkout exists.
+
 Anonymous browsing and cart interaction MUST be allowed without authentication.
 Authentication MUST be required only at the payment step. The buyer's `Customer`
 (together with its linked `User`) MUST be created at that point — not before.
