@@ -87,17 +87,19 @@ Chain strategy: N/A (owner-locked single-branch, no-PR)
 
 ## Phase 3: Persistence Adapters (Slice B1 — `packages/infra-db/src/delivery/`)
 
-- [ ] 3.1 RED `prisma-carrier.repository.spec.ts` (real Postgres): create/findById/list(`activeOnly`)/soft-delete round-trip.
-- [ ] 3.2 GREEN `prisma-carrier.repository.ts`.
-- [ ] 3.3 RED `prisma-carrier-warehouse.repository.spec.ts`: add/remove a coverage row; `@@unique([carrierId,warehouseId])` enforced; `listByCarrier` returns 0/1/N rows.
-- [ ] 3.4 GREEN `prisma-carrier-warehouse.repository.ts`.
-- [ ] 3.5 RED `prisma-delivery-assignment.repository.spec.ts`: `create` rejects a duplicate `orderId` (unique index IS the guarantee); `findByOrderId` returns `null` for pickup/no-assignment orders — never throws; `list(filter)` by carrierId/status/date range; `countOrdersAwaitingCarrier()` anti-join counts only verified+`deliveryMode='delivery'`+no-assignment orders.
-- [ ] 3.6 GREEN `prisma-delivery-assignment.repository.ts` — anti-join/raw SQL MUST reference table `sales_order`, never `order` (reserved word, design §9).
-- [ ] 3.7 RED+GREEN `seed.ts` + `delivery-fixtures.spec-helper.ts`: deterministic carrier/coverage/assignment fixtures for downstream specs.
-- [ ] 3.8 Modify `packages/infra-db/src/index.ts`: export the three adapters.
-- [ ] 3.9 Add `src/delivery/prisma-*.repository.ts` to `tenantRepoBoundaryRule`'s `files` glob in `packages/eslint-config/backend-boundaries.config.js` — closes the same tenant-Prisma-client boundary the other 6 concepts already enforce.
+- [x] 3.1 RED `prisma-carrier.repository.spec.ts` (real Postgres): create/findById/list(`activeOnly`)/soft-delete round-trip. **DONE 2026-08-06**: written first, confirmed RED (`Could not locate module ./prisma-carrier.repository.js`).
+- [x] 3.2 GREEN `prisma-carrier.repository.ts`. **DONE**: 7/7 passing. NOTE (deviation, documented in the adapter's own doc comment rather than editing the already-shipped Phase 1 port file): the domain port's `activeOnly` doc comment is ambiguous ("When omitted or `false`, `active: false` carriers are excluded") — read literally it leaves no case where `true` differs from the default. Implemented the standard boolean-flag reading instead: `activeOnly: true` restricts to `active: true`; omitted/`false` returns every carrier (active or not). No spec scenario pins this down either way, so this is a resolved ambiguity, not a violated one — flagged here for verify.
+- [x] 3.3 RED `prisma-carrier-warehouse.repository.spec.ts`: add/remove a coverage row; `@@unique([carrierId,warehouseId])` enforced; `listByCarrier` returns 0/1/N rows. **DONE**: confirmed RED (module not found).
+- [x] 3.4 GREEN `prisma-carrier-warehouse.repository.ts`. **DONE**: 6/6 passing, incl. the unique-violation-on-duplicate-add case and the no-op-remove case.
+- [x] 3.5 RED `prisma-delivery-assignment.repository.spec.ts`: `create` rejects a duplicate `orderId` (unique index IS the guarantee); `findByOrderId` returns `null` for pickup/no-assignment orders — never throws; `list(filter)` by carrierId/status/date range; `countOrdersAwaitingCarrier()` anti-join counts only verified+`deliveryMode='delivery'`+no-assignment orders. **DONE**: confirmed RED (module not found).
+- [x] 3.6 GREEN `prisma-delivery-assignment.repository.ts` — anti-join/raw SQL MUST reference table `sales_order`, never `order` (reserved word, design §9). **DONE**: 7/7 passing, incl. the anti-join test (2 counted, 3 correctly excluded: already-assigned, pickup-mode, not-yet-verified). Raw SQL via `$queryRaw`/`Prisma.sql` against `"sales_order"` LEFT JOIN `"delivery_assignment"` — no schema qualification needed, `TenantPrismaFactory` sets `search_path` on the connection itself (design §4), same precedent as `applyReservationTx`'s raw `$executeRaw`.
+- [x] 3.7 RED+GREEN `seed.ts` + `delivery-fixtures.spec-helper.ts`: deterministic carrier/coverage/assignment fixtures for downstream specs. **DONE**: `delivery-fixtures.spec-helper.ts` (raw-insert base graph + arbitrary-status/mode order fixture + full wipe, mirrors `commission-fixtures.spec-helper.ts`) backs tasks 3.1/3.3/3.5's specs. `seed.ts` exports `seedCarriers` — an idempotent DEMO carrier catalog (2 carriers, one with coverage over 2 warehouses, one with zero coverage rows on purpose so a fresh tenant exercises the "zero rows = no coverage" reading with no manual setup), mirroring `inventory/seed.ts`'s `seedWarehouses` shape; `seed.spec.ts` (2/2 passing) covers creation counts + idempotency. NOT wired into `prisma/seed.js` — no task in this phase (or any later one in this file) calls for that wiring, so it stays an available, tested, unwired seed function; flagged here rather than silently added or silently skipped.
+- [x] 3.8 Modify `packages/infra-db/src/index.ts`: export the three adapters. **DONE**: also exports `seedCarriers`.
+- [x] 3.9 Add `src/delivery/prisma-*.repository.ts` to `tenantRepoBoundaryRule`'s `files` glob in `packages/eslint-config/backend-boundaries.config.js` — closes the same tenant-Prisma-client boundary the other 6 concepts already enforce. **DONE**.
 
 **Exit criteria**: `packages/infra-db/src/delivery/*.spec.ts` green against real Postgres (`pnpm --filter @store-mgmt/infra-db test`, `maxWorkers:1`). `pnpm -r build` clean. Commit.
+
+**PHASE 3 EXIT CRITERIA MET 2026-08-06**: infra-db suite 36→40 files, 299→321 tests, all green (`pnpm test` — real Postgres, `maxWorkers:1`). `pnpm -r build` clean across every package/app.
 
 ## Phase 4: Read Surface (Slice B2 — `apps/api-salesops/src/delivery/`, reads only)
 

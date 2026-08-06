@@ -84,6 +84,7 @@ export const tenantRepoBoundaryRule = {
     "src/inventory/prisma-*.repository.ts",
     "src/product/prisma-*.repository.ts",
     "src/users/prisma-warehouse-operator.repository.ts",
+    "src/delivery/prisma-*.repository.ts",
   ],
   rules: {
     "no-restricted-imports": [

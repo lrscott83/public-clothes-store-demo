@@ -47,3 +47,8 @@ export { grantTenantRole, type GrantTenantRoleResult } from './company/grant-ten
 export { PrismaCommissionReferenceProvider } from './commission/prisma-commission-reference.provider.js';
 export { PrismaCommissionAccrualRepository } from './commission/prisma-commission-accrual.repository.js';
 export { PrismaCommissionPaymentRepository } from './commission/prisma-commission-payment.repository.js';
+// SDD change `delivery`, Phase 3 (Slice B1): tenant-side Delivery adapters.
+export { PrismaCarrierRepository } from './delivery/prisma-carrier.repository.js';
+export { PrismaCarrierWarehouseRepository } from './delivery/prisma-carrier-warehouse.repository.js';
+export { PrismaDeliveryAssignmentRepository } from './delivery/prisma-delivery-assignment.repository.js';
+export { seedCarriers } from './delivery/seed.js';
