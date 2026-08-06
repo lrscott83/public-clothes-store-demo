@@ -11,9 +11,12 @@ import { DeliveryAssignmentController } from './delivery-assignment.controller.j
 import { DeliveryService } from './delivery.service.js';
 
 /**
- * Phase 4 (Slice B2): READS ONLY. Imports ONLY `InfraDbModule` — `SalesModule`
- * is deliberately NOT imported here yet. That import arrives in Phase 6
- * alongside `markDelivered`'s gateway call (design §2A); adding it early
+ * Phase 6a: Carrier CRUD writes + `assign` shipped here (in addition to
+ * Phase 4's reads). Imports ONLY `InfraDbModule` — `SalesModule` is
+ * deliberately NOT imported here yet. `assign` needs only
+ * `ICarrierRepository`/`IDeliveryAssignmentRepository`, both already
+ * provided through `InfraDbModule`. `SalesModule` arrives in Phase 6b
+ * alongside `markDelivered`'s gateway call (design §2A) — adding it early
  * would be scope leaking ahead of the write path that actually needs it.
  */
 @Module({

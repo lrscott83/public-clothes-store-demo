@@ -1,19 +1,37 @@
-import { Controller, Get, NotFoundException, Param, Query, Req, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard, RolesGuard, TenantContextGuard, createRunInTenant } from '@store-mgmt/api-common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { JwtAuthGuard, Roles, RolesGuard, TenantContextGuard, createRunInTenant } from '@store-mgmt/api-common';
+import { USER_ROLES } from '@store-mgmt/domain';
 import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
 import type { Request } from 'express';
 import { DeliveryService } from './delivery.service.js';
-import type { CarrierResponseDto } from './dto/index.js';
+import type { CarrierResponseDto, CreateCarrierDto, UpdateCarrierDto } from './dto/index.js';
 
 /** `Request` carrying `req.tenant`, set by `TenantContextGuard` (design D4/D5). */
 type TenantScopedRequest = Request & { tenant: TenantContext };
 
 /**
- * REST delivery for the Carrier catalog — READS ONLY this phase (Phase 6
- * adds `POST`/`PATCH`/soft-`DELETE`, `owner`/`admin`-only). No `@Roles` on
- * either handler here: carrier catalog reads are open to any authenticated
- * tenant user, mirroring `product.controller.ts`/`warehouse.controller.ts`
- * (spec: "Any authenticated tenant user can read carriers").
+ * REST delivery for the Carrier catalog. Reads carry no `@Roles` — open to
+ * any authenticated tenant user, mirroring `product.controller.ts`/
+ * `warehouse.controller.ts` (spec: "Any authenticated tenant user can read
+ * carriers"). Writes (`POST`/`PATCH`/soft-`DELETE`) require `owner`/`admin`
+ * (spec: "Carrier Catalog Roles Mirror Existing Master Data"). `DELETE`
+ * always soft-deletes (`active=false`) — never a hard DELETE. No domain
+ * error mapping here — `createCarrier()` defines no runtime rejection (see
+ * its doc comment), unlike `ProductController`/`WarehouseController`.
  */
 @Controller('delivery/carriers')
 @UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)
@@ -25,6 +43,16 @@ export class CarrierController {
     tenantContext: TenantContextService,
   ) {
     this.runInTenant = createRunInTenant(tenantContext);
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
+  async create(
+    @Body() body: CreateCarrierDto,
+    @Req() req: TenantScopedRequest,
+  ): Promise<CarrierResponseDto> {
+    return this.runInTenant(req.tenant, () => this.deliveryService.createCarrier(body));
   }
 
   @Get()
@@ -44,5 +72,26 @@ export class CarrierController {
       }
       return found;
     });
+  }
+
+  @Patch(':id')
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
+  async update(
+    @Param('id') id: string,
+    @Body() body: UpdateCarrierDto,
+    @Req() req: TenantScopedRequest,
+  ): Promise<CarrierResponseDto> {
+    return this.runInTenant(req.tenant, () => this.deliveryService.updateCarrier(id, body));
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
+  async softDelete(
+    @Param('id') id: string,
+    @Req() req: TenantScopedRequest,
+  ): Promise<{ id: string }> {
+    await this.runInTenant(req.tenant, () => this.deliveryService.deactivateCarrier(id));
+    return { id };
   }
 }

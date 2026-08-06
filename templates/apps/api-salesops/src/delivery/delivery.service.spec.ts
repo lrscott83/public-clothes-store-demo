@@ -10,7 +10,9 @@ import type {
 import {
   CARRIER_REPOSITORY,
   CARRIER_WAREHOUSE_REPOSITORY,
+  CarrierNotFoundError,
   DELIVERY_ASSIGNMENT_REPOSITORY,
+  OrderAlreadyAssignedError,
 } from '@store-mgmt/domain';
 import { DeliveryService } from './delivery.service.js';
 
@@ -233,6 +235,119 @@ describe('DeliveryService', () => {
       const result = await service.findAssignmentByOrderId('order-1');
 
       expect(result!.orderId).toBe('order-1');
+    });
+  });
+
+  describe('createCarrier', () => {
+    it('creates a carrier via the repository', async () => {
+      carrierRepo.create.mockResolvedValue(carrier({ id: 'new-carrier', name: 'New Carrier' }));
+
+      const result = await service.createCarrier({ name: 'New Carrier' });
+
+      expect(carrierRepo.create).toHaveBeenCalledWith({ name: 'New Carrier' });
+      expect(result.id).toBe('new-carrier');
+      expect(result.name).toBe('New Carrier');
+    });
+  });
+
+  describe('updateCarrier', () => {
+    it('updates a carrier via the repository', async () => {
+      carrierRepo.update.mockResolvedValue(carrier({ id: 'carrier-1', name: 'Renamed' }));
+
+      const result = await service.updateCarrier('carrier-1', { name: 'Renamed' });
+
+      expect(carrierRepo.update).toHaveBeenCalledWith('carrier-1', { name: 'Renamed' });
+      expect(result.name).toBe('Renamed');
+    });
+  });
+
+  describe('deactivateCarrier', () => {
+    it('soft-deletes via the repository', async () => {
+      await service.deactivateCarrier('carrier-1');
+
+      expect(carrierRepo.softDelete).toHaveBeenCalledWith('carrier-1');
+    });
+  });
+
+  describe('assign', () => {
+    it('creates an in_transit assignment when the carrier is active and the order has none', async () => {
+      carrierRepo.findById.mockResolvedValue(carrier({ id: 'carrier-1', active: true }));
+      assignmentRepo.findByOrderId.mockResolvedValue(null);
+      assignmentRepo.create.mockImplementation(async (a: DomainDeliveryAssignment) => a);
+
+      const result = await service.assign({ orderId: 'order-1', carrierId: 'carrier-1' });
+
+      expect(carrierRepo.findById).toHaveBeenCalledWith('carrier-1');
+      expect(assignmentRepo.findByOrderId).toHaveBeenCalledWith('order-1');
+      expect(result.status).toBe('in_transit');
+      expect(result.orderId).toBe('order-1');
+      expect(result.carrierId).toBe('carrier-1');
+      expect(assignmentRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ orderId: 'order-1', carrierId: 'carrier-1', status: 'in_transit' }),
+      );
+    });
+
+    it('throws CarrierNotFoundError for an unknown carrier — 404 at the controller', async () => {
+      carrierRepo.findById.mockResolvedValue(null);
+
+      await expect(service.assign({ orderId: 'order-1', carrierId: 'unknown' })).rejects.toThrow(
+        CarrierNotFoundError,
+      );
+      expect(assignmentRepo.findByOrderId).not.toHaveBeenCalled();
+      expect(assignmentRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws CarrierNotFoundError for an inactive carrier — same error as unknown (spec: "unknown or inactive")', async () => {
+      carrierRepo.findById.mockResolvedValue(carrier({ id: 'carrier-1', active: false }));
+
+      await expect(service.assign({ orderId: 'order-1', carrierId: 'carrier-1' })).rejects.toThrow(
+        CarrierNotFoundError,
+      );
+      expect(assignmentRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws OrderAlreadyAssignedError when the order already has an assignment — 409 at the controller', async () => {
+      carrierRepo.findById.mockResolvedValue(carrier({ id: 'carrier-1', active: true }));
+      assignmentRepo.findByOrderId.mockResolvedValue(assignment({ orderId: 'order-1' }));
+
+      await expect(service.assign({ orderId: 'order-1', carrierId: 'carrier-1' })).rejects.toThrow(
+        OrderAlreadyAssignedError,
+      );
+      expect(assignmentRepo.create).not.toHaveBeenCalled();
+    });
+
+    describe('coverage is advisory, never enforced (ADR-4 / spec "Coverage Is Advisory")', () => {
+      it('succeeds when the carrier has zero coverage rows for any warehouse', async () => {
+        carrierRepo.findById.mockResolvedValue(carrier({ id: 'carrier-1', active: true }));
+        assignmentRepo.findByOrderId.mockResolvedValue(null);
+        carrierWarehouseRepo.listByCarrier.mockResolvedValue([]);
+        assignmentRepo.create.mockImplementation(async (a: DomainDeliveryAssignment) => a);
+
+        const result = await service.assign({ orderId: 'order-1', carrierId: 'carrier-1' });
+
+        expect(result.status).toBe('in_transit');
+        expect(result).not.toHaveProperty('warning');
+        // `assign` never consults coverage at all — it has no `warehouseId`
+        // parameter and never calls `listByCarrier` (design: assign's flow
+        // is findById -> findByOrderId -> assignCarrier() -> create(), full
+        // stop).
+        expect(carrierWarehouseRepo.listByCarrier).not.toHaveBeenCalled();
+      });
+
+      it('succeeds when the carrier only covers a DIFFERENT warehouse than the order (mismatched coverage)', async () => {
+        carrierRepo.findById.mockResolvedValue(carrier({ id: 'carrier-1', active: true }));
+        assignmentRepo.findByOrderId.mockResolvedValue(null);
+        carrierWarehouseRepo.listByCarrier.mockResolvedValue([coverage('carrier-1', 'warehouse-A')]);
+        assignmentRepo.create.mockImplementation(async (a: DomainDeliveryAssignment) => a);
+
+        // The order's own warehouse is never passed to `assign` at all —
+        // coverage mismatch has no code path to reject through.
+        const result = await service.assign({ orderId: 'order-1', carrierId: 'carrier-1' });
+
+        expect(result.status).toBe('in_transit');
+        expect(result).not.toHaveProperty('warning');
+        expect(carrierWarehouseRepo.listByCarrier).not.toHaveBeenCalled();
+      });
     });
   });
 });

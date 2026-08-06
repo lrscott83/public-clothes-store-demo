@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   Carrier as DomainCarrier,
+  CarrierUpdateInput,
   DeliveryAssignment as DomainDeliveryAssignment,
   DeliveryAssignmentFilter,
   ICarrierRepository,
@@ -10,13 +11,18 @@ import type {
 import {
   CARRIER_REPOSITORY,
   CARRIER_WAREHOUSE_REPOSITORY,
+  CarrierNotFoundError,
   DELIVERY_ASSIGNMENT_REPOSITORY,
+  OrderAlreadyAssignedError,
+  assignCarrier,
   computeCarrierCapacity,
   computeCarrierThroughput,
 } from '@store-mgmt/domain';
 import type {
+  AssignCarrierDto,
   CarrierCapacityResponseDto,
   CarrierResponseDto,
+  CreateCarrierDto,
   DeliveryAssignmentResponseDto,
 } from './dto/index.js';
 
@@ -30,8 +36,11 @@ export interface CapacityWindow {
 }
 
 /**
- * Orchestration layer for the Delivery read surface (design §6). Phase 4 is
- * READS ONLY — no `assign`/`markDelivered` here yet (Phase 6). Mirrors
+ * Orchestration layer for the Delivery module (design §6). Phase 4 shipped
+ * the read surface; Phase 6 (this) adds Carrier CRUD writes and `assign`.
+ * `markDelivered` is NOT here — that needs `IOrderDeliveryGateway` /
+ * `SalesModule`, which is Phase 6b (out of scope for this batch; see
+ * `delivery.module.ts`, still `imports: [InfraDbModule]` only). Mirrors
  * `WarehouseService`'s shape: the only place with I/O, maps domain entities
  * to response DTOs (dates -> ISO strings).
  */
@@ -71,6 +80,27 @@ export class DeliveryService {
     return found ? this.toCarrierResponse(found) : null;
   }
 
+  /**
+   * Unlike `WarehouseService.create`, this does NOT run the payload through a
+   * domain guardian factory first — `createCarrier()` (Phase 1) defines no
+   * runtime rejection (`name` is required only at the TYPE level; see its
+   * doc comment). The repository is the single source of truth.
+   */
+  async createCarrier(input: CreateCarrierDto): Promise<CarrierResponseDto> {
+    const created = await this.carrierRepository.create(input);
+    return this.toCarrierResponse(created);
+  }
+
+  async updateCarrier(id: string, patch: CarrierUpdateInput): Promise<CarrierResponseDto> {
+    const updated = await this.carrierRepository.update(id, patch);
+    return this.toCarrierResponse(updated);
+  }
+
+  /** Soft-delete only — flips `active`, never a hard `DELETE` (spec: "Deleting a carrier soft-deletes it"). */
+  async deactivateCarrier(id: string): Promise<void> {
+    await this.carrierRepository.softDelete(id);
+  }
+
   async listAssignments(filter?: DeliveryAssignmentFilter): Promise<DeliveryAssignmentResponseDto[]> {
     const rows = await this.assignmentRepository.list(filter);
     return rows.map((row) => this.toAssignmentResponse(row));
@@ -80,6 +110,32 @@ export class DeliveryService {
   async findAssignmentByOrderId(orderId: string): Promise<DeliveryAssignmentResponseDto | null> {
     const found = await this.assignmentRepository.findByOrderId(orderId);
     return found ? this.toAssignmentResponse(found) : null;
+  }
+
+  /**
+   * `findById` -> `findByOrderId` -> pure `assignCarrier()` -> `create()`
+   * (task 6.3/6.4). Deliberately does NOT consult
+   * `carrierWarehouseRepository` at all — coverage is advisory, surfaced on
+   * reads only (`listCarriers`), and MUST NOT block or warn on assignment
+   * (spec: "Coverage Is Advisory, Not an Enforced Assignment Block"; ADR-4).
+   * `CarrierNotFoundError` covers BOTH an unknown id and an inactive
+   * carrier — same 404 either way, mirroring the error's own message.
+   */
+  async assign(input: AssignCarrierDto): Promise<DeliveryAssignmentResponseDto> {
+    const carrier = await this.carrierRepository.findById(input.carrierId);
+    if (!carrier || !carrier.active) {
+      throw new CarrierNotFoundError(input.carrierId);
+    }
+
+    const existing = await this.assignmentRepository.findByOrderId(input.orderId);
+    if (existing) {
+      throw new OrderAlreadyAssignedError(input.orderId);
+    }
+
+    const created = await this.assignmentRepository.create(
+      assignCarrier({ orderId: input.orderId, carrierId: input.carrierId }, new Date()),
+    );
+    return this.toAssignmentResponse(created);
   }
 
   /**

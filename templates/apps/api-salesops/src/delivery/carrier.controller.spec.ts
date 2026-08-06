@@ -15,6 +15,9 @@ import { DeliveryService } from './delivery.service.js';
 type DeliveryServiceMock = {
   listCarriers: jest.Mock;
   findCarrierById: jest.Mock;
+  createCarrier: jest.Mock;
+  updateCarrier: jest.Mock;
+  deactivateCarrier: jest.Mock;
 };
 
 const sampleCarrier = {
@@ -51,7 +54,13 @@ describe('CarrierController', () => {
   let service: DeliveryServiceMock;
 
   beforeEach(() => {
-    service = { listCarriers: jest.fn(), findCarrierById: jest.fn() };
+    service = {
+      listCarriers: jest.fn(),
+      findCarrierById: jest.fn(),
+      createCarrier: jest.fn(),
+      updateCarrier: jest.fn(),
+      deactivateCarrier: jest.fn(),
+    };
   });
 
   afterEach(async () => {
@@ -108,6 +117,115 @@ describe('CarrierController', () => {
       const response = await request(app.getHttpServer()).get('/delivery/carriers/unknown');
 
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('POST /delivery/carriers', () => {
+    it('returns 201 with the created carrier', async () => {
+      app = await buildApp(service, USER_ROLES.owner);
+      service.createCarrier.mockResolvedValue(sampleCarrier);
+
+      const response = await request(app.getHttpServer())
+        .post('/delivery/carriers')
+        .send({ name: 'Envíos Rápidos' });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual(sampleCarrier);
+      expect(service.createCarrier).toHaveBeenCalledWith({ name: 'Envíos Rápidos' });
+    });
+
+    it('admits an admin caller -> 201', async () => {
+      app = await buildApp(service, USER_ROLES.admin);
+      service.createCarrier.mockResolvedValue(sampleCarrier);
+
+      const response = await request(app.getHttpServer())
+        .post('/delivery/carriers')
+        .send({ name: 'Envíos Rápidos' });
+
+      expect(response.status).toBe(201);
+    });
+
+    it('rejects a warehouse_operator caller with 403', async () => {
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+
+      const response = await request(app.getHttpServer())
+        .post('/delivery/carriers')
+        .send({ name: 'Envíos Rápidos' });
+
+      expect(response.status).toBe(403);
+    });
+
+    it('rejects a sales_agent caller with 403', async () => {
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer())
+        .post('/delivery/carriers')
+        .send({ name: 'Envíos Rápidos' });
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('PATCH /delivery/carriers/:id', () => {
+    it('returns 200 with the updated carrier', async () => {
+      app = await buildApp(service, USER_ROLES.owner);
+      service.updateCarrier.mockResolvedValue({ ...sampleCarrier, name: 'Renamed' });
+
+      const response = await request(app.getHttpServer())
+        .patch('/delivery/carriers/carrier-uuid-1')
+        .send({ name: 'Renamed' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.name).toBe('Renamed');
+      expect(service.updateCarrier).toHaveBeenCalledWith('carrier-uuid-1', { name: 'Renamed' });
+    });
+
+    it('rejects a warehouse_operator caller with 403', async () => {
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+
+      const response = await request(app.getHttpServer())
+        .patch('/delivery/carriers/carrier-uuid-1')
+        .send({ name: 'Renamed' });
+
+      expect(response.status).toBe(403);
+    });
+
+    it('rejects a sales_agent caller with 403', async () => {
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer())
+        .patch('/delivery/carriers/carrier-uuid-1')
+        .send({ name: 'Renamed' });
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('DELETE /delivery/carriers/:id', () => {
+    it('soft-deletes and returns 200, never a hard delete', async () => {
+      app = await buildApp(service, USER_ROLES.owner);
+
+      const response = await request(app.getHttpServer()).delete('/delivery/carriers/carrier-uuid-1');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ id: 'carrier-uuid-1' });
+      expect(service.deactivateCarrier).toHaveBeenCalledWith('carrier-uuid-1');
+    });
+
+    it('rejects a warehouse_operator caller with 403', async () => {
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+
+      const response = await request(app.getHttpServer()).delete('/delivery/carriers/carrier-uuid-1');
+
+      expect(response.status).toBe(403);
+    });
+
+    it('rejects a sales_agent caller with 403', async () => {
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer()).delete('/delivery/carriers/carrier-uuid-1');
+
+      expect(response.status).toBe(403);
     });
   });
 });

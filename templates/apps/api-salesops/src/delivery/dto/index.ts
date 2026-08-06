@@ -1,8 +1,27 @@
 /**
- * Wire shapes for the Delivery read surface (design §6). Phase 4 is READS
- * ONLY — no write DTOs here yet (`CreateCarrierDto`/`AssignCarrierDto`
- * arrive with Phase 6's write handlers).
+ * Wire shapes for the Delivery module (design §6). Read DTOs shipped in
+ * Phase 4 (Slice B2); write DTOs below ship in Phase 6 (Slice C2).
  */
+
+/** Request body for `POST /delivery/carriers`. Mirrors `CreateWarehouseDto`. */
+export class CreateCarrierDto {
+  name!: string;
+  phone?: string | null;
+  active?: boolean;
+}
+
+/** Request body for `PATCH /delivery/carriers/:id` — every field optional. */
+export class UpdateCarrierDto {
+  name?: string;
+  phone?: string | null;
+  active?: boolean;
+}
+
+/** Request body for `POST /delivery/assignments` (task 6.3/6.4). */
+export class AssignCarrierDto {
+  orderId!: string;
+  carrierId!: string;
+}
 
 /**
  * `coversWarehouse` is present only when the caller asked

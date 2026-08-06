@@ -1,7 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesGuard } from '@store-mgmt/api-common';
-import { USER_ROLES } from '@store-mgmt/domain';
+import { CarrierNotFoundError, OrderAlreadyAssignedError, USER_ROLES } from '@store-mgmt/domain';
 import { TenantContextService } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import {
@@ -16,6 +16,7 @@ type DeliveryServiceMock = {
   listAssignments: jest.Mock;
   findAssignmentByOrderId: jest.Mock;
   getCarrierCapacity: jest.Mock;
+  assign: jest.Mock;
 };
 
 const sampleAssignment = {
@@ -67,6 +68,7 @@ describe('DeliveryAssignmentController', () => {
       listAssignments: jest.fn(),
       findAssignmentByOrderId: jest.fn(),
       getCarrierCapacity: jest.fn(),
+      assign: jest.fn(),
     };
   });
 
@@ -163,6 +165,80 @@ describe('DeliveryAssignmentController', () => {
       const response = await request(app.getHttpServer()).get('/delivery/capacity');
 
       expect(response.status).toBe(200);
+    });
+  });
+
+  describe('POST /delivery/assignments', () => {
+    it('returns 201 with the created assignment, in_transit', async () => {
+      app = await buildApp(service, USER_ROLES.owner);
+      service.assign.mockResolvedValue(sampleAssignment);
+
+      const response = await request(app.getHttpServer())
+        .post('/delivery/assignments')
+        .send({ orderId: 'order-uuid-1', carrierId: 'carrier-uuid-1' });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual(sampleAssignment);
+      expect(response.body.status).toBe('in_transit');
+      expect(service.assign).toHaveBeenCalledWith({
+        orderId: 'order-uuid-1',
+        carrierId: 'carrier-uuid-1',
+      });
+    });
+
+    it('maps CarrierNotFoundError to 404 for an unknown or inactive carrier', async () => {
+      app = await buildApp(service, USER_ROLES.owner);
+      service.assign.mockRejectedValue(new CarrierNotFoundError('unknown-carrier'));
+
+      const response = await request(app.getHttpServer())
+        .post('/delivery/assignments')
+        .send({ orderId: 'order-uuid-1', carrierId: 'unknown-carrier' });
+
+      expect(response.status).toBe(404);
+    });
+
+    it('maps OrderAlreadyAssignedError to 409 when the order already has an assignment', async () => {
+      app = await buildApp(service, USER_ROLES.owner);
+      service.assign.mockRejectedValue(new OrderAlreadyAssignedError('order-uuid-1'));
+
+      const response = await request(app.getHttpServer())
+        .post('/delivery/assignments')
+        .send({ orderId: 'order-uuid-1', carrierId: 'carrier-uuid-1' });
+
+      expect(response.status).toBe(409);
+    });
+
+    it('succeeds with 201 and carries NO warning field even on a coverage mismatch — coverage is advisory (ADR-4)', async () => {
+      app = await buildApp(service, USER_ROLES.owner);
+      service.assign.mockResolvedValue(sampleAssignment);
+
+      const response = await request(app.getHttpServer())
+        .post('/delivery/assignments')
+        .send({ orderId: 'order-uuid-1', carrierId: 'carrier-uuid-1' });
+
+      expect(response.status).toBe(201);
+      expect(response.body).not.toHaveProperty('warning');
+    });
+
+    it('admits a warehouse_operator caller -> 201', async () => {
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+      service.assign.mockResolvedValue(sampleAssignment);
+
+      const response = await request(app.getHttpServer())
+        .post('/delivery/assignments')
+        .send({ orderId: 'order-uuid-1', carrierId: 'carrier-uuid-1' });
+
+      expect(response.status).toBe(201);
+    });
+
+    it('rejects a sales_agent caller with 403', async () => {
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer())
+        .post('/delivery/assignments')
+        .send({ orderId: 'order-uuid-1', carrierId: 'carrier-uuid-1' });
+
+      expect(response.status).toBe(403);
     });
   });
 });
