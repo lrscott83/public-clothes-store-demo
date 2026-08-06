@@ -4,12 +4,21 @@
 **Verifier**: sdd-verify (independent gate — re-derived, not a replay of Phase 6)
 **Branch**: `salesops-multi-tenant-by-schema` @ `f25ee10` (tree clean, verify-only, no commits made)
 **Verdict**: **PASS WITH WARNINGS**
-**CRITICAL**: 1 (CLOSED 2026-08-06 — see resolution below) · **WARNING**: 2 · **SUGGESTION**: 2
+**CRITICAL**: 1 (CLOSED) · **WARNING**: 2 (CLOSED) · **SUGGESTION**: 2 (CLOSED)
+**All findings resolved 2026-08-06. Nothing is left open on this change.**
 
-> **Post-verify amendment (2026-08-06)**: the single CRITICAL was closed by owner decision —
-> "Self-Service Buyer Authentication Flow" is formally DEFERRED, not implemented. Two
-> corrections to this report's original framing are recorded in that section. No open
-> CRITICAL remains; the change is clear to archive.
+> **Post-verify amendment (2026-08-06)**:
+> - **CRITICAL** closed by owner decision — "Self-Service Buyer Authentication Flow" is
+>   formally DEFERRED, not implemented. Two corrections to this report's original framing
+>   are recorded in that section.
+> - **WARNING 1 & 2** (design.md doc drift) closed — `design.md` now opens with an
+>   **Amendment log** table mapping every stale statement to the shipped reality and the
+>   change that superseded it, plus inline `> **Superseded**` notes at §1, §2, §5 and §6.
+>   The original text is preserved verbatim; the record was annotated, not rewritten.
+> - **SUGGESTION 1** closed — it *was* the fix applied for the two WARNINGs above.
+> - **SUGGESTION 2** closed — `tasks.md` task 6.3's scenario-coverage claim is corrected
+>   in place: the "Buyer Auth 2" coverage entry was false and the count of 9 testable
+>   requirements is now **8 testable (all covered) + 1 untestable + 1 deferred**.
 
 ## Important context: this change was reshaped in-place by later changes
 
@@ -126,6 +135,12 @@ Original finding, retained for the record:
 
 ## WARNING findings
 
+> **BOTH CLOSED 2026-08-06.** `design.md` now carries an Amendment log table (right after
+> its header) plus inline `> **Superseded**` notes at §1 Component/layer map, §2 Data model,
+> §5 Auth mechanism and §6 RolesGuard. Each entry names the stale statement, the shipped
+> reality, and the change that superseded it (`multi-tenant-by-schema`,
+> `company-user-roles-reframe`, the code/DB-English convention). Original text preserved.
+
 1. **Design.md's `OperadorAlmacen` naming and `email: string?` non-unique note are now
    partially stale** — the shipped entity is `WarehouseOperator` (renamed per the
    code/DB-English convention, documented in `tasks.md` Phase 2's own deviation note) and the
@@ -143,6 +158,10 @@ Original finding, retained for the record:
    already-disclosed drift from a later change's rework, not a silent implementation gap.
 
 ## SUGGESTION findings
+
+> **BOTH CLOSED 2026-08-06.** #1 was applied verbatim — it is the fix used for the two
+> WARNINGs above. #2 was applied to `tasks.md` task 6.3: the false "Buyer Auth 2" coverage
+> entry is struck through and the count corrected to 8 testable / 1 untestable / 1 deferred.
 
 1. Consider updating `design.md` §1's component/layer map and ADR set with a short
    "superseded by multi-tenant-by-schema" pointer (mirroring how the merged spec files

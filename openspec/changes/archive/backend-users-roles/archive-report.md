@@ -11,7 +11,7 @@ The `backend-users-roles` change has been verified, archived, and closed. It del
 
 **Tests**: 1022 unit + 98 e2e, all passing (reproducible, fresh rebuild).  
 **Specs merged**: `salesops-identity` and `salesops-customers` delta specs already merged into `openspec/specs/`.  
-**Open issues**: 2 WARNINGs (documentation drift in design.md, already self-disclosed in tasks.md), 0 blocking CRITICALs.
+**Open issues**: **NONE.** All findings from the independent verify gate are closed as of 2026-08-06 — 1 CRITICAL (formally deferred by owner decision), 2 WARNINGs (design.md doc drift, fixed via the Amendment log + inline superseded notes), 2 SUGGESTIONs (both applied; #2 corrected the false "Buyer Auth 2" coverage claim in `tasks.md` task 6.3). See `verify-report.md` for the per-finding closure record.
 
 ## Verification Results
 

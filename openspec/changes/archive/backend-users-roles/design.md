@@ -7,6 +7,28 @@
 > hexagonal slices and the production reference `poolops-biz/apps/api-idp`.
 > This is formalization, not redesign — no locked decision is re-opened here.
 
+## Amendment log (added 2026-08-06 — read this before trusting anything below)
+
+This design is an **archived historical record** of what was decided BEFORE implementation.
+The original text below is preserved verbatim; the entries here record where the shipped code
+diverged and why. Where the two disagree, **the shipped code and `tasks.md`'s deviation notes
+win.** Each divergence was already disclosed in `tasks.md`; this log closes the two
+documentation-drift WARNINGs from `verify-report.md`.
+
+| § | Design says | Shipped reality | Superseded by |
+|---|---|---|---|
+| §1 map, §2 model, §3 migration | `OperadorAlmacen` / `operador-almacen.ts` / `@@map("operador_almacen")` | **`WarehouseOperator`** — `packages/domain/src/users/warehouse-operator.ts`, `warehouse-operator-repository.port.ts` | code/DB-English convention (`tasks.md` Phase 2 deviation note); later formalized by `ventas-english-rename` |
+| §2 data model | ONE Prisma schema, `Customer.userId → User` | Schema **split into master + tenant**; `Customer` FKs the tenant-side **`CompanyUser`** (`companyUserId`), never the master `User`. `rg userId packages/domain/src/customer` → 0 hits | `multi-tenant-by-schema` (archived `12a3d4c`) |
+| §4 roles bitmask | `User.roles` bitmask on the master user | Bitmask moved to **`CompanyUser.role`** | `company-user-roles-reframe` (archived) |
+| §1 map line 69, §6 | Two-guard chain `@UseGuards(JwtAuthGuard, RolesGuard)` | **Three-guard chain** `@UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)` on all 10 business controllers — `TenantContextGuard` resolves the tenant `CompanyUser` and raises `MISSING_COMPANY_USER`; `RolesGuard` is guard-order-invariant. See `apps/api-salesops/src/currency/currency.controller.ts:51` | `multi-tenant-by-schema` |
+| §5 auth mechanism | `refresh-token.dto.ts`, single `password-reset.dto.ts` | `refresh.dto.ts`; reset DTOs **split** into `password-reset-request.dto.ts` + `password-reset-confirm.dto.ts` (`apps/api-idp/src/auth/dto/`) | `tasks.md` Phase 4 preamble deviation note |
+| §2 `email` note | `email: string?`, non-unique, FK-adjacent concern | The master-schema reshape moved `email` off any FK-adjacent concern entirely | `multi-tenant-by-schema` |
+
+Everything else in this document shipped as designed and was re-verified on 2026-08-06
+(1022 unit + 98 e2e green). One requirement that appeared in this change's delta spec —
+**Self-Service Buyer Authentication Flow** — was never designed, tasked, or built, and is
+formally **DEFERRED**; see `specs/salesops-customers/spec.md` and `verify-report.md`.
+
 ## 1. Architecture approach
 
 Pattern: **hexagonal shared-kernel** exactly as every shipped module (currency →
@@ -22,6 +44,10 @@ The one genuinely new architectural element is the **delivery split** and its
 with `@poolops/api-common` and this repo has no equivalent yet.
 
 ### Component / layer map
+
+> **Superseded in part** — `OperadorAlmacen` shipped as `WarehouseOperator`, and the
+> `@UseGuards(JwtAuthGuard, RolesGuard)` line below shipped as a three-guard chain.
+> See the Amendment log.
 
 ```
 packages/domain/src/users/                      ← PURE identity core (framework-free)
@@ -90,6 +116,13 @@ apps/api-salesops/            ← MODIFIED: consumes JWT only
 - Both apps read the same `JWT_SECRET` env var via `@store-mgmt/api-common` (no drift).
 
 ## 2. Data model / Prisma
+
+> **Superseded** — this single-schema model was split into master + tenant schemas by
+> `multi-tenant-by-schema`. `Customer` now FKs the tenant `CompanyUser` via
+> `companyUserId`, not the master `User`, and the roles bitmask lives on
+> `CompanyUser.role`. `OperadorAlmacen` shipped as `WarehouseOperator`. The
+> authoritative model is `packages/infra-db/prisma/{master,tenant}/schema.prisma`.
+> See the Amendment log.
 
 Conventions: `uuid` PKs `@db.Uuid @default(uuid())`, snake_case `@map`, mutable rows
 carry `created_at`+`updated_at`, `Warehouse`-style FK relations. **`User` maps to
@@ -282,6 +315,11 @@ import in the domain.
 
 ## 5. Auth mechanism (mirror poolops api-idp near-verbatim)
 
+> **Superseded in part** — DTO filenames shipped as `refresh.dto.ts` (not
+> `refresh-token.dto.ts`) and the password-reset DTO was split into
+> `password-reset-request.dto.ts` + `password-reset-confirm.dto.ts`. The mechanism
+> itself (rotation, reuse detection) shipped as designed. See the Amendment log.
+
 - **Hashing:** `bcrypt`, `saltRounds = 10` (poolops `auth.service.ts:153,316,843`).
   Hashing runs in `AuthService` (app edge), never in the domain; `createUser` only
   asserts the invariant (§ below).
@@ -336,6 +374,12 @@ boundary. Uniqueness of `login` is enforced by the DB unique index and surfaces 
 `DuplicateCustomerDocumentError`).
 
 ## 6. @Roles() / RolesGuard (net-new — poolops has none)
+
+> **Superseded in part** — the shipped chain is THREE guards,
+> `JwtAuthGuard → TenantContextGuard → RolesGuard`. `TenantContextGuard` (added by
+> `multi-tenant-by-schema`) resolves the tenant `CompanyUser` and raises
+> `MISSING_COMPANY_USER`; `RolesGuard` then reads the role from that `CompanyUser`, not
+> from `req.user.roles`, and is guard-order-invariant. See the Amendment log.
 
 Lives in `@store-mgmt/api-common` so BOTH apps share ONE implementation.
 
