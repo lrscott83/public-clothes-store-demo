@@ -8,16 +8,17 @@ Define the testable contract for the `salesops-customers` capability: `Customer`
 
 ### Requirement: Customer Master-Data Entity
 
-The system MUST persist a `Customer` entity as flat master data (a single `fullName`
-field, optional contact fields, no address hierarchy). Only `fullName` is required; it
-MUST NOT be empty or whitespace-only. `Customer` MUST NOT store any monetary field
-(`creditLimit`, `balance`, `debt`) — a customer's debt is derived from `SaleCredit` in a
+The system MUST persist a `Customer` entity in the tenant schema as flat master data 
+(a single `fullName` field, optional contact fields, no address hierarchy). Only `fullName` 
+is required; it MUST NOT be empty or whitespace-only. `Customer` MUST NOT store any monetary 
+field (`creditLimit`, `balance`, `debt`) — a customer's debt is derived from `SaleCredit` in a
 future change, never stored here.
 
 | Field | Type | Constraint |
 |---|---|---|
 | id | UUID | PK |
 | fullName | string | required, non-empty / non-whitespace |
+| companyUserId | UUID | REQUIRED, UNIQUE, FK → tenant CompanyUser.id |
 | documentId | string \| null | optional; unique when present |
 | cellPhone | string \| null | optional |
 | email | string \| null | optional |
@@ -60,6 +61,38 @@ CRUD MUST be supported.
 - GIVEN the `Customer` entity fields
 - WHEN inspected
 - THEN a single `fullName` exists and no `firstName` / `lastName` split exists
+
+### Requirement: Customer FKs Tenant CompanyUser, Not Master User
+
+`Customer` MUST live in the tenant schema. Its identity link MUST be
+`companyUserId` (REQUIRED, UNIQUE, `@relation` to the tenant
+`CompanyUser.id`), replacing the prior `userId @relation` to the master
+`User` (`schema.prisma:192`) — Prisma forbids a cross-schema `@relation`, so
+this reshape is required, not optional. The REQUIRED/UNIQUE invariant on the
+identity link is preserved; only its target changes.
+
+#### Scenario: Customer.companyUserId is required and unique
+
+- GIVEN the tenant `Customer` schema after this change
+- WHEN inspected
+- THEN `companyUserId` is REQUIRED and UNIQUE, and `@relation`s to the
+  tenant `CompanyUser`
+
+#### Scenario: No relation to master User exists
+
+- GIVEN the tenant `Customer` schema after this change
+- WHEN inspected
+- THEN no `userId` field or `@relation` to the master `User` model exists
+  anywhere on `Customer`
+
+#### Scenario: Agent-assisted customer creation still links through companyUserId
+
+- GIVEN a `sales_agent` creating a customer together with a new identity
+  (existing agent-assisted flow)
+- WHEN the customer is persisted
+- THEN it links to the newly created tenant `CompanyUser` via
+  `companyUserId`, exactly as the pre-existing `userId` link did before the
+  reshape
 
 ### Requirement: documentId Optional and Unique When Present
 

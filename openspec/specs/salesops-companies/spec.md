@@ -2,97 +2,95 @@
 
 ## Purpose
 
-Define `Company` and `CompanyUser`: the single-schema authorization model that
-replaces `User.roles`. `CompanyUser` keys a role bitmask + status to
-`(userId, companyId)`. Ships with a nullable, unread `schemaName` hook on
-`Company` for a deferred schema-per-tenant change. No dual Prisma clients, no
-tenant provisioning — single implicit company only.
+Define `Company` and `CompanyUser` in a multi-tenant schema-per-tenant topology:
+master `Company` entity with authoritative `schemaName`, master `Membership` gates
+access, tenant-side `CompanyUser` with collapsed primary key. No implicit company,
+no auto-assignment — explicit `Membership` required for access.
 
 ## Requirements
 
 ### Requirement: Company Entity
 
 The system MUST persist a `Company` with `id`, `name`, `slug`, `isActive`,
-a nullable `schemaName`, and timestamps. `schemaName` MUST exist as a reserved
-column but MUST NOT be read by any code path in this change.
+`schemaName`, and timestamps. `schemaName` MUST be READ and authoritative for
+tenant routing (see `salesops-tenancy`) — every provisioned company MUST have
+a non-null `schemaName`, and an unprovisioned company (`schemaName=null`)
+MUST be treated as not-yet-accessible.
 
-#### Scenario: Company persists with schemaName null
+#### Scenario: Company persists with a non-null schemaName once provisioned
 
-- GIVEN the seeded implicit company
+- GIVEN a company that finished provisioning
 - WHEN it is inspected
-- THEN `schemaName` is `null`
+- THEN `schemaName` is set and matches the tenant schema created for it
 
-#### Scenario: schemaName is an inert hook
+#### Scenario: A Company with schemaName=null is not yet accessible
 
-- GIVEN a `Company` row with a non-null `schemaName`
-- WHEN any request is processed by the system
-- THEN request behavior is unaffected — no code path queries `schemaName`
+- GIVEN a `Company` row with `schemaName=null`
+- WHEN any tenant-scoped request targets it
+- THEN the request is rejected with `403` — provisioning is not complete
 
-### Requirement: CompanyUser Soft-FK Shape
+### Requirement: CompanyUser Collapsed-PK Shape (Tenant-Side)
 
-`CompanyUser` MUST persist `id`, `userId` (plain `String`, NO `@relation` to
-`User`), `companyId` (`@relation` to `Company`), `role` (Int bitmask,
-NOT NULL), `status`, and timestamps, with a UNIQUE constraint on
-`(userId, companyId)`. Referential integrity to `User` is enforced in
-application code, not the database.
+`CompanyUser` MUST live in the tenant schema and MUST persist `id` (the
+master `User.id`, provided explicitly — no auto-generation), `role` (Int
+bitmask), `createdByCompanyUserId`, and timestamps. It MUST NOT carry a
+`userId` column or a `companyId` column, and MUST NOT hold a `@relation` to
+any master-schema model — company identity is expressed by the schema
+itself, not by a column.
 
-#### Scenario: CompanyUser persists without a matching User row
+#### Scenario: CompanyUser.id equals the master User.id
 
-- GIVEN a `userId` with no corresponding `User` row
-- WHEN a `CompanyUser` is persisted with that `userId`
-- THEN it succeeds — no DB-level FK rejects it (per D1's accepted cost)
+- GIVEN a tenant `CompanyUser` row
+- WHEN its `id` is compared to the master `User.id` it represents
+- THEN they are identical — no separate soft-FK column exists
 
-#### Scenario: Duplicate (userId, companyId) rejected
+#### Scenario: No companyId column exists on CompanyUser
 
-- GIVEN an existing `CompanyUser` for `(userId=U1, companyId=C1)`
-- WHEN a second `CompanyUser` is created for the same pair
-- THEN the UNIQUE constraint rejects it
+- GIVEN the tenant `CompanyUser` schema
+- WHEN inspected
+- THEN no `companyId` field exists — which company it belongs to is
+  determined entirely by which schema the row lives in
 
-### Requirement: Single-Company Auto-Assignment on Signup
+### Requirement: Master Membership Gates Company Access
 
-On signup, the system MUST create a `CompanyUser` (`user` bit, `status=active`)
-for the caller ONLY when exactly one `Company` exists. Zero or multiple
-companies MUST fail loudly and be logged — never silently default.
+The system MUST introduce a master `Membership` (`userId`, `companyId`,
+`status`) as the single source of "is this person active in this company".
+Access to a company's tenant schema MUST require an ACTIVE `Membership` for
+that `(userId, companyId)` pair — there is no implicit default company.
 
-#### Scenario: Exactly one company auto-assigns
+#### Scenario: A user with an ACTIVE Membership can access that company
 
-- GIVEN exactly one `Company` row exists
-- WHEN a new user signs up
-- THEN a `CompanyUser` is created with the `user` bit and `status=active`
+- GIVEN a `Membership` with `status=ACTIVE` for `(userId=U, companyId=C)`
+- WHEN `U` requests a tenant-scoped endpoint with `X-Company-Id: C`
+- THEN the request proceeds to tenant resolution
 
-#### Scenario: Zero companies fails loudly
+#### Scenario: A user with no Membership for the company is rejected
 
-- GIVEN no `Company` row exists
-- WHEN a user signs up
-- THEN the request fails with `500` and the failure is logged as a
-  misconfigured-deployment error
+- GIVEN no `Membership` row exists for `(userId=U, companyId=C)`
+- WHEN `U` requests a tenant-scoped endpoint with `X-Company-Id: C`
+- THEN the response is `403` — no company is guessed or defaulted
 
-#### Scenario: Multiple companies fails loudly
+### Requirement: Membership Status Gates Company Access
 
-- GIVEN more than one `Company` row exists
-- WHEN a user signs up
-- THEN the request fails with `409` and the failure is logged — no company
-  is guessed or defaulted
+A `Membership` MUST support at least `ACTIVE`, `REVOKED`, and `SUSPENDED`. A
+non-`ACTIVE` `Membership` MUST be treated as NOT authorized for that company
+— equivalent in effect to having no `Membership` row at all. `CompanyUser`
+(tenant-side) MUST NOT carry its own active/inactive flag — status lives in
+exactly one place.
 
-### Requirement: CompanyUser Status Gates Access
+#### Scenario: REVOKED Membership denies access
 
-A `CompanyUser` MUST support at least `active` and a non-active status
-(e.g. `inactive`). A non-active `CompanyUser` MUST be treated as NOT
-authorized for that company — equivalent in effect to having no
-`CompanyUser` row at all.
+- GIVEN a `Membership` with `status=REVOKED` for `(U, C)`
+- WHEN `U` requests a tenant-scoped endpoint for `C`
+- THEN the response is `403` — the same failure class as a missing
+  `Membership`
 
-#### Scenario: Active CompanyUser is authorized normally
+#### Scenario: CompanyUser carries no independent status field
 
-- GIVEN a `CompanyUser` with `status=active` and role bit `owner`
-- WHEN the user calls an endpoint requiring `owner`
-- THEN the request is admitted
-
-#### Scenario: Non-active CompanyUser denies access
-
-- GIVEN a `CompanyUser` with a non-active `status`
-- WHEN that user calls any `@Roles(...)`-guarded endpoint
-- THEN the request is denied — the same failure class as a missing
-  `CompanyUser` row
+- GIVEN the tenant `CompanyUser` schema
+- WHEN inspected
+- THEN no `status`/`isActive` field exists on it — only `Membership.status`
+  gates access
 
 ### Requirement: Additive-Then-Drop Migration Lifecycle
 
