@@ -23,6 +23,19 @@ export class AssignCarrierDto {
   carrierId!: string;
 }
 
+/** Request body for `POST /delivery/carriers/:id/warehouses` — declares coverage. */
+export class AddCarrierCoverageDto {
+  warehouseId!: string;
+}
+
+/** One `CarrierWarehouse` coverage row on the wire. */
+export interface CarrierCoverageResponseDto {
+  id: string;
+  carrierId: string;
+  warehouseId: string;
+  createdAt: string;
+}
+
 /**
  * `coversWarehouse` is present only when the caller asked
  * (`GET /delivery/carriers?warehouseId=<uuid>`) — ADR-4: coverage is
@@ -43,7 +56,8 @@ export interface DeliveryAssignmentResponseDto {
   id: string;
   orderId: string;
   carrierId: string;
-  status: 'in_transit' | 'delivered';
+  /** `cancelled` = the order was cancelled while this assignment was still open. */
+  status: 'in_transit' | 'delivered' | 'cancelled';
   assignedAt: string;
   deliveredAt: string | null;
   createdAt: string;
@@ -59,7 +73,26 @@ export interface CarrierCapacityRowDto {
   deliveredCount: number;
 }
 
+/**
+ * The `[from,to]` window `deliveredCount` was actually computed over —
+ * including the DEFAULT `from` applied whenever the caller names no lower
+ * bound. Reported so a dashboard can never present a windowed number as
+ * all-time, which is the whole reason the default is safe to introduce.
+ *
+ * `to` is `null` in the ordinary case, and that is not an omission: the
+ * default deliberately leaves the upper bound OPEN rather than stamping it
+ * with the app's clock, because `deliveredAt` is written by the DATABASE's
+ * (see `resolveThroughputWindow`). `from` is `null` only if a caller ever
+ * reaches this endpoint without one, which `resolveThroughputWindow` no
+ * longer allows.
+ */
+export interface ThroughputWindowDto {
+  from: string | null;
+  to: string | null;
+}
+
 export interface CarrierCapacityResponseDto {
+  throughputWindow: ThroughputWindowDto;
   carriers: CarrierCapacityRowDto[];
   busyCount: number;
   freeCount: number;

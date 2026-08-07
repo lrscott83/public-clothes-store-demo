@@ -13,6 +13,7 @@ import {
   Patch,
   Post,
   Req,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -27,19 +28,26 @@ import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
 import type { Request } from 'express';
 import {
   CHANNEL_CURRENCY,
+  ConcurrentWriteConflictError,
   InsufficientStockError,
   InvalidOrderError,
   InvalidOrderStateError,
   NegativeStockError,
+  PersistenceTimeoutError,
   RateNotFoundError,
-  RoleHelpers,
   USER_ROLES,
   WAREHOUSE_OPERATOR_REPOSITORY,
   WarehouseCannotFulfillOrderError,
+  WarehouseScopeViolationError,
   UnsellableOrderReferenceError,
   type IWarehouseOperatorRepository,
 } from '@store-mgmt/domain';
-import { isScopedSalesAgent } from '../auth/role-scope.js';
+import {
+  NO_WAREHOUSE,
+  assertWarehouseScope,
+  isScopedSalesAgent,
+  isScopedWarehouseOperator,
+} from '../auth/role-scope.js';
 import { OrderService } from './order.service.js';
 import type {
   CreateOrderDto,
@@ -185,11 +193,20 @@ export class OrderController {
   ): Promise<OrderResponseDto> {
     return this.runInTenant(req.tenant, async () => {
       const found = await this.orderService.findById(id);
+      // SCOPE FIRST, 404 SECOND — for a scoped caller. This ran the other way
+      // round, so a `warehouse_operator` (or a `sales_agent`) got 404 for an
+      // id that does not exist and 403 for one that does but is not theirs:
+      // an order-existence oracle for exactly the roles the scope exists to
+      // restrict. A missing order resolves to `NO_WAREHOUSE`/`null`
+      // attribution, neither of which any caller can match, so both answers
+      // are 403 for them. An unscoped `owner`/`admin`/`sales_operator` is
+      // unaffected: the two assertions return immediately for them and the
+      // 404 below is what they still get.
+      await this.assertOrderWarehouseScope(req.user, found?.warehouseId ?? NO_WAREHOUSE);
+      this.assertOrderAttributionScope(req.user, found?.attributedCompanyUserId ?? null);
       if (!found) {
         throw new NotFoundException(`Order "${id}" not found`);
       }
-      await this.assertOrderWarehouseScope(req.user, found.warehouseId);
-      this.assertOrderAttributionScope(req.user, found.attributedCompanyUserId);
       return found;
     });
   }
@@ -214,10 +231,14 @@ export class OrderController {
         // issues no extra read.
         if (this.isScopedSalesAgent(req.user)) {
           const existing = await this.orderService.findById(id);
+          // Attribution scope BEFORE the 404, same reason as `findById`: an
+          // unknown id answering 404 while a colleague's answers 403 tells a
+          // scoped agent which order ids exist. `null` attribution matches
+          // nobody, so a missing order is 403 here too.
+          this.assertOrderAttributionScope(req.user, existing?.attributedCompanyUserId ?? null);
           if (!existing) {
             throw new NotFoundException(`Order "${id}" not found`);
           }
-          this.assertOrderAttributionScope(req.user, existing.attributedCompanyUserId);
         }
         const updated = await this.orderService.update(id, body);
         if (!updated) {
@@ -255,10 +276,11 @@ export class OrderController {
     return this.runInTenant(req.tenant, () =>
       this.withDomainErrorMapping(async () => {
         const existing = await this.orderService.findById(id);
+        // Warehouse scope BEFORE the 404, same reason as `findById`.
+        await this.assertOrderWarehouseScope(req.user, existing?.warehouseId ?? NO_WAREHOUSE);
         if (!existing) {
           throw new NotFoundException(`Order "${id}" not found`);
         }
-        await this.assertOrderWarehouseScope(req.user, existing.warehouseId);
         const delivered = await this.orderService.deliver(id);
         if (!delivered) {
           throw new NotFoundException(`Order "${id}" not found`);
@@ -290,13 +312,25 @@ export class OrderController {
    * `warehouse_operator` is scoped to their OWN `warehouseId` — MUST match
    * the order's `warehouseId`, else 403.
    */
+  // Delegates to the shared assertion: `POST /delivery/assignments` and
+  // `POST /delivery/assignments/:id/deliver` apply the SAME rule to the same
+  // orders, and who may act on whose warehouse must be decided in exactly one
+  // place. Same reasoning as `isScopedSalesAgent` below.
+  //
+  // The shared assertion raises the DOMAIN `WarehouseScopeViolationError` (it
+  // is also called from `DeliveryService`, which must not throw HTTP
+  // exceptions); the mapping to 403 belongs to the controller that owns the
+  // HTTP contract. Done HERE rather than in `withDomainErrorMapping` because
+  // `findById` does not run inside it — this keeps the status AND the message
+  // identical to what this endpoint has always answered.
   private async assertOrderWarehouseScope(user: SanitizedUser, warehouseId: string): Promise<void> {
-    if (!this.isScopedWarehouseOperator(user)) {
-      return;
-    }
-    const operator = await this.warehouseOperatorRepository.findByUserId(user.id);
-    if (!operator || operator.warehouseId !== warehouseId) {
-      throw new ForbiddenException('Not scoped to this warehouse');
+    try {
+      await assertWarehouseScope(user, warehouseId, this.warehouseOperatorRepository);
+    } catch (err) {
+      if (err instanceof WarehouseScopeViolationError) {
+        throw new ForbiddenException(err.message);
+      }
+      throw err;
     }
   }
 
@@ -367,12 +401,7 @@ export class OrderController {
 
   /** `true` only for a caller whose access to this endpoint comes SOLELY from `warehouse_operator` (not owner/admin/sales_operator). */
   private isScopedWarehouseOperator(user: SanitizedUser): boolean {
-    return (
-      RoleHelpers.hasRole(user.roles, USER_ROLES.warehouse_operator) &&
-      !RoleHelpers.hasRole(user.roles, USER_ROLES.owner) &&
-      !RoleHelpers.hasRole(user.roles, USER_ROLES.admin) &&
-      !RoleHelpers.hasRole(user.roles, USER_ROLES.sales_operator)
-    );
+    return isScopedWarehouseOperator(user);
   }
 
   private async withDomainErrorMapping<T>(fn: () => Promise<T>): Promise<T> {
@@ -387,6 +416,17 @@ export class OrderController {
       // this request succeed. Mirrors `CustomerUserNotFoundError` -> 400.
       if (err instanceof UnsellableOrderReferenceError) {
         throw new BadRequestException(err.message);
+      }
+      // The three status transitions each run one locked `$transaction`, so
+      // each can end as a deadlock victim or with a blown budget. Both used to
+      // surface here as raw Prisma errors, i.e. 500s — the same hole the
+      // Delivery door had. 409 for the one a retry fixes, 503 for the one that
+      // is an availability statement rather than anything about the request.
+      if (err instanceof ConcurrentWriteConflictError) {
+        throw new ConflictException(err.message);
+      }
+      if (err instanceof PersistenceTimeoutError) {
+        throw new ServiceUnavailableException(err.message);
       }
       if (
         err instanceof InvalidOrderStateError ||

@@ -1,10 +1,16 @@
 import { Module } from '@nestjs/common';
-import { CARRIER_REPOSITORY, CARRIER_WAREHOUSE_REPOSITORY, DELIVERY_ASSIGNMENT_REPOSITORY } from '@store-mgmt/domain';
+import {
+  CARRIER_REPOSITORY,
+  CARRIER_WAREHOUSE_REPOSITORY,
+  DELIVERY_ASSIGNMENT_REPOSITORY,
+  WAREHOUSE_OPERATOR_REPOSITORY,
+} from '@store-mgmt/domain';
 import {
   InfraDbModule,
   PrismaCarrierRepository,
   PrismaCarrierWarehouseRepository,
   PrismaDeliveryAssignmentRepository,
+  PrismaWarehouseOperatorRepository,
 } from '@store-mgmt/infra-db';
 import { SalesModule } from '../sales/sales.module.js';
 import { CarrierController } from './carrier.controller.js';
@@ -30,6 +36,10 @@ import { DeliveryService } from './delivery.service.js';
     { provide: CARRIER_REPOSITORY, useClass: PrismaCarrierRepository },
     { provide: CARRIER_WAREHOUSE_REPOSITORY, useClass: PrismaCarrierWarehouseRepository },
     { provide: DELIVERY_ASSIGNMENT_REPOSITORY, useClass: PrismaDeliveryAssignmentRepository },
+    // `DeliveryService` applies the SAME warehouse scope `OrderController`
+    // applies, so it needs the same lookup. Provided the same way
+    // `SalesModule`/`StockModule` provide it — no new adapter, no new port.
+    { provide: WAREHOUSE_OPERATOR_REPOSITORY, useClass: PrismaWarehouseOperatorRepository },
   ],
 })
 export class DeliveryModule {}

@@ -3,6 +3,8 @@ import { Client as PgClient } from 'pg';
 import { schemaNameFor } from './schema-name.js';
 import { TenantDatabaseService } from './tenant-database.service.js';
 import {
+  MINIMUM_SERVER_VERSION_NUM,
+  describeUnsupportedServerVersion,
   migrateTenantFleet,
   resolveTenantMigratePaths,
   withTenantSchema,
@@ -201,6 +203,30 @@ describe('migrateTenantFleet', () => {
       expect(statusBySchema.get(fast1)).toBe('in-sync');
       expect(statusBySchema.get(fast2)).toBe('in-sync');
     }, 60_000);
+
+    /**
+     * The same hole `close-stranded-assignments.ts` had, in the same shape:
+     * `assertSchemaName` sat OUTSIDE `migrateOneTenant`'s try, so an
+     * unusable schema name threw straight out of the fleet loop and
+     * discarded every result already collected — while the surrounding
+     * design ("one hung/slow tenant never prevents the rest of the fleet
+     * from being attempted") says the exact opposite.
+     */
+    it('reports an unusable schema name as an errored tenant, and still migrates the rest', async () => {
+      const healthy = await createInSyncTenant();
+
+      const report = await migrate({
+        connectionString,
+        tenantSchemas: ['not-a-valid-schema-name"; DROP TABLE carrier; --', healthy],
+        mode: 'check',
+      });
+
+      expect(report.failed).toBe(true);
+      expect(report.results).toHaveLength(2);
+      expect(report.results[0]!.status).toBe('error');
+      expect(report.results[0]!.error).toContain('Invalid tenant schema name');
+      expect(report.results[1]!.status).toBe('in-sync');
+    }, 60_000);
   });
 
   describe('withTenantSchema', () => {
@@ -215,6 +241,55 @@ describe('migrateTenantFleet', () => {
       const url = withTenantSchema('postgresql://u:p@host:5432/db', 'store_mgmt_tenant_x');
 
       expect(url).toContain('schema=store_mgmt_tenant_x');
+    });
+  });
+
+  /**
+   * CLASS F2 — `applyDiff` wraps the generated script in an explicit
+   * `BEGIN`/`COMMIT`, and `ALTER TYPE ... ADD VALUE` (which is exactly what
+   * shipping a new enum value emits) is ILLEGAL inside a transaction block on
+   * PostgreSQL < 12. On such a server the tenant would simply come back
+   * `error` with a raw driver message, which reads like a migration bug
+   * rather than "your database is too old". Asserted up front instead.
+   */
+  describe('minimum PostgreSQL version', () => {
+    it('names 12 as the floor', () => {
+      expect(MINIMUM_SERVER_VERSION_NUM).toBe(120_000);
+    });
+
+    it('rejects PG 11 with a message that names the real cause', () => {
+      const message = describeUnsupportedServerVersion(110_012);
+
+      expect(message).toMatch(/11\.12/);
+      expect(message).toMatch(/12/);
+      expect(message).toMatch(/ALTER TYPE/i);
+    });
+
+    it('accepts PG 12 and anything newer', () => {
+      expect(describeUnsupportedServerVersion(120_000)).toBeNull();
+      expect(describeUnsupportedServerVersion(160_013)).toBeNull();
+    });
+
+    it('the real test database satisfies the floor, so every other spec here is meaningful', async () => {
+      const { rows } = await rawClient.query<{ server_version_num: string }>(
+        'SHOW server_version_num',
+      );
+      expect(describeUnsupportedServerVersion(Number(rows[0]!.server_version_num))).toBeNull();
+    });
+
+    it('marks every tenant errored — and fails the run — when the server is too old', async () => {
+      const schemaName = await createInSyncTenant();
+
+      const report = await migrate({
+        connectionString,
+        tenantSchemas: [schemaName],
+        minimumServerVersionNum: 999_999,
+      });
+
+      expect(report.failed).toBe(true);
+      expect(report.results).toHaveLength(1);
+      expect(report.results[0]!.status).toBe('error');
+      expect(report.results[0]!.error).toMatch(/ALTER TYPE/i);
     });
   });
 });

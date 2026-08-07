@@ -12,6 +12,14 @@ export * from './users/index.js';
 export * from './company/index.js';
 export * from './commission/index.js';
 export * from './delivery/index.js';
+// The two concurrency/time failures a repository port is allowed to report.
+// Introduced with the explicit row locking: a deadlock (`40P01`) and a blown
+// transaction budget (`P2028`) were both untranslated 500s, i.e. the locking
+// added to stop one class of 500 produced another. See the module's doc.
+export {
+  ConcurrentWriteConflictError,
+  PersistenceTimeoutError,
+} from './persistence/errors.js';
 
 // Multi-tenant-by-schema (design D1): reshaped `CompanyUser`, `Membership`,
 // and the `resolveTenantAccess` policy now export as plain names through

@@ -9,8 +9,10 @@ export interface ComputeCarrierThroughputWindow {
 /**
  * PURE fold. Counts `delivered` assignments per carrier over an optional
  * `[from,to]` window on `deliveredAt` (design §6: "how much each carrier
- * delivered"). `in_transit` rows never count — throughput measures
- * completed deliveries only.
+ * delivered"). `in_transit` and `cancelled` rows never count — throughput
+ * measures completed deliveries only, and counting a cancellation as a
+ * delivery is exactly the reporting corruption the `cancelled` state exists
+ * to avoid.
  *
  * Returns a `Map` (not an array) so the read surface can look up one
  * carrier's count directly without a linear scan.

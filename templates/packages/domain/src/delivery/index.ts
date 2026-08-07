@@ -1,6 +1,7 @@
 export * from './carrier.js';
 export * from './carrier-warehouse.js';
 export * from './delivery-assignment.js';
+export * from './assert-order-assignable.js';
 export * from './compute-carrier-capacity.js';
 export * from './compute-carrier-throughput.js';
 export * from './errors.js';

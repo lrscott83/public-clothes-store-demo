@@ -507,6 +507,31 @@ describe('OrderController', () => {
       const response = await request(app.getHttpServer()).get('/orders/order-uuid-1');
       expect(response.status).toBe(403);
     });
+
+    /**
+     * THE EXISTENCE ORACLE. The 404 used to be answered BEFORE the scope
+     * assertion, so a scoped operator got 404 for an id that does not exist
+     * and 403 for one that does but is not theirs — enough to enumerate which
+     * order ids are in the tenant, for exactly the role the scope restricts.
+     * Same class as `DeliveryService.assign`'s, found by sweeping for it.
+     */
+    it('answers an UNKNOWN order the same way as a FOREIGN one for a scoped operator — 403', async () => {
+      await app.close();
+      service.findById.mockResolvedValue(null);
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+
+      const response = await request(app.getHttpServer()).get('/orders/no-such-order');
+      expect(response.status).toBe(403);
+    });
+
+    it('still answers an UNKNOWN order with 404 for an UNSCOPED caller', async () => {
+      await app.close();
+      service.findById.mockResolvedValue(null);
+      app = await buildApp(service, USER_ROLES.admin);
+
+      const response = await request(app.getHttpServer()).get('/orders/no-such-order');
+      expect(response.status).toBe(404);
+    });
   });
 
   describe('sales_agent scope on GET /orders (list)', () => {
@@ -669,6 +694,26 @@ describe('OrderController', () => {
       const response = await request(app.getHttpServer()).post('/orders/order-uuid-1/deliver');
       expect(response.status).toBe(403);
       expect(service.deliver).not.toHaveBeenCalled();
+    });
+
+    /** The same oracle on the write door — swept alongside `GET /orders/:id`. */
+    it('answers an UNKNOWN order the same way as a FOREIGN one for a scoped operator — 403', async () => {
+      await app.close();
+      service.findById.mockResolvedValue(null);
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+
+      const response = await request(app.getHttpServer()).post('/orders/no-such-order/deliver');
+      expect(response.status).toBe(403);
+      expect(service.deliver).not.toHaveBeenCalled();
+    });
+
+    it('still answers an UNKNOWN order with 404 for an UNSCOPED caller', async () => {
+      await app.close();
+      service.findById.mockResolvedValue(null);
+      app = await buildApp(service, USER_ROLES.admin);
+
+      const response = await request(app.getHttpServer()).post('/orders/no-such-order/deliver');
+      expect(response.status).toBe(404);
     });
   });
 });

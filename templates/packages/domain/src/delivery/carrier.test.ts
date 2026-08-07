@@ -42,3 +42,27 @@ describe('Carrier — soft-delete shape', () => {
     expect(softDeleted.createdAt).toEqual(carrier.createdAt);
   });
 });
+
+describe('createCarrier — stored value matches validated value (CLASS G7)', () => {
+  /**
+   * The HTTP boundary validates `name` by TRIMMING it (`assertNonEmptyString`
+   * in `apps/api-salesops/src/delivery/request-validation.ts`) but forwards the
+   * untrimmed value, so `{"name":"  Envíos  "}` used to persist the padding —
+   * validated one string, stored another. The factory is the one authoritative
+   * home for the Carrier's field normalization (same reason the `phone`/`active`
+   * defaults live here), so it trims.
+   */
+  it('trims a padded name so what is stored is what was validated', () => {
+    expect(createCarrier({ name: '  Envíos Rápidos  ' }).name).toBe('Envíos Rápidos');
+  });
+
+  it('trims a padded phone', () => {
+    expect(createCarrier({ name: 'Transportes ABC', phone: '  +53 5555 5555 ' }).phone).toBe(
+      '+53 5555 5555',
+    );
+  });
+
+  it('keeps `null` phone null — trimming never invents an empty string', () => {
+    expect(createCarrier({ name: 'Transportes ABC', phone: null }).phone).toBeNull();
+  });
+});

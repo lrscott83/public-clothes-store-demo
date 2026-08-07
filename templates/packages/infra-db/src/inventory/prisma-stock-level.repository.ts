@@ -5,6 +5,8 @@ import type {
   StockLevel as DomainStockLevel,
   StockLevelListFilter,
 } from '@store-mgmt/domain';
+import { LOCK_TRANSACTION_BUDGET } from '../lock-budget.js';
+import { withTransactionErrorMapping } from '../transaction-errors.js';
 import { TenantContextService } from '../tenant/tenant-context.service.js';
 import { applyReservationTx } from './apply-reservation.js';
 
@@ -76,11 +78,22 @@ export class PrismaStockLevelRepository implements IStockLevelRepository {
     return rows.map(toDomain);
   }
 
+  // Both take the same `stock_level` row locks the order transitions take, on
+  // the same budget, so they can end the same two ways — a deadlock and a
+  // blown budget — and get the same translation. See `transaction-errors.ts`.
   async reserve(input: ReserveStockInput): Promise<DomainStockLevel> {
-    return this.tenantContext.getClient().$transaction((tx) => applyReservationTx(tx, input, 'reserve'));
+    return withTransactionErrorMapping('PrismaStockLevelRepository.reserve', () =>
+      this.tenantContext
+        .getClient()
+        .$transaction((tx) => applyReservationTx(tx, input, 'reserve'), LOCK_TRANSACTION_BUDGET),
+    );
   }
 
   async release(input: ReserveStockInput): Promise<DomainStockLevel> {
-    return this.tenantContext.getClient().$transaction((tx) => applyReservationTx(tx, input, 'release'));
+    return withTransactionErrorMapping('PrismaStockLevelRepository.release', () =>
+      this.tenantContext
+        .getClient()
+        .$transaction((tx) => applyReservationTx(tx, input, 'release'), LOCK_TRANSACTION_BUDGET),
+    );
   }
 }

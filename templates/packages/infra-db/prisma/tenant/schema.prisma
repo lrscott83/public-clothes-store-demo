@@ -300,6 +300,14 @@ model Order {
 
   @@index([customerId])
   @@index([attributedCompanyUserId])
+  /// The warehouse SCOPE's access path. `GET /delivery/assignments` filters a
+  /// `warehouse_operator` to their own warehouse through the
+  /// `delivery_assignment -> sales_order` relation, i.e. by this column, across
+  /// the tenant's WHOLE order history — and the same column is what
+  /// `OrderController` scopes its own list by. Without this the scoped read is
+  /// a sequential scan of `sales_order` that grows with the tenant forever,
+  /// and it is precisely the operator whose grant is NARROWEST who pays for it.
+  @@index([warehouseId])
   @@map("sales_order") // "order" is a SQL reserved word
 }
 
@@ -541,9 +549,16 @@ model CompanyUser {
 // exactly ONE writer, `closeAssignmentOnDeliveryTx` (Phase 5) — there is no
 // repository `markDelivered` method by design (design §8).
 
+/// `in_transit`/`delivered` are the happy path. `cancelled` is the terminal
+/// state of an assignment whose ORDER was cancelled — written by
+/// `cancelAssignmentOnOrderCancelTx` inside `PrismaOrderRepository.cancel`'s
+/// transaction. Without it the row stays `in_transit` forever and the carrier
+/// reads BUSY with no API path able to close it. Closing as `delivered` was
+/// explicitly rejected: it would corrupt throughput reporting.
 enum DeliveryAssignmentStatus {
   in_transit
   delivered
+  cancelled
 }
 
 model Carrier {
@@ -578,8 +593,10 @@ model CarrierWarehouse {
   @@map("carrier_warehouse")
 }
 
-/// Two-state bridge, `order_id` UNIQUE — the idempotency guarantee (0..1 per
-/// order, D1). `status` is exactly `in_transit | delivered`, no third state.
+/// Bridge row, `order_id` UNIQUE — the idempotency guarantee (0..1 per
+/// order, D1). `status` is `in_transit | delivered | cancelled`: two
+/// happy-path states plus the terminal state for an order cancelled while
+/// its assignment was still open (see the enum's own comment).
 /// `onDelete: Restrict` on both FKs, per spec: an assignment referencing a
 /// deleted order or carrier would silently erase which carrier had which
 /// order — Carrier/Order are both soft-delete-only master data/events, so
@@ -599,5 +616,23 @@ model DeliveryAssignment {
 
   @@index([carrierId])
   @@index([status])
+  /// COMPOSITE, in the query's own order. `GET /delivery/capacity`'s
+  /// throughput read is `status = 'delivered' AND delivered_at >= ?`, so this
+  /// is the index that serves it: the equality column first, the range column
+  /// second.
+  ///
+  /// A bare `@@index([deliveredAt])` was tried first and is wrong twice over.
+  /// It cannot answer the `status` predicate, so the planner still has to
+  /// choose between two single-column indexes and recheck; and it is a FULL
+  /// index over a column that is NULL for every `in_transit` and every
+  /// `cancelled` row, so it pays write cost and storage for rows it can never
+  /// serve. Postgres does not index NULLs usefully for a `>=` predicate
+  /// either — they simply sit there.
+  @@index([status, deliveredAt])
+  /// The other bounded read: `GET /delivery/assignments` is now windowed on
+  /// `assigned_at` and ordered by it, with `id` as the keyset tiebreak.
+  /// `assigned_at` is NOT NULL, so unlike `delivered_at` this covers every
+  /// row of every status.
+  @@index([assignedAt, id])
   @@map("delivery_assignment")
 }

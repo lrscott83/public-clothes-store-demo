@@ -18,12 +18,19 @@ import { Prisma } from '../../generated/tenant/client.js';
  *     attempts never happen in practice since `delivered` is terminal, but
  *     the guard costs nothing and keeps the function total).
  * Never `findUniqueOrThrow` — an absent assignment is not an error state.
+ *
+ * The enum values are bound as parameters and cast through `text` — the same
+ * form (and the same reason) as `cancelAssignmentOnOrderCancelTx`, whose doc
+ * comment carries the full explanation. Both labels used here have existed
+ * since the table did, so this file never had the bug; writing it the safe
+ * way is what stops the NEXT enum addition from reintroducing it in the
+ * sibling that looks identical.
  */
 export async function closeAssignmentOnDeliveryTx(
   tx: Prisma.TransactionClient,
   orderId: string,
 ): Promise<void> {
   await tx.$executeRaw(
-    Prisma.sql`UPDATE "delivery_assignment" SET "status" = 'delivered'::"DeliveryAssignmentStatus", "delivered_at" = now(), "updated_at" = now() WHERE "order_id" = ${orderId}::uuid AND "status" = 'in_transit'::"DeliveryAssignmentStatus"`,
+    Prisma.sql`UPDATE "delivery_assignment" SET "status" = ${'delivered'}::text::"DeliveryAssignmentStatus", "delivered_at" = now(), "updated_at" = now() WHERE "order_id" = ${orderId}::uuid AND "status" = ${'in_transit'}::text::"DeliveryAssignmentStatus"`,
   );
 }

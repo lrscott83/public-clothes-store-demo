@@ -1,7 +1,8 @@
-import { BadRequestException, ForbiddenException, InternalServerErrorException, Logger, type ExecutionContext } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, InternalServerErrorException, Logger, ServiceUnavailableException, type ExecutionContext } from '@nestjs/common';
 import type { CompanyUser, ICompanyRepository, IMembershipRepository, Membership } from '@store-mgmt/domain';
 import { USER_ROLES } from '@store-mgmt/domain';
-import type { TenantContext, TenantContextService } from '@store-mgmt/infra-db';
+import { TenantSchemaBehindError } from '@store-mgmt/infra-db';
+import type { TenantContext, TenantContextService, TenantSchemaCurrencyService } from '@store-mgmt/infra-db';
 import { TenantContextGuard } from './tenant-context.guard.js';
 import type { AuthenticatedUser, SanitizedUser } from './jwt.strategy.js';
 
@@ -77,6 +78,18 @@ function makeTenantContextService(findUniqueImpl: jest.Mock) {
   return { run, getClient } as unknown as TenantContextService;
 }
 
+/**
+ * Fake `TenantSchemaCurrencyService`. Current by default — the gate is a
+ * separate concern from tenant RESOLUTION, and every test that is not about
+ * drift must not have to know it exists.
+ */
+function makeSchemaCurrency(behindError?: Error) {
+  const assertSchemaCurrent = jest.fn(async () => {
+    if (behindError) throw behindError;
+  });
+  return { assertSchemaCurrent } as unknown as TenantSchemaCurrencyService;
+}
+
 function makeContext(request: Record<string, unknown>): ExecutionContext {
   return {
     switchToHttp: () => ({
@@ -99,7 +112,12 @@ describe('TenantContextGuard', () => {
     const membershipRepository = makeMembershipRepository();
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: authUser(), headers: { 'x-company-id': 'company-1' } };
     const result = await guard.canActivate(makeContext(request));
@@ -117,7 +135,12 @@ describe('TenantContextGuard', () => {
     const membershipRepository = makeMembershipRepository();
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: authUser(), headers: {} };
     const result = await guard.canActivate(makeContext(request));
@@ -139,7 +162,12 @@ describe('TenantContextGuard', () => {
     });
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: authUser(), headers: {} };
 
@@ -157,7 +185,12 @@ describe('TenantContextGuard', () => {
     const membershipRepository = makeMembershipRepository({ listActiveByUserId: [membership({ id: 'm-active' })] });
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: authUser(), headers: {} };
     const result = await guard.canActivate(makeContext(request));
@@ -171,7 +204,12 @@ describe('TenantContextGuard', () => {
     const membershipRepository = makeMembershipRepository({ findByUserAndCompany: null });
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: authUser(), headers: { 'x-company-id': 'company-1' } };
 
@@ -188,7 +226,12 @@ describe('TenantContextGuard', () => {
     const membershipRepository = makeMembershipRepository({ findByUserAndCompany: null });
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: authUser(), headers: { 'x-company-id': 'company-2' } };
 
@@ -204,7 +247,12 @@ describe('TenantContextGuard', () => {
       const membershipRepository = makeMembershipRepository({ findByUserAndCompany: membership({ status }) });
       const companyRepository = makeCompanyRepository();
       const tenantContext = makeTenantContextService(findUnique);
-      const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+      const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
       const request = { user: authUser(), headers: { 'x-company-id': 'company-1' } };
 
@@ -218,7 +266,12 @@ describe('TenantContextGuard', () => {
     const membershipRepository = makeMembershipRepository();
     const companyRepository = makeCompanyRepository({ isActive: false });
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: authUser(), headers: { 'x-company-id': 'company-1' } };
 
@@ -232,7 +285,12 @@ describe('TenantContextGuard', () => {
     const membershipRepository = makeMembershipRepository();
     const companyRepository = makeCompanyRepository({ schemaName: null });
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: authUser(), headers: { 'x-company-id': 'company-1' } };
 
@@ -245,7 +303,12 @@ describe('TenantContextGuard', () => {
     const membershipRepository = makeMembershipRepository();
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: authUser(), headers: { 'x-company-id': 'company-1' } };
 
@@ -257,7 +320,12 @@ describe('TenantContextGuard', () => {
     const membershipRepository = makeMembershipRepository();
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: authUser(), headers: { 'x-company-id': 'company-1' } };
     let thrown: unknown;
@@ -280,7 +348,12 @@ describe('TenantContextGuard', () => {
     const membershipRepository = makeMembershipRepository();
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: authUser(), headers: { 'x-company-id': 'company-1' } };
     await guard.canActivate(makeContext(request)).catch(() => null);
@@ -288,12 +361,75 @@ describe('TenantContextGuard', () => {
     expect(logged.join('\n')).toContain('MISSING_COMPANY_USER');
   });
 
+  /**
+   * The whole point of moving the schema-currency gate off the boot path.
+   * `main.ts` used to `process.exit(1)` when ANY tenant in the database was
+   * missing an enum label — a company-wide outage in answer to one endpoint
+   * 500ing in one tenant, reachable through an ordinary rolling deploy where
+   * `api-idp` (a separate deployable that provisions schemas at runtime from
+   * its own bundled DDL) lags `api-salesops`. The refusal now belongs to the
+   * request whose schema is actually stale.
+   */
+  describe('per-tenant schema currency gate', () => {
+    it('refuses ONLY the stale tenant, with 503, and never touches the tenant client', async () => {
+      const findUnique = jest.fn();
+      const membershipRepository = makeMembershipRepository();
+      const companyRepository = makeCompanyRepository();
+      const tenantContext = makeTenantContextService(findUnique);
+      const guard = new TenantContextGuard(
+        membershipRepository,
+        companyRepository,
+        tenantContext,
+        makeSchemaCurrency(
+          new TenantSchemaBehindError(
+            'store_mgmt_tenant_company_1',
+            'DeliveryAssignmentStatus is missing: cancelled',
+          ),
+        ),
+      );
+
+      const request = { user: authUser(), headers: { 'x-company-id': 'company-1' } };
+
+      await expect(guard.canActivate(makeContext(request))).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+      // Refused BEFORE any tenant query — a schema that cannot answer this
+      // build's queries must not be queried.
+      expect(tenantContext.run).not.toHaveBeenCalled();
+      expect(request.tenant).toBeUndefined();
+    });
+
+    it('is asked about THIS request\'s schema, and lets a current tenant through', async () => {
+      const findUnique = jest.fn().mockResolvedValue(tenantCompanyUser());
+      const membershipRepository = makeMembershipRepository();
+      const companyRepository = makeCompanyRepository();
+      const tenantContext = makeTenantContextService(findUnique);
+      const schemaCurrency = makeSchemaCurrency();
+      const guard = new TenantContextGuard(
+        membershipRepository,
+        companyRepository,
+        tenantContext,
+        schemaCurrency,
+      );
+
+      const request = { user: authUser(), headers: { 'x-company-id': 'company-1' } };
+
+      expect(await guard.canActivate(makeContext(request))).toBe(true);
+      expect(schemaCurrency.assertSchemaCurrent).toHaveBeenCalledWith('store_mgmt_tenant_company_1');
+    });
+  });
+
   it('does NOT mutate the object JwtStrategy returned — reassigns req.user with a NEW object (TtlCache safety)', async () => {
     const findUnique = jest.fn().mockResolvedValue(tenantCompanyUser());
     const membershipRepository = makeMembershipRepository();
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const originalUser = authUser();
     const request = { user: originalUser, headers: { 'x-company-id': 'company-1' } };
@@ -314,7 +450,12 @@ describe('TenantContextGuard', () => {
     const membershipRepository = makeMembershipRepository();
     const companyRepository = makeCompanyRepository();
     const tenantContext = makeTenantContextService(findUnique);
-    const guard = new TenantContextGuard(membershipRepository, companyRepository, tenantContext);
+    const guard = new TenantContextGuard(
+      membershipRepository,
+      companyRepository,
+      tenantContext,
+      makeSchemaCurrency(),
+    );
 
     const request = { user: undefined, headers: {} };
 

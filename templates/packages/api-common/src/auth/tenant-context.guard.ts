@@ -5,6 +5,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  ServiceUnavailableException,
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
@@ -17,7 +18,12 @@ import {
   type IMembershipRepository,
   type Membership,
 } from '@store-mgmt/domain';
-import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
+import {
+  TenantContextService,
+  TenantSchemaBehindError,
+  TenantSchemaCurrencyService,
+  type TenantContext,
+} from '@store-mgmt/infra-db';
 import type { AuthenticatedUser, SanitizedUser } from './jwt.strategy.js';
 
 const COMPANY_ID_HEADER = 'x-company-id';
@@ -44,6 +50,17 @@ interface TenantGuardRequest {
  * 3. Reject `403` when the resolved `Company` is inactive or has no
  *    provisioned schema (`schemaName === null`) — never query a schema that
  *    does not exist.
+ * 3b. Reject `503` when that schema is established to be BEHIND this build
+ *    (`TenantSchemaCurrencyService`, `TENANT_SCHEMA_DRIFT_CHECK=enforce`).
+ *    THIS is where the schema-currency gate lives, and the placement is the
+ *    whole point of it. The previous version gated `main.ts`: one tenant
+ *    missing an enum label made `process.exit(1)` refuse boot for EVERY
+ *    tenant, which is a company-wide outage in answer to one endpoint 500ing
+ *    in one tenant. Here the refusal is scoped to the request whose schema is
+ *    actually stale, it also covers tenants provisioned at RUNTIME (which a
+ *    boot probe never saw), and it is `warn` by default. `503`, not `500`:
+ *    the request is well-formed and the fix — running the fleet migration —
+ *    is operational and imminent.
  * 4. Inside a tenant context scope, look up the tenant `CompanyUser` row
  *    matching the caller's user id. A DB error during that lookup surfaces
  *    as `500` (infrastructure failure); a genuinely missing row surfaces as
@@ -67,6 +84,7 @@ export class TenantContextGuard implements CanActivate {
     @Inject(MEMBERSHIP_REPOSITORY) private readonly membershipRepository: IMembershipRepository,
     @Inject(COMPANY_REPOSITORY) private readonly companyRepository: ICompanyRepository,
     private readonly tenantContext: TenantContextService,
+    private readonly schemaCurrency: TenantSchemaCurrencyService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -101,6 +119,7 @@ export class TenantContextGuard implements CanActivate {
     }
 
     const tenant: TenantContext = { companyId: company.id, schemaName: company.schemaName };
+    await this.assertSchemaCurrent(tenant.schemaName);
     const companyUser = await this.tenantContext.run(tenant, () => this.findTenantCompanyUser(user.id));
 
     const access = resolveTenantAccess({ membership, companyUser });
@@ -127,6 +146,30 @@ export class TenantContextGuard implements CanActivate {
     request.user = resolvedUser;
 
     return true;
+  }
+
+  /**
+   * Refuses THIS tenant, and only this tenant, when its schema is established
+   * to be missing enum labels this build writes.
+   *
+   * `TenantSchemaCurrencyService` caches per schema (a `current` verdict for
+   * the process's lifetime, a `behind` one briefly so a migration heals it
+   * without a restart), so this is not a per-request round trip. It never
+   * throws for "I could not check" — an unreachable database is not evidence
+   * of drift, and at `warn` (the default) it never throws at all.
+   */
+  private async assertSchemaCurrent(schemaName: string): Promise<void> {
+    try {
+      await this.schemaCurrency.assertSchemaCurrent(schemaName);
+    } catch (err) {
+      if (err instanceof TenantSchemaBehindError) {
+        this.logger.error(`TENANT_SCHEMA_BEHIND: ${schemaName}\n${err.message}`);
+        throw new ServiceUnavailableException(
+          `Tenant schema "${schemaName}" is behind this build and cannot serve requests yet`,
+        );
+      }
+      throw err;
+    }
   }
 
   private readCompanyIdHeader(request: TenantGuardRequest): string | undefined {

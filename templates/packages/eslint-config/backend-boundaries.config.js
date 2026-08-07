@@ -74,13 +74,24 @@ export const webBackendBoundaryRule = {
 // are relative to the linted package's root, per ESLint flat-config
 // convention) — meaningless in any other package, since none of them have
 // this directory shape.
-// design.md §2 ADR-1's Direction B (Sales -> Delivery) is DELIBERATELY not a
-// NestJS import — it is an infra-db `*Tx` helper invoked inside
-// `PrismaOrderRepository.deliver`'s own transaction (delivery module,
-// Phase 5, `packages/domain/src/delivery/delivery-assignment-seam.md`). This
-// rule is what stops a future `SalesModule -> DeliveryModule` import from
-// quietly making that avoided cycle real — a boundary documented only in a
-// doc breaks on its own (architecture.md:132-141).
+// Stops the NESTJS-MODULE cycle, and only that.
+//
+// Scope: `apps/api-salesops/src/sales/**` — the NestJS side of Sales. Within
+// that folder, importing anything under a `delivery/` path is forbidden,
+// because `SalesModule -> DeliveryModule` would make real the module cycle
+// design.md §2 ADR-1 deliberately avoids (`DeliveryModule` already imports
+// `SalesModule` for `ORDER_DELIVERY_GATEWAY`). A boundary documented only in
+// a doc breaks on its own (architecture.md:132-141).
+//
+// What it deliberately does NOT cover: `packages/infra-db/src/sales/**`.
+// `prisma-order.repository.ts` imports `../delivery/close-assignment-on-delivery.js`
+// and `../delivery/cancel-assignment-on-order-cancel.js`, and that is the
+// SANCTIONED shape of Direction B (Sales -> Delivery) — plain `*Tx` helper
+// functions invoked inside `PrismaOrderRepository`'s own transaction (delivery
+// module, Phase 5, `packages/domain/src/delivery/delivery-assignment-seam.md`).
+// Extending this rule there would forbid exactly the pattern the design chose.
+// So: this rule guards the NestJS wiring, and the `*Tx` convention — not a
+// lint rule — is what keeps the infra-db coupling to transactional helpers.
 //
 // Applied to `apps/api-salesops`'s own `eslint.config.mjs` (`files` globs
 // are relative to the linted package's root, per ESLint flat-config

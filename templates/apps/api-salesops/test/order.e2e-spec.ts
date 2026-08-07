@@ -369,10 +369,13 @@ describe('Sales (e2e)', () => {
       .set(...companyIdHeader(companyId))
       .expect(200);
 
-    // No HTTP surface for Carrier/DeliveryAssignment writes exists yet
-    // (that's Phase 6) — seed the assignment directly against the tenant
-    // client, same discipline `commission.e2e-spec.ts` uses for entities its
-    // own phase doesn't expose via HTTP.
+    // Phase 6 shipped, so `POST /delivery/carriers` and
+    // `POST /delivery/assignments` both exist now — `test/delivery.e2e-spec.ts`
+    // drives them. This test is about the SALES door (`POST /orders/:id/deliver`
+    // closing an assignment it did not create), so the fixture is still seeded
+    // directly against the tenant client: routing it through Delivery's own
+    // endpoints would couple a Sales assertion to Delivery's authorization
+    // rules and make a Delivery regression fail here instead of there.
     const carrier = await tenant.carrier.create({ data: { name: 'Transportes D5 E2E' } });
     const assignment = await tenant.deliveryAssignment.create({
       data: { orderId: created.body.id, carrierId: carrier.id, status: 'in_transit', assignedAt: new Date() },

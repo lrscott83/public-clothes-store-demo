@@ -42,6 +42,20 @@ describe('computeCarrierThroughput', () => {
     expect(result.get('carrier-1')).toBe(1);
   });
 
+  it('never counts a cancelled assignment — a cancelled order is not throughput', () => {
+    const cancelled: DeliveryAssignment = {
+      ...assignCarrier({ orderId: 'order-1', carrierId: 'carrier-1' }, AT),
+      status: 'cancelled',
+      // Deliberately non-null: even a row that somehow carries a timestamp
+      // must not be counted, because `status` is what decides, not the date.
+      deliveredAt: new Date('2026-08-02T00:00:00.000Z'),
+    };
+
+    const result = computeCarrierThroughput([cancelled]);
+
+    expect(result.size).toBe(0);
+  });
+
   it('returns an empty map when nothing is delivered', () => {
     const open = assignCarrier({ orderId: 'order-1', carrierId: 'carrier-1' }, AT);
     const result = computeCarrierThroughput([open]);

@@ -7,7 +7,9 @@ import {
   createOrder,
   money,
 } from '@store-mgmt/domain';
+import { LOCK_TRANSACTION_BUDGET } from '../lock-budget.js';
 import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { rowIsLocked, waitUntil } from '../lock-wait.spec-helper.js';
 import { fakeTenantContext, useTenantSchema, assertAbsentFromPublicSchema } from '../tenant-schema.spec-helper.js';
 import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
 import { PrismaProductRepository } from '../product/prisma-product.repository.js';
@@ -439,11 +441,12 @@ describe('PrismaOrderRepository', () => {
     });
   });
 
-  describe('deliver closes any open DeliveryAssignment atomically (Phase 5, design §2B/ADR-2)', () => {
-    async function seedCarrier() {
-      return tenantContext.getClient().carrier.create({ data: { name: `Transportes ${randomUUID()}` } });
-    }
+  /** Shared by the `deliver` and `cancel` assignment-closing suites below. */
+  async function seedCarrier() {
+    return tenantContext.getClient().carrier.create({ data: { name: `Transportes ${randomUUID()}` } });
+  }
 
+  describe('deliver closes any open DeliveryAssignment atomically (Phase 5, design §2B/ADR-2)', () => {
     it('closes an in_transit assignment to delivered when a delivery-mode order is delivered', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       await stockIn(product.id, warehouse.id, 10);
@@ -499,7 +502,25 @@ describe('PrismaOrderRepository', () => {
       expect(delivered.deliveredAt).not.toBeNull();
     });
 
-    it('rolls back the WHOLE transaction — including the assignment close — when a later step fails', async () => {
+    /**
+     * The close is the module's CENTRAL correctness invariant: an assignment
+     * left `in_transit` behind a `delivered` order poisons every capacity read
+     * forever. So the failure has to be injected where it can actually observe
+     * a rolled-back close — i.e. AFTER `closeAssignmentOnDeliveryTx` has run.
+     *
+     * A previous version of this test corrupted the reservation so that
+     * `applyReservationTx('release')` threw inside the per-line loop. That was
+     * a genuine failure, but the close now runs AFTER that loop, so it never
+     * executed at all — `expect(status).toBe('in_transit')` passed because
+     * nothing had tried to change it, and the test could not have failed if
+     * the close had been moved into its own transaction. Vacuous.
+     *
+     * A `BEFORE UPDATE` trigger on `sales_order` that raises when the row goes
+     * `delivered` fires on the `tx.order.update` that comes AFTER the close,
+     * inside the same transaction. Now the close HAS run and been rolled back,
+     * which is exactly the state the assertion claims to observe.
+     */
+    it('rolls back the close itself when a step AFTER it fails — the assignment stays in_transit', async () => {
       const { product, warehouse, customer } = await seedFixtures();
       await stockIn(product.id, warehouse.id, 10);
       const order = buildSingleLineOrder(
@@ -521,15 +542,76 @@ describe('PrismaOrderRepository', () => {
         data: { orderId: created.id, carrierId: carrier.id, status: 'in_transit', assignedAt: AT },
       });
 
+      const prisma = tenantContext.getClient();
+      await prisma.$executeRawUnsafe(`
+        CREATE OR REPLACE FUNCTION fail_after_assignment_close() RETURNS trigger AS $fn$
+        BEGIN
+          RAISE EXCEPTION 'post-close failure injected by prisma-order.repository.spec';
+        END;
+        $fn$ LANGUAGE plpgsql;
+      `);
+      await prisma.$executeRawUnsafe(`
+        CREATE TRIGGER fail_after_assignment_close_trg
+        BEFORE UPDATE ON "sales_order"
+        FOR EACH ROW WHEN (NEW."status" = 'delivered')
+        EXECUTE FUNCTION fail_after_assignment_close();
+      `);
+
+      try {
+        await expect(repository.deliver(created.id)).rejects.toThrow(/post-close failure/);
+      } finally {
+        await prisma.$executeRawUnsafe(
+          'DROP TRIGGER IF EXISTS fail_after_assignment_close_trg ON "sales_order"',
+        );
+        await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS fail_after_assignment_close()');
+      }
+
+      const stillVerified = await repository.findById(created.id);
+      expect(stillVerified?.status).toBe('verified');
+
+      const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
+      expect(level?.onHand).toBe(10); // the sale_out never committed
+      expect(level?.reserved).toBe(4); // the release never committed either
+
+      const reloadedAssignment = await tenantContext
+        .getClient()
+        .deliveryAssignment.findUnique({ where: { id: assignment.id } });
+      // The close DID run in this transaction and was rolled back with it.
+      // Move `closeAssignmentOnDeliveryTx` out into its own transaction and
+      // this reads `delivered` — which is the regression the old version of
+      // this test only claimed to catch.
+      expect(reloadedAssignment?.status).toBe('in_transit');
+      expect(reloadedAssignment?.deliveredAt).toBeNull();
+    });
+
+    /**
+     * The per-line stock failure is still worth covering — it just proves a
+     * DIFFERENT thing (the loop's own atomicity), and it must not be mistaken
+     * for a guard on the close, which by then has not run yet.
+     */
+    it('rolls back the per-line stock work when a step BEFORE the close fails', async () => {
+      const { product, warehouse, customer } = await seedFixtures();
+      await stockIn(product.id, warehouse.id, 10);
+      const order = buildSingleLineOrder(
+        product.id,
+        product.name,
+        'Cafeteras',
+        warehouse.id,
+        customer.id,
+        customer.fullName,
+        4,
+        [],
+        'delivery',
+      );
+      const created = await repository.create(order);
+      await repository.confirm(created.id);
+
       // Corrupt the reservation DIRECTLY (bypassing every app-level guard,
-      // typed `.update()` — not the raw guarded UPDATE — so this write
-      // itself does not go through `applyReservationTx`) so that
-      // `applyReservationTx('release')`, which runs AFTER the assignment
-      // close inside `deliver()`, finds `reserved=0` and its own guarded
-      // UPDATE affects 0 rows, throwing `InvalidStockLevelError`. This
-      // forces a genuine Postgres-level failure INSIDE `deliver()`'s
-      // transaction, strictly AFTER the close already ran (uncommitted),
-      // proving the whole transaction unwinds together — no partial state.
+      // typed `.update()` — not the raw guarded UPDATE) so that
+      // `applyReservationTx('release')` inside `deliver()` finds `reserved=0`,
+      // its own guarded UPDATE affects 0 rows, and it throws
+      // `InvalidStockLevelError` — a genuine Postgres-level failure INSIDE
+      // `deliver()`'s transaction.
       await tenantContext.getClient().stockLevel.update({
         where: { productId_warehouseId: { productId: product.id, warehouseId: warehouse.id } },
         data: { reserved: 0 },
@@ -543,11 +625,6 @@ describe('PrismaOrderRepository', () => {
       const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
       expect(level?.onHand).toBe(10); // untouched
       expect(level?.reserved).toBe(0); // still our corrupted value — the failed release never committed
-
-      const reloadedAssignment = await tenantContext
-        .getClient()
-        .deliveryAssignment.findUnique({ where: { id: assignment.id } });
-      expect(reloadedAssignment?.status).toBe('in_transit'); // the close rolled back too
     });
   });
 
@@ -594,6 +671,63 @@ describe('PrismaOrderRepository', () => {
       const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
       expect(level?.onHand).toBe(10);
       expect(level?.reserved ?? 0).toBe(0);
+    });
+
+    it('cancels any open DeliveryAssignment in the SAME transaction — never leaves it in_transit', async () => {
+      const { product, warehouse, customer } = await seedFixtures();
+      await stockIn(product.id, warehouse.id, 10);
+      const order = buildSingleLineOrder(
+        product.id,
+        product.name,
+        'Cafeteras',
+        warehouse.id,
+        customer.id,
+        customer.fullName,
+        4,
+        [],
+        'delivery',
+      );
+      const created = await repository.create(order);
+      await repository.confirm(created.id);
+
+      const carrier = await seedCarrier();
+      const assignment = await tenantContext.getClient().deliveryAssignment.create({
+        data: { orderId: created.id, carrierId: carrier.id, status: 'in_transit', assignedAt: AT },
+      });
+
+      await repository.cancel(created.id);
+
+      const reloadedAssignment = await tenantContext
+        .getClient()
+        .deliveryAssignment.findUnique({ where: { id: assignment.id } });
+      // `cancelled`, NOT `delivered`: counting a cancellation as a delivery
+      // would corrupt `computeCarrierThroughput`. And not `in_transit`
+      // either — that is the stranded row this closes, which no API path
+      // could ever recover from.
+      expect(reloadedAssignment?.status).toBe('cancelled');
+      expect(reloadedAssignment?.deliveredAt).toBeNull();
+    });
+
+    it('is a no-op for a cancelled order with no assignment — 0 rows is not an error', async () => {
+      const { product, warehouse, customer } = await seedFixtures();
+      await stockIn(product.id, warehouse.id, 10);
+      const order = buildSingleLineOrder(
+        product.id,
+        product.name,
+        'Cafeteras',
+        warehouse.id,
+        customer.id,
+        customer.fullName,
+        4,
+        [],
+        'delivery',
+      );
+      const created = await repository.create(order);
+      await repository.confirm(created.id);
+
+      const cancelled = await repository.cancel(created.id);
+
+      expect(cancelled.status).toBe('cancelled');
     });
   });
 
@@ -687,5 +821,189 @@ describe('PrismaOrderRepository', () => {
       const updated = await repository.update(created.id, { customerName: 'Nueva Cliente' });
       expect(updated.customerName).toBe('Nueva Cliente');
     });
+  });
+
+  /**
+   * CLASS G1 — `IOrderDeliveryGateway.findOrderSnapshot`'s port doc says the
+   * snapshot exists because loading the full aggregate to read three scalars
+   * is a wasted read. Its only implementation went through
+   * `OrderService.findById`, which loads exactly that aggregate — on the hot
+   * path of every `assign` and every scoped `markDelivered`. This is the
+   * narrow read that makes the claim true.
+   */
+  describe('findScopeProjection — the narrow read behind the delivery snapshot', () => {
+    it('returns the four scoping scalars for an existing order', async () => {
+      const { product, warehouse, customer } = await seedFixtures();
+      const created = await repository.create(
+        buildSingleLineOrder(
+          product.id,
+          product.name,
+          'Cafeteras',
+          warehouse.id,
+          customer.id,
+          customer.fullName,
+          2,
+          [],
+          'delivery',
+        ),
+      );
+
+      const projection = await repository.findScopeProjection(created.id);
+
+      expect(projection).toEqual({
+        orderId: created.id,
+        warehouseId: warehouse.id,
+        deliveryMode: 'delivery',
+        status: 'created',
+      });
+    });
+
+    it('tracks the status through a transition', async () => {
+      const { product, warehouse, customer } = await seedFixtures();
+      await stockIn(product.id, warehouse.id, 10);
+      const created = await repository.create(
+        buildSingleLineOrder(
+          product.id,
+          product.name,
+          'Cafeteras',
+          warehouse.id,
+          customer.id,
+          customer.fullName,
+          2,
+          [],
+          'pickup',
+        ),
+      );
+      await repository.confirm(created.id);
+
+      const projection = await repository.findScopeProjection(created.id);
+
+      expect(projection?.status).toBe('verified');
+      expect(projection?.deliveryMode).toBe('pickup');
+    });
+
+    it('returns null for an unknown id — never throws', async () => {
+      await expect(repository.findScopeProjection(randomUUID())).resolves.toBeNull();
+    });
+  });
+
+  /**
+   * `lockOrderRowTx` gave the three transitions ONE global ordering at the
+   * STEP level — order, then stock, then assignment — and its comment claimed
+   * that closed the deadlock. It did not close it WITHIN the stock step: the
+   * `include: { lines: true }` that drives the per-line loop carried no
+   * `orderBy`, so the stock row locks were taken in whatever order Postgres
+   * happened to return the lines — in practice insertion order, which differs
+   * per order.
+   *
+   * Two concurrent transitions on DIFFERENT orders sharing the same products,
+   * whose lines were entered in opposite order, therefore take the same two
+   * `stock_level` locks in opposite order: a textbook cycle, `40P01`, and an
+   * unmapped 500 for one of them. The upfront order lock made the window
+   * WIDER, because every transition now holds its locks for longer.
+   *
+   * The property under test is the fix itself: locks are acquired in
+   * `productId` order, independent of how the lines were inserted.
+   */
+  describe('stock locks are taken in productId order, not line-insertion order', () => {
+    /**
+     * Deliberately NOT a two-transaction deadlock reproduction. A real cycle
+     * needs an interleaving neither test can force, so such a test passes for
+     * the wrong reason far more often than it detects anything. This asserts
+     * the ORDERING that makes a cycle impossible, deterministically:
+     *
+     * an outside transaction holds the HIGHER-sorting product's row, then
+     * `confirm` runs against an order whose lines were inserted HIGH first.
+     * If the loop followed insertion order it would block on HIGH immediately
+     * and never touch LOW. If it follows `productId` order it takes LOW
+     * first, then blocks. So "LOW is locked while `confirm` is blocked" IS
+     * the ordering property, and nothing else produces it.
+     */
+    it('locks the lower-sorting product first even when its line was inserted second', async () => {
+      const { category, warehouse, customer } = await seedFixtures();
+      const productA = await productRepository.create({
+        name: 'Molinillo',
+        description: 'desc',
+        price: { minorUnits: 10000n, currency: 'USD' },
+        cost: { minorUnits: 6000n, currency: 'USD' },
+        categoryId: category.id,
+        image: 'a.png',
+        order: 2,
+      });
+      const productB = await productRepository.create({
+        name: 'Prensa',
+        description: 'desc',
+        price: { minorUnits: 10000n, currency: 'USD' },
+        cost: { minorUnits: 6000n, currency: 'USD' },
+        categoryId: category.id,
+        image: 'b.png',
+        order: 3,
+      });
+      // Both ids are random uuids, so which one sorts first is decided here,
+      // not assumed.
+      const [lowProductId, highProductId] = [productA.id, productB.id].sort();
+      await stockIn(lowProductId, warehouse.id, 100);
+      await stockIn(highProductId, warehouse.id, 100);
+
+      const line = (productId: string) => ({
+        productId,
+        productName: productId === productA.id ? productA.name : productB.name,
+        categoryName: 'Cafeteras',
+        price: money(10000n, 'USD'),
+        quantity: 1,
+      });
+      const created = await repository.create(
+        createOrder(
+          {
+            customerId: customer.id,
+            customerName: customer.fullName,
+            warehouseId: warehouse.id,
+            deliveryMode: 'pickup',
+            attributedCompanyUserId,
+            // HIGH first: insertion order is deliberately the OPPOSITE of
+            // productId order, so the two orderings are distinguishable.
+            lines: [line(highProductId), line(lowProductId)],
+            payments: [{ channel: 'ZELLE', amount: money(20000n, 'USD') }],
+          },
+          [],
+          AT,
+        ),
+      );
+
+      const client = tenantContext.getClient();
+      const lowRow = await client.stockLevel.findFirstOrThrow({
+        where: { productId: lowProductId, warehouseId: warehouse.id },
+      });
+      const highRow = await client.stockLevel.findFirstOrThrow({
+        where: { productId: highProductId, warehouseId: warehouse.id },
+      });
+
+      let releaseHolder!: () => void;
+      const holderMayFinish = new Promise<void>((resolve) => {
+        releaseHolder = resolve;
+      });
+      const holder = client.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT "id" FROM "stock_level" WHERE "id" = ${highRow.id}::uuid FOR UPDATE`;
+        await holderMayFinish;
+      }, LOCK_TRANSACTION_BUDGET);
+
+      try {
+        expect(await waitUntil(() => rowIsLocked(client, 'stock_level', highRow.id))).toBe(true);
+
+        const confirming = repository.confirm(created.id);
+
+        // THE assertion. False here means `confirm` blocked on HIGH without
+        // ever having taken LOW — i.e. it walked the lines in insertion
+        // order, and two such transitions can deadlock.
+        expect(await waitUntil(() => rowIsLocked(client, 'stock_level', lowRow.id))).toBe(true);
+
+        releaseHolder();
+        await holder;
+        await expect(confirming).resolves.toMatchObject({ status: 'verified' });
+      } finally {
+        releaseHolder();
+        await holder.catch(() => undefined);
+      }
+    }, 40_000);
   });
 });

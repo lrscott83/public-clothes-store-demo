@@ -23,6 +23,48 @@ export { TenantDatabaseService } from './tenant/tenant-database.service.js';
 // Task 10.2 (Phase 10, D7): the provisioning saga (`apps/api-idp/src/company/`)
 // is the first consumer of this helper OUTSIDE `infra-db` itself.
 export { schemaNameFor, assertSchemaName } from './tenant/schema-name.js';
+// The schema-currency probe and the PER-TENANT gate built on it (design D6,
+// CLASS F1). Tenant schemas evolve only via a manual
+// `node scripts/tenant-migrate.ts`, and a build depending on new DDL should
+// say so rather than 500 on an unrelated endpoint later.
+//
+// `reportTenantSchemaCurrency` is what `apps/api-salesops/src/main.ts` calls
+// at boot: it LOGS and returns, in every mode, and can never refuse boot.
+// `TenantSchemaCurrencyService` is the gate — `TenantContextGuard` calls it
+// per request with the request's own schema, so at `enforce` a stale tenant
+// fails its OWN requests and nobody else's. See the module's doc comment for
+// the two designs this replaced and why each was worse than the problem.
+export {
+  REQUIRED_TENANT_ENUM_LABELS,
+  SCHEMA_CURRENCY_ENV,
+  TenantSchemaBehindError,
+  TenantSchemaCurrencyService,
+  UnknownSchemaCurrencyModeError,
+  describeEnumLabelGaps,
+  findEnumLabelGaps,
+  reportTenantSchemaCurrency,
+  resolveSchemaCurrencyMode,
+  surveyTenantSchemaCurrency,
+  type EnumLabelGap,
+  type SchemaCurrencyMode,
+  type SchemaCurrencyStatus,
+  type SchemaCurrencySurvey,
+  type TenantEnumLabelRow,
+  type TenantSchemaCurrencyOptions,
+} from './tenant/tenant-schema-currency.js';
+// The lock budget and the translation of the two failures explicit locking
+// makes reachable (`P2028`, `40P01`, plus the server-side `55P03`/`57014`
+// ceilings that enforce the budget). Exported so an app can assert the
+// contract without reaching into `src/`.
+export {
+  LOCK_TRANSACTION_BUDGET,
+  TENANT_LOCK_TIMEOUT_MS,
+  TENANT_STATEMENT_TIMEOUT_MS,
+} from './lock-budget.js';
+export {
+  translateTransactionError,
+  withTransactionErrorMapping,
+} from './transaction-errors.js';
 export { PrismaMembershipRepository } from './company/prisma-membership.repository.js';
 export { PrismaProvisioningIncidentRepository } from './company/prisma-provisioning-incident.repository.js';
 export { PrismaCurrencyRepository } from './currency/prisma-currency.repository.js';

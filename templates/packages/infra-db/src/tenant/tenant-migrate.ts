@@ -121,10 +121,101 @@ export interface TenantMigrationOptions {
   readonly allowDestructive?: boolean;
   /** Overrides auto-discovery (`information_schema`) — for tests, and for scoping a run to a subset of the fleet. */
   readonly tenantSchemas?: readonly string[];
+  /** Overrides `MINIMUM_SERVER_VERSION_NUM` — for tests only; production never lowers the floor. */
+  readonly minimumServerVersionNum?: number;
 }
 
 /** Matches the two Prisma destructive DDL forms the spec names. Case-insensitive, word-boundaried. */
 const DESTRUCTIVE_PATTERN = /\b(DROP\s+TABLE|DROP\s+COLUMN)\b/i;
+
+/**
+ * PostgreSQL 12.0, as `server_version_num` reports it.
+ *
+ * `applyDiff` runs the generated script inside an EXPLICIT `BEGIN`/`COMMIT`.
+ * `ALTER TYPE ... ADD VALUE` — precisely what shipping a new enum value emits,
+ * and what the `DeliveryAssignmentStatus.cancelled` migration IS — is illegal
+ * inside a transaction block before PostgreSQL 12. On an older server the
+ * tenant came back with status `error` carrying a raw driver message, which
+ * reads like a bug in this tool rather than "this database is too old to
+ * migrate". Asserted once, up front, in the tool's own vocabulary.
+ */
+export const MINIMUM_SERVER_VERSION_NUM = 120_000;
+
+/** `server_version_num` (e.g. `160013`) rendered the way Postgres itself prints a version. */
+function formatServerVersion(serverVersionNum: number): string {
+  const major = Math.floor(serverVersionNum / 10_000);
+  const minor = serverVersionNum % 10_000;
+  return `${major}.${minor}`;
+}
+
+/**
+ * `null` when `serverVersionNum` is supported; otherwise the message to
+ * report. Pure, so the unsupported branch is testable without an ancient
+ * Postgres to point at.
+ */
+export function describeUnsupportedServerVersion(
+  serverVersionNum: number,
+  minimum: number = MINIMUM_SERVER_VERSION_NUM,
+): string | null {
+  if (serverVersionNum >= minimum) {
+    return null;
+  }
+  return (
+    `PostgreSQL ${formatServerVersion(serverVersionNum)} is below the required ` +
+    `${formatServerVersion(minimum)}: this tool applies each tenant's diff inside an explicit ` +
+    'transaction, and ALTER TYPE ... ADD VALUE (emitted whenever an enum gains a value) is not ' +
+    'allowed in a transaction block on older servers. Upgrade the server, or apply this tenant\'s ' +
+    'diff by hand outside a transaction.'
+  );
+}
+
+/**
+ * What one connection to the fleet database establishes: which tenant schemas
+ * exist, and what server version they live on.
+ *
+ * Both used to be read on SEPARATE connections — `listTenantSchemas` and
+ * `readServerVersionNum` — and the version read ran on EVERY invocation
+ * including `check` mode, outside any try/catch, so an unreachable database
+ * threw straight out of `migrateTenantFleet`. That contradicts this module's
+ * own contract that "one hung/slow tenant never prevents the rest of the
+ * fleet from being attempted": a fleet-level connection failure is not a
+ * tenant's problem, and it must be REPORTED, not thrown.
+ *
+ * `serverVersionNum` is `null` when it could not be read. A version nobody
+ * could determine is not evidence of an unsupported one.
+ */
+interface FleetSurvey {
+  readonly tenantSchemas: readonly string[];
+  readonly serverVersionNum: number | null;
+  readonly error?: string;
+}
+
+async function surveyFleet(connectionString: string): Promise<FleetSurvey> {
+  let client: PgClient | undefined;
+  try {
+    client = new PgClient({ connectionString });
+    await client.connect();
+    const { rows: schemaRows } = await client.query<{ schema_name: string }>(
+      'SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE $1 ORDER BY schema_name',
+      [`${SCHEMA_PREFIX}%`],
+    );
+    const { rows: versionRows } = await client.query<{ server_version_num: string }>(
+      'SHOW server_version_num',
+    );
+    return {
+      tenantSchemas: schemaRows.map((r) => r.schema_name),
+      serverVersionNum: Number(versionRows[0]?.server_version_num ?? 0),
+    };
+  } catch (err) {
+    return {
+      tenantSchemas: [],
+      serverVersionNum: null,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  } finally {
+    await client?.end().catch(() => undefined);
+  }
+}
 
 /**
  * One migration tool, drift check is the same primitive in report mode
@@ -140,7 +231,48 @@ export async function migrateTenantFleet(options: TenantMigrationOptions): Promi
   const { toSchemaPath, configPath, cwd } = options;
   const allowDestructive = options.allowDestructive ?? false;
 
-  const tenantSchemas = options.tenantSchemas ?? (await listTenantSchemas(options.connectionString));
+  // ONE connection for both fleet-level facts, and it cannot throw out of
+  // this function — see `surveyFleet`.
+  const survey = await surveyFleet(options.connectionString);
+  const tenantSchemas = options.tenantSchemas ?? survey.tenantSchemas;
+
+  // A fleet-level connection failure is reported, not thrown. With
+  // `tenantSchemas` supplied by the caller there is still a list to report
+  // against; with auto-discovery there is not, and an empty report carrying
+  // `failed: true` is the honest answer.
+  if (survey.error !== undefined) {
+    return {
+      mode,
+      results: tenantSchemas.map((schemaName) => ({
+        schemaName,
+        status: 'error' as const,
+        error: `Could not reach the fleet database: ${survey.error!}`,
+        durationMs: 0,
+      })),
+      failed: true,
+    };
+  }
+
+  // Asserted ONCE, before any tenant is touched. Too old a server cannot
+  // apply an enum addition inside this tool's transaction, and every tenant
+  // would have failed one at a time with a driver-level message that names
+  // neither the version nor the reason.
+  const unsupported = describeUnsupportedServerVersion(
+    survey.serverVersionNum ?? MINIMUM_SERVER_VERSION_NUM,
+    options.minimumServerVersionNum ?? MINIMUM_SERVER_VERSION_NUM,
+  );
+  if (unsupported !== null) {
+    return {
+      mode,
+      results: tenantSchemas.map((schemaName) => ({
+        schemaName,
+        status: 'error' as const,
+        error: unsupported,
+        durationMs: 0,
+      })),
+      failed: true,
+    };
+  }
 
   const results: TenantMigrationResult[] = [];
   for (const schemaName of tenantSchemas) {
@@ -183,16 +315,25 @@ interface MigrateOneTenantParams {
 
 async function migrateOneTenant(params: MigrateOneTenantParams): Promise<TenantMigrationResult> {
   const { schemaName, baseConnectionString, mode, toSchemaPath, configPath, cwd, timeoutMs, allowDestructive } = params;
-  // Defense in depth (design D3) — every interpolation site re-validates,
-  // even though every caller here is expected to already have a
-  // `store_mgmt_tenant_%`-derived name.
-  assertSchemaName(schemaName);
 
   const start = Date.now();
   const durationMs = (): number => Date.now() - start;
-  const tenantUrl = withTenantSchema(baseConnectionString, schemaName);
 
   try {
+    // Defense in depth (design D3) — every interpolation site re-validates,
+    // even though every caller here is expected to already have a
+    // `store_mgmt_tenant_%`-derived name.
+    //
+    // INSIDE the try, with `withTenantSchema` (which parses a URL and can
+    // throw on a malformed base connection string). Both used to sit outside
+    // it, so either one threw straight out of `migrateTenantFleet`'s loop and
+    // discarded every result already collected — directly contradicting this
+    // module's own "one hung/slow tenant never prevents the rest of the fleet
+    // from being attempted". A bad name is one tenant's problem; it is not
+    // the fleet's.
+    assertSchemaName(schemaName);
+    const tenantUrl = withTenantSchema(baseConnectionString, schemaName);
+
     if (mode === 'check') {
       const diff = await runDiff({ tenantUrl, configPath, toSchemaPath, cwd, timeoutMs, exitCode: true, script: false });
       if (diff.timedOut) {
@@ -405,16 +546,3 @@ export function withTenantSchema(baseConnectionString: string, schemaName: strin
   return url.toString();
 }
 
-async function listTenantSchemas(connectionString: string): Promise<string[]> {
-  const client = new PgClient({ connectionString });
-  await client.connect();
-  try {
-    const { rows } = await client.query<{ schema_name: string }>(
-      'SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE $1 ORDER BY schema_name',
-      [`${SCHEMA_PREFIX}%`],
-    );
-    return rows.map((r) => r.schema_name);
-  } finally {
-    await client.end();
-  }
-}

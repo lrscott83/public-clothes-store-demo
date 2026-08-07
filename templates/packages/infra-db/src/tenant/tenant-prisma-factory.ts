@@ -2,6 +2,12 @@ import { Injectable, OnModuleDestroy, Optional } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { assertSchemaName } from './schema-name.js';
+import {
+  LOCK_TRANSACTION_BUDGET,
+  TENANT_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+  TENANT_LOCK_TIMEOUT_MS,
+  TENANT_STATEMENT_TIMEOUT_MS,
+} from '../lock-budget.js';
 import { PrismaClient } from '../../generated/tenant/client.js';
 
 export interface TenantPrismaFactoryOptions {
@@ -9,6 +15,8 @@ export interface TenantPrismaFactoryOptions {
   max?: number;
   /** `pg.Pool` `idleTimeoutMillis` per tenant schema. Env: `TENANT_POOL_IDLE_TIMEOUT_MS`. */
   idleTimeoutMillis?: number;
+  /** `pg.Pool` `connectionTimeoutMillis` per tenant schema. Env: `TENANT_POOL_CONNECTION_TIMEOUT_MS`. */
+  connectionTimeoutMillis?: number;
   /** Max distinct tenant schemas cached at once before LRU eviction. Env: `TENANT_POOL_LRU_CAP`. */
   lruCap?: number;
 }
@@ -21,9 +29,35 @@ interface CacheEntry {
 // `5`/`30_000`/`20` are starting values, not measured ones (design.md §7 Open
 // Items carries the same caveat for `max`) — tune via env once there is
 // fleet data to tune against.
+//
+// `max` RECONCILED WITH THE TRANSACTION BUDGET, and the reconciliation is why
+// it did NOT change. `LOCK_TRANSACTION_BUDGET` raised Prisma's client-side
+// `timeout` from 5s to 20s, which reads like a 4x longer connection hold on
+// the same 5-connection pool. It is not, because that client-side number
+// never bounded the hold in the first place: it is evaluated when a query is
+// DISPATCHED, so a transaction blocked on a row lock — or simply left idle in
+// one — held its connection INDEFINITELY (see `lock-budget.ts`). The real
+// worst-case hold before this round was UNBOUNDED. It is now bounded by the
+// three server-side ceilings below: each statement at 18s, each lock wait at
+// 15s, and an abandoned open transaction reaped at 30s. Bounded is strictly
+// better than unbounded, so the pool does not need widening to absorb it.
+//
+// Note what is NOT claimed: none of these caps the total hold of a long
+// MULTI-statement transaction, which can legitimately run several statements
+// inside the 20s budget. `timeout` is what bounds that, across dispatches.
+//
+// Widening it would also have been actively harmful. `max` is PER TENANT
+// SCHEMA and multiplies by `DEFAULT_LRU_CAP` cached schemas: at `max: 20` one
+// process can open 400 connections against a server whose default
+// `max_connections` is 100. Raising the per-tenant number to fix a per-tenant
+// hold time is how a pool-tuning change becomes a fleet-wide outage.
 const DEFAULT_MAX = 5;
 const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
 const DEFAULT_LRU_CAP = 20;
+// A request that cannot get a connection within Prisma's own `maxWait` is
+// already lost; without this, `pg` waits forever for one and the caller sees a
+// hang rather than the fast saturation failure `maxWait` is documented to give.
+const DEFAULT_CONNECTION_TIMEOUT_MS = LOCK_TRANSACTION_BUDGET.maxWait;
 
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -54,6 +88,7 @@ function envInt(name: string, fallback: number): number {
 export class TenantPrismaFactory implements OnModuleDestroy {
   private readonly max: number;
   private readonly idleTimeoutMillis: number;
+  private readonly connectionTimeoutMillis: number;
   private readonly lruCap: number;
   // `Map` preserves insertion order; re-inserting a key on touch moves it to
   // the end, so the FIRST key iterated is always the least recently used —
@@ -81,6 +116,9 @@ export class TenantPrismaFactory implements OnModuleDestroy {
     this.max = options.max ?? envInt('TENANT_POOL_MAX', DEFAULT_MAX);
     this.idleTimeoutMillis =
       options.idleTimeoutMillis ?? envInt('TENANT_POOL_IDLE_TIMEOUT_MS', DEFAULT_IDLE_TIMEOUT_MS);
+    this.connectionTimeoutMillis =
+      options.connectionTimeoutMillis ??
+      envInt('TENANT_POOL_CONNECTION_TIMEOUT_MS', DEFAULT_CONNECTION_TIMEOUT_MS);
     this.lruCap = options.lruCap ?? envInt('TENANT_POOL_LRU_CAP', DEFAULT_LRU_CAP);
   }
 
@@ -125,13 +163,41 @@ export class TenantPrismaFactory implements OnModuleDestroy {
       connectionString: process.env.DATABASE_URL ?? '',
       max: this.max,
       idleTimeoutMillis: this.idleTimeoutMillis,
-      // The tenant schema ALONE — no `,public` fallback. Postgres resolves
-      // an unqualified name against each schema in order, so a trailing
-      // `public` would turn a missing tenant table into a silent read of
-      // whatever `public` holds (legacy business tables today, the master
-      // tables after 14.2's reset). A missing table must raise, not resolve
-      // somewhere else. Proven by `tenant-search-path-isolation.spec.ts`.
-      options: `-c search_path="${schemaName}"`,
+      connectionTimeoutMillis: this.connectionTimeoutMillis,
+      // Three connect options, and only the first is about isolation.
+      //
+      // `search_path`: the tenant schema ALONE — no `,public` fallback.
+      // Postgres resolves an unqualified name against each schema in order, so
+      // a trailing `public` would turn a missing tenant table into a silent
+      // read of whatever `public` holds (legacy business tables today, the
+      // master tables after 14.2's reset). A missing table must raise, not
+      // resolve somewhere else. Proven by
+      // `tenant-search-path-isolation.spec.ts`.
+      //
+      // `lock_timeout`/`statement_timeout`/`idle_in_transaction_session_timeout`:
+      // the SERVER-SIDE ceilings that actually enforce
+      // `LOCK_TRANSACTION_BUDGET`. Nothing used to set any of them, and
+      // Prisma's client-side `timeout` is evaluated when a query is
+      // DISPATCHED — it cannot cancel an in-flight statement — so a
+      // transaction blocked behind an `idle in transaction` holder waited
+      // INDEFINITELY while holding one of these connections. That is the exact
+      // failure the 20s budget claimed to bound.
+      //
+      // All three are needed and they bound different things: the first two
+      // bound a STATEMENT (a lock wait, and execution generally), the third
+      // bounds a transaction that is open with NO statement running — which is
+      // the holder shape that made the lock waits pathological to begin with,
+      // and the one `statement_timeout` cannot see.
+      //
+      // They go on the POOL, not on individual calls, so they cover raw SQL
+      // riding the driver directly (`lockOrderRowTx`, `applyReservationTx`,
+      // the anti-join) as well as statements issued through a Prisma model
+      // call. See `lock-budget.ts` for what each layer really guarantees.
+      options:
+        `-c search_path="${schemaName}"` +
+        ` -c lock_timeout=${TENANT_LOCK_TIMEOUT_MS}` +
+        ` -c statement_timeout=${TENANT_STATEMENT_TIMEOUT_MS}` +
+        ` -c idle_in_transaction_session_timeout=${TENANT_IDLE_IN_TRANSACTION_TIMEOUT_MS}`,
     });
     const adapter = new PrismaPg(pool, { schema: schemaName });
     const client = new PrismaClient({ adapter });

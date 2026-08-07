@@ -38,9 +38,9 @@ Phase 1.)
 
 ## Direction B · Sales -> Delivery (close the open assignment)
 
-**NOT** a NestJS port, and there is deliberately no DI token for it. An
-infra-db transactional helper, invoked INSIDE
-`PrismaOrderRepository.deliver`'s already-open `$transaction`:
+**NOT** a NestJS port, and there is deliberately no DI token for it. Two
+infra-db transactional helpers, each invoked INSIDE the matching
+`PrismaOrderRepository` transition's already-open `$transaction`:
 
 ```ts
 // packages/infra-db/src/delivery/close-assignment-on-delivery.ts
@@ -48,7 +48,36 @@ export async function closeAssignmentOnDeliveryTx(
   tx: Prisma.TransactionClient,
   orderId: string,
 ): Promise<void>
+
+// packages/infra-db/src/delivery/cancel-assignment-on-order-cancel.ts
+export async function cancelAssignmentOnOrderCancelTx(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+): Promise<void>
 ```
+
+**Both terminal edges of an Order need one.** `deliver` had a closer from the
+start; `cancel` did not, and that gap stranded assignments: an assigned order
+that got cancelled left a permanently `in_transit` row. The carrier read BUSY
+forever in `computeCarrierCapacity`, and NO API path could close it —
+`markDelivered` on a cancelled order throws `InvalidOrderStateError`. Recovery
+required manual SQL. `cancelAssignmentOnOrderCancelTx` writes
+`status = 'cancelled'`, a third `DeliveryAssignmentStatus` member added for
+exactly this. Closing those rows as `delivered` was explicitly REJECTED: it
+would make `computeCarrierThroughput` count deliveries that never happened.
+
+Both run AFTER the per-line stock effects — matching design §10's diagram.
+Not last: the order's own `status` update and the closing full-aggregate
+re-read still follow them. The guarded UPDATE takes an exclusive row lock held
+until COMMIT, so running it before the loop would stretch that hold across
+every per-line statement.
+
+Each transition also takes a `FOR UPDATE` row lock on the ORDER as its first
+statement (`lockOrderRowTx`). That is what makes the close atomic against a
+concurrent `POST /delivery/assignments`, which takes the same lock and
+re-checks the order's status before inserting — otherwise an assign committing
+just after `cancelAssignmentOnOrderCancelTx` ran recreated the stranded row it
+had just closed.
 
 It runs a guarded conditional `UPDATE ... WHERE order_id = $1 AND status =
 'in_transit'`, exactly the same shape as `applyReservationTx`
@@ -100,6 +129,10 @@ endpoint drove the transition.
 - `packages/infra-db/src/delivery/close-assignment-on-delivery.spec.ts` — the
   helper in isolation (in_transit -> delivered, idempotent already-delivered,
   0-row no-assignment case).
+- `packages/infra-db/src/delivery/cancel-assignment-on-order-cancel.spec.ts` —
+  the cancellation helper in isolation (in_transit -> cancelled with
+  `delivered_at` left NULL, already-delivered untouched, idempotent
+  already-cancelled, 0-row no-assignment case).
 - `packages/infra-db/src/sales/prisma-order.repository.spec.ts` — the
   wired, whole-transaction rollback case: a later failure inside `deliver()`
   undoes the assignment close too.

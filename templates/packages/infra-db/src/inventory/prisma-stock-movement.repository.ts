@@ -7,6 +7,8 @@ import type {
   StockMovementListFilter,
   StockMovementType,
 } from '@store-mgmt/domain';
+import { LOCK_TRANSACTION_BUDGET } from '../lock-budget.js';
+import { withTransactionErrorMapping } from '../transaction-errors.js';
 import { TenantContextService } from '../tenant/tenant-context.service.js';
 import { applyStockMovementTx } from './apply-stock-movement.js';
 
@@ -58,7 +60,11 @@ export class PrismaStockMovementRepository implements IStockMovementRepository {
   constructor(private readonly tenantContext: TenantContextService) {}
 
   async record(input: CreateStockMovementInput): Promise<RecordMovementResult> {
-    return this.tenantContext.getClient().$transaction((tx) => applyStockMovementTx(tx, input));
+    return withTransactionErrorMapping('PrismaStockMovementRepository.record', () =>
+      this.tenantContext
+        .getClient()
+        .$transaction((tx) => applyStockMovementTx(tx, input), LOCK_TRANSACTION_BUDGET),
+    );
   }
 
   async list(filter?: StockMovementListFilter): Promise<DomainStockMovement[]> {

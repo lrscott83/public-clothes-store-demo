@@ -283,7 +283,7 @@ export class OrderService {
   }
 
   async confirm(id: string): Promise<OrderResponseDto | null> {
-    const existing = await this.orderRepository.findById(id);
+    const existing = await this.orderRepository.findScopeProjection(id);
     if (!existing) return null;
     const confirmed = await this.orderRepository.confirm(id);
     return this.toResponse(confirmed);
@@ -313,7 +313,7 @@ export class OrderService {
    * log everything an operator doing that manual reconciliation would need.
    */
   async deliver(id: string): Promise<OrderResponseDto | null> {
-    const existing = await this.orderRepository.findById(id);
+    const existing = await this.orderRepository.findScopeProjection(id);
     if (!existing) return null;
     const delivered = await this.orderRepository.deliver(id);
     try {
@@ -334,7 +334,7 @@ export class OrderService {
   }
 
   async cancel(id: string): Promise<OrderResponseDto | null> {
-    const existing = await this.orderRepository.findById(id);
+    const existing = await this.orderRepository.findScopeProjection(id);
     if (!existing) return null;
     const cancelled = await this.orderRepository.cancel(id);
     return this.toResponse(cancelled);

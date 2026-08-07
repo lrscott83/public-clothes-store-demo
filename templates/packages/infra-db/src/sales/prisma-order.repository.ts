@@ -7,6 +7,7 @@ import type {
   OrderLine as DomainOrderLine,
   OrderListFilter,
   OrderPayment as DomainOrderPayment,
+  OrderScopeProjection,
   OrderStatus,
   OrderUpdateInput,
   PaymentChannel,
@@ -24,9 +25,13 @@ import {
   rateFromDecimalString,
   rateToDecimalString,
 } from '@store-mgmt/domain';
+import { Prisma } from '../../generated/tenant/client.js';
+import { LOCK_TRANSACTION_BUDGET } from '../lock-budget.js';
+import { withTransactionErrorMapping } from '../transaction-errors.js';
 import { TenantContextService } from '../tenant/tenant-context.service.js';
 import { applyReservationTx } from '../inventory/apply-reservation.js';
 import { applyStockMovementTx } from '../inventory/apply-stock-movement.js';
+import { cancelAssignmentOnOrderCancelTx } from '../delivery/cancel-assignment-on-order-cancel.js';
 import { closeAssignmentOnDeliveryTx } from '../delivery/close-assignment-on-delivery.js';
 
 /** Row shapes shared by every Prisma read of the `Order` aggregate. */
@@ -96,6 +101,74 @@ interface OrderRow {
 
 /** Prisma's `include` shape shared by every full-aggregate read. */
 const AGGREGATE_INCLUDE = { lines: true, payments: true, saleCredit: true } as const;
+
+/**
+ * The `include` every STATUS TRANSITION reads its lines through.
+ *
+ * `orderBy: { productId: 'asc' }` is a LOCK ORDER, not presentation. Each
+ * iteration of the per-line loop takes a `stock_level` row lock (via
+ * `applyReservationTx`/`applyStockMovementTx`'s guarded UPDATE) and holds it
+ * until COMMIT, so the loop's order IS the order those locks are acquired in.
+ * Without it, Postgres returns the lines in whatever order it likes — in
+ * practice insertion order, which differs from order to order. Two concurrent
+ * transitions on DIFFERENT orders sharing the same products, entered in
+ * opposite line order, then take the same two locks in opposite order: a
+ * cycle, `40P01`, and an untranslated 500 for whichever one Postgres picks as
+ * the victim.
+ *
+ * `lockOrderRowTx` closed the ordering BETWEEN steps (order -> stock ->
+ * assignment). This closes it WITHIN the stock step, which is the half its
+ * comment used to claim without delivering. Both halves are needed; either
+ * alone still admits a cycle.
+ *
+ * Sorting by `productId` and not by `id`: the lock is on the `stock_level`
+ * row, which is keyed by `(productId, warehouseId)`. A transition only ever
+ * touches ONE warehouse (`orderRow.warehouseId`), so `productId` alone
+ * totally orders the rows this loop can lock.
+ */
+const TRANSITION_LINES_INCLUDE = {
+  lines: { orderBy: { productId: 'asc' } },
+} as const satisfies Prisma.OrderInclude;
+
+/**
+ * Takes an exclusive row lock on the order, as the FIRST statement of every
+ * status transition.
+ *
+ * WHY: `PrismaDeliveryAssignmentRepository.create` re-validates the order's
+ * status under this same lock before inserting, because a `cancel` committing
+ * between `DeliveryService.assign`'s snapshot read and its insert stranded the
+ * new row `in_transit` behind a `cancelled` order — unclosable by any API
+ * path. That lock only helps if the transitions take it too: `cancel` used to
+ * run `cancelAssignmentOnOrderCancelTx` BEFORE it ever touched the order row,
+ * so an assign could still slip in behind it.
+ *
+ * WHY IN ALL THREE and not only `cancel`: lock ORDER. Every transition ends by
+ * updating the order row (which locks it) after having locked stock rows in
+ * its loop. Adding an upfront order lock to only some of them would leave
+ * `confirm` taking stock-then-order while `cancel` took order-then-stock —
+ * a cycle, i.e. a deadlock between a concurrent `confirm` and `cancel` of the
+ * SAME order. Taking the order lock first EVERYWHERE keeps one ordering
+ * BETWEEN THE STEPS: order -> stock -> (assignment).
+ *
+ * That is only HALF of a global ordering, and this comment used to claim the
+ * whole of it. The rows within the stock step must be ordered too, or two
+ * transitions on different orders sharing products still deadlock inside that
+ * step — see `TRANSITION_LINES_INCLUDE`, which supplies the other half.
+ *
+ * Uses `$queryRaw` rather than a Prisma read because Prisma has no `FOR
+ * UPDATE`; the tenant `search_path` is set on the connection itself (design.md
+ * §4), so the table needs no schema qualification — the same reason
+ * `applyReservationTx`'s raw SQL does not qualify it either.
+ *
+ * `$queryRaw`, not `$executeRaw`: this is a SELECT. Both work, but the other
+ * two lock sites in this module (`PrismaCarrierRepository.deactivateGuarded`
+ * and `PrismaDeliveryAssignmentRepository.create`) already read their locked
+ * rows with `$queryRaw`, and three lock sites written in two idioms invites
+ * the reader to look for a difference that is not there.
+ */
+async function lockOrderRowTx(tx: Prisma.TransactionClient, id: string): Promise<void> {
+  await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "sales_order" WHERE "id" = ${id}::uuid FOR UPDATE`);
+}
 
 function lineToDomain(row: OrderLineRow, orderCurrency: Currency): DomainOrderLine {
   const nativeCurrency = row.priceCurrency as Currency;
@@ -206,11 +279,14 @@ function orderToDomain(row: OrderRow): DomainOrder {
  * INSIDE the transaction and throws `InvalidOrderStateError` on a mismatch;
  * any stock-guard failure (`InsufficientStockError`/`NegativeStockError`)
  * rolls back the WHOLE transaction, including the status change and any
- * earlier per-line mutation in the same call. `deliver` additionally closes
- * any open `DeliveryAssignment` for the order in the SAME transaction, via
- * `closeAssignmentOnDeliveryTx` (delivery module, Phase 5, design.md §2B) —
- * the same guarded-UPDATE-inside-this-transaction shape, one more `*Tx`
- * helper from another concept's infra folder, same precedent.
+ * earlier per-line mutation in the same call. `deliver` AND `cancel` each
+ * additionally close any open `DeliveryAssignment` for the order in the SAME
+ * transaction — `closeAssignmentOnDeliveryTx` and
+ * `cancelAssignmentOnOrderCancelTx` respectively (delivery module,
+ * design.md §2B) — the same guarded-UPDATE-inside-this-transaction shape,
+ * two more `*Tx` helpers from another concept's infra folder, same
+ * precedent. `cancel` needs its own because an assignment stranded by a
+ * cancelled order has no other recovery path at all.
  *
  * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
  * resolved fresh per call, never cached on `this` (see
@@ -220,11 +296,34 @@ function orderToDomain(row: OrderRow): DomainOrder {
 export class PrismaOrderRepository implements IOrderRepository {
   constructor(private readonly tenantContext: TenantContextService) {}
 
+  /**
+   * The ONE transaction shape for this class: the shared lock budget, plus the
+   * translation of the failures that budget and the explicit locking make
+   * reachable.
+   *
+   * These four transactions had NO translator at all. A deadlock (`40P01`) —
+   * the exact outcome `TRANSITION_LINES_INCLUDE`'s lock ordering exists to
+   * avoid, so the one that will actually happen if that ordering is ever
+   * broken — and a blown budget (Prisma `P2028`, which `lock-budget.ts` calls
+   * "exactly the outcome the locking was introduced to prevent") both reached
+   * the controller as raw Prisma errors, i.e. 500s. Written as a helper rather
+   * than repeated four times because the recurring defect in this area has
+   * been fixing one call site and leaving its siblings.
+   */
+  private lockedTransaction<T>(
+    operation: string,
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return withTransactionErrorMapping(operation, () =>
+      this.tenantContext.getClient().$transaction(fn, LOCK_TRANSACTION_BUDGET),
+    );
+  }
+
   async create(order: DomainOrder): Promise<DomainOrder> {
     // The `input as unknown as Order` cast that used to open this method is
     // gone: the port now types `create` as taking the factory-built aggregate,
     // which is what every caller has always passed.
-    const row = await this.tenantContext.getClient().$transaction(async (tx) => {
+    const row = await this.lockedTransaction('PrismaOrderRepository.create', async (tx) => {
       const orderRow = await tx.order.create({
         data: {
           id: order.id,
@@ -339,6 +438,29 @@ export class PrismaOrderRepository implements IOrderRepository {
     return row ? orderToDomain(row) : null;
   }
 
+  /**
+   * Four columns, no `include`, no Money/rate reconstruction — the whole
+   * point (see the port's own doc comment). `IOrderDeliveryGateway`'s
+   * snapshot is served from here rather than from `findById`, which loads
+   * lines, payments and credit to answer three scalars on the hot path of
+   * every `assign`.
+   */
+  async findScopeProjection(id: string): Promise<OrderScopeProjection | null> {
+    const row = await this.tenantContext.getClient().order.findUnique({
+      where: { id },
+      select: { id: true, warehouseId: true, deliveryMode: true, status: true },
+    });
+    if (!row) {
+      return null;
+    }
+    return {
+      orderId: row.id,
+      warehouseId: row.warehouseId,
+      deliveryMode: row.deliveryMode as DeliveryMode,
+      status: row.status as OrderStatus,
+    };
+  }
+
   async list(filter?: OrderListFilter): Promise<DomainOrder[]> {
     const rows = await this.tenantContext.getClient().order.findMany({
       where: {
@@ -352,8 +474,10 @@ export class PrismaOrderRepository implements IOrderRepository {
   }
 
   async confirm(id: string): Promise<DomainOrder> {
-    const row = await this.tenantContext.getClient().$transaction(async (tx) => {
-      const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: { lines: true } });
+    const row = await this.lockedTransaction('PrismaOrderRepository.confirm', async (tx) => {
+      // FIRST statement of the transaction — see `lockOrderRowTx`.
+      await lockOrderRowTx(tx, id);
+      const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: TRANSITION_LINES_INCLUDE });
       if (orderRow.status !== 'created') {
         throw new InvalidOrderStateError(id, 'created', orderRow.status);
       }
@@ -375,28 +499,13 @@ export class PrismaOrderRepository implements IOrderRepository {
   }
 
   async deliver(id: string): Promise<DomainOrder> {
-    const row = await this.tenantContext.getClient().$transaction(async (tx) => {
-      const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: { lines: true } });
+    const row = await this.lockedTransaction('PrismaOrderRepository.deliver', async (tx) => {
+      // FIRST statement of the transaction — see `lockOrderRowTx`.
+      await lockOrderRowTx(tx, id);
+      const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: TRANSITION_LINES_INCLUDE });
       if (orderRow.status !== 'verified') {
         throw new InvalidOrderStateError(id, 'verified', orderRow.status);
       }
-
-      // Direction B of the two-way Sales<->Delivery relationship
-      // (design.md §2B, delivery-assignment-seam.md) — a TRANSACTION, not
-      // Commission's try/catch (ADR-2): an assignment left `in_transit`
-      // behind a `delivered` order is not an independently-recoverable fact
-      // like commission, it is a stale PROJECTION of this same event that
-      // would poison every capacity read forever. If ANYTHING below fails,
-      // this call (already uncommitted) unwinds with everything else — order
-      // stays `verified`, stock untouched, assignment still `in_transit`.
-      // Run FIRST rather than last (design §10's diagram shows it after the
-      // stock effects, but statement order inside one atomic transaction has
-      // no observable effect on the all-or-nothing outcome) — this keeps the
-      // guarded UPDATE's blast radius identical regardless of how many lines
-      // the order has. 0 rows affected is the NORMAL case (pickup orders,
-      // or an already-closed assignment) — never an error, never
-      // `findUniqueOrThrow` (see the helper's own doc comment).
-      await closeAssignmentOnDeliveryTx(tx, id);
 
       for (const line of orderRow.lines) {
         // Release BEFORE sale_out — load-bearing ordering (design.md
@@ -418,6 +527,32 @@ export class PrismaOrderRepository implements IOrderRepository {
         });
       }
 
+      // Direction B of the two-way Sales<->Delivery relationship
+      // (design.md §2B, delivery-assignment-seam.md) — a TRANSACTION, not
+      // Commission's try/catch (ADR-2): an assignment left `in_transit`
+      // behind a `delivered` order is not an independently-recoverable fact
+      // like commission, it is a stale PROJECTION of this same event that
+      // would poison every capacity read forever. If ANYTHING here or below
+      // fails, this call (already uncommitted) unwinds with everything else
+      // — order stays `verified`, stock untouched, assignment still
+      // `in_transit`.
+      //
+      // Runs AFTER the per-line stock loop — matching design §10's diagram.
+      // Note it is not the LAST statement of the transaction: the `status`
+      // update and the full re-read below still follow it. The tradeoff is
+      // LOCK HOLD TIME: this guarded UPDATE takes an exclusive row lock on
+      // the assignment and holds it until COMMIT, so running it before the
+      // loop would keep that lock across every
+      // `applyReservationTx`/`applyStockMovementTx` — the longest possible
+      // hold, growing with the order's line count. Atomicity is identical
+      // either way; statement order inside one transaction cannot change an
+      // all-or-nothing outcome.
+      //
+      // 0 rows affected is the NORMAL case (pickup orders, or an
+      // already-closed assignment) — never an error, never
+      // `findUniqueOrThrow` (see the helper's own doc comment).
+      await closeAssignmentOnDeliveryTx(tx, id);
+
       await tx.order.update({ where: { id }, data: { status: 'delivered', deliveredAt: new Date() } });
 
       return tx.order.findUniqueOrThrow({ where: { id }, include: AGGREGATE_INCLUDE });
@@ -427,8 +562,10 @@ export class PrismaOrderRepository implements IOrderRepository {
   }
 
   async cancel(id: string): Promise<DomainOrder> {
-    const row = await this.tenantContext.getClient().$transaction(async (tx) => {
-      const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: { lines: true } });
+    const row = await this.lockedTransaction('PrismaOrderRepository.cancel', async (tx) => {
+      // FIRST statement of the transaction — see `lockOrderRowTx`.
+      await lockOrderRowTx(tx, id);
+      const orderRow = await tx.order.findUniqueOrThrow({ where: { id }, include: TRANSITION_LINES_INCLUDE });
       if (orderRow.status !== 'created' && orderRow.status !== 'verified') {
         throw new InvalidOrderStateError(id, 'created|verified', orderRow.status);
       }
@@ -442,6 +579,21 @@ export class PrismaOrderRepository implements IOrderRepository {
           );
         }
       }
+
+      // The cancellation counterpart of `closeAssignmentOnDeliveryTx` above,
+      // same reasoning and same placement (after the stock loop, minimal
+      // assignment-lock hold; the order `status` update still follows). The
+      // order row itself was locked at the top of this transaction
+      // (`lockOrderRowTx`), which is what stops a concurrent
+      // `POST /delivery/assignments` from inserting a fresh `in_transit` row
+      // behind this cancellation. Without
+      // it, cancelling an ASSIGNED order stranded its assignment in
+      // `in_transit` forever: the carrier read BUSY in every capacity
+      // snapshot and no API path could ever close the row, because
+      // `markDelivered` on a cancelled order throws `InvalidOrderStateError`.
+      // Recovery needed manual SQL. 0 rows affected is the NORMAL case
+      // (pickup orders, unassigned delivery orders).
+      await cancelAssignmentOnOrderCancelTx(tx, id);
 
       await tx.order.update({ where: { id }, data: { status: 'cancelled' } });
 

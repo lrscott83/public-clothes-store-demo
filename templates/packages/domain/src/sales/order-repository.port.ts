@@ -1,4 +1,19 @@
-import type { Order, OrderStatus } from './order.js';
+import type { DeliveryMode, Order, OrderStatus } from './order.js';
+
+/**
+ * The four scalars an `Order` answers about itself for scoping and
+ * fulfilment decisions — no lines, no payments, no credit.
+ *
+ * Declared by SALES (it owns these columns), even though today's only
+ * consumer is the Delivery gateway adapter: a type declared by Delivery and
+ * returned by a Sales port would point the dependency the wrong way.
+ */
+export interface OrderScopeProjection {
+  readonly orderId: string;
+  readonly warehouseId: string;
+  readonly deliveryMode: DeliveryMode;
+  readonly status: OrderStatus;
+}
 
 /** Optional filter for `IOrderRepository.list`. */
 export interface OrderListFilter {
@@ -34,6 +49,18 @@ export interface IOrderRepository {
   create(order: Order): Promise<Order>;
   update(id: string, patch: OrderUpdateInput): Promise<Order>;
   findById(id: string): Promise<Order | null>;
+  /**
+   * `findById`'s narrow counterpart: SELECTs four columns off `sales_order`
+   * and joins nothing. `null` when no such order exists.
+   *
+   * Exists because the Delivery gateway's snapshot is on the hot path of
+   * every `assign` and every scoped `markDelivered`, and reading it through
+   * `findById` loaded the full aggregate — lines, payments, credit, plus the
+   * per-line Money/rate reconstruction — to answer three scalars. The
+   * gateway port's doc comment already claimed this read was narrow; this is
+   * what makes that claim true.
+   */
+  findScopeProjection(id: string): Promise<OrderScopeProjection | null>;
   list(filter?: OrderListFilter): Promise<Order[]>;
   /** `created -> verified`: freezes rate+totals AND reserves stock per line. */
   confirm(id: string): Promise<Order>;
@@ -45,7 +72,15 @@ export interface IOrderRepository {
    * two-way Sales<->Delivery relationship this fulfils).
    */
   deliver(id: string): Promise<Order>;
-  /** `created|verified -> cancelled`: releases the reservation per line when source is `verified`; no-op when source is `created`. */
+  /**
+   * `created|verified -> cancelled`: releases the reservation per line when
+   * source is `verified`; no-op on stock when source is `created`. Also
+   * closes any open `DeliveryAssignment` for the order — as `cancelled`, not
+   * `delivered` — in the same transaction (delivery module; see
+   * `packages/domain/src/delivery/delivery-assignment-seam.md`). Without that
+   * the assignment would stay `in_transit` forever with no API path able to
+   * close it.
+   */
   cancel(id: string): Promise<Order>;
 }
 

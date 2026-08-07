@@ -25,7 +25,7 @@ CREATE TYPE "OrderStatus" AS ENUM ('created', 'verified', 'delivered', 'cancelle
 CREATE TYPE "DeliveryMode" AS ENUM ('pickup', 'delivery');
 
 -- CreateEnum
-CREATE TYPE "DeliveryAssignmentStatus" AS ENUM ('in_transit', 'delivered');
+CREATE TYPE "DeliveryAssignmentStatus" AS ENUM ('in_transit', 'delivered', 'cancelled');
 
 -- CreateTable
 CREATE TABLE "exchange_rate" (
@@ -359,6 +359,9 @@ CREATE INDEX "sales_order_customer_id_idx" ON "sales_order"("customer_id");
 CREATE INDEX "sales_order_attributed_company_user_id_idx" ON "sales_order"("attributed_company_user_id");
 
 -- CreateIndex
+CREATE INDEX "sales_order_warehouse_id_idx" ON "sales_order"("warehouse_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "commission_accrual_order_id_key" ON "commission_accrual"("order_id");
 
 -- CreateIndex
@@ -405,6 +408,12 @@ CREATE INDEX "delivery_assignment_carrier_id_idx" ON "delivery_assignment"("carr
 
 -- CreateIndex
 CREATE INDEX "delivery_assignment_status_idx" ON "delivery_assignment"("status");
+
+-- CreateIndex
+CREATE INDEX "delivery_assignment_status_delivered_at_idx" ON "delivery_assignment"("status", "delivered_at");
+
+-- CreateIndex
+CREATE INDEX "delivery_assignment_assigned_at_id_idx" ON "delivery_assignment"("assigned_at", "id");
 
 -- AddForeignKey
 ALTER TABLE "product" ADD CONSTRAINT "product_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "category"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

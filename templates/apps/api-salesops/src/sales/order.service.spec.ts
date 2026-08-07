@@ -11,6 +11,7 @@ import type {
   Customer,
   Money,
   Order as DomainOrder,
+  OrderScopeProjection,
   Product,
   StockLevel,
   Warehouse,
@@ -40,6 +41,7 @@ function buildOrderRepoMock(): jest.Mocked<IOrderRepository> {
     create: jest.fn(),
     update: jest.fn(),
     findById: jest.fn(),
+    findScopeProjection: jest.fn(),
     list: jest.fn(),
     confirm: jest.fn(),
     deliver: jest.fn(),
@@ -179,6 +181,25 @@ function buildCustomerRepoMock(): jest.Mocked<ICustomerRepository> {
 }
 
 const at = new Date('2026-01-01T00:00:00.000Z');
+
+/**
+ * The four scalars `confirm`/`deliver`/`cancel` read to decide whether the
+ * order exists. Those pre-checks used to load the FULL aggregate through
+ * `findById` — lines, payments and sale credit — purely to return `null`,
+ * immediately before a transaction that re-reads and re-checks everything
+ * under a row lock anyway. `IOrderDeliveryGateway`'s port comment claimed
+ * that wasted read had been eliminated; it had been, for the gateway, and not
+ * for these three.
+ */
+function scopeProjection(overrides: Partial<OrderScopeProjection> = {}): OrderScopeProjection {
+  return {
+    orderId: 'order-uuid-1',
+    warehouseId: 'warehouse-uuid-1',
+    deliveryMode: 'pickup',
+    status: 'created',
+    ...overrides,
+  };
+}
 
 function sampleOrder(overrides: Partial<DomainOrder> = {}): DomainOrder {
   return {
@@ -347,7 +368,7 @@ describe('OrderService', () => {
 
   describe('confirm/deliver/cancel', () => {
     it('confirm delegates straight to the repository and maps the response', async () => {
-      orderRepo.findById.mockResolvedValue(sampleOrder());
+      orderRepo.findScopeProjection.mockResolvedValue(scopeProjection());
       orderRepo.confirm.mockResolvedValue(sampleOrder({ status: 'verified', verifiedAt: at }));
 
       const result = await service.confirm('order-uuid-1');
@@ -357,14 +378,14 @@ describe('OrderService', () => {
     });
 
     it('confirm propagates InsufficientStockError unmapped', async () => {
-      orderRepo.findById.mockResolvedValue(sampleOrder());
+      orderRepo.findScopeProjection.mockResolvedValue(scopeProjection());
       orderRepo.confirm.mockRejectedValue(new InsufficientStockError('not enough stock'));
 
       await expect(service.confirm('order-uuid-1')).rejects.toThrow(InsufficientStockError);
     });
 
     it('confirm returns null when the order does not exist (repo.confirm never called)', async () => {
-      orderRepo.findById.mockResolvedValue(null);
+      orderRepo.findScopeProjection.mockResolvedValue(null);
 
       const result = await service.confirm('unknown-id');
 
@@ -373,7 +394,7 @@ describe('OrderService', () => {
     });
 
     it('deliver delegates straight to the repository and propagates NegativeStockError unmapped', async () => {
-      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verified' }));
+      orderRepo.findScopeProjection.mockResolvedValue(scopeProjection({ status: 'verified' }));
       orderRepo.deliver.mockRejectedValue(new NegativeStockError('onHand would go negative'));
 
       await expect(service.deliver('order-uuid-1')).rejects.toThrow(NegativeStockError);
@@ -382,7 +403,7 @@ describe('OrderService', () => {
 
     it('deliver records a commission accrual for the DELIVERED order', async () => {
       const delivered = sampleOrder({ status: 'delivered' });
-      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verified' }));
+      orderRepo.findScopeProjection.mockResolvedValue(scopeProjection({ status: 'verified' }));
       orderRepo.deliver.mockResolvedValue(delivered);
 
       const result = await service.deliver('order-uuid-1');
@@ -402,7 +423,7 @@ describe('OrderService', () => {
       // retry of THIS request would read as "already delivered" (409), not
       // as a path back to the missed accrual.
       const delivered = sampleOrder({ status: 'delivered' });
-      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verified' }));
+      orderRepo.findScopeProjection.mockResolvedValue(scopeProjection({ status: 'verified' }));
       orderRepo.deliver.mockResolvedValue(delivered);
       commissionRecorder.recordForDeliveredOrder.mockRejectedValue(
         new Error('reference provider unavailable'),
@@ -429,7 +450,7 @@ describe('OrderService', () => {
 
     it('stringifies a null attributedCompanyUserId as "null" in the log line, whatever the throw reason', async () => {
       const delivered = sampleOrder({ status: 'delivered', attributedCompanyUserId: null });
-      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'verified' }));
+      orderRepo.findScopeProjection.mockResolvedValue(scopeProjection({ status: 'verified' }));
       orderRepo.deliver.mockResolvedValue(delivered);
       commissionRecorder.recordForDeliveredOrder.mockRejectedValue(
         new Error('reference provider unavailable'),
@@ -447,7 +468,7 @@ describe('OrderService', () => {
     it.each(['confirm', 'cancel'] as const)(
       '%s never records an accrual — commission is earned by delivery alone',
       async (action) => {
-        orderRepo.findById.mockResolvedValue(sampleOrder());
+        orderRepo.findScopeProjection.mockResolvedValue(scopeProjection());
         orderRepo[action].mockResolvedValue(sampleOrder({ status: 'verified' }));
 
         await service[action]('order-uuid-1');
@@ -457,7 +478,7 @@ describe('OrderService', () => {
     );
 
     it('cancel delegates straight to the repository and propagates InvalidOrderStateError unmapped', async () => {
-      orderRepo.findById.mockResolvedValue(sampleOrder({ status: 'delivered' }));
+      orderRepo.findScopeProjection.mockResolvedValue(scopeProjection({ status: 'delivered' }));
       orderRepo.cancel.mockRejectedValue(
         new InvalidOrderStateError('order-uuid-1', 'created|verified', 'delivered'),
       );

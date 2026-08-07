@@ -19,8 +19,10 @@ export interface CarrierCapacity {
  * PURE. No query in the domain — the application service loads the
  * snapshot (all carriers + all open assignments), this function only
  * decides. `openAssignments` may carry ANY status; only `in_transit` rows
- * count toward busyness (delivered/expired ones are ignored here, not by
- * the caller pre-filtering — see the mixed-list triangulation in the test).
+ * count toward busyness (`delivered` and `cancelled` ones are ignored here,
+ * not by the caller pre-filtering — see the mixed-list triangulation in the
+ * test). `cancelled` never makes a carrier busy: that is the whole point of
+ * the state — a cancelled order must release its carrier.
  *
  * A carrier is BUSY when it has one or more `in_transit` assignments;
  * otherwise FREE. No cached/persisted number — recomputed from live rows

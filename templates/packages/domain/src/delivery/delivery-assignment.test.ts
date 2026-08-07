@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { assignCarrier, markAssignmentDelivered } from './delivery-assignment.js';
+import {
+  assertAssignmentDeliverable,
+  assignCarrier,
+  markAssignmentDelivered,
+} from './delivery-assignment.js';
+import type { DeliveryAssignment } from './delivery-assignment.js';
 import { InvalidAssignmentStateError } from './errors.js';
 
 const AT = new Date('2026-08-06T12:00:00.000Z');
@@ -35,11 +40,52 @@ describe('markAssignmentDelivered', () => {
     expect(delivered.carrierId).toBe(assignment.carrierId);
   });
 
+  it('rejects a cancelled assignment with InvalidAssignmentStateError — cancelled is terminal', () => {
+    const cancelled: DeliveryAssignment = {
+      ...assignCarrier({ orderId: 'order-1', carrierId: 'carrier-1' }, AT),
+      status: 'cancelled',
+    };
+    expect(() => markAssignmentDelivered(cancelled, LATER)).toThrow(InvalidAssignmentStateError);
+  });
+
   it('rejects an already-delivered assignment with InvalidAssignmentStateError', () => {
     const assignment = assignCarrier({ orderId: 'order-1', carrierId: 'carrier-1' }, AT);
     const delivered = markAssignmentDelivered(assignment, LATER);
     expect(() => markAssignmentDelivered(delivered, new Date('2026-08-08T00:00:00.000Z'))).toThrow(
       InvalidAssignmentStateError,
     );
+  });
+});
+
+describe('assertAssignmentDeliverable — the guard, named (CLASS G6)', () => {
+  it('passes silently for an in_transit assignment', () => {
+    const assignment = assignCarrier({ orderId: 'order-1', carrierId: 'carrier-1' }, AT);
+    expect(() => assertAssignmentDeliverable(assignment)).not.toThrow();
+  });
+
+  it('throws InvalidAssignmentStateError for a delivered assignment', () => {
+    const delivered = markAssignmentDelivered(
+      assignCarrier({ orderId: 'order-1', carrierId: 'carrier-1' }, AT),
+      LATER,
+    );
+    expect(() => assertAssignmentDeliverable(delivered)).toThrow(InvalidAssignmentStateError);
+  });
+
+  it('throws InvalidAssignmentStateError for a cancelled assignment', () => {
+    const cancelled: DeliveryAssignment = {
+      ...assignCarrier({ orderId: 'order-1', carrierId: 'carrier-1' }, AT),
+      status: 'cancelled',
+    };
+    expect(() => assertAssignmentDeliverable(cancelled)).toThrow(InvalidAssignmentStateError);
+  });
+
+  /** `markAssignmentDelivered` must keep routing its own guard through here — one rule, one home. */
+  it('is the same rule markAssignmentDelivered enforces', () => {
+    const cancelled: DeliveryAssignment = {
+      ...assignCarrier({ orderId: 'order-1', carrierId: 'carrier-1' }, AT),
+      status: 'cancelled',
+    };
+    expect(() => markAssignmentDelivered(cancelled, LATER)).toThrow(InvalidAssignmentStateError);
+    expect(() => assertAssignmentDeliverable(cancelled)).toThrow(InvalidAssignmentStateError);
   });
 });
