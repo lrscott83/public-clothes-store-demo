@@ -6,12 +6,16 @@ import type {
   ICarrierRepository,
   ICarrierWarehouseRepository,
   IDeliveryAssignmentRepository,
+  IOrderDeliveryGateway,
+  Order as DomainOrder,
 } from '@store-mgmt/domain';
 import {
   CARRIER_REPOSITORY,
   CARRIER_WAREHOUSE_REPOSITORY,
   CarrierNotFoundError,
   DELIVERY_ASSIGNMENT_REPOSITORY,
+  InvalidAssignmentStateError,
+  ORDER_DELIVERY_GATEWAY,
   OrderAlreadyAssignedError,
 } from '@store-mgmt/domain';
 import { DeliveryService } from './delivery.service.js';
@@ -42,6 +46,10 @@ function buildAssignmentRepoMock(): jest.Mocked<IDeliveryAssignmentRepository> {
     list: jest.fn(),
     countOrdersAwaitingCarrier: jest.fn(),
   };
+}
+
+function buildOrderDeliveryGatewayMock(): jest.Mocked<IOrderDeliveryGateway> {
+  return { markOrderDelivered: jest.fn() };
 }
 
 function carrier(overrides: Partial<DomainCarrier> = {}): DomainCarrier {
@@ -79,17 +87,20 @@ describe('DeliveryService', () => {
   let carrierRepo: jest.Mocked<ICarrierRepository>;
   let carrierWarehouseRepo: jest.Mocked<ICarrierWarehouseRepository>;
   let assignmentRepo: jest.Mocked<IDeliveryAssignmentRepository>;
+  let orderDeliveryGateway: jest.Mocked<IOrderDeliveryGateway>;
 
   beforeEach(async () => {
     carrierRepo = buildCarrierRepoMock();
     carrierWarehouseRepo = buildCarrierWarehouseRepoMock();
     assignmentRepo = buildAssignmentRepoMock();
+    orderDeliveryGateway = buildOrderDeliveryGatewayMock();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DeliveryService,
         { provide: CARRIER_REPOSITORY, useValue: carrierRepo },
         { provide: CARRIER_WAREHOUSE_REPOSITORY, useValue: carrierWarehouseRepo },
         { provide: DELIVERY_ASSIGNMENT_REPOSITORY, useValue: assignmentRepo },
+        { provide: ORDER_DELIVERY_GATEWAY, useValue: orderDeliveryGateway },
       ],
     }).compile();
     service = module.get(DeliveryService);
@@ -348,6 +359,49 @@ describe('DeliveryService', () => {
         expect(result).not.toHaveProperty('warning');
         expect(carrierWarehouseRepo.listByCarrier).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('markDelivered', () => {
+    it('guards in_transit, calls the gateway with orderId, and re-reads the assignment — writes NOTHING to the assignment itself', async () => {
+      const inTransit = assignment({ id: 'assignment-1', orderId: 'order-1', status: 'in_transit' });
+      const delivered = assignment({
+        id: 'assignment-1',
+        orderId: 'order-1',
+        status: 'delivered',
+        deliveredAt: new Date('2026-08-06T12:00:00.000Z'),
+      });
+      assignmentRepo.findById.mockResolvedValueOnce(inTransit).mockResolvedValueOnce(delivered);
+      orderDeliveryGateway.markOrderDelivered.mockResolvedValue({} as DomainOrder);
+
+      const result = await service.markDelivered('assignment-1');
+
+      expect(assignmentRepo.findById).toHaveBeenNthCalledWith(1, 'assignment-1');
+      expect(orderDeliveryGateway.markOrderDelivered).toHaveBeenCalledWith('order-1');
+      expect(assignmentRepo.findById).toHaveBeenNthCalledWith(2, 'assignment-1');
+      expect(assignmentRepo.findById).toHaveBeenCalledTimes(2);
+      expect(result!.status).toBe('delivered');
+      // `IDeliveryAssignmentRepository` has no write method for this transition
+      // (design §8) — `create` is the only write on this mock and it must
+      // never be touched by `markDelivered`.
+      expect(assignmentRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('returns null for an unknown assignment id — controller maps 404, never calls the gateway', async () => {
+      assignmentRepo.findById.mockResolvedValue(null);
+
+      const result = await service.markDelivered('unknown-assignment');
+
+      expect(result).toBeNull();
+      expect(orderDeliveryGateway.markOrderDelivered).not.toHaveBeenCalled();
+    });
+
+    it('throws InvalidAssignmentStateError when the assignment is not in_transit — never calls the gateway', async () => {
+      const alreadyDelivered = assignment({ id: 'assignment-1', status: 'delivered' });
+      assignmentRepo.findById.mockResolvedValue(alreadyDelivered);
+
+      await expect(service.markDelivered('assignment-1')).rejects.toThrow(InvalidAssignmentStateError);
+      expect(orderDeliveryGateway.markOrderDelivered).not.toHaveBeenCalled();
     });
   });
 });

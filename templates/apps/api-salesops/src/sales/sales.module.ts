@@ -3,6 +3,7 @@ import {
   CATEGORY_REPOSITORY,
   CURRENCY_REPOSITORY,
   CUSTOMER_REPOSITORY,
+  ORDER_DELIVERY_GATEWAY,
   ORDER_REPOSITORY,
   PRODUCT_REPOSITORY,
   STOCK_LEVEL_REPOSITORY,
@@ -24,6 +25,7 @@ import { AvailabilityController } from './availability.controller.js';
 import { AvailabilityService } from './availability.service.js';
 import { CommissionModule } from '../commission/commission.module.js';
 import { OrderController } from './order.controller.js';
+import { OrderDeliveryGatewayAdapter } from './order-delivery-gateway.adapter.js';
 import { OrderService } from './order.service.js';
 
 @Module({
@@ -48,6 +50,14 @@ import { OrderService } from './order.service.js';
     { provide: PRODUCT_REPOSITORY, useClass: PrismaProductRepository },
     { provide: CATEGORY_REPOSITORY, useClass: PrismaCategoryRepository },
     { provide: CUSTOMER_REPOSITORY, useClass: PrismaCustomerRepository },
+    // Delivery -> Sales direction (design §2 ADR-1): declared by Delivery as
+    // a port, implemented HERE because Sales knows how. Exported below so
+    // `DeliveryModule` can inject it without ever importing anything else
+    // from this module.
+    { provide: ORDER_DELIVERY_GATEWAY, useClass: OrderDeliveryGatewayAdapter },
   ],
+  // The ONLY thing `DeliveryModule` sees of Sales — it depends on the port,
+  // not on `OrderService`/`IOrderRepository`/anything else in here.
+  exports: [ORDER_DELIVERY_GATEWAY],
 })
 export class SalesModule {}

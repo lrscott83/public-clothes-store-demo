@@ -7,12 +7,15 @@ import type {
   ICarrierRepository,
   ICarrierWarehouseRepository,
   IDeliveryAssignmentRepository,
+  IOrderDeliveryGateway,
 } from '@store-mgmt/domain';
 import {
   CARRIER_REPOSITORY,
   CARRIER_WAREHOUSE_REPOSITORY,
   CarrierNotFoundError,
   DELIVERY_ASSIGNMENT_REPOSITORY,
+  InvalidAssignmentStateError,
+  ORDER_DELIVERY_GATEWAY,
   OrderAlreadyAssignedError,
   assignCarrier,
   computeCarrierCapacity,
@@ -37,12 +40,11 @@ export interface CapacityWindow {
 
 /**
  * Orchestration layer for the Delivery module (design §6). Phase 4 shipped
- * the read surface; Phase 6 (this) adds Carrier CRUD writes and `assign`.
- * `markDelivered` is NOT here — that needs `IOrderDeliveryGateway` /
- * `SalesModule`, which is Phase 6b (out of scope for this batch; see
- * `delivery.module.ts`, still `imports: [InfraDbModule]` only). Mirrors
- * `WarehouseService`'s shape: the only place with I/O, maps domain entities
- * to response DTOs (dates -> ISO strings).
+ * the read surface, Phase 6a added Carrier CRUD writes and `assign`, Phase 6b
+ * (this) adds `markDelivered` — the only method here that reaches across the
+ * module boundary, via `IOrderDeliveryGateway` (`SalesModule`, design §2A).
+ * Mirrors `WarehouseService`'s shape: the only place with I/O, maps domain
+ * entities to response DTOs (dates -> ISO strings).
  */
 @Injectable()
 export class DeliveryService {
@@ -52,6 +54,8 @@ export class DeliveryService {
     private readonly carrierWarehouseRepository: ICarrierWarehouseRepository,
     @Inject(DELIVERY_ASSIGNMENT_REPOSITORY)
     private readonly assignmentRepository: IDeliveryAssignmentRepository,
+    @Inject(ORDER_DELIVERY_GATEWAY)
+    private readonly orderDeliveryGateway: IOrderDeliveryGateway,
   ) {}
 
   /**
@@ -136,6 +140,32 @@ export class DeliveryService {
       assignCarrier({ orderId: input.orderId, carrierId: input.carrierId }, new Date()),
     );
     return this.toAssignmentResponse(created);
+  }
+
+  /**
+   * Guards `in_transit`, delegates the actual transition to
+   * `IOrderDeliveryGateway.markOrderDelivered` (design §2A), then re-reads.
+   * Writes NOTHING to the assignment itself — `closeAssignmentOnDeliveryTx`
+   * (Phase 5) is the one writer of the delivered edge, inside Sales' own
+   * transaction. `IDeliveryAssignmentRepository` gains no `markDelivered`
+   * method for this; that absence is the design (design §8), not an
+   * oversight. `null` on an unknown id lets the controller map a clean 404,
+   * mirroring `OrderService.confirm/deliver/cancel`'s own null-on-missing
+   * shape.
+   */
+  async markDelivered(assignmentId: string): Promise<DeliveryAssignmentResponseDto | null> {
+    const found = await this.assignmentRepository.findById(assignmentId);
+    if (!found) {
+      return null;
+    }
+    if (found.status !== 'in_transit') {
+      throw new InvalidAssignmentStateError(found.id, 'in_transit', found.status);
+    }
+
+    await this.orderDeliveryGateway.markOrderDelivered(found.orderId);
+
+    const updated = await this.assignmentRepository.findById(assignmentId);
+    return updated ? this.toAssignmentResponse(updated) : null;
   }
 
   /**

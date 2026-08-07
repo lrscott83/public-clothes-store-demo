@@ -6,21 +6,24 @@ import {
   PrismaCarrierWarehouseRepository,
   PrismaDeliveryAssignmentRepository,
 } from '@store-mgmt/infra-db';
+import { SalesModule } from '../sales/sales.module.js';
 import { CarrierController } from './carrier.controller.js';
 import { DeliveryAssignmentController } from './delivery-assignment.controller.js';
 import { DeliveryService } from './delivery.service.js';
 
 /**
- * Phase 6a: Carrier CRUD writes + `assign` shipped here (in addition to
- * Phase 4's reads). Imports ONLY `InfraDbModule` — `SalesModule` is
- * deliberately NOT imported here yet. `assign` needs only
- * `ICarrierRepository`/`IDeliveryAssignmentRepository`, both already
- * provided through `InfraDbModule`. `SalesModule` arrives in Phase 6b
- * alongside `markDelivered`'s gateway call (design §2A) — adding it early
- * would be scope leaking ahead of the write path that actually needs it.
+ * Phase 6a shipped Carrier CRUD writes + `assign` on `InfraDbModule` alone.
+ * Phase 6b (this) adds `markDelivered`, which needs `IOrderDeliveryGateway`
+ * — so `SalesModule` is imported here for the FIRST time (design §2A).
+ * `SalesModule` exports only `ORDER_DELIVERY_GATEWAY`; this module gains the
+ * delivery→sales trigger without gaining any knowledge of `OrderService`,
+ * `IOrderRepository`, or anything else Sales owns. The reverse import
+ * (`apps/api-salesops/src/sales/**` -> `../delivery/**`) is what stays
+ * forbidden — see `packages/eslint-config/backend-boundaries.config.js`'s
+ * `salesForbidsDeliveryImportRule`.
  */
 @Module({
-  imports: [InfraDbModule],
+  imports: [InfraDbModule, SalesModule],
   controllers: [CarrierController, DeliveryAssignmentController],
   providers: [
     DeliveryService,

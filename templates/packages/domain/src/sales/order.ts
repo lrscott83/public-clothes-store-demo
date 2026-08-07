@@ -11,10 +11,18 @@ import type { SaleCredit } from './sale-credit.js';
 import { InvalidOrderError, InvalidOrderStateError } from './errors.js';
 
 /**
- * `Order` fulfillment path. This slice (Sales) implements only the
- * `pickup` direct edge (`verified -> delivered`); `delivery` continues
- * through a FUTURE Delivery module out of scope here — Sales never models
- * `despachando`/`transportando`.
+ * `Order` fulfillment path. Sales owns `verified -> delivered` for BOTH
+ * `deliveryMode` values. For `pickup`, `POST /orders/:id/deliver` reaches it
+ * directly. For `delivery`, the same edge is now reached from the Delivery
+ * module's `POST /delivery/assignments/:id/deliver`, via
+ * `IOrderDeliveryGateway` (`packages/domain/src/delivery/
+ * order-delivery-gateway.port.ts`) delegating straight back into
+ * `OrderService.deliver` — one write path, whichever door the caller used
+ * (`packages/domain/src/delivery/delivery-assignment-seam.md`). That seam is
+ * fulfilled now, not future: Sales still never models `despachando`/
+ * `transportando` as an `Order` status — that intermediate state lives
+ * entirely in `DeliveryAssignmentStatus.in_transit`, a Delivery concept
+ * Sales does not know exists.
  */
 /**
  * NOTE: `deliveryMode: 'delivery'` and `status: 'delivered'` are

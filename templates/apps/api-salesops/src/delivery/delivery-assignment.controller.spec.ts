@@ -1,7 +1,12 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesGuard } from '@store-mgmt/api-common';
-import { CarrierNotFoundError, OrderAlreadyAssignedError, USER_ROLES } from '@store-mgmt/domain';
+import {
+  CarrierNotFoundError,
+  InvalidAssignmentStateError,
+  OrderAlreadyAssignedError,
+  USER_ROLES,
+} from '@store-mgmt/domain';
 import { TenantContextService } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import {
@@ -17,6 +22,7 @@ type DeliveryServiceMock = {
   findAssignmentByOrderId: jest.Mock;
   getCarrierCapacity: jest.Mock;
   assign: jest.Mock;
+  markDelivered: jest.Mock;
 };
 
 const sampleAssignment = {
@@ -69,6 +75,7 @@ describe('DeliveryAssignmentController', () => {
       findAssignmentByOrderId: jest.fn(),
       getCarrierCapacity: jest.fn(),
       assign: jest.fn(),
+      markDelivered: jest.fn(),
     };
   });
 
@@ -237,6 +244,70 @@ describe('DeliveryAssignmentController', () => {
       const response = await request(app.getHttpServer())
         .post('/delivery/assignments')
         .send({ orderId: 'order-uuid-1', carrierId: 'carrier-uuid-1' });
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('POST /delivery/assignments/:id/deliver', () => {
+    it('returns 200 with the re-read (delivered) assignment on success', async () => {
+      app = await buildApp(service, USER_ROLES.owner);
+      service.markDelivered.mockResolvedValue({
+        ...sampleAssignment,
+        status: 'delivered',
+        deliveredAt: '2026-08-06T12:00:00.000Z',
+      });
+
+      const response = await request(app.getHttpServer()).post(
+        '/delivery/assignments/assignment-uuid-1/deliver',
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('delivered');
+      expect(service.markDelivered).toHaveBeenCalledWith('assignment-uuid-1');
+    });
+
+    it('maps an unknown assignment id (service returns null) to 404', async () => {
+      app = await buildApp(service, USER_ROLES.owner);
+      service.markDelivered.mockResolvedValue(null);
+
+      const response = await request(app.getHttpServer()).post(
+        '/delivery/assignments/unknown-id/deliver',
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it('maps InvalidAssignmentStateError to 409 when the assignment is not in_transit', async () => {
+      app = await buildApp(service, USER_ROLES.owner);
+      service.markDelivered.mockRejectedValue(
+        new InvalidAssignmentStateError('assignment-uuid-1', 'in_transit', 'delivered'),
+      );
+
+      const response = await request(app.getHttpServer()).post(
+        '/delivery/assignments/assignment-uuid-1/deliver',
+      );
+
+      expect(response.status).toBe(409);
+    });
+
+    it('admits a warehouse_operator caller -> 200', async () => {
+      app = await buildApp(service, USER_ROLES.warehouse_operator);
+      service.markDelivered.mockResolvedValue(sampleAssignment);
+
+      const response = await request(app.getHttpServer()).post(
+        '/delivery/assignments/assignment-uuid-1/deliver',
+      );
+
+      expect(response.status).toBe(200);
+    });
+
+    it('rejects a sales_agent caller with 403', async () => {
+      app = await buildApp(service, USER_ROLES.sales_agent);
+
+      const response = await request(app.getHttpServer()).post(
+        '/delivery/assignments/assignment-uuid-1/deliver',
+      );
 
       expect(response.status).toBe(403);
     });

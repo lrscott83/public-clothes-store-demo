@@ -15,6 +15,7 @@ import {
 import { JwtAuthGuard, Roles, RolesGuard, TenantContextGuard, createRunInTenant } from '@store-mgmt/api-common';
 import {
   CarrierNotFoundError,
+  InvalidAssignmentStateError,
   OrderAlreadyAssignedError,
   USER_ROLES,
   type DeliveryAssignmentStatus,
@@ -36,12 +37,12 @@ function parseDate(value: string | undefined): Date | undefined {
 }
 
 /**
- * REST delivery for `DeliveryAssignment` reads, the capacity snapshot, and
- * `POST /delivery/assignments` (task 6.3/6.4). `POST
- * /delivery/assignments/:id/deliver` is Phase 6b (needs
- * `IOrderDeliveryGateway`/`SalesModule`, out of scope here). Reads carry no
- * `@Roles` — open to any authenticated tenant user (design §6, spec: reads
- * carry no role restriction). `assign` requires `owner`/`admin`/
+ * REST delivery for `DeliveryAssignment` reads, the capacity snapshot,
+ * `POST /delivery/assignments` (task 6.3/6.4), and
+ * `POST /delivery/assignments/:id/deliver` (task 6.5/6.6, Phase 6b — the
+ * `IOrderDeliveryGateway`/`SalesModule` door). Reads carry no `@Roles` — open
+ * to any authenticated tenant user (design §6, spec: reads carry no role
+ * restriction). `assign`/`markDelivered` require `owner`/`admin`/
  * `warehouse_operator` — mirrors `POST /orders/:id/deliver`'s roles exactly
  * (spec: "Assigning a carrier and marking an assignment delivered are
  * OPERATIONS, not master-data writes").
@@ -71,6 +72,31 @@ export class DeliveryAssignmentController {
   ): Promise<DeliveryAssignmentResponseDto> {
     return this.runInTenant(req.tenant, () =>
       this.withDomainErrorMapping(() => this.deliveryService.assign(body)),
+    );
+  }
+
+  /**
+   * `IDeliveryAssignmentRepository` never learns a `markDelivered` write —
+   * `DeliveryService.markDelivered` re-reads after delegating to
+   * `IOrderDeliveryGateway`, so `null` (unknown id) is the only "not found"
+   * outcome to map here; `InvalidAssignmentStateError` covers the
+   * not-`in_transit` guard.
+   */
+  @Post('assignments/:id/deliver')
+  @HttpCode(HttpStatus.OK)
+  @Roles(USER_ROLES.owner, USER_ROLES.admin, USER_ROLES.warehouse_operator)
+  async markDelivered(
+    @Param('id') id: string,
+    @Req() req: TenantScopedRequest,
+  ): Promise<DeliveryAssignmentResponseDto> {
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(async () => {
+        const result = await this.deliveryService.markDelivered(id);
+        if (!result) {
+          throw new NotFoundException(`DeliveryAssignment "${id}" not found`);
+        }
+        return result;
+      }),
     );
   }
 
@@ -107,6 +133,8 @@ export class DeliveryAssignmentController {
    * one status, per its own message). `OrderAlreadyAssignedError` -> 409 —
    * the request is well-formed, the order just cannot accept a second
    * assignment right now (mirrors `order.controller.ts`'s 409 class).
+   * `InvalidAssignmentStateError` -> 409 — `markDelivered` on an assignment
+   * that is not `in_transit` (task 6.5/6.6).
    */
   private async withDomainErrorMapping<T>(fn: () => Promise<T>): Promise<T> {
     try {
@@ -116,6 +144,9 @@ export class DeliveryAssignmentController {
         throw new NotFoundException(err.message);
       }
       if (err instanceof OrderAlreadyAssignedError) {
+        throw new ConflictException(err.message);
+      }
+      if (err instanceof InvalidAssignmentStateError) {
         throw new ConflictException(err.message);
       }
       throw err;
