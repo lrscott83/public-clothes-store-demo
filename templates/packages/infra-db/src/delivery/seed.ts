@@ -8,6 +8,13 @@ import type { PrismaClient as TenantPrismaClient } from '../../generated/tenant/
  * demo tenant exercises the "zero coverage rows means no declared coverage"
  * reading (spec: "Zero coverage rows means the carrier serves no
  * warehouse") without any manual setup.
+ *
+ * NOT WIRED INTO `prisma/seed.js` — deliberately, not an oversight. No task in
+ * the `delivery` change called for it, and wiring a seed is a product decision
+ * about what a fresh demo tenant should contain, not an implementation detail.
+ * `seedCarriers` is tested and idempotent, so wiring it later is a one-line
+ * change. Flagged by `sdd-verify` (SUGGESTION, 2026-08-07) so the omission stays
+ * a choice on record rather than something rediscovered as a bug.
  */
 const CARRIERS = [
   { name: 'Envíos Rápidos', phone: '+53 5 555 0101', coversWarehouseNames: ['Pinar del Río', 'Herradura'] },

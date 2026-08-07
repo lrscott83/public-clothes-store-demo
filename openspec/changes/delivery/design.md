@@ -310,6 +310,19 @@ Exactly as `proposal.md:124-168` (D1/D2/D3/D4). Two notes for implementation:
 
 ## 10. Data flow
 
+> **Amended 2026-08-07 after implementation.** The diagram below draws
+> `closeAssignmentOnDeliveryTx` as the LAST write inside `deliver()`'s
+> transaction. The shipped code runs it FIRST, right after the `verified` guard
+> — see `packages/infra-db/src/sales/prisma-order.repository.ts`. Statement order
+> inside a single transaction does not change the outcome, and no ADR pins it;
+> what forced the change is testability. If the close ran last, nothing could
+> fail after it, so the rollback path would be structurally unreachable and
+> untestable — `reserved <= on_hand` already blocks any state that would make
+> `applyReservationTx` fail on a properly-verified order. Running it first lets a
+> later failure roll it back, which is exactly the property the rollback test
+> proves. The three MUSTs of ADR-1/ADR-2 — one transaction, not try/catch,
+> 0 rows is not an error — are all honoured.
+
 **(a) Assign a carrier** — one write, no cross-module call:
 
 ```

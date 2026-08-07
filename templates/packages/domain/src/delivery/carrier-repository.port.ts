@@ -2,7 +2,17 @@ import type { Carrier, CreateCarrierInput } from './carrier.js';
 
 /** Optional filter for `ICarrierRepository.list`. */
 export interface CarrierListFilter {
-  /** When omitted or `false`, `active: false` carriers are excluded (default listing). */
+  /**
+   * When `true`, `active: false` carriers are excluded. When omitted or
+   * `false`, ALL carriers are returned, soft-deleted ones included.
+   *
+   * NOTE the inverted sense relative to `IWarehouseRepository`'s
+   * `includeInactive`, whose default EXCLUDES inactive rows. Both are
+   * tested contracts; they simply opt in from opposite ends. Callers that
+   * serve HTTP reads pass `activeOnly: true` explicitly — see
+   * `DeliveryService.listCarriers` and `getCarrierCapacity` — so no
+   * endpoint ever exposes a soft-deleted carrier.
+   */
   readonly activeOnly?: boolean;
 }
 
