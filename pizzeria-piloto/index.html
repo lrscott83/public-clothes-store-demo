@@ -13,7 +13,8 @@
 <meta property="og:image" content="assets/logo.png">
 <meta property="og:locale" content="es_ES">
 
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3 L27 25 A17 17 0 0 1 5 25 Z' fill='%23F5A623'/%3E%3Ccircle cx='16' cy='13' r='2.4' fill='%23E23B2E'/%3E%3Ccircle cx='11' cy='20' r='2' fill='%23E23B2E'/%3E%3Ccircle cx='21' cy='20' r='2' fill='%236DB33F'/%3E%3C/svg%3E">
+<link rel="icon" href="assets/logo.png">
+<link rel="apple-touch-icon" href="assets/logo.png">
 
 <style>
 /* ==========================================================================
@@ -58,7 +59,7 @@ h1,h2,h3{margin:0}
 
 .etiqueta{
   font-size:.7rem;letter-spacing:.22em;text-transform:uppercase;
-  color:var(--brasa);font-weight:700;margin:0 0 .9rem;
+  color:var(--brasa);font-weight:700;margin:0 0 .55rem;
 }
 .titulo{
   font-family:var(--serif);font-weight:400;
@@ -115,10 +116,11 @@ h1,h2,h3{margin:0}
 .barra{position:relative;z-index:3}
 .barra__interior{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding-block:.85rem}
 .marca{display:flex;align-items:center;gap:.55rem;text-decoration:none}
+.marca__logo{width:32px;height:32px;border-radius:7px;object-fit:cover;flex:none}
 .marca__nombre{font-family:var(--serif);font-size:1.05rem;line-height:1}
 
-/* ---- HERO: compacto, para que las tarjetas asomen ---------------------- */
-.hero{position:relative;isolation:isolate;padding-block:clamp(2rem,7vw,3.5rem) clamp(2.5rem,8vw,4rem)}
+/* ---- HERO: compacto, para que las dos primeras tarjetas entren enteras -- */
+.hero{position:relative;isolation:isolate;padding-block:clamp(1rem,3.5vw,2rem) clamp(1.5rem,5vw,2.25rem)}
 
 /* El fuego, DENTRO de la pantalla. Tres capas: halo, núcleo y lengua. */
 .fuego{position:absolute;inset:-10% -20% -30%;z-index:-1;pointer-events:none;overflow:hidden}
@@ -161,11 +163,11 @@ h1,h2,h3{margin:0}
 
 .hero__titulo{
   font-family:var(--serif);font-weight:400;
-  font-size:clamp(3.2rem,15vw,6rem);
-  line-height:.95;letter-spacing:-.035em;
+  font-size:clamp(1.65rem,5.5vw,2.4rem);
+  line-height:1.1;letter-spacing:-.02em;
 }
-.hero__bajada{color:var(--tenue);font-size:1.075rem;max-width:34ch;margin:1.1rem 0 0}
-.hero__acciones{display:flex;flex-wrap:wrap;align-items:center;gap:1.25rem;margin-top:1.9rem}
+.hero__bajada{color:var(--tenue);font-size:1rem;max-width:38ch;margin:.65rem 0 0}
+.hero__acciones{display:flex;flex-wrap:wrap;align-items:center;gap:1.1rem;margin-top:1.35rem}
 
 /* ---- LA REJILLA: todo lo que hay, arriba y a la vista ------------------ */
 .rejilla{display:grid;gap:1rem;grid-template-columns:repeat(2,1fr)}
@@ -260,12 +262,7 @@ h1,h2,h3{margin:0}
 <header class="barra">
   <div class="envoltura barra__interior">
     <a class="marca" href="#">
-      <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
-        <path d="M16 3 L27 25 A17 17 0 0 1 5 25 Z" fill="#F5A623"/>
-        <circle cx="16" cy="13" r="2.4" fill="#E23B2E"/>
-        <circle cx="11" cy="20" r="2" fill="#E23B2E"/>
-        <circle cx="21" cy="20" r="2" fill="#6DB33F"/>
-      </svg>
+      <img class="marca__logo" src="assets/logo.png" width="32" height="32" alt="">
       <span class="marca__nombre">Pizzería Piloto</span>
     </a>
 
@@ -290,9 +287,11 @@ h1,h2,h3{margin:0}
 
     <div class="envoltura">
       <p class="etiqueta entra">Pizzería &amp; mercado</p>
-      <h1 class="hero__titulo entra">Todavía<br>quema.</h1>
+      <!-- Sigue habiendo un h1: la página necesita un encabezado de nivel 1
+           para buscadores y lectores de pantalla. Solo dejó de ser enorme. -->
+      <h1 class="hero__titulo entra">Todavía quema.</h1>
       <p class="hero__bajada entra">
-        Napolitana con jamón y cebolla. Sale del horno cuando la pides, no antes.
+        Napolitana con jamón y cebolla, del horno a tu mano.
         Y al lado, el mercado con lo que hace falta en la casa.
       </p>
       <div class="hero__acciones entra">
@@ -310,6 +309,27 @@ h1,h2,h3{margin:0}
     <h2 class="oculto" id="t-todo">Todo lo que hay</h2>
 
     <div class="rejilla">
+
+      <article class="ficha entra">
+        <svg class="ficha__icono" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#A6DDE0" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 4h8v4l3 6v14a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V14l3-6z"/>
+          <path d="M9 19h14" stroke-linecap="round"/>
+        </svg>
+        <h3 class="ficha__nombre">Bien frío</h3>
+        <p class="ficha__texto">Refrescos, cerveza, jugos y pomos de agua. Fríos de verdad, no del tiempo.</p>
+        <span class="ficha__marca">Con este calor</span>
+      </article>
+
+      <article class="ficha entra">
+        <svg class="ficha__icono" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#F5A623" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 17h22v3a5 5 0 0 1-5 5H10a5 5 0 0 1-5-5z"/>
+          <path d="M10 17a6 6 0 0 1 12 0" stroke="#E23B2E"/>
+          <path d="M6 28h20" stroke-linecap="round"/>
+        </svg>
+        <h3 class="ficha__nombre">Entremeses</h3>
+        <p class="ficha__texto">Algo salado para acompañar mientras esperas.</p>
+        <span class="ficha__marca">En oferta</span>
+      </article>
 
       <article class="ficha entra">
         <svg class="ficha__icono" width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
@@ -332,27 +352,6 @@ h1,h2,h3{margin:0}
         <h3 class="ficha__nombre">Familiar</h3>
         <p class="ficha__texto">Para cuando son cuatro y nadie quiere cocinar.</p>
         <span class="ficha__marca">Alcanza para varios</span>
-      </article>
-
-      <article class="ficha entra">
-        <svg class="ficha__icono" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#A6DDE0" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 4h8v4l3 6v14a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V14l3-6z"/>
-          <path d="M9 19h14" stroke-linecap="round"/>
-        </svg>
-        <h3 class="ficha__nombre">Bien frío</h3>
-        <p class="ficha__texto">Refrescos, cerveza, jugos y pomos de agua. Fríos de verdad, no del tiempo.</p>
-        <span class="ficha__marca">Con este calor</span>
-      </article>
-
-      <article class="ficha entra">
-        <svg class="ficha__icono" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#F5A623" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
-          <path d="M5 17h22v3a5 5 0 0 1-5 5H10a5 5 0 0 1-5-5z"/>
-          <path d="M10 17a6 6 0 0 1 12 0" stroke="#E23B2E"/>
-          <path d="M6 28h20" stroke-linecap="round"/>
-        </svg>
-        <h3 class="ficha__nombre">Entremeses</h3>
-        <p class="ficha__texto">Algo salado para acompañar mientras esperas.</p>
-        <span class="ficha__marca">En oferta</span>
       </article>
 
       <article class="ficha entra">
@@ -452,7 +451,10 @@ h1,h2,h3{margin:0}
 <footer class="pie">
   <div class="envoltura pie__interior">
     <span>Pizzería Piloto — pizzería y mercado</span>
-    <a class="enlace-suave" href="https://chat.whatsapp.com/EJEMPLO0000000000000000">Entrar al grupo</a>
+    <a class="wa wa--chico" href="https://chat.whatsapp.com/EJEMPLO0000000000000000">
+      <svg width="18" height="18" aria-hidden="true"><use href="#g-wa"/></svg>
+      Entrar al grupo
+    </a>
   </div>
 </footer>
 
