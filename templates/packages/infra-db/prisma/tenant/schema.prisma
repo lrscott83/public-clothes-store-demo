@@ -1,0 +1,638 @@
+// TENANT schema (design.md §1/§2 D1-D3). One Postgres schema per Company —
+// every business table lives here, none of it in `public`. There is no
+// `_prisma_migrations` history for tenant schemas: the truth is this file,
+// applied via the generated `prisma/tenant-schema.sql` (task 3.3,
+// `scripts/generate-tenant-schema-sql.ts`) at provisioning time and by
+// `scripts/tenant-migrate.ts` for fleet evolution (design.md D6). Split
+// from the single `prisma/schema.prisma` (SDD change multi-tenant-by-schema,
+// task 3.2). The sibling `prisma/master/schema.prisma` holds identity plus
+// the (userId, companyId) access decision.
+//
+// Prisma 7 rejects `url` inside a schema file's `datasource` block
+// (error P1012, confirmed by task 11.1's spike) — declare `provider` only,
+// mirroring the pre-split `prisma/schema.prisma:8-10`.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../../generated/tenant"
+  runtime      = "nodejs"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// First domain module: Currency / exchange rates (SDD change backend-currency).
+// Append-only: no updatedAt, no soft-delete, no valid_to. A rate change is a
+// new INSERT; "current rate" = latest row with effectiveFrom <= at.
+
+enum PaymentChannel {
+  ZELLE
+  USD_CASH
+  EUR_CASH
+  MN_TRANSFER
+  MN_CASH
+}
+
+enum Currency {
+  USD
+  EUR
+  MN
+}
+
+model ExchangeRate {
+  id            String         @id @default(uuid()) @db.Uuid
+  channel       PaymentChannel
+  rate          Decimal        @db.Decimal(18, 6) // NUMERIC — never float
+  effectiveFrom DateTime       @map("effective_from")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  @@index([channel, effectiveFrom])
+  @@map("exchange_rate")
+}
+
+// Second domain module: Products & Categories (SDD change backend-products).
+// Mutable master data -> BOTH created_at + updated_at (unlike the
+// append-only ExchangeRate above). Soft-delete via `active`, never a hard
+// DELETE — order-history FK references must never be orphaned. Seeded per
+// tenant from the master `TemplateCategory`/`TemplateProduct` at
+// provisioning time (design.md D7 step 6, Phase 9) — independently
+// editable afterwards, never a live reference to the template.
+
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  image     String?
+  icon      String?
+  order     Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  products Product[]
+
+  @@map("category")
+}
+
+model Product {
+  id                   String   @id @default(uuid()) @db.Uuid
+  name                 String
+  description          String
+  sku                  String?
+  barcode              String?
+  price                Decimal  @db.Decimal(18, 2) // NUMERIC — never float
+  priceCurrency        String   @map("price_currency")
+  percentDiscountPrice Decimal  @default(0) @map("percent_discount_price") @db.Decimal(5, 2)
+  discountPrice        Decimal  @default(0) @map("discount_price") @db.Decimal(18, 2)
+  cost                 Decimal  @db.Decimal(18, 2)
+  costCurrency         String   @map("cost_currency")
+  categoryId           String   @map("category_id") @db.Uuid
+  image                String
+  isNew                Boolean  @default(false) @map("is_new")
+  order                Int
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  category    Category        @relation(fields: [categoryId], references: [id])
+  // Inverse relations only — Product carries ZERO inventory scalar fields
+  // (see design.md decision #10; `rg -i "stock|warehouse"` under
+  // packages/domain/src/product/ must stay 0).
+  stockLevels StockLevel[]
+  movements   StockMovement[]
+  // Inverse relation only — added by the Sales module (backend-ventas).
+  orderLines  OrderLine[]
+  // Inverse relation only — added by the Commission module. 0..1 per product.
+  commissionReference ProductCommissionReference?
+
+  @@index([categoryId])
+  @@map("product")
+}
+
+// Third domain module: Almacenes + Inventario (SDD change backend-inventory).
+// `Warehouse`/`StockLevel` are mutable master data -> BOTH created_at +
+// updated_at. `StockMovement` is an append-only audit log -> created_at
+// only, no soft-delete (mirrors ExchangeRate). `onHand` mutates ONLY via a
+// recorded StockMovement, inside one prisma.$transaction (design.md's
+// central decision) — no direct "set onHand" write anywhere.
+
+enum StockMovementType {
+  purchase_in
+  sale_out
+  transfer_in
+  transfer_out
+  adjustment_in
+  adjustment_out
+}
+
+model Warehouse {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  stockLevels        StockLevel[]
+  movements          StockMovement[]
+  // Inverse relation only — added by the Sales module (backend-ventas).
+  orders             Order[]
+  // Inverse relation only — added by the Users/Roles module (backend-users-roles).
+  warehouseOperators WarehouseOperator[]
+  // Inverse relation only — added by the Delivery module (SDD change
+  // delivery). `CarrierWarehouse` coverage join; Warehouse carries zero
+  // Delivery scalar fields.
+  carriers           CarrierWarehouse[]
+
+  @@map("warehouse")
+}
+
+model StockLevel {
+  id          String   @id @default(uuid()) @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  warehouseId String   @map("warehouse_id") @db.Uuid
+  onHand      Int      @default(0) @map("on_hand")
+  reserved    Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  product   Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  // DB backstop (raw SQL in migration): CHECK (on_hand >= 0 AND reserved >= 0)
+  // DB backstop (raw SQL in migration, W4): CHECK (reserved <= on_hand) —
+  // IMMEDIATE, makes deliver's release-before-sale_out ordering load-bearing.
+
+  @@unique([productId, warehouseId])
+  @@index([warehouseId])
+  @@map("stock_level")
+}
+
+model StockMovement {
+  id          String            @id @default(uuid()) @db.Uuid
+  productId   String            @map("product_id") @db.Uuid
+  warehouseId String            @map("warehouse_id") @db.Uuid
+  type        StockMovementType
+  quantity    Int // positive magnitude; type implies direction
+  reason      String?
+  createdBy   String?           @map("created_by")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  product   Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([productId, warehouseId])
+  @@map("stock_movement")
+}
+
+// Fourth domain module: Clientes (SDD change backend-customers). Flat master
+// data -> BOTH created_at + updated_at. Soft-delete via `active`, never a
+// hard DELETE — a future Sales SaleCredit/Order FK must never be orphaned.
+// `documentId` is optional and unique-when-present: a plain @unique on a
+// nullable column allows many NULLs (Postgres treats NULLs as distinct)
+// while rejecting duplicate non-null values — no partial index needed
+// (design.md). RESHAPED by multi-tenant-by-schema (design.md §1): the
+// former `userId -> User` relation cannot cross the master/tenant schema
+// boundary, so it becomes `companyUserId -> CompanyUser` (tenant-side,
+// design.md D1) — still REQUIRED and UNIQUE, still 1:1.
+model Customer {
+  id            String   @id @default(uuid()) @db.Uuid
+  companyUserId String   @unique @map("company_user_id") @db.Uuid
+  fullName      String   @map("full_name")
+  documentId    String?  @unique @map("document_id")
+  cellPhone     String?  @map("cell_phone")
+  email         String?
+  address       String?
+  note          String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  companyUser CompanyUser @relation(fields: [companyUserId], references: [id])
+
+  // Inverse relations only — added by the Sales module (SDD change
+  // backend-ventas). Customer carries zero Sales scalar fields.
+  orders      Order[]
+  saleCredits SaleCredit[]
+
+  @@map("customer")
+}
+
+// Fifth domain module: Sales (SDD change backend-ventas). `Order` is the
+// aggregate root — persists/loads with `OrderLine[]`/`OrderPayment[]`/an
+// optional `SaleCredit` as ONE unit (design.md decision #1). Mutable ->
+// created_at + updated_at. An Order is an immutable transactional EVENT: it
+// is NEVER deleted (no hard DELETE and NO soft-delete `active` flag either) —
+// its whole lifecycle lives in the `OrderStatus` machine
+// (created/verified/delivered/cancelled). Mirrors the append-only
+// `StockMovement`/`ExchangeRate` records. `OrderLine`/`OrderPayment` carry
+// `onDelete: Cascade` as defense-in-depth (children are meaningless without
+// the root; the root is never deleted, so cascade only guards accidental
+// removal).
+//
+// DEVIATION from design.md's literal Prisma block (flagged, not a domain
+// change): design.md was written BEFORE Phase 3 locked the actual domain
+// shape. The frozen `OrderLine.rateApplied`/`OrderPayment.rateApplied`/
+// `SaleCredit.rateApplied` are full `ExchangeRate` objects
+// (`{id?, channel, rate, effectiveFrom}`), not a bare `bigint` — so each
+// needs its own `rateChannel` column (design.md omitted it) to round-trip
+// losslessly, since a resolved rate's channel is NOT always the same as
+// `OrderPayment.channel` (cross-currency payments resolve the DEST-side
+// channel, per `convert`). `SaleCredit` likewise needs its own
+// `rateApplied`/`rateChannel`/`rateEffectiveFrom` — design.md's SaleCredit
+// block omitted them entirely, but the frozen `SaleCredit` domain
+// interface requires them. All additions below are ADDITIVE (new nullable
+// -free-but-newly-introduced columns on brand-new tables) — no existing
+// table changes.
+
+enum OrderStatus {
+  created
+  verified
+  delivered
+  cancelled
+}
+
+enum DeliveryMode {
+  pickup
+  delivery
+}
+
+model Order {
+  id                      String       @id @default(uuid()) @db.Uuid
+  customerId              String       @map("customer_id") @db.Uuid
+  customerName            String       @map("customer_name") // snapshot
+  warehouseId             String       @map("warehouse_id") @db.Uuid
+  deliveryMode            DeliveryMode @map("delivery_mode") // REQUIRED; delivery engages future Delivery module
+  currency                String // derived USD|MN
+  status                  OrderStatus  @default(created)
+  subtotal                Decimal      @db.Decimal(18, 2) // Money in `currency`
+  discountTotal           Decimal      @map("discount_total") @db.Decimal(18, 2)
+  total                   Decimal      @db.Decimal(18, 2)
+  /// `CompanyUser.id` of the sales agent this sale is credited to. NULLABLE only because
+  /// orders predating this column exist and are deliberately NOT backfilled — inventing an
+  /// agent for a historical sale would fabricate financial evidence. Every order written
+  /// after the cutover carries it (the domain input is required, not optional).
+  attributedCompanyUserId String?      @map("attributed_company_user_id") @db.Uuid
+  orderDate               DateTime     @map("order_date")
+  verifiedAt              DateTime?    @map("verified_at") // freeze stamp (rate+totals, NO commission)
+  deliveredAt             DateTime?    @map("delivered_at") // stamped at verified->delivered
+  createdAt               DateTime     @default(now()) @map("created_at")
+  updatedAt               DateTime     @updatedAt @map("updated_at")
+
+  customer              Customer       @relation(fields: [customerId], references: [id])
+  warehouse             Warehouse      @relation(fields: [warehouseId], references: [id])
+  lines                 OrderLine[]
+  // Inverse relation only — added by the Commission module. 0..1 per order
+  // (`commission_accrual.order_id` is UNIQUE, the idempotency key).
+  commissionAccrual     CommissionAccrual?
+  // Inverse relation only — added by the Delivery module (SDD change
+  // delivery). 0..1 per order (`delivery_assignment.order_id` is UNIQUE,
+  // mirrors `commissionAccrual`'s idempotency guarantee). `null` for pickup
+  // orders and for orders delivered before this module existed — never a
+  // 404, never backfilled.
+  deliveryAssignment    DeliveryAssignment?
+  payments              OrderPayment[]
+  saleCredit            SaleCredit?
+  /// RESTRICT, not SET NULL: an assignment that has sales against it must not be deletable,
+  /// because nulling the column would silently erase who earned the commission. Retiring an
+  /// agent is a `status` change on `company_user`, never a delete.
+  attributedCompanyUser CompanyUser?   @relation(fields: [attributedCompanyUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([customerId])
+  @@index([attributedCompanyUserId])
+  /// The warehouse SCOPE's access path. `GET /delivery/assignments` filters a
+  /// `warehouse_operator` to their own warehouse through the
+  /// `delivery_assignment -> sales_order` relation, i.e. by this column, across
+  /// the tenant's WHOLE order history — and the same column is what
+  /// `OrderController` scopes its own list by. Without this the scoped read is
+  /// a sequential scan of `sales_order` that grows with the tenant forever,
+  /// and it is precisely the operator whose grant is NARROWEST who pays for it.
+  @@index([warehouseId])
+  @@map("sales_order") // "order" is a SQL reserved word
+}
+
+/// What one unit of a product earns its selling agent. PK == FK, so a product has
+/// exactly 0..1 reference — no ambiguity about which row applies, enforced by the
+/// schema rather than by a "pick the latest" rule nobody would remember.
+/// Name→product matching happens ONCE at seed time; the request path only reads by id.
+model ProductCommissionReference {
+  productId String   @id @map("product_id") @db.Uuid
+  /// MN only. The commission table is authored in national currency and never converted,
+  /// so there is no exchange rate to freeze here.
+  amountMn  Decimal  @map("amount_mn") @db.Decimal(18, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@map("product_commission_reference")
+}
+
+/// What one delivered order earned one agent. `orderId` is UNIQUE and that uniqueness
+/// IS the idempotency guarantee: delivering twice, or retrying after a partial failure,
+/// cannot produce a second accrual. Amounts are frozen at accrual time — a later edit to
+/// the commission table must never restate what someone already earned.
+model CommissionAccrual {
+  id                      String   @id @default(uuid()) @db.Uuid
+  orderId                 String   @unique @map("order_id") @db.Uuid
+  attributedCompanyUserId String   @map("attributed_company_user_id") @db.Uuid
+  /// Σ of the RESOLVED lines only, MN. Unresolved lines are excluded, never summed as zero.
+  total                   Decimal  @db.Decimal(18, 2)
+  accruedAt               DateTime @map("accrued_at")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  companyUser CompanyUser @relation(fields: [attributedCompanyUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  lines       CommissionAccrualLine[]
+  unresolved  CommissionAccrualUnresolved[]
+  payment     CommissionPayment?
+
+  @@index([attributedCompanyUserId])
+  @@map("commission_accrual")
+}
+
+/// One resolved line. `unitCommission` is the FROZEN snapshot of the reference at accrual
+/// time — the same discipline `order_line` already applies to price and exchange rate.
+model CommissionAccrualLine {
+  id             String  @id @default(uuid()) @db.Uuid
+  accrualId      String  @map("accrual_id") @db.Uuid
+  orderLineId    String  @map("order_line_id") @db.Uuid
+  productId      String  @map("product_id") @db.Uuid
+  quantity       Int
+  unitCommission Decimal @map("unit_commission") @db.Decimal(18, 2)
+  lineCommission Decimal @map("line_commission") @db.Decimal(18, 2)
+
+  accrual CommissionAccrual @relation(fields: [accrualId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([accrualId, orderLineId])
+  @@map("commission_accrual_line")
+}
+
+/// Lines whose product had NO reference configured. Recorded, never zeroed, never summed.
+/// "Unconfigured" and "worth nothing" are different facts: storing the first as the second
+/// would silently under-pay an agent and leave an accrual that looks complete.
+model CommissionAccrualUnresolved {
+  id          String @id @default(uuid()) @db.Uuid
+  accrualId   String @map("accrual_id") @db.Uuid
+  orderLineId String @map("order_line_id") @db.Uuid
+  productId   String @map("product_id") @db.Uuid
+  quantity    Int
+
+  accrual CommissionAccrual @relation(fields: [accrualId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([accrualId, orderLineId])
+  @@map("commission_accrual_unresolved")
+}
+
+/// Settlement of one accrual, 1:1 via the unique `accrual_id`. An accrual is paid once or
+/// not at all. `ON DELETE RESTRICT` because this is a financial record: it outlives the
+/// convenience of deleting the accrual it settles.
+/// Note what is ABSENT: nothing here references or alters an `Order`. Whether the customer's
+/// order is delivered and whether the agent has been paid are independent facts.
+model CommissionPayment {
+  id                      String   @id @default(uuid()) @db.Uuid
+  accrualId               String   @unique @map("accrual_id") @db.Uuid
+  amount                  Decimal  @db.Decimal(18, 2)
+  paidAt                  DateTime @map("paid_at")
+  /// The CompanyUser who RECORDED the settlement — never the one being paid.
+  recordedByCompanyUserId String   @map("recorded_by_company_user_id") @db.Uuid
+  note                    String?
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  accrual CommissionAccrual @relation(fields: [accrualId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// RESTRICT, like every other edge in this module: who authorised a payment is
+  /// part of the financial record, so the assignment cannot be deleted out from
+  /// under it and the column can never name someone who does not exist.
+  recordedBy CompanyUser @relation("CommissionPaymentRecordedBy", fields: [recordedByCompanyUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([recordedByCompanyUserId])
+  @@map("commission_payment")
+}
+
+model OrderLine {
+  id                   String         @id @default(uuid()) @db.Uuid
+  orderId              String         @map("order_id") @db.Uuid
+  productId            String         @map("product_id") @db.Uuid
+  productName          String         @map("product_name") // snapshot
+  categoryName         String         @map("category_name") // snapshot
+  price                Decimal        @db.Decimal(18, 2) // native
+  priceCurrency        String         @map("price_currency") // native currency
+  percentDiscountPrice Decimal        @default(0) @map("percent_discount_price") @db.Decimal(5, 2)
+  discountPrice        Decimal        @default(0) @map("discount_price") @db.Decimal(18, 2)
+  quantity             Int
+  unitFinalPrice       Decimal        @map("unit_final_price") @db.Decimal(18, 2) // native
+  lineTotalNative      Decimal        @map("line_total_native") @db.Decimal(18, 2) // native
+  rateApplied          Decimal        @map("rate_applied") @db.Decimal(18, 6) // scale-6
+  rateChannel          PaymentChannel @map("rate_channel") // see module-level DEVIATION note
+  rateEffectiveFrom    DateTime       @map("rate_effective_from")
+  lineTotalOrder       Decimal        @map("line_total_order") @db.Decimal(18, 2) // in Order.currency, frozen
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@map("order_line")
+}
+
+model OrderPayment {
+  id                    String         @id @default(uuid()) @db.Uuid
+  orderId               String         @map("order_id") @db.Uuid
+  channel               PaymentChannel
+  amount                Decimal        @db.Decimal(18, 2) // in CHANNEL_CURRENCY[channel]
+  rateApplied           Decimal        @map("rate_applied") @db.Decimal(18, 6)
+  rateChannel           PaymentChannel @map("rate_channel") // see module-level DEVIATION note
+  rateEffectiveFrom     DateTime       @map("rate_effective_from")
+  amountInOrderCurrency Decimal        @map("amount_in_order_currency") @db.Decimal(18, 2) // Order.currency
+  createdAt             DateTime       @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_payment")
+}
+
+model SaleCredit {
+  id                String         @id @default(uuid()) @db.Uuid
+  orderId           String         @unique @map("order_id") @db.Uuid // 0..1
+  customerId        String         @map("customer_id") @db.Uuid // FK, replaces legacy `client: string`
+  total             Decimal        @db.Decimal(18, 2) // Order.currency
+  paid              Decimal        @default(0) @db.Decimal(18, 2) // Order.currency
+  rateApplied       Decimal        @map("rate_applied") @db.Decimal(18, 6) // see module-level DEVIATION note
+  rateChannel       PaymentChannel @map("rate_channel")
+  rateEffectiveFrom DateTime       @map("rate_effective_from")
+  paidDate          DateTime?      @map("paid_date")
+  paidType          String?        @map("paid_type")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@map("sale_credit")
+}
+
+// Sixth domain module: Users / Roles (SDD change backend-users-roles).
+// RESHAPED by multi-tenant-by-schema (design.md §1): the former
+// `userId @id -> User` relation cannot cross the master/tenant schema
+// boundary, so it becomes `companyUserId @id -> CompanyUser` (still 1:1,
+// still the PK, design.md D1). Per-warehouse scope detail for a user
+// holding the `warehouse_operator` role. `warehouseId` is deliberately NOT
+// unique — a single `Warehouse` MAY have many operators.
+model WarehouseOperator {
+  companyUserId String   @id @map("company_user_id") @db.Uuid
+  warehouseId   String   @map("warehouse_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  companyUser CompanyUser @relation(fields: [companyUserId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse   @relation(fields: [warehouseId], references: [id])
+
+  @@index([warehouseId])
+  @@map("warehouse_operator")
+}
+
+// Seventh domain module: Companies / CompanyUser role reframe. TENANT-SIDE
+// role assignment, RESHAPED by multi-tenant-by-schema (design.md D1):
+// `id` IS the master `User.id`, the SOLE PK — provided explicitly, never
+// auto-generated, because WHICH company a row belongs to is expressed by
+// WHICH tenant schema it lives in, not by a `companyId` column (spec:
+// "CompanyUser Collapsed-PK Shape (Tenant-Side)"). Carries NO `userId`, NO
+// `companyId`, and NO independent status field — active/inactive lives in
+// exactly one place, the master `Membership.status` (spec: "Membership
+// Status Gates Company Access"). The `company -> Company` relation from the
+// pre-split schema is DROPPED, not reshaped (design.md D1/§1): Prisma
+// forbids a cross-schema `@relation`, and a redundant, unvalidatable
+// `companyId` column would be drift bait — company identity IS the schema
+// this row lives in.
+model CompanyUser {
+  id        String   @id @db.Uuid
+  role      Int
+  /// `CompanyUser.id` of whoever provisioned this assignment. NULL for self-registered
+  /// (`AuthService.signup`), seeded, and pre-migration rows.
+  /// NEVER backfilled: an invented creator is invented audit.
+  createdByCompanyUserId String? @map("created_by_company_user_id") @db.Uuid
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  customer          Customer?
+  warehouseOperator WarehouseOperator?
+  attributedOrders  Order[]
+  // Inverse relation only — added by the Commission module.
+  commissionAccruals CommissionAccrual[]
+  recordedCommissionPayments CommissionPayment[] @relation("CommissionPaymentRecordedBy")
+
+  /// Self-relation. `ON DELETE RESTRICT` (Prisma's `Restrict`) matches every other FK in
+  /// this schema; `company_user` has no hard-delete path today, so it can only ever fire
+  /// as a loud signal that one was introduced.
+  createdBy    CompanyUser?  @relation("CompanyUserProvisioning", fields: [createdByCompanyUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  provisioned  CompanyUser[] @relation("CompanyUserProvisioning")
+
+  @@index([createdByCompanyUserId])
+  @@map("company_user")
+}
+
+// Eighth domain module: Delivery (SDD change delivery). `Carrier` is tenant
+// master data (mirrors `Warehouse`: flat, soft-delete via `active`, no hard
+// DELETE). `CarrierWarehouse` expresses coverage as a plain join table —
+// ZERO `zone`/geography field anywhere (D2) — supporting 0/1/N warehouses
+// per carrier uniformly; absence of a row means "no declared coverage", not
+// "serves everywhere" (design §5). `DeliveryAssignment` bridges an `Order`
+// to a `Carrier`, `order_id` UNIQUE (0..1 per order, D1) — its `status` is
+// the ONLY in-transit lifecycle state anywhere in this schema; `Order`
+// itself gains no scalar column, only the inverse relation above. Capacity
+// is NEVER stored: no `capacity`/`maxOrdersPerDay` column exists on
+// `Carrier` — it is always computed live from `DeliveryAssignment` rows
+// (`computeCarrierCapacity`, design §4/ADR-3). The delivered edge has
+// exactly ONE writer, `closeAssignmentOnDeliveryTx` (Phase 5) — there is no
+// repository `markDelivered` method by design (design §8).
+
+/// `in_transit`/`delivered` are the happy path. `cancelled` is the terminal
+/// state of an assignment whose ORDER was cancelled — written by
+/// `cancelAssignmentOnOrderCancelTx` inside `PrismaOrderRepository.cancel`'s
+/// transaction. Without it the row stays `in_transit` forever and the carrier
+/// reads BUSY with no API path able to close it. Closing as `delivered` was
+/// explicitly rejected: it would corrupt throughput reporting.
+enum DeliveryAssignmentStatus {
+  in_transit
+  delivered
+  cancelled
+}
+
+model Carrier {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  warehouses  CarrierWarehouse[]
+  assignments DeliveryAssignment[]
+
+  @@map("carrier")
+}
+
+/// Coverage join row. Deliberately flat — no `zone`/geography dimension (D2).
+/// `@@unique([carrierId, warehouseId])` supports 0, 1, or N warehouses per
+/// carrier uniformly; coverage is advisory on reads only (design §5), never
+/// enforced as a hard block on `DeliveryAssignment` creation.
+model CarrierWarehouse {
+  id          String   @id @default(uuid()) @db.Uuid
+  carrierId   String   @map("carrier_id") @db.Uuid
+  warehouseId String   @map("warehouse_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  carrier   Carrier   @relation(fields: [carrierId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([carrierId, warehouseId])
+  @@index([warehouseId])
+  @@map("carrier_warehouse")
+}
+
+/// Bridge row, `order_id` UNIQUE — the idempotency guarantee (0..1 per
+/// order, D1). `status` is `in_transit | delivered | cancelled`: two
+/// happy-path states plus the terminal state for an order cancelled while
+/// its assignment was still open (see the enum's own comment).
+/// `onDelete: Restrict` on both FKs, per spec: an assignment referencing a
+/// deleted order or carrier would silently erase which carrier had which
+/// order — Carrier/Order are both soft-delete-only master data/events, so
+/// this only ever fires as a loud signal something upstream is wrong.
+model DeliveryAssignment {
+  id          String                   @id @default(uuid()) @db.Uuid
+  orderId     String                   @unique @map("order_id") @db.Uuid
+  carrierId   String                   @map("carrier_id") @db.Uuid
+  status      DeliveryAssignmentStatus @default(in_transit)
+  assignedAt  DateTime                 @map("assigned_at")
+  deliveredAt DateTime?                @map("delivered_at")
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  carrier Carrier @relation(fields: [carrierId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([carrierId])
+  @@index([status])
+  /// COMPOSITE, in the query's own order. `GET /delivery/capacity`'s
+  /// throughput read is `status = 'delivered' AND delivered_at >= ?`, so this
+  /// is the index that serves it: the equality column first, the range column
+  /// second.
+  ///
+  /// A bare `@@index([deliveredAt])` was tried first and is wrong twice over.
+  /// It cannot answer the `status` predicate, so the planner still has to
+  /// choose between two single-column indexes and recheck; and it is a FULL
+  /// index over a column that is NULL for every `in_transit` and every
+  /// `cancelled` row, so it pays write cost and storage for rows it can never
+  /// serve. Postgres does not index NULLs usefully for a `>=` predicate
+  /// either — they simply sit there.
+  @@index([status, deliveredAt])
+  /// The other bounded read: `GET /delivery/assignments` is now windowed on
+  /// `assigned_at` and ordered by it, with `id` as the keyset tiebreak.
+  /// `assigned_at` is NOT NULL, so unlike `delivered_at` this covers every
+  /// row of every status.
+  @@index([assignedAt, id])
+  @@map("delivery_assignment")
+}

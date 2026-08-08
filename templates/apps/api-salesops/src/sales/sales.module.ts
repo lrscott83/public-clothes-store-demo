@@ -1,0 +1,63 @@
+import { Module } from '@nestjs/common';
+import {
+  CATEGORY_REPOSITORY,
+  CURRENCY_REPOSITORY,
+  CUSTOMER_REPOSITORY,
+  ORDER_DELIVERY_GATEWAY,
+  ORDER_REPOSITORY,
+  PRODUCT_REPOSITORY,
+  STOCK_LEVEL_REPOSITORY,
+  WAREHOUSE_OPERATOR_REPOSITORY,
+  WAREHOUSE_REPOSITORY,
+} from '@store-mgmt/domain';
+import {
+  InfraDbModule,
+  PrismaCategoryRepository,
+  PrismaCurrencyRepository,
+  PrismaCustomerRepository,
+  PrismaProductRepository,
+  PrismaOrderRepository,
+  PrismaStockLevelRepository,
+  PrismaWarehouseOperatorRepository,
+  PrismaWarehouseRepository,
+} from '@store-mgmt/infra-db';
+import { AvailabilityController } from './availability.controller.js';
+import { AvailabilityService } from './availability.service.js';
+import { CommissionModule } from '../commission/commission.module.js';
+import { OrderController } from './order.controller.js';
+import { OrderDeliveryGatewayAdapter } from './order-delivery-gateway.adapter.js';
+import { OrderService } from './order.service.js';
+
+@Module({
+  // `CommissionModule` exports only the `COMMISSION_ACCRUAL_RECORDER` port, so
+  // this module gains the delivery→accrual trigger without gaining any
+  // knowledge of how a commission is computed or stored.
+  imports: [InfraDbModule, CommissionModule],
+  controllers: [OrderController, AvailabilityController],
+  providers: [
+    OrderService,
+    AvailabilityService,
+    { provide: ORDER_REPOSITORY, useClass: PrismaOrderRepository },
+    { provide: CURRENCY_REPOSITORY, useClass: PrismaCurrencyRepository },
+    // `OrderController` uses this to enforce the `warehouse_operator` scope (backend-users-roles).
+    { provide: WAREHOUSE_OPERATOR_REPOSITORY, useClass: PrismaWarehouseOperatorRepository },
+    // Availability reads. Bound by PORT SYMBOL, never the concrete Prisma class —
+    // Sales reaches Inventory only through the composition layer.
+    { provide: STOCK_LEVEL_REPOSITORY, useClass: PrismaStockLevelRepository },
+    { provide: WAREHOUSE_REPOSITORY, useClass: PrismaWarehouseRepository },
+    // Catalog + customer resolution: every field of an order line that reaches
+    // money is read from here, never from the request body.
+    { provide: PRODUCT_REPOSITORY, useClass: PrismaProductRepository },
+    { provide: CATEGORY_REPOSITORY, useClass: PrismaCategoryRepository },
+    { provide: CUSTOMER_REPOSITORY, useClass: PrismaCustomerRepository },
+    // Delivery -> Sales direction (design §2 ADR-1): declared by Delivery as
+    // a port, implemented HERE because Sales knows how. Exported below so
+    // `DeliveryModule` can inject it without ever importing anything else
+    // from this module.
+    { provide: ORDER_DELIVERY_GATEWAY, useClass: OrderDeliveryGatewayAdapter },
+  ],
+  // The ONLY thing `DeliveryModule` sees of Sales — it depends on the port,
+  // not on `OrderService`/`IOrderRepository`/anything else in here.
+  exports: [ORDER_DELIVERY_GATEWAY],
+})
+export class SalesModule {}

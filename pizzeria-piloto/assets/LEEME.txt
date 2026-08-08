@@ -1,0 +1,13 @@
+Falta el logo.
+
+Guardá acá el logo del negocio como `logo.png` (o `logo.webp`):
+
+  - ancho 400 px
+  - por debajo de 40 KB
+  - optimizado en https://squoosh.app
+
+Es la imagen más pesada de la página y el elemento LCP del hero. Si pesa de más,
+arrastra la métrica de rendimiento sin importar cuán liviano sea el resto del sitio.
+
+Si usás otra extensión, actualizá las cuatro referencias en ../index.html:
+og:image, icon, apple-touch-icon y el <img> del hero.

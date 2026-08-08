@@ -1,0 +1,70 @@
+/**
+ * Plain-language explanations shown by each card's `InfoPopover` on `/decisiones`.
+ * Written for the business owner (not the analyst): what the card is worth and
+ * what its numbers mean, in one or two sentences, with a hook toward acting on it.
+ * Keep the voice warm and direct — this copy is the "why should I care" for each card.
+ */
+export interface HelpEntry {
+  title: string;
+  text: string;
+}
+
+export const DECISIONES_HELP = {
+  // --- Capa 1 — Pulso inmediato ---
+  pedidosActivos: {
+    title: 'Pedidos activos por estado y almacén',
+    text: 'Cuántos pedidos tenés en curso ahora mismo (creados, verificados, en camino), por almacén. Si se amontonan en una etapa o un almacén, ahí tenés un cuello de botella que atender hoy.',
+  },
+  transportistas: {
+    title: 'Transportistas',
+    text: 'Quién está repartiendo ahora y quién tenés libre. "Sin chofer" cuenta pedidos ya verificados que todavía no tienen quién los lleve: son entregas frenadas por falta de asignación.',
+  },
+  comisionesPorPagar: {
+    title: 'Comisiones por pagar',
+    text: 'Lo que les debés a tus gestores en moneda nacional (MN), y quién lleva más días esperando su cobro. Es plata comprometida: priorizá pagar a quien está más atrasado.',
+  },
+
+  // --- Capa 2 — Qué atiendo YA ---
+  pedidosDemorados: {
+    title: 'Pedidos demorados/trabados',
+    text: 'Pedidos parados más tiempo del normal en su etapa actual (creado, verificado o en camino). Cada uno es una entrega frenada: revisalos hoy antes de que se conviertan en un reclamo.',
+  },
+
+  // --- Capa 3 — Comportamiento en el tiempo ---
+  entraVsSale: {
+    title: 'Entra vs. sale',
+    text: 'Cuántos pedidos entraron (se crearon) contra cuántos salieron (se entregaron) en el período elegido. Si entra más de lo que sale, se te está acumulando trabajo pendiente.',
+  },
+  cicloPromedio: {
+    title: 'Ciclo promedio',
+    text: 'Cuántos días tarda en promedio un pedido desde que se crea hasta que se entrega. La flecha compara contra el período anterior: si sube, tus entregas se están volviendo más lentas.',
+  },
+  pedidosPorDia: {
+    title: 'Pedidos por día',
+    text: 'Cuántos pedidos entran cada día del período elegido. Cambiá entre "Nº pedidos" y "Valor de venta" para ver si crecés en volumen, en facturación, o en ninguno de los dos.',
+  },
+  completadosPorDia: {
+    title: 'Completados por día',
+    text: 'Cuántos pedidos entregás cada día, y qué porcentaje de lo que entró en el período ya salió (tasa de completado). Una tasa baja te dice que estás acumulando trabajo sin cerrar.',
+  },
+
+  // --- Layer 2 (visual sections) ---
+  ventasPorAlmacen: {
+    title: 'Ventas por almacén',
+    text: 'Cuánto vende cada almacén. Te muestra qué punto empuja el negocio y cuál está quedando dormido, para reforzar stock o atención donde de verdad rinde.',
+  },
+  mixPorMoneda: {
+    title: 'Mix por moneda',
+    text: 'En qué monedas o métodos te pagan (USD, MN, Zelle…). Conocer tu mezcla te ayuda a manejar el tipo de cambio y a no quedar demasiado expuesto a una sola moneda.',
+  },
+
+  // --- Layer 3 (actionable blocks) ---
+  rankingGestores: {
+    title: 'Ranking de gestores',
+    text: 'Tu equipo de ventas ordenado por facturación: ventas, pedidos, ticket promedio y comisiones. De un vistazo ves quién empuja y quién necesita una mano.',
+  },
+  alertasInventario: {
+    title: 'Alertas de inventario',
+    text: 'Productos bajos o agotados por almacén, los más urgentes primero. Cada faltante es una venta que se te escapa: esta lista te dice qué reponer ya.',
+  },
+} satisfies Record<string, HelpEntry>;

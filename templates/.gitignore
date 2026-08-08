@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-pages
+build
+.turbo
+.react-router
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+packages/infra-db/generated

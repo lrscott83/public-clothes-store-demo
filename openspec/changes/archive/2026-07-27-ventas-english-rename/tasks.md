@@ -1,0 +1,413 @@
+# Tasks: ventas-english-rename
+
+No spec/design artifacts (owner decision — pure rename, zero behavior change; naming is locked in
+`sdd/ventas-english-rename/naming-decisions` #1529). Delivery model: **single branch
+`salesops-rename-ventas`** cut from `salesops-users` @ `163cd7d`, work-unit commits, push at end,
+**NO PULL REQUEST**. No 400-line PR budget applies — slicing is governed ONLY by
+compile/test integrity: every commit must leave build + full test matrix green.
+Conventional commits, no AI attribution.
+
+All `pnpm` commands run from `templates/`. Package names: `@store-mgmt/domain`,
+`@store-mgmt/infra-db`, `@store-mgmt/api-salesops`.
+
+Sequencing note (overrides original proposal, owner-confirmed 2026-07-25): WU1 (folders D +
+classes E) now runs FIRST, ahead of enum work, so every later unit operates on final paths
+(`packages/domain/src/sales/`, `packages/infra-db/src/sales/`, `apps/api-salesops/src/sales/`).
+Est. total: **~490–670 changed lines / ~45 files** (see per-unit sizing below, sourced from #1523
+occurrence counts).
+
+**Progress (2026-07-25)**: WU1 DONE (`b435452`). WU2 DONE (`df3fc7c`) — atomic enum-value rename;
+per orchestrator direction this run, WU2's commit also absorbed WU3's literal-guard/seed-literal work
+(minus the seed namespace/slug/image renames, still open) and ALL of WU4. WU4 is DONE (no separate
+commit — see its section). WU3 DONE (`9ec2caa`) — seed namespace/slug/image/doc-rot remainder, incl.
+the required salt-stability comment and dev-DB idempotency proof (see apply-progress). WU5 DONE
+(`6d722f2`) — Currency fn/param rename, also renamed the previously-unitemized `tryResolverTasa`
+helper to `tryResolveRate` (see WU5 section for why). WU6 DONE (`088f19d`) — Spanish display labels,
+additive, strict TDD RED→GREEN applied for real (see WU6 section for RED transcripts and the
+exhaustiveness compiler-error proof). WU7 DONE (`16b4a26`) — spec + docs literal sweep, zero behavior
+change, all gates green.
+
+**Change implementation-complete.** All 7 work units DONE.
+
+---
+
+## WU1 — Structural rename: `ventas/` → `sales/` folders, `Ventas*` → `Order*`/`SalesModule` classes (blocks D+E)
+
+**Status: [x] DONE** — commit `b435452` (`refactor(sales): rename ventas module to sales, Ventas* classes to
+Order*/SalesModule`), preceded by planning-artifact commit `0f5bb30`. All 5 verification commands green
+(domain 230/230, infra-db 121/121, api-salesops unit 180/180, api-salesops e2e 50/50, `pnpm -r build` clean)
+plus the residue-sweep regex `Ventas(Controller|Service|Module)|from '.*\/ventas\/|ventasService|ventasController`
+returned zero hits. See `sdd/ventas-english-rename/apply-progress` for full detail.
+
+**Size**: ~30–50 lines, 29 files (pure `git mv` + import path/identifier edits, no content change).
+
+**Commit**: `refactor(sales): rename ventas folder and classes to sales/order (D+E)`
+
+**Files**:
+- `git mv packages/domain/src/ventas packages/domain/src/sales` (11 files: `errors.ts`, `index.ts`, `order.ts`,
+  `order.test.ts`, `order-line.ts`, `order-line.test.ts`, `order-payment.ts`, `order-payment.test.ts`,
+  `order-repository.port.ts`, `sale-credit.ts`, `sale-credit.test.ts`)
+- `packages/domain/src/index.ts:10` — import path `./ventas` → `./sales`
+- `git mv packages/infra-db/src/ventas packages/infra-db/src/sales` (4 files: `seed.ts`, `seed.spec.ts`,
+  `prisma-order.repository.ts`, `prisma-order.repository.spec.ts`)
+- `packages/infra-db/src/index.ts:11` — import path `./ventas` → `./sales`
+- `git mv apps/api-salesops/src/ventas apps/api-salesops/src/sales`, then inside it:
+  `git mv ventas.controller.ts order.controller.ts`, `git mv ventas.service.ts order.service.ts`,
+  `git mv ventas.module.ts sales.module.ts`, `git mv ventas.controller.spec.ts order.controller.spec.ts`,
+  `git mv ventas.service.spec.ts order.service.spec.ts` (`dto/` subfolder moves as-is, no file renames)
+- `git mv apps/api-salesops/test/ventas.e2e-spec.ts apps/api-salesops/test/order.e2e-spec.ts`
+- `apps/api-salesops/src/app.module.ts:11` — import path + `VentasModule` → `SalesModule`
+
+**Steps**:
+1. `git mv` the three directories and the five renamed files (Prettier/ESLint noise minimized by using
+   `git mv`, not delete+recreate).
+2. Rename classes/identifiers inside moved files: `VentasController`→`OrderController`,
+   `VentasService`→`OrderService`, `VentasModule`→`SalesModule`; constructor field
+   `ventasService`→`orderService`; spec-file local vars `ventasController`/`ventasService`→
+   `orderController`/`orderService`. Confirm `@Controller('orders')` decorator string is untouched.
+3. Fix all relative imports inside the moved trees that reference sibling files by old names.
+4. Update the three cross-package barrel/wiring imports listed above.
+5. `rg -i ventas templates/packages/domain/src templates/packages/infra-db/src templates/apps/api-salesops/src templates/apps/api-salesops/test` → zero hits (residue check).
+
+**Verification**:
+- `pnpm --filter @store-mgmt/domain test`
+- `pnpm --filter @store-mgmt/domain build && pnpm --filter @store-mgmt/infra-db build`
+- `pnpm --filter @store-mgmt/infra-db test`
+- `pnpm --filter @store-mgmt/api-salesops test`
+- `pnpm --filter @store-mgmt/api-salesops build && pnpm --filter @store-mgmt/api-salesops test:e2e`
+
+---
+
+## WU2 — ATOMIC: enum value rename (blocks A+B+C) + `schema.prisma` + hand-written migration
+
+**Status: [x] DONE** — commit `df3fc7c` (`feat(sales)!: rename OrderStatus/DeliveryMode/PaymentChannel
+values to English`). 26 files changed, 303 insertions / 267 deletions. All 8 verification commands green
+(domain 230/230, infra-db 121/121 real-Postgres, api-salesops unit 180/180, api-salesops e2e 50/50,
+`pnpm -r build` clean, `prisma migrate dev --create-only` confirmed NO-OP against the hand-written SQL,
+migration applied cleanly to both dev `store_mgmt` and test `store_mgmt_test`, full residue sweep zero
+hits outside old `*/migrations/*` files and the explicitly out-of-scope `apps/salesops-mvp` prototype).
+See `sdd/ventas-english-rename/apply-progress` for full detail.
+
+**Scope note (deviation from original per-WU split, orchestrator-directed for this run)**: to keep the
+whole workspace compiling and green in ONE atomic commit, this unit absorbed literal call-site updates
+that the original plan below had assigned to WU3 (infra-db repository guards + seed.ts literals, MINUS
+the `VENTAS_SEED_NAMESPACE`/slug/image-path renames — those remain WU3) and ALL of WU4 (api-salesops
+service guard, DTO comment, unit specs, e2e), plus Currency's infra-db/api-salesops specs
+(`prisma-currency.repository.spec.ts`, `currency.controller.spec.ts`, `currency.service.spec.ts`) which
+were not itemized in any WU below but contain `PaymentChannel` literals that would otherwise break the
+type. WU3 and WU4 sections below are updated accordingly — do not re-do this work.
+
+**Do not split.** `infra-db` cannot compile with only part of this done.
+
+**Size**: ~165–200 lines, ~9 files (original estimate — actual delivered commit is larger, see Status
+note above for why).
+
+**Commit**: `feat(sales)!: rename OrderStatus/DeliveryMode/PaymentChannel enum values to English`
+(footer: `BREAKING CHANGE: /orders* wire format enum values changed from Spanish to English —
+creado→created, verificado→verified, entregado→delivered, cancelado→cancelled, recogida→pickup,
+domicilio→delivery, USD_EFECTIVO→USD_CASH, EUR_EFECTIVO→EUR_CASH, MN_EFECTIVO→MN_CASH,
+MN_TRANSFERENCIA→MN_TRANSFER.`)
+
+**Files**:
+- `packages/domain/src/currency/payment-channel.ts` (type + `CHANNEL_CURRENCY` map — block C)
+- `packages/domain/src/currency/payment-channel.test.ts` (11 hits)
+- `packages/domain/src/currency/rate-resolver.test.ts` (37 hits — literals only)
+- `packages/domain/src/sales/order.ts` (type defs, 5 literal comparisons in
+  `createOrder`/`confirmOrder`/`deliverOrder`/`cancelOrder`, doc comments; add the agreed comment on
+  `DeliveryMode` stating `deliveryMode`/`status` are independent axes)
+- `packages/domain/src/sales/order.test.ts` (22 hits)
+- `packages/domain/src/sales/order-repository.port.ts` (doc comment)
+- `packages/domain/src/sales/errors.ts` (doc comment)
+- `packages/infra-db/prisma/schema.prisma` (`enum PaymentChannel` L16-22, `enum OrderStatus` L227-232,
+  `enum DeliveryMode` L234-237, `status OrderStatus @default(creado)`→`@default(created)` L246,
+  Spanish narrative comment L200-231 + `delivery_mode` inline comment L244)
+- NEW `packages/infra-db/prisma/migrations/20260725170000_rename_sales_currency_enums_to_english/migration.sql`
+
+**Steps**:
+1. Update `payment-channel.ts` (block C), then its test + `rate-resolver.test.ts` literals.
+2. Update `order.ts` type defs + 5 literal guards + doc comments + the DeliveryMode independent-axes comment.
+3. Update `order.test.ts`, `order-repository.port.ts`, `errors.ts`.
+4. `pnpm --filter @store-mgmt/domain test` → green.
+5. Edit `schema.prisma` enum blocks + default value + narrative comments to match.
+6. Hand-write the migration SQL (Prisma does not generate `RENAME VALUE`; its auto-diff is destructive
+   DROP/CREATE):
+   ```sql
+   ALTER TYPE "OrderStatus" RENAME VALUE 'creado' TO 'created';
+   ALTER TYPE "OrderStatus" RENAME VALUE 'verificado' TO 'verified';
+   ALTER TYPE "OrderStatus" RENAME VALUE 'entregado' TO 'delivered';
+   ALTER TYPE "OrderStatus" RENAME VALUE 'cancelado' TO 'cancelled';
+   ALTER TYPE "DeliveryMode" RENAME VALUE 'recogida' TO 'pickup';
+   ALTER TYPE "DeliveryMode" RENAME VALUE 'domicilio' TO 'delivery';
+   ALTER TYPE "PaymentChannel" RENAME VALUE 'USD_EFECTIVO' TO 'USD_CASH';
+   ALTER TYPE "PaymentChannel" RENAME VALUE 'EUR_EFECTIVO' TO 'EUR_CASH';
+   ALTER TYPE "PaymentChannel" RENAME VALUE 'MN_EFECTIVO' TO 'MN_CASH';
+   ALTER TYPE "PaymentChannel" RENAME VALUE 'MN_TRANSFERENCIA' TO 'MN_TRANSFER';
+   UPDATE "category" SET slug = 'sales-seed-demo' WHERE slug = 'ventas-seed-demo';
+   ```
+7. `pnpm --filter @store-mgmt/infra-db exec prisma migrate dev --create-only` → MUST be a no-op diff
+   against the hand-written SQL. If Prisma proposes a destructive diff, schema and migration disagree —
+   reconcile before continuing.
+8. `pnpm --filter @store-mgmt/infra-db exec prisma generate`.
+
+**Verification**:
+- `pnpm --filter @store-mgmt/domain test`
+- `pnpm --filter @store-mgmt/infra-db exec prisma migrate dev --create-only` (confirm no-op)
+- `psql $DATABASE_URL -c "SELECT unnest(enum_range(NULL::\"OrderStatus\"))"` (repeat for `DeliveryMode`,
+  `PaymentChannel`) → English labels only
+- `psql $DATABASE_URL -c "SELECT slug, count(*) FROM category GROUP BY slug"` → one `sales-seed-demo`,
+  zero `ventas-seed-demo`
+
+---
+
+## WU3 — infra-db seed source constant/slug/image renames (block F remainder)
+
+**Status: [x] DONE** — commit `9ec2caa`. The literal enum-value guards in `prisma-order.repository.ts`
++ `prisma-order.repository.spec.ts`, and the enum-value literals inside `seed.ts` (deliveryMode/status
+fixtures, `DEMO_MN_RATE_CHANNEL`) + `seed.spec.ts`, were already DONE in WU2 (commit `df3fc7c`). This
+commit closed the remaining scope: `VENTAS_SEED_NAMESPACE`→`SALES_SEED_NAMESPACE`, `DEMO_CATEGORY_SLUG`
+value `'ventas-seed-demo'`→`'sales-seed-demo'` (the fix that closes the duplicate-category window left
+open since WU2's migration), both seed image paths, the required salt-stability comment at `seed.ts:18`,
+`seed.spec.ts`'s cleanup-filter slug, and the `customer/seed.ts:27` doc-rot fix. Full detail, evidence,
+and dev-DB idempotency proof in `sdd/ventas-english-rename/apply-progress`.
+
+**Size**: small, 2 files (`seed.ts`, `packages/infra-db/src/customer/seed.ts` doc-rot fix).
+
+**Commit**: `refactor(infra-db): rename seed namespace constant and demo asset paths to English`
+
+**Files**:
+- `packages/infra-db/src/sales/seed.ts`:
+  - `VENTAS_SEED_NAMESPACE` → `SALES_SEED_NAMESPACE` (variable name ONLY — UUID value unchanged)
+  - `DEMO_CATEGORY_SLUG` value `'ventas-seed-demo'` → `'sales-seed-demo'` (must now match what the WU2
+    migration already renamed in the DB — until this lands, a manual seed run would upsert-miss and
+    duplicate the category; see `sdd/ventas-english-rename/seed-salt-correction` #1537)
+  - `image: 'ventas-seed/demo-usd.png'` / `'ventas-seed/demo-mn.png'` → `sales-seed/…` (cosmetic,
+    product upsert's update clause overwrites on next seed run — no migration statement needed)
+  - Add the required comment at `seed.ts:18` on the `` `ventas-seed:${key}` `` hash-salt string stating
+    it must NEVER change (stability is its only load-bearing property — renaming it re-derives every
+    seeded UUID and duplicates the demo dataset). **DO NOT rename the salt string itself.**
+- `packages/infra-db/src/customer/seed.ts:27` — fix doc-rot: comment references `` `ventas/seed.ts`'s
+  `VENTAS_SEED_NAMESPACE` `` , a path that no longer exists after WU1's folder rename → `sales/seed.ts`
+  / `SALES_SEED_NAMESPACE`.
+
+**Steps**:
+1. Rename `VENTAS_SEED_NAMESPACE` → `SALES_SEED_NAMESPACE` (all references in `seed.ts`).
+2. Rename `DEMO_CATEGORY_SLUG`'s value to `'sales-seed-demo'`; update `seed.spec.ts`'s cleanup filter
+   (`slug: 'ventas-seed-demo'`) to match.
+3. Rename the two image paths.
+4. Add the salt-stability comment at line 18; do not touch the salt string.
+5. Fix the doc-rot comment in `customer/seed.ts`.
+
+**Verification**:
+- `pnpm --filter @store-mgmt/infra-db test` (jest vs real Postgres)
+- `psql $DATABASE_URL -c "SELECT slug, count(*) FROM category GROUP BY slug"` after running the seed
+  script once → still exactly one `sales-seed-demo` row (idempotency)
+
+---
+
+## WU4 — api-salesops wiring (service guard, DTO comment, unit specs, e2e)
+
+**Status: [x] DONE — absorbed into WU2** — `order.service.ts` guard, `create-order.dto.ts` doc comment,
+`order.controller.spec.ts`, `order.service.spec.ts`, `order.e2e-spec.ts` were all updated as part of the
+WU2 atomic commit `df3fc7c` (api-salesops cannot compile/pass tests against the renamed domain types
+otherwise). No separate commit needed for this unit.
+
+---
+
+## WU5 — Currency function/param renames (block G)
+
+**Status: [x] DONE** — commit `6d722f2` (`refactor(currency): rename convertir/resolverTasa functions to
+English`). 12 files changed, 111 insertions / 111 deletions. All exported renames delivered
+(`resolverTasa`→`resolveRate`, `convertir`→`convert`, `convertirEntreMonedas`→`convertBetweenCurrencies`),
+plus params `origen`→`source`, `monedaDestino`→`targetCurrency`, local `destinoMinorUnits`→
+`targetMinorUnits`. **Scope addition beyond this section's original file list**: the private helper
+`tryResolverTasa` (line ~87, not itemized above) was also renamed to `tryResolveRate` — it directly named
+the renamed `resolverTasa` in its own identifier and doc comment, so leaving it would have both
+reintroduced Spanish residue and failed the mandatory zero-hit sweep (`resolverTasa` is a substring of
+`tryResolverTasa`). Updated every call site (`order.ts`, `order-payment.ts`, `order-line.ts` in domain;
+`currency.service.ts` in api-salesops) and every stale doc comment naming the old symbols (`pricing.ts`,
+`schema.prisma`, `rate-response.dto.ts`, `order-payment.test.ts`/`order-line.test.ts` test-description
+strings, and the full `rate-resolver.test.ts` — 20 tests). Verification ALL green: `pnpm -r build` exit 0,
+domain 230/230, infra-db 121/121 (real Postgres), api-salesops unit 180/180, api-salesops e2e 50/50
+(rebuilt dist first), residue sweep zero hits. See `sdd/ventas-english-rename/apply-progress` for full
+detail.
+
+**Size**: ~20–30 lines, 4 files. Pure TS, kept out of WU2 to keep the atomic commit focused.
+
+**Commit**: `refactor(currency): rename convertir/convertirEntreMonedas/resolverTasa to English`
+
+**Files**:
+- `packages/domain/src/currency/rate-resolver.ts` (`convertir`→`convert` L148-185,
+  `convertirEntreMonedas`→`convertBetweenCurrencies` L197-222, `resolverTasa`→`resolveRate` L69-80,
+  params `origen`→`source`, `monedaDestino`→`targetCurrency`, local `destinoMinorUnits`→`targetMinorUnits`)
+- `packages/domain/src/sales/order.ts:5` (import `convertirEntreMonedas`→`convertBetweenCurrencies`)
+- `packages/domain/src/sales/order-payment.ts:6` (import `convertir`→`convert`)
+- `packages/domain/src/currency/currency.service.ts:59` (local `origen`→`source`)
+
+**Steps**:
+1. Rename exported functions + params in `rate-resolver.ts`.
+2. Update the two call sites in `order.ts`/`order-payment.ts`.
+3. Rename the local var in `currency.service.ts`.
+4. Update any remaining references in `rate-resolver.test.ts` to the new function names (values were
+   already renamed in WU2; this pass renames the function-call identifiers only).
+
+**Verification**:
+- `pnpm --filter @store-mgmt/domain test`
+- `pnpm --filter @store-mgmt/infra-db build && pnpm --filter @store-mgmt/api-salesops build`
+- `pnpm --filter @store-mgmt/api-salesops test`
+
+---
+
+## WU6 — Spanish labels (block H, additive — strict TDD RED→GREEN)
+
+**Status: [x] DONE** — commit `088f19d` (`feat(sales): add Spanish display labels for order and payment
+enums`). 8 files changed, 138 insertions / 1 deletion. Strict TDD genuinely applied (unlike WU1/WU2/WU3/WU5
+which were pure zero-behavior renames): 3 RED→GREEN cycles run in sequence — (1) `labels.test.ts` written
+before `labels.ts` existed, RED confirmed as `Error: Cannot find module './labels.js'`; (2)
+`payment-channel.test.ts` extended before `PAYMENT_CHANNEL_LABELS_ES`/`getPaymentChannelLabel` existed, RED
+confirmed as `Cannot read properties of undefined (reading 'ZELLE')` / `is not a function`; (3)
+`order.service.spec.ts` extended before the DTO fields/mapper wiring existed, RED confirmed as
+`Expected: "Verificado" — Received: undefined`. All three GREEN after minimal implementation. Exhaustiveness
+verified with real evidence: temporarily added a bogus `OrderStatus` member, `tsc --noEmit` failed with
+`TS2741: Property 'shipped_bogus' is missing in type '{...}' but required in type 'Record<OrderStatus,
+string>'` at `labels.ts(10,14)`, then reverted. Final verification all green: `pnpm -r build` exit 0, domain
+238/238 (230+8 new), infra-db 121/121, api-salesops unit 181/181 (180+1 new), api-salesops e2e 50/50
+(unchanged, out of WU6 scope). See `sdd/ventas-english-rename/apply-progress` for full detail.
+
+**Size**: ~40–60 lines, 4 files. No rename risk — purely additive.
+
+**Commit**: `feat(sales): add Spanish display labels for order status/delivery/payment channel`
+
+**Files**:
+- NEW `packages/domain/src/sales/labels.ts` (`ORDER_STATUS_LABELS_ES`, `DELIVERY_MODE_LABELS_ES` +
+  helpers, mirroring `packages/domain/src/users/roles.ts` `ROLE_LABELS_ES`/`RoleHelpers`)
+- `packages/domain/src/currency/payment-channel.ts` (`PAYMENT_CHANNEL_LABELS_ES` beside
+  `CHANNEL_CURRENCY`)
+- `apps/api-salesops/src/sales/dto/order-response.dto.ts` (new `statusLabel`, `deliveryModeLabel` fields)
+- `apps/api-salesops/src/sales/order.service.ts` (compute the two label fields in the response mapper)
+
+**Values** (neutral LatAm Spanish): created=Creado, verified=Verificado, delivered=Entregado,
+cancelled=Cancelado, pickup=«Recogida en tienda», delivery=«Envío a domicilio», ZELLE=Zelle,
+USD_CASH=«USD en efectivo», EUR_CASH=«EUR en efectivo», MN_CASH=«MN en efectivo»,
+MN_TRANSFER=«Transferencia en MN».
+
+**Steps**:
+1. RED: add `labels.test.ts` (or extend `order.test.ts`) asserting `ORDER_STATUS_LABELS_ES`/
+   `DELIVERY_MODE_LABELS_ES` cover every enum member with the values above — fails (module doesn't exist).
+2. GREEN: create `labels.ts`; add `PAYMENT_CHANNEL_LABELS_ES` to `payment-channel.ts`.
+3. Wire `statusLabel`/`deliveryModeLabel` into `OrderResponseDto` and the service mapper; extend
+   `order.service.spec.ts`/`order.e2e-spec.ts` to assert the new fields.
+
+**Verification**:
+- `pnpm --filter @store-mgmt/domain test`
+- `pnpm --filter @store-mgmt/domain build && pnpm --filter @store-mgmt/infra-db build`
+- `pnpm --filter @store-mgmt/api-salesops test && pnpm --filter @store-mgmt/api-salesops test:e2e`
+
+---
+
+## WU7 — OpenSpec spec + docs literal sweep
+
+**Status: [x] DONE** — commit `16b4a26` (`docs(sales): update spec and e2e fixtures to the English enum
+values`). 5 files changed, 152 insertions / 152 deletions. Zero behavior change (docs + test-fixture
+strings only). All verification gates green: `pnpm -r build` exit 0, domain 238/238, infra-db 121/121
+(real Postgres), api-salesops unit 181/181, api-salesops e2e 50/50 (built dist first), `api-salesops`
+lint (`--max-warnings 0`, includes `backend-boundaries`) clean with zero auto-fix diffs, exhaustiveness
+switch-statement sweep zero hits. Full detail (including the two files added beyond the original
+3-file estimate, and the out-of-scope categories justified one by one) in
+`sdd/ventas-english-rename/apply-progress`.
+
+**Files** (actual, supersedes the original 3-file estimate below):
+- `openspec/specs/salesops-ventas/spec.md` — ~66 literal/symbol occurrences corrected; also fixed 2
+  redundant/grammar artifacts left by the mechanical rename (`` `created` (created) `` → `` `created` ``;
+  `an `delivered`` → `a `delivered``) and renamed the module-name references ("Ventas" → "Sales") that
+  denote the same renamed `SalesModule`/`sales/` entity.
+- `openspec/specs/salesops-currency/spec.md` — **added to scope beyond the original file list**: this is
+  the authoritative spec for the exact Currency module WU5 renamed (`resolverTasa`→`resolveRate`,
+  `convertir`→`convert`, `convertirEntreMonedas`→`convertBetweenCurrencies`, params
+  `origen`→`source`/`canal`→`channel`/`momento`→`at`/`monedaDestino`→`targetCurrency`,
+  `USD_EFECTIVO`→`USD_CASH`, `EUR_EFECTIVO`→`EUR_CASH`, `MN_EFECTIVO`→`MN_CASH`,
+  `MN_TRANSFERENCIA`→`MN_TRANSFER`) — it was not itemized in the original inventory but the final residue
+  sweep surfaced it, so it was fixed in-run rather than deferred. Left `efectivaDesde` (a field-name
+  reference, line 69) untouched — that was ALREADY stale before this SDD change (real column is
+  `effectiveFrom`) and isn't one of the renamed symbols in scope here; flagged as a pre-existing,
+  out-of-scope discrepancy rather than silently fixed.
+- `templates/apps/api-salesops/test/order.e2e-spec.ts` — ~34 fixture-string occurrences
+  (`describe('Ventas (e2e)')`→`'Sales (e2e)'`, `'Ventas E2E'`→`'Sales E2E'` (covers the `Cliente`/`Depósito`
+  compounds), slug `'ventas-e2e'`→`'sales-e2e'`, login prefix `` `ventas.e2e.` ``→`` `sales.e2e.` ``).
+- `docs/plans/ventas-follow-ups-pendientes.md` — 3 stale source-path references
+  (`domain/src/ventas/order.ts`→`sales/order.ts`, `infra-db/src/ventas/seed.ts`→`sales/seed.ts`,
+  `infra-db/src/ventas/prisma-order.repository.ts`→`sales/prisma-order.repository.ts`) + one
+  backtick-quoted enum-literal list (`` `creado/verificado/entregado/cancelado` ``→
+  `` `created/verified/delivered/cancelled` ``).
+- `docs/plans/ventas-devoluciones-flujo-diferido.md` — full state-machine diagram/table (backtick-quoted
+  `creado/verificado/entregado/cancelado` throughout) updated to English; `devuelto` (a PROPOSED future
+  state name, not yet implemented) and all "Ventas"/"módulo Ventas (`backend-ventas`)" prose left Spanish —
+  that doc explicitly ties its terminology to the archived `backend-ventas` change's own identity.
+
+**Deliberately left untouched (with justification)**:
+- `docs/plans/monedas-tasas-cambio-design.md` — despite containing the exact same stale Currency literals,
+  its own header (line 3) and code references (lines 117, 136) explicitly scope it to
+  `apps/salesops-mvp` (the disconnected prototype), which is out of scope for the whole change.
+- `openspec/specs/salesops-mvp/spec.md`, `openspec/changes/salesops-11-finanzas-dashboard/*`,
+  `docs/plans/mvp-sales-ops-cockpit.md`, `docs/plans/dashboard-decisiones*.md`,
+  `docs/plans/reference/*.md` — all describe the MVP prototype's own (richer, disconnected) domain model
+  or the owner's real manual business process, not the renamed backend.
+- `openspec/changes/archive/**` (backend-ventas and other archived changes) — historical record, must
+  never be rewritten.
+- `openspec/changes/ventas-english-rename/**` (this change's own proposal/tasks) — describes the
+  before/after mapping using the OLD names by design.
+- `openspec/changes/backend-users-roles/tasks.md` (one `VentasModule` hit) — a different, already-merged
+  SDD change's own historical tasks checklist, accurately describing the module name AS IT WAS at the
+  time that change shipped (before this rename). Left untouched to avoid revising another change's
+  historical record; not part of this change's file list.
+- `templates/packages/domain/src/sales/labels.ts`/`labels.test.ts`,
+  `apps/api-salesops/src/sales/order.service.spec.ts` — matches are the intentional Spanish DISPLAY LABEL
+  values from WU6 (block H, e.g. `'Envío a domicilio'`), not residue.
+
+**Commit**: `docs(sales): update spec and e2e fixtures to the English enum values`
+
+**Verification (all real, all green)**:
+- `pnpm -r build` — exit 0.
+- `pnpm --filter @store-mgmt/domain test` — 238/238.
+- `pnpm --filter @store-mgmt/infra-db test` — 121/121 (real Postgres).
+- `pnpm --filter api-salesops test` — 181/181.
+- `pnpm --filter api-salesops test:e2e` — 50/50 (rebuilt dist first).
+- `pnpm --filter api-salesops lint` (`--max-warnings 0`, incl. `backend-boundaries`) — clean, zero
+  auto-fix diffs.
+- `rg -n "switch\s*\(\s*\w*(status|deliveryMode|channel)"` across `packages/domain/src`,
+  `packages/infra-db/src`, `apps/api-salesops/src` — zero hits, confirmed.
+- Full repo-root residue sweep (see apply-progress for the complete categorized breakdown) — every
+  surviving hit individually justified as one of: archived-change historical record, MUST-NEVER-RENAME
+  hash salt, out-of-scope `salesops-mvp` prototype surface, this change's own before/after planning
+  artifacts, a different change's already-shipped historical record, Spanish prose, or intentional
+  Spanish display-label values.
+
+---
+
+## Requirement Traceability
+
+| Naming block (#1529) | Work unit |
+|---|---|
+| A — OrderStatus | WU2 |
+| B — DeliveryMode | WU2 |
+| C — PaymentChannel | WU2 |
+| D — Folders | WU1 |
+| E — Classes/files | WU1 |
+| F — Seed | WU2 (migration UPDATE) + WU3 (source constant) |
+| G — Currency fn/param | WU5 |
+| H — Spanish labels | WU6 |
+| Spec/docs sweep | WU7 |
+
+## Dependency / Parallelism
+
+Strictly sequential — WU1 → WU2 → WU3 → WU4 → WU5 → WU6 → WU7. Each unit depends on the previous
+unit's final file paths and/or compiled output (domain/infra-db must build before api-salesops e2e).
+No parallel work units; this is a single branch, single contributor, no PR review, so sequencing is
+driven purely by compile order, not reviewer parallelism.
+
+## Delivery Notes (no PR review budget applies)
+
+- Single branch `salesops-rename-ventas` from `salesops-users` @ `163cd7d`.
+- Conventional commits, no AI attribution, no `Co-Authored-By`.
+- Push once at the end, after all 7 work units are green — no PR is opened.
+- Every commit boundary above is independently revertible (WU2's revert needs an inverse
+  `ALTER TYPE ... RENAME VALUE` + inverse category `UPDATE`).

@@ -1,0 +1,26 @@
+{
+  "name": "store-mgmt-template",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run build && turbo run dev",
+    "dev:local": "turbo run dev:local",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "check": "pnpm build && pnpm lint && pnpm typecheck && pnpm test",
+    "build:pages:all": "pnpm --filter @store-mgmt/static-store build:pages:all",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "clean": "turbo run clean && rimraf node_modules/.cache .turbo"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "rimraf": "^6.0.1",
+    "turbo": "^2.10.2",
+    "typescript": "5.8.3"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  }
+}

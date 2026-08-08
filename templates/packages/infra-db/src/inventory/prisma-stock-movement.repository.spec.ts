@@ -1,0 +1,146 @@
+import { NegativeStockError, type StockMovementType } from '@store-mgmt/domain';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+import { fakeTenantContext, useTenantSchema, assertAbsentFromPublicSchema } from '../tenant-schema.spec-helper.js';
+import { PrismaWarehouseRepository } from './prisma-warehouse.repository.js';
+import { PrismaStockLevelRepository } from './prisma-stock-level.repository.js';
+import { PrismaStockMovementRepository } from './prisma-stock-movement.repository.js';
+import { PrismaCategoryRepository } from '../product/prisma-category.repository.js';
+import { PrismaProductRepository } from '../product/prisma-product.repository.js';
+
+/**
+ * Integration tests against a REAL, per-suite provisioned tenant Postgres
+ * schema (design.md §4, P12 Option C) — same discipline as
+ * `prisma-currency.repository.spec.ts`.
+ */
+describe('PrismaStockMovementRepository', () => {
+  const getTenantSchema = useTenantSchema();
+  let tenantContext: TenantContextService;
+  let repository: PrismaStockMovementRepository;
+  let stockLevelRepository: PrismaStockLevelRepository;
+  let warehouseRepository: PrismaWarehouseRepository;
+  let categoryRepository: PrismaCategoryRepository;
+  let productRepository: PrismaProductRepository;
+
+  beforeAll(() => {
+    tenantContext = fakeTenantContext(getTenantSchema);
+    repository = new PrismaStockMovementRepository(tenantContext);
+    stockLevelRepository = new PrismaStockLevelRepository(tenantContext);
+    warehouseRepository = new PrismaWarehouseRepository(tenantContext);
+    categoryRepository = new PrismaCategoryRepository(tenantContext);
+    productRepository = new PrismaProductRepository(tenantContext);
+  });
+
+  afterEach(async () => {
+    const prisma = tenantContext.getClient();
+    await prisma.stockMovement.deleteMany({});
+    await prisma.stockLevel.deleteMany({});
+    await prisma.product.deleteMany({});
+    await prisma.category.deleteMany({});
+    await prisma.warehouse.deleteMany({});
+  });
+
+  async function seedProductAndWarehouse() {
+    const category = await categoryRepository.create({ name: 'Cafeteras', slug: 'cafeteras', order: 1 });
+    const product = await productRepository.create({
+      name: 'Cafetera',
+      description: 'desc',
+      price: { minorUnits: 1000n, currency: 'USD' },
+      cost: { minorUnits: 600n, currency: 'USD' },
+      categoryId: category.id,
+      image: 'x.png',
+      order: 1,
+    });
+    const warehouse = await warehouseRepository.create({ name: 'Pinar del Río' });
+    return { product, warehouse };
+  }
+
+  it('lazily creates a StockLevel on the first movement and adjusts onHand, scoped to the tenant schema alone', async () => {
+    const { product, warehouse } = await seedProductAndWarehouse();
+
+    const result = await repository.record({
+      productId: product.id,
+      warehouseId: warehouse.id,
+      type: 'purchase_in',
+      quantity: 10,
+    });
+
+    expect(result.stockLevel.onHand).toBe(10);
+    expect(result.movement.quantity).toBe(10);
+    expect(result.movement.type).toBe('purchase_in');
+
+    const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
+    expect(level?.onHand).toBe(10);
+    // The trap this batch's instructions call out by name: a spec that never
+    // provisions a tenant schema, or that reaches a master/default client,
+    // can still pass for the wrong reason. `public` still holds a same-named
+    // legacy `stock_movement` table until task 14.2's reset.
+    await assertAbsentFromPublicSchema('stock_movement', 'id', result.movement.id);
+  });
+
+  it('appends a StockMovement row for every record() call', async () => {
+    const { product, warehouse } = await seedProductAndWarehouse();
+
+    await repository.record({ productId: product.id, warehouseId: warehouse.id, type: 'purchase_in', quantity: 10 });
+    await repository.record({ productId: product.id, warehouseId: warehouse.id, type: 'sale_out', quantity: 4 });
+
+    const movements = await repository.list({ productId: product.id, warehouseId: warehouse.id });
+    expect(movements).toHaveLength(2);
+
+    const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
+    expect(level?.onHand).toBe(6);
+  });
+
+  it('a sale_out exceeding onHand throws NegativeStockError and persists NEITHER the level change NOR the movement', async () => {
+    const { product, warehouse } = await seedProductAndWarehouse();
+    await repository.record({ productId: product.id, warehouseId: warehouse.id, type: 'purchase_in', quantity: 5 });
+
+    await expect(
+      repository.record({ productId: product.id, warehouseId: warehouse.id, type: 'sale_out', quantity: 10 }),
+    ).rejects.toThrow(NegativeStockError);
+
+    const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
+    expect(level?.onHand).toBe(5); // unchanged
+
+    const movements = await repository.list({ productId: product.id, warehouseId: warehouse.id });
+    expect(movements).toHaveLength(1); // only the initial purchase_in
+  });
+
+  it('concurrency: two racing sale_out movements that would jointly overdraw onHand — exactly ONE succeeds', async () => {
+    const { product, warehouse } = await seedProductAndWarehouse();
+    await repository.record({ productId: product.id, warehouseId: warehouse.id, type: 'purchase_in', quantity: 10 });
+
+    const results = await Promise.allSettled([
+      repository.record({ productId: product.id, warehouseId: warehouse.id, type: 'sale_out', quantity: 7 }),
+      repository.record({ productId: product.id, warehouseId: warehouse.id, type: 'sale_out', quantity: 7 }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(NegativeStockError);
+
+    const level = await stockLevelRepository.findByProductAndWarehouse(product.id, warehouse.id);
+    expect(level?.onHand).toBe(3); // 10 - 7, never negative
+    expect(level!.onHand).toBeGreaterThanOrEqual(0);
+  });
+
+  it('every StockMovementType TS union value has an identical-string Prisma enum counterpart', async () => {
+    const unionValues: StockMovementType[] = [
+      'purchase_in',
+      'sale_out',
+      'transfer_in',
+      'transfer_out',
+      'adjustment_in',
+      'adjustment_out',
+    ];
+    const { product, warehouse } = await seedProductAndWarehouse();
+
+    for (const type of unionValues) {
+      await expect(
+        repository.record({ productId: product.id, warehouseId: warehouse.id, type, quantity: 1 }),
+      ).resolves.toBeDefined();
+    }
+  });
+});

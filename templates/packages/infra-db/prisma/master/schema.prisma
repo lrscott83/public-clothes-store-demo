@@ -1,0 +1,217 @@
+// MASTER schema (design.md §1/§2 D1-D3, D7). Lives in the shared Postgres
+// `public` schema — identity plus the (userId, companyId) access decision.
+// Split from the single `prisma/schema.prisma` (SDD change
+// multi-tenant-by-schema, task 3.1). The sibling `prisma/tenant/schema.prisma`
+// holds every business table, one Postgres schema per Company. Prisma
+// forbids cross-schema `@relation`, so the three relations that used to
+// cross this boundary are reshaped or dropped — see design.md §1's table
+// and D1.
+//
+// Prisma 7 rejects `url` inside a schema file's `datasource` block
+// (error P1012, confirmed by task 11.1's spike) — declare `provider` only,
+// mirroring the pre-split `prisma/schema.prisma:8-10`. The per-tenant/
+// per-invocation connection travels as `DATABASE_URL` in the process env
+// (design.md D6), resolved by this schema's own `prisma.config.ts`.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../../generated/master"
+  runtime      = "nodejs"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Users / Roles / Authentication — unchanged from the pre-split schema,
+// EXCEPT the inverse relations to `WarehouseOperator`/`Customer`, which are
+// now tenant-side (reshaped onto `CompanyUser.id`, design.md §1) and can no
+// longer be expressed as a Prisma `@relation` across schemas. `User` maps
+// to table "app_user", NOT "user" (USER is a Postgres reserved word). `User`
+// carries NO role bitmask — authorization is a property of the
+// (user, company) pair; WHICH company is decided here by `Membership`,
+// WHAT role within that company lives on the tenant `CompanyUser` (design D1).
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  login        String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  email        String?
+  cellPhone    String?  @map("cell_phone")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  memberships         Membership[]
+
+  @@map("app_user")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique // opaque rtid (crypto.randomBytes hex)
+  userId    String   @map("user_id") @db.Uuid
+  expiresAt DateTime @map("expires_at")
+  isRevoked Boolean  @default(false) @map("is_revoked")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_token")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique // opaque single-use token
+  userId    String   @map("user_id") @db.Uuid
+  expiresAt DateTime @map("expires_at")
+  isUsed    Boolean  @default(false) @map("is_used")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_token")
+}
+
+// Companies / Membership (design.md D1, D3, D7). Single schema-per-tenant:
+// `Company.schemaName` is now READ and AUTHORITATIVE (not the deferred/inert
+// placeholder from the pre-split schema) — it names the tenant Postgres
+// schema this Company's business data lives in, and is NULL until the
+// provisioning saga (D7 step 3) sets it.
+
+enum MembershipStatus {
+  ACTIVE
+  REVOKED
+  SUSPENDED
+}
+
+model Company {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  slug       String   @unique
+  isActive   Boolean  @default(true) @map("is_active")
+  /// Names the tenant Postgres schema (see `schemaNameFor`/`assertSchemaName`,
+  /// `packages/infra-db/src/tenant/schema-name.ts`). NULL until the
+  /// provisioning saga (design.md D7 step 3) sets it — a Company with a NULL
+  /// `schemaName` has no tenant data yet and MUST be treated as inactive by
+  /// every tenant-resolution path (design.md D4).
+  schemaName String?  @map("schema_name")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  memberships Membership[]
+
+  @@map("company")
+}
+
+/// `Membership` — the SINGLE source of "is this (user, company) pair
+/// active" (design.md D1/D4; spec: salesops-companies "Master Membership
+/// Gates Company Access", "Membership Status Gates Company Access").
+/// Mirrors `packages/domain/src/company/models.ts`'s `Membership`.
+/// `MembershipStatus` is renamed from the pre-split schema's
+/// `CompanyUserStatus` — status now lives in exactly one place, here, never
+/// on the tenant `CompanyUser` (design.md D1). Created by the provisioning
+/// saga (design.md D7 step 4) and, later, invite-accept flows (out of scope
+/// for this change).
+model Membership {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  companyId String           @map("company_id") @db.Uuid
+  status    MembershipStatus @default(ACTIVE)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@index([userId])
+  @@index([companyId])
+  @@index([status])
+  @@map("membership")
+}
+
+// Catalog templates (design.md §1, P8/P9; spec: salesops-products
+// "Category Catalog Seed Load", "Tenant Catalog Is Independently Editable").
+// Master-side source of truth for the 11 seeded catalog slugs. Copied
+// (never referenced live) into a tenant's own `Category`/`Product` tables at
+// provisioning time (design.md D7 step 6, Phase 9's `copy-catalog.ts`) — a
+// tenant's catalog is independently editable afterwards. Columns mirror
+// what `seedProducts` (`src/product/seed.ts`) already writes from
+// `catalog.json` today; the copy step (Phase 9) settles the exact mapping.
+
+model TemplateCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  image     String?
+  icon      String?
+  order     Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  products TemplateProduct[]
+
+  @@map("template_category")
+}
+
+model TemplateProduct {
+  id                   String   @id @default(uuid()) @db.Uuid
+  name                 String
+  description          String
+  sku                  String?
+  barcode              String?
+  price                Decimal  @db.Decimal(18, 2) // NUMERIC — never float
+  priceCurrency        String   @map("price_currency")
+  percentDiscountPrice Decimal  @default(0) @map("percent_discount_price") @db.Decimal(5, 2)
+  discountPrice        Decimal  @default(0) @map("discount_price") @db.Decimal(18, 2)
+  cost                 Decimal  @db.Decimal(18, 2)
+  costCurrency         String   @map("cost_currency")
+  categoryId           String   @map("category_id") @db.Uuid
+  image                String
+  isNew                Boolean  @default(false) @map("is_new")
+  order                Int
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  category TemplateCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@map("template_product")
+}
+
+// Provisioning saga incident ledger (design.md D7; spec: salesops-tenancy
+// "Provisioning Saga Compensates on Failure"). The provisioning saga
+// (Phase 10, `apps/api-idp/src/company/create-company.saga.ts`) always
+// creates the master `Company` row first (step 1), so every incident can be
+// tied back to a `Company.id` — there is no earlier step to fail before one
+// exists. A failing COMPENSATION step (not a failing forward step, which
+// the saga itself rolls back) writes one row here instead of silently
+// swallowing the inconsistency; `scripts/tenant-orphan-sweep.ts` (task 10.3)
+// reconciles what this table names. Never updated in place by the saga —
+// `resolvedAt` is set only by the sweep tool once it has confirmed the
+// inconsistency no longer exists.
+model ProvisioningIncident {
+  id         String    @id @default(uuid()) @db.Uuid
+  companyId  String    @map("company_id") @db.Uuid
+  /// Which saga step's compensation failed (e.g. "create-schema-rollback",
+  /// "membership-rollback") — free text, not an enum, since the sweep tool
+  /// reads this for a human operator, not for branching logic.
+  step       String
+  reason     String
+  resolvedAt DateTime? @map("resolved_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([companyId])
+  @@index([resolvedAt])
+  @@map("provisioning_incident")
+}

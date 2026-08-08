@@ -1,0 +1,10 @@
+{
+  "extends": "@store-mgmt/typescript-config/tsconfig.backend.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": ".",
+    "baseUrl": "."
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "generated", "**/*.spec.ts"]
+}

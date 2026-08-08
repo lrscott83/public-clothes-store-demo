@@ -1,0 +1,7 @@
+{
+  "extends": "@store-mgmt/typescript-config/tsconfig.backend.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": "./"
+  }
+}

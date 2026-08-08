@@ -1,0 +1,156 @@
+import { Injectable } from '@nestjs/common';
+import type {
+  Currency,
+  CreateProductInput,
+  IProductRepository,
+  Product as DomainProduct,
+  ProductListFilter,
+  ProductUpdateInput,
+} from '@store-mgmt/domain';
+import {
+  discountPriceFromDecimalString,
+  discountPriceToDecimalString,
+  moneyFromDecimalString,
+  moneyToDecimalString,
+  percentFromDecimalString,
+  percentToDecimalString,
+} from '@store-mgmt/domain';
+import { TenantContextService } from '../tenant/tenant-context.service.js';
+
+/** Shape shared by every row Prisma returns for the `Product` model. */
+interface ProductRow {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly sku: string | null;
+  readonly barcode: string | null;
+  readonly price: { toString(): string };
+  readonly priceCurrency: string;
+  readonly percentDiscountPrice: { toString(): string };
+  readonly discountPrice: { toString(): string };
+  readonly cost: { toString(): string };
+  readonly costCurrency: string;
+  readonly categoryId: string;
+  readonly image: string;
+  readonly isNew: boolean;
+  readonly order: number;
+  readonly active: boolean;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+function toDomain(row: ProductRow): DomainProduct {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    sku: row.sku ?? undefined,
+    barcode: row.barcode ?? undefined,
+    price: moneyFromDecimalString(row.price.toString(), row.priceCurrency as Currency),
+    percentDiscountPrice: percentFromDecimalString(row.percentDiscountPrice.toString()),
+    discountPrice: discountPriceFromDecimalString(row.discountPrice.toString()),
+    cost: moneyFromDecimalString(row.cost.toString(), row.costCurrency as Currency),
+    categoryId: row.categoryId,
+    image: row.image,
+    isNew: row.isNew,
+    order: row.order,
+    active: row.active,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/**
+ * Prisma adapter for `IProductRepository`. Maps the Prisma `Decimal(18,2)`
+ * columns <-> the domain's `Money` VO via `moneyFromDecimalString`/
+ * `moneyToDecimalString` for `price`/`cost` (each paired with its own
+ * `priceCurrency`/`costCurrency` column — caller-chosen, MAY DIFFER),
+ * `percentDiscountPrice` (`Decimal(5,2)`) <-> the domain's scaled `bigint`
+ * via `percentFromDecimalString`/`percentToDecimalString`, and
+ * `discountPrice` (`Decimal(18,2)`, no currency) <-> the domain's scaled
+ * `bigint` via `discountPriceFromDecimalString`/`discountPriceToDecimalString`.
+ * `create()` never passes `id` through to Prisma — the DB always generates
+ * it. `softDelete` flips `active`, never a hard DELETE (order-history FK
+ * references must never be orphaned).
+ *
+ * Client source: `TenantContextService.getClient()` (design.md D2/D5) —
+ * resolved fresh per call, never cached on `this` (see
+ * `PrismaCurrencyRepository`'s doc comment for why).
+ */
+@Injectable()
+export class PrismaProductRepository implements IProductRepository {
+  constructor(private readonly tenantContext: TenantContextService) {}
+
+  async create(input: CreateProductInput): Promise<DomainProduct> {
+    const row = await this.tenantContext.getClient().product.create({
+      data: {
+        name: input.name,
+        description: input.description,
+        sku: input.sku ?? null,
+        barcode: input.barcode ?? null,
+        price: moneyToDecimalString(input.price),
+        priceCurrency: input.price.currency,
+        percentDiscountPrice: percentToDecimalString(input.percentDiscountPrice ?? 0n),
+        discountPrice: discountPriceToDecimalString(input.discountPrice ?? 0n),
+        cost: moneyToDecimalString(input.cost),
+        costCurrency: input.cost.currency,
+        categoryId: input.categoryId,
+        image: input.image,
+        isNew: input.isNew ?? false,
+        order: input.order,
+        active: input.active ?? true,
+      },
+    });
+    return toDomain(row);
+  }
+
+  async update(id: string, patch: ProductUpdateInput): Promise<DomainProduct> {
+    const row = await this.tenantContext.getClient().product.update({
+      where: { id },
+      data: {
+        ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.description !== undefined ? { description: patch.description } : {}),
+        ...(patch.sku !== undefined ? { sku: patch.sku ?? null } : {}),
+        ...(patch.barcode !== undefined ? { barcode: patch.barcode ?? null } : {}),
+        ...(patch.price !== undefined
+          ? { price: moneyToDecimalString(patch.price), priceCurrency: patch.price.currency }
+          : {}),
+        ...(patch.percentDiscountPrice !== undefined
+          ? { percentDiscountPrice: percentToDecimalString(patch.percentDiscountPrice) }
+          : {}),
+        ...(patch.discountPrice !== undefined
+          ? { discountPrice: discountPriceToDecimalString(patch.discountPrice) }
+          : {}),
+        ...(patch.cost !== undefined
+          ? { cost: moneyToDecimalString(patch.cost), costCurrency: patch.cost.currency }
+          : {}),
+        ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
+        ...(patch.image !== undefined ? { image: patch.image } : {}),
+        ...(patch.isNew !== undefined ? { isNew: patch.isNew } : {}),
+        ...(patch.order !== undefined ? { order: patch.order } : {}),
+        ...(patch.active !== undefined ? { active: patch.active } : {}),
+      },
+    });
+    return toDomain(row);
+  }
+
+  async softDelete(id: string): Promise<void> {
+    await this.tenantContext.getClient().product.update({ where: { id }, data: { active: false } });
+  }
+
+  async findById(id: string): Promise<DomainProduct | null> {
+    const row = await this.tenantContext.getClient().product.findUnique({ where: { id } });
+    return row ? toDomain(row) : null;
+  }
+
+  async list(filter?: ProductListFilter): Promise<DomainProduct[]> {
+    const rows = await this.tenantContext.getClient().product.findMany({
+      where: {
+        ...(filter?.includeInactive ? {} : { active: true }),
+        ...(filter?.categoryId ? { categoryId: filter.categoryId } : {}),
+      },
+      orderBy: { order: 'asc' },
+    });
+    return rows.map(toDomain);
+  }
+}

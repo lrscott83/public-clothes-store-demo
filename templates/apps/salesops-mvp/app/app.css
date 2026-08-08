@@ -1,0 +1,16 @@
+/* App-level base rule, imported AFTER `@store-mgmt/web-common/styles.css` in
+   `app/root.tsx` so this `@layer base` declaration wins the cascade for
+   `html`'s `font-family`. No per-vertical theme in this app — a single,
+   fixed system font stack for the internal sales-ops cockpit. */
+@layer base {
+  html {
+    font-family:
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      'Helvetica Neue',
+      Arial,
+      sans-serif;
+  }
+}
