@@ -1,6 +1,23 @@
 <!doctype html>
 <html lang="es">
 <head>
+<!--
+  ============================================================================
+  CONFIGURACIÓN — los datos que hay que cambiar antes de publicar.
+
+  Están escritos directamente en el HTML, no inyectados por JavaScript, para
+  que buscadores y la vista previa de WhatsApp los lean. Cada uno está marcado
+  con un comentario "CONFIG · NOMBRE" justo encima.
+
+  Para cambiarlos todos de una sola vez:   bash configurar.sh
+
+    GRUPO      enlace del grupo de WhatsApp   (3: barra, hero, banda)
+    DIRECCION  dirección visible              (1)
+    MAPA       enlace a Google Maps           (1, repite la dirección)
+    HORARIO    horario de atención            (1)
+    CREDITO    "Hecho por ..." del pie        (1)
+  ============================================================================
+-->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pizzería Piloto — todavía quema</title>
@@ -104,6 +121,22 @@ h1,h2,h3{margin:0}
   70% {opacity:0;transform:scale(1.22)}
   100%{opacity:0;transform:scale(1.22)}
 }
+
+/* Botón secundario: misma silueta que el de WhatsApp, sin robarle el verde.
+   El verde es exclusivo de WhatsApp para que signifique una sola cosa. */
+.boton-linea{
+  display:inline-flex;align-items:center;gap:.6rem;
+  background:transparent;color:var(--crema);
+  border:1.5px solid var(--filo);
+  font-weight:700;font-size:1rem;text-decoration:none;
+  padding:.8rem 1.5rem;border-radius:999px;
+  transition:border-color .15s ease,color .15s ease,transform .15s ease,background .15s ease;
+}
+.boton-linea:hover{
+  border-color:var(--brasa);color:var(--brasa);
+  background:rgba(245,166,35,.07);transform:translateY(-2px);
+}
+.boton-linea svg{flex:none}
 
 .enlace-suave{
   color:var(--tenue);text-decoration:none;font-size:.95rem;
@@ -228,8 +261,16 @@ h1,h2,h3{margin:0}
 .visita__horario{color:var(--tenue);margin:0 0 1.1rem}
 
 /* ---- Pie --------------------------------------------------------------- */
-.pie{border-top:1px solid var(--filo);margin-top:2rem;padding-block:2rem;color:var(--tenue);font-size:.875rem}
-.pie__interior{display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between;align-items:center}
+.pie{border-top:1px solid var(--filo);margin-top:2rem;padding-block:2.25rem;color:var(--tenue);font-size:.875rem}
+.pie__interior{text-align:center}
+.pie__linea{margin:0}
+.pie__credito{margin:.65rem 0 0;font-size:.8rem;opacity:.72}
+.pie__credito a{
+  color:var(--tenue);text-decoration:none;
+  border-bottom:1px solid var(--filo);padding-bottom:1px;
+  transition:color .15s ease,border-color .15s ease;
+}
+.pie__credito a:hover{color:var(--brasa);border-color:var(--brasa)}
 
 /* ---- Entrada escalonada: se ve al cargar, no al hacer scroll ----------- */
 .entra{opacity:0;transform:translateY(22px);animation:asomar .55s cubic-bezier(.2,.75,.3,1) forwards}
@@ -266,7 +307,8 @@ h1,h2,h3{margin:0}
       <span class="marca__nombre">Pizzería Piloto</span>
     </a>
 
-    <!-- TODO: sustituir por el enlace real del grupo. -->
+    <!-- CONFIG · GRUPO -->
+
     <a class="wa wa--chico" href="https://chat.whatsapp.com/EJEMPLO0000000000000000">
       <svg width="18" height="18" aria-hidden="true"><use href="#g-wa"/></svg>
       Grupo de WhatsApp
@@ -295,6 +337,7 @@ h1,h2,h3{margin:0}
         Y al lado, el mercado con lo que hace falta en la casa.
       </p>
       <div class="hero__acciones entra">
+        <!-- CONFIG · GRUPO -->
         <a class="wa wa--late" href="https://chat.whatsapp.com/EJEMPLO0000000000000000">
           <svg width="21" height="21" aria-hidden="true"><use href="#g-wa"/></svg>
           Entrar al grupo
@@ -420,6 +463,7 @@ h1,h2,h3{margin:0}
           Las ofertas salen ahí antes que en ningún lado. Cuando entra algo nuevo
           al mercado, ahí se avisa.
         </p>
+        <!-- CONFIG · GRUPO -->
         <a class="wa" href="https://chat.whatsapp.com/EJEMPLO0000000000000000">
           <svg width="21" height="21" aria-hidden="true"><use href="#g-wa"/></svg>
           Entrar al grupo de WhatsApp
@@ -436,11 +480,20 @@ h1,h2,h3{margin:0}
 
       <div class="visita">
         <div>
-          <!-- TODO: sustituir por la dirección real. -->
+          <!-- CONFIG · DIRECCION -->
           <p class="visita__dir">1234 SW 8th St<br>Miami, FL 33135</p>
+          <!-- CONFIG · HORARIO -->
           <p class="visita__horario">Lunes a domingo, de 11:00 a.m. a 11:00 p.m.</p>
-          <a class="enlace-suave" href="https://maps.google.com/?q=1234+SW+8th+St,+Miami,+FL+33135"
-             target="_blank" rel="noopener">Abrir en el mapa</a>
+          <!-- CONFIG · MAPA -->
+          <a class="boton-linea" href="https://maps.google.com/?q=1234+SW+8th+St%2C+Miami%2C+FL+33135"
+             target="_blank" rel="noopener">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2c-4 0-7 3-7 7 0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/>
+              <circle cx="12" cy="9" r="2.5"/>
+            </svg>
+            Abrir en el mapa
+          </a>
         </div>
       </div>
     </div>
@@ -450,11 +503,11 @@ h1,h2,h3{margin:0}
 
 <footer class="pie">
   <div class="envoltura pie__interior">
-    <span>Pizzería Piloto — pizzería y mercado</span>
-    <a class="wa wa--chico" href="https://chat.whatsapp.com/EJEMPLO0000000000000000">
-      <svg width="18" height="18" aria-hidden="true"><use href="#g-wa"/></svg>
-      Entrar al grupo
-    </a>
+    <p class="pie__linea">Pizzería Piloto — pizzería y mercado</p>
+    <!-- CONFIG · CREDITO -->
+    <p class="pie__credito">
+      Hecho por <a href="https://automatizanegocio.com">AutomatizaNegocio</a>
+    </p>
   </div>
 </footer>
 
