@@ -6,73 +6,88 @@ de WhatsApp; el segundo, que sepan dónde queda el local.
 No pertenece al monorepo de `templates/`. Es una carpeta independiente en la raíz del
 repo: sin `package.json`, sin dependencias, sin paso de compilación.
 
-## Cómo verlo
+**No hay servicio a domicilio.** Ese servicio no se presta por ahora y no debe
+aparecer en el sitio en ninguna forma.
+
+## Estructura
+
+```
+pizzeria-piloto/
+├── index.html             ← EL SITIO — versión Brasa
+├── versiones/
+│   ├── index.html         ← índice para comparar
+│   └── 01-sticker.html    ← alternativa descartada
+├── assets/                ← el logo va acá (ver LEEME.txt)
+├── docs/prompt.md         ← el encargo
+└── README.md
+```
+
+Brasa vive en `index.html`, **no** en `versiones/`. Está una sola vez: dos copias del
+mismo archivo se desincronizan al primer cambio.
+
+## Verlo
 
 ```bash
 python3 -m http.server 8080 --directory pizzeria-piloto
-# http://localhost:8080
 ```
 
-O abrí `index.html` directo en el navegador. Funciona igual: no hay build.
+- El sitio: `http://localhost:8080/`
+- Comparar con la descartada: `http://localhost:8080/versiones/`
 
-## Antes de publicar — tres cosas obligatorias
+Desde el teléfono, en la misma red: `http://<ip-de-tu-maquina>:8080/`.
+Miralo ahí — el hero está diseñado para móvil y en pantalla ancha pierde efecto.
 
-### 1. El logo
+## Las versiones
 
-`assets/logo.png` **no está en el repo todavía.** Hay que agregarlo:
+**Brasa (activa).** Fondo casi negro con una sola fuente de luz: la boca del horno,
+hecha con degradados radiales que respiran a ritmos distintos. Serif del sistema
+(Georgia) en tamaño grande, filos de 1px, mucho aire. Sin ilustración — el calor es
+la imagen. 5.0 KB comprimido.
 
-- Exportalo a **WebP o PNG, 400 px de ancho, por debajo de 40 KB**
-  (pasalo por [squoosh.app](https://squoosh.app) si hace falta).
-- Es el elemento LCP de la página: si pesa de más, se lleva puesta la métrica
-  de rendimiento sin importar cuán liviano sea el resto.
-- Si cambiás la extensión, actualizá las tres referencias en `index.html`
-  (`og:image`, `icon`, `apple-touch-icon`) más el `<img>` del hero.
+**Sticker (descartada).** Contornos gruesos de tinta, colores planos y cálidos sobre
+crema, sombras duras desplazadas, tarjetas apenas rotadas como calcomanías pegadas a
+mano. Sans peso 900 con sombra dura. Energía de barrio. 7.2 KB comprimido.
+Se conserva en `versiones/` por si se quiere volver.
 
-### 2. Los datos de contacto — hoy son de relleno
+## El logo
 
-| Dato | Valor actual (falso) | Dónde está |
-|---|---|---|
-| Enlace del grupo | `https://chat.whatsapp.com/EJEMPLO0000000000000000` | líneas 559, 585, 597 |
-| Dirección | 1234 SW 8th St, Miami, FL 33135 | línea 581, y repetida en el enlace al mapa (584) |
-| Horario | Lun a dom, 11:00 a.m. – 11:00 p.m. | línea 582 |
+`assets/logo.png` **no está en el repo todavía**, y ninguna de las dos versiones
+depende de él para funcionar.
 
-El enlace del grupo **no funciona** y la dirección **no es la real**. Reemplazá las tres
-apariciones del enlace de una sola vez:
+Ambas usan una **marca SVG simplificada** embebida en el HTML: sirve de logo a 32 px
+en la barra y de favicon, escala a cualquier tamaño y no cuesta ninguna petición de
+red. A 32 px el logo ilustrado completo no se lee — los tomates y las nubes se vuelven
+papilla —, así que la marca simplificada no es un atajo sino la solución correcta.
 
-```bash
-sd 'https://chat.whatsapp.com/EJEMPLO0000000000000000' 'TU_ENLACE_REAL' index.html
-```
+El PNG grande se usa solo en `og:image`: la vista previa cuando alguien comparte el
+enlace por WhatsApp, que es donde el detalle sí importa. Ver `assets/LEEME.txt`.
 
-La dirección aparece dos veces —el texto visible y la URL del mapa—: si cambiás una,
-cambiá la otra o el enlace manda a la gente al lugar equivocado.
+## Antes de publicar
 
-### 3. Lighthouse
+Los datos de contacto son de relleno en las dos versiones:
 
-Correlo en Chrome DevTools → Lighthouse → **Mobile**. Objetivo: Performance ≥ 95,
+| Dato | Valor actual (falso) |
+|---|---|
+| Enlace del grupo | `https://chat.whatsapp.com/EJEMPLO0000000000000000` |
+| Dirección | 1234 SW 8th St, Miami, FL 33135 |
+| Horario | Lun a dom, 11:00 a.m. – 11:00 p.m. |
+
+Buscá `TODO` en el HTML de la versión elegida. El enlace del mapa repite la dirección:
+si cambiás una, cambiá el otro.
+
+Después, Lighthouse en Chrome DevTools → **Mobile**. Objetivo: Performance ≥ 95,
 Accessibility 100, Best Practices ≥ 95, SEO 100.
 
-## Cómo está construido
+## Cómo están construidas
 
-- HTML5 semántico, un solo archivo autocontenido con el CSS embebido en el `<head>`.
-- Sin fuentes descargadas. El carácter tipográfico sale del peso 900, el tracking
-  negativo y la sombra dura desplazada — cuesta 0 KB y funciona sin conexión.
-- SVG inline dibujado a mano para el sol, el pin y los íconos. Nada de librerías.
-- ~20 líneas de JS para revelar secciones al hacer scroll. Si el script no corre,
+- HTML5 semántico, un archivo autocontenido con el CSS embebido en el `<head>`.
+- Sin fuentes descargadas. Las dos usan stacks del sistema — es el mayor ahorro de
+  peso y funcionan sin conexión.
+- SVG inline dibujado a mano. Nada de librerías de íconos.
+- ~15 líneas de JS para revelar secciones al hacer scroll. Si el script no corre,
   todo queda visible: el contenido nunca depende de él.
-- Todas las animaciones usan solo `transform` y `opacity`, y se apagan por completo
-  con `prefers-reduced-motion: reduce`.
-
-### Sobre el diseño
-
-El logo es una porción de pizza volando como un cohete. De ahí sale el vocabulario del
-sitio: el mercado es un **manifiesto de carga**, la sección de refrescarse del sol es
-una **escala técnica**, y el llamado principal es un **pase de abordaje** troquelado
-con CSS. Esa es la pieza que el sitio quiere que recuerdes — el resto se mantiene
-callado para que destaque.
-
-Las tarjetas van rotadas apenas, con borde de tinta grueso y sombra dura sin difuminar,
-como calcomanías pegadas a mano. El giro se aplica con la variable `--giro` en vez de
-`transform` directo, para que componga con la animación de revelado en lugar de pisarla.
+- Animaciones solo con `transform` y `opacity`, apagadas por completo con
+  `prefers-reduced-motion: reduce`.
 
 ## Publicarlo
 

@@ -3,349 +3,225 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pizzería Piloto — Pizza acabada de hacer y mercado, en un solo lugar</title>
-<meta name="description" content="Napolitana con jamón y cebolla, pizzas familiares y un mercado con bebidas bien frías, confituras y lo básico de la casa. Servicio a domicilio. Entra al grupo de WhatsApp.">
-<meta name="theme-color" content="#F7DBAE">
+<title>Pizzería Piloto — todavía quema</title>
+<meta name="description" content="Napolitana con jamón y cebolla, sale del horno cuando la pides. Y al lado, el mercado: bebidas bien frías, confituras y lo básico de la casa.">
+<meta name="theme-color" content="#0E0B0C">
 
-<!-- El enlace se comparte por WhatsApp: la vista previa es parte del producto. -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="Pizzería Piloto — pizza acabada de hacer y mercado">
-<meta property="og:description" content="Napolitana con jamón y cebolla, familiares, y un mercado con bebidas frías y lo básico de la casa. Servicio a domicilio.">
+<meta property="og:title" content="Pizzería Piloto — todavía quema">
+<meta property="og:description" content="Napolitana con jamón y cebolla, del horno a tu mano. Y el mercado al lado.">
 <meta property="og:image" content="assets/logo.png">
 <meta property="og:locale" content="es_ES">
-<meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="assets/logo.png">
-<link rel="apple-touch-icon" href="assets/logo.png">
+
+<!-- Favicon: la marca simplificada, embebida. A 32px el logo ilustrado no se
+     lee; esto sí, y no cuesta una petición de red. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3 L27 25 A17 17 0 0 1 5 25 Z' fill='%23F5A623'/%3E%3Ccircle cx='16' cy='13' r='2.4' fill='%23E23B2E'/%3E%3Ccircle cx='11' cy='20' r='2' fill='%23E23B2E'/%3E%3Ccircle cx='21' cy='20' r='2' fill='%236DB33F'/%3E%3C/svg%3E">
 
 <style>
 /* ==========================================================================
-   Tokens
-   Paleta tomada del logo. La tinta estructura todo: es borde, texto y sombra.
+   BRASA — paleta derivada del logo, apagando los claros.
+   Una sola fuente de luz en toda la página: la boca del horno.
    ========================================================================== */
 :root{
-  --tinta:#3D3B62;
-  --crema:#F7DBAE;
-  --crema-claro:#FDF1DC;
-  --naranja:#F5A623;
-  --naranja-hondo:#E8801C;
-  --tomate:#E23B2E;
-  --tomate-hondo:#C0392B;  /* fondo de botón: 4.87:1 sobre crema-claro */
-  --agua:#A6DDE0;
-  --agua-hondo:#6FC5CC;
-  --aji:#6DB33F;
+  --carbon:#0E0B0C;
+  --humo:#171314;
+  --ceniza:#2A2427;
+  --crema:#F2E4CE;    /* 15:1 sobre carbón */
+  --tenue:#9A8F86;    /* 5.9:1 sobre carbón */
+  --brasa:#F5A623;    /* 9.5:1 sobre carbón */
+  --fuego:#E23B2E;
 
+  --serif:ui-serif,Georgia,"Times New Roman",serif;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
 
-  --borde:3px;
-  --sombra:6px 6px 0 var(--tinta);
-  --sombra-chica:4px 4px 0 var(--tinta);
-  --ancho:min(100% - 2rem, 68rem);
+  --ancho:min(100% - 2.5rem, 60rem);
 }
 
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{
   margin:0;
+  background:var(--carbon);
+  color:var(--crema);
   font-family:var(--sans);
-  font-size:clamp(1rem,0.96rem + 0.2vw,1.075rem);
-  line-height:1.6;
-  color:var(--tinta);
-  background-color:var(--crema);
-  /* Trama de puntos: le quita el plano digital al fondo sin pesar un byte. */
-  background-image:radial-gradient(rgba(61,59,98,.09) 1px,transparent 1px);
-  background-size:18px 18px;
+  font-size:1.0625rem;
+  line-height:1.65;
+  overflow-x:hidden;
 }
-img{max-width:100%;height:auto;display:block}
 a{color:inherit}
 
-/* Utilidades ------------------------------------------------------------- */
 .envoltura{width:var(--ancho);margin-inline:auto}
-.bloque{padding-block:clamp(3.5rem,10vw,6rem)}
-.mono{
-  font-family:var(--mono);
-  font-size:.72rem;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-  font-weight:600;
-}
-.saltar{
-  position:absolute;left:-9999px;
-  background:var(--tinta);color:var(--crema-claro);
-  padding:.75rem 1.25rem;border-radius:0 0 8px 0;z-index:99;
-}
-.saltar:focus{left:0;top:0}
+.bloque{padding-block:clamp(4rem,14vw,7rem)}
+.borde-arriba{border-top:1px solid var(--ceniza)}
 
-:where(a,button,summary):focus-visible{
-  outline:3px solid var(--tomate-hondo);
-  outline-offset:3px;
-  border-radius:2px;
+.etiqueta{
+  font-size:.7rem;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--brasa);font-weight:600;margin:0 0 1.25rem;
 }
-
-/* Tipografía ------------------------------------------------------------- */
-/* Sin fuentes descargadas. El carácter sale del peso extremo, el tracking
-   negativo y la sombra dura desplazada: rotulación pintada, 0 KB. */
-.titular{
-  font-weight:900;
-  text-transform:uppercase;
-  letter-spacing:-.035em;
-  line-height:.92;
+.titulo{
+  font-family:var(--serif);
+  font-weight:400;
+  font-size:clamp(2.4rem,9vw,4rem);
+  line-height:1.04;
+  letter-spacing:-.015em;
   margin:0;
   text-wrap:balance;
 }
-.titular-hero{
-  font-size:clamp(2.6rem,12vw,5.25rem);
-  text-shadow:4px 4px 0 var(--naranja);
+.bajada{
+  color:var(--tenue);
+  max-width:38ch;
+  margin:1.25rem 0 0;
 }
-.titular-seccion{
-  font-size:clamp(1.9rem,7vw,3.1rem);
-  text-shadow:3px 3px 0 var(--naranja);
-}
-.titular-seccion--agua{text-shadow:3px 3px 0 var(--crema-claro)}
-.rotulo{
-  display:inline-block;
-  margin:0 0 .9rem;
-  padding:.3rem .7rem;
-  background:var(--tinta);
-  color:var(--crema-claro);
-  border-radius:2px;
-}
-.entrada{
-  font-size:1.075rem;
-  max-width:46ch;
-  margin:1.15rem 0 0;
-}
-.nota{font-size:.92rem;opacity:.78;margin:1.5rem 0 0;max-width:52ch}
 
-/* Botones ---------------------------------------------------------------- */
-.acciones{display:flex;flex-wrap:wrap;gap:.85rem;margin-top:1.9rem}
-.boton{
-  display:inline-flex;align-items:center;gap:.55rem;
-  padding:.85rem 1.4rem;
-  font-family:inherit;font-size:1.05rem;font-weight:800;
-  letter-spacing:-.01em;
-  text-decoration:none;
-  border:var(--borde) solid var(--tinta);
-  border-radius:10px;
-  box-shadow:var(--sombra-chica);
-  transition:transform .12s ease,box-shadow .12s ease;
+:where(a,button):focus-visible{
+  outline:2px solid var(--brasa);
+  outline-offset:4px;border-radius:3px;
 }
-.boton--principal{background:var(--tomate-hondo);color:var(--crema-claro)}
-.boton--segundo{background:var(--crema-claro);color:var(--tinta)}
-.boton:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--tinta)}
-.boton:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--tinta)}
 
-/* Barra superior --------------------------------------------------------- */
-.barra{
-  border-bottom:var(--borde) solid var(--tinta);
-  background:var(--crema-claro);
-}
+/* Barra ------------------------------------------------------------------ */
+.barra{position:relative;z-index:2}
 .barra__interior{
   display:flex;align-items:center;justify-content:space-between;gap:1rem;
-  padding-block:.7rem;
+  padding-block:1.1rem;
 }
-.marca{display:flex;align-items:center;gap:.6rem;font-weight:900;letter-spacing:-.02em;text-decoration:none}
-.marca__texto{font-size:1.05rem;text-transform:uppercase;line-height:1}
-.marca__texto span{display:block;font-size:.62rem;letter-spacing:.22em;opacity:.7;font-weight:700}
+.marca{display:flex;align-items:center;gap:.6rem;text-decoration:none}
+.marca__nombre{
+  font-family:var(--serif);font-size:1.0625rem;letter-spacing:.01em;line-height:1;
+}
 .barra__enlace{
-  font-weight:800;font-size:.92rem;text-decoration:none;
-  border-bottom:3px solid var(--tomate);
-  padding-bottom:2px;white-space:nowrap;
+  font-size:.85rem;color:var(--tenue);text-decoration:none;
+  border-bottom:1px solid var(--ceniza);padding-bottom:3px;
 }
+.barra__enlace:hover{color:var(--crema);border-color:var(--brasa)}
 
-/* Hero ------------------------------------------------------------------- */
-.hero{position:relative;overflow:hidden;padding-block:clamp(2.5rem,8vw,4.5rem) clamp(3rem,9vw,5rem)}
-.hero__rejilla{display:grid;gap:clamp(2rem,6vw,3rem);align-items:center}
-@media(min-width:56rem){
-  .hero__rejilla{grid-template-columns:1.05fr .95fr}
-}
-
-/* Estelas de velocidad detrás del logo. Solo transform: no dispara layout. */
-.estelas{position:absolute;inset:0;pointer-events:none;opacity:.5}
-.estela{
-  position:absolute;height:4px;border-radius:2px;background:var(--agua-hondo);
-  transform:rotate(-32deg);transform-origin:left center;
-}
-.estela:nth-child(1){top:22%;left:-12%;width:46%;opacity:.9}
-.estela:nth-child(2){top:38%;left:-18%;width:62%;opacity:.55;height:6px}
-.estela:nth-child(3){top:57%;left:-8%;width:38%;opacity:.7}
-.estela:nth-child(4){top:73%;left:-14%;width:52%;opacity:.4;height:5px}
-
-.hero__marco{position:relative;justify-self:center;max-width:22rem;width:100%}
-.hero__logo{
-  width:100%;
-  border:var(--borde) solid var(--tinta);
-  border-radius:16px;
-  background:var(--crema-claro);
-  box-shadow:8px 8px 0 var(--tinta);
-  transform:rotate(-2deg);
-}
-.sol{position:absolute;top:-1.6rem;right:-1.2rem;width:5rem;height:5rem}
-.sol__rayos{transform-origin:50% 50%;animation:girar 26s linear infinite}
-@keyframes girar{to{transform:rotate(360deg)}}
-
-.sello{
-  position:absolute;bottom:-1.1rem;left:-.9rem;
-  background:var(--naranja);
-  border:var(--borde) solid var(--tinta);
-  border-radius:8px;
-  padding:.4rem .7rem;
-  box-shadow:var(--sombra-chica);
-  transform:rotate(-6deg);
-}
-
-/* Tarjetas genéricas ----------------------------------------------------- */
-.tarjeta{
-  background:var(--crema-claro);
-  border:var(--borde) solid var(--tinta);
-  border-radius:14px;
-  box-shadow:var(--sombra);
-  padding:clamp(1.25rem,4vw,1.75rem);
-  transform:rotate(var(--giro,0deg));
-}
-.tarjeta__titulo{
-  font-weight:900;text-transform:uppercase;letter-spacing:-.02em;
-  font-size:1.35rem;margin:.55rem 0 .5rem;line-height:1.1;
-}
-.tarjeta p{margin:0;font-size:.98rem}
-
-/* Pizzas ----------------------------------------------------------------- */
-.pizzas__lista{display:grid;gap:1.75rem;margin-top:2.25rem}
-@media(min-width:44rem){.pizzas__lista{grid-template-columns:1fr 1fr;gap:2rem}}
-/* Asimetría: pegadas a mano, no alineadas por una grilla.
-   El giro va por variable, no por `transform` directo: así se compone con la
-   animación de revelado en vez de pisarla. */
-.pizzas__lista .tarjeta:nth-child(1){--giro:-1.4deg}
-.pizzas__lista .tarjeta:nth-child(2){--giro:1deg}
-
-.insignia{
-  display:inline-block;
-  font-family:var(--mono);font-size:.66rem;font-weight:700;
-  letter-spacing:.14em;text-transform:uppercase;
-  background:var(--tomate);color:var(--crema-claro);
-  border:2px solid var(--tinta);border-radius:99px;
-  padding:.22rem .6rem;
-}
-.insignia--agua{background:var(--agua);color:var(--tinta)}
-.agregos{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:1rem;padding:0;list-style:none}
-.agregos li{
-  font-size:.85rem;font-weight:700;
-  background:var(--crema);border:2px solid var(--tinta);border-radius:99px;
-  padding:.2rem .65rem;
-}
-
-/* Mercado: manifiesto de carga ------------------------------------------- */
-.manifiesto{display:grid;gap:1.5rem;margin-top:2.25rem}
-@media(min-width:48rem){.manifiesto{grid-template-columns:repeat(3,1fr)}}
-.carga{
-  background:var(--crema-claro);
-  border:var(--borde) solid var(--tinta);
-  border-radius:14px;
-  box-shadow:var(--sombra);
-  overflow:hidden;
-}
-.carga__cabeza{
-  display:flex;align-items:center;justify-content:space-between;gap:.5rem;
-  background:var(--tinta);color:var(--crema-claro);
-  padding:.55rem .9rem;
-}
-.carga__cuerpo{padding:1.1rem}
-.carga__titulo{font-weight:900;text-transform:uppercase;letter-spacing:-.02em;font-size:1.15rem;margin:0 0 .75rem}
-.carga__items{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:.4rem}
-.carga__items li{
-  font-size:.86rem;
-  background:var(--crema);
-  border:2px solid var(--tinta);
-  border-radius:6px;
-  padding:.18rem .5rem;
-}
-
-/* Escala técnica (fresco) ------------------------------------------------ */
-.fresco{
-  background:var(--agua);
-  border-block:var(--borde) solid var(--tinta);
-}
-.fresco__lista{display:grid;gap:1.5rem;margin-top:2.25rem}
-@media(min-width:48rem){.fresco__lista{grid-template-columns:repeat(3,1fr)}}
-.fresco__lista .tarjeta:nth-child(2){--giro:-1.2deg}
-
-/* Pase de abordaje: la pieza firme del sitio ----------------------------- */
-.pase{
+/* HERO — la pieza que tiene que impactar en móvil ------------------------ */
+.hero{
   position:relative;
-  max-width:34rem;margin:2.5rem auto 0;
-  background:var(--crema-claro);
-  border:var(--borde) solid var(--tinta);
-  border-radius:14px;
-  box-shadow:10px 10px 0 var(--tinta);
-  overflow:hidden;
+  min-height:calc(100svh - 4rem);
+  display:flex;flex-direction:column;justify-content:center;
+  padding-block:clamp(3rem,12vh,6rem) clamp(9rem,32vh,14rem);
+  isolation:isolate;
 }
-.pase__cabeza{
-  display:flex;align-items:center;justify-content:space-between;gap:.75rem;
-  background:var(--tomate-hondo);color:var(--crema-claro);
-  padding:.7rem 1.1rem;
-  border-bottom:var(--borde) solid var(--tinta);
-}
-.pase__datos{
-  display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.25rem;
-  padding:1.25rem 1.25rem 1.4rem;
-}
-.dato dt{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;opacity:.72;margin:0}
-.dato dd{margin:.2rem 0 0;font-weight:900;font-size:1.05rem;letter-spacing:-.02em;text-transform:uppercase}
 
-/* Troquelado: dos muescas y una línea de corte. Puro CSS. */
-.pase__corte{position:relative;border-top:3px dashed var(--tinta);margin-inline:1.25rem}
-.pase__corte::before,.pase__corte::after{
-  content:"";position:absolute;top:-15px;width:26px;height:26px;
-  background:var(--crema);
-  border:var(--borde) solid var(--tinta);border-radius:50%;
+/* La boca del horno: una sola fuente de luz, abajo, ancha y baja.
+   Dos capas para que el núcleo sea más caliente que el halo. */
+.horno{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.horno__halo,.horno__nucleo{position:absolute;left:50%;translate:-50% 0;border-radius:50%}
+.horno__halo{
+  bottom:-42vh;width:150vw;height:78vh;
+  background:radial-gradient(ellipse at 50% 100%,
+    rgba(245,166,35,.42) 0%,
+    rgba(226,59,46,.24) 34%,
+    rgba(226,59,46,.07) 58%,
+    transparent 76%);
+  filter:blur(2px);
+  animation:respirar 7s ease-in-out infinite;
 }
-.pase__corte::before{left:-2.05rem}
-.pase__corte::after{right:-2.05rem}
-.pase__pie{padding:1.4rem 1.25rem 1.5rem}
-.pase__pie p{margin:0 0 1.1rem;font-size:.95rem}
-.pase .boton{width:100%;justify-content:center}
-
-/* Visita ----------------------------------------------------------------- */
-.visita__caja{
-  display:grid;gap:1.5rem;margin-top:2.25rem;
-  background:var(--crema-claro);
-  border:var(--borde) solid var(--tinta);
-  border-radius:14px;
-  box-shadow:var(--sombra);
-  padding:clamp(1.4rem,5vw,2.25rem);
+.horno__nucleo{
+  bottom:-26vh;width:88vw;height:44vh;
+  background:radial-gradient(ellipse at 50% 100%,
+    rgba(255,208,120,.55) 0%,
+    rgba(245,166,35,.30) 40%,
+    transparent 72%);
+  animation:respirar 5s ease-in-out infinite reverse;
 }
-@media(min-width:44rem){.visita__caja{grid-template-columns:auto 1fr;align-items:center;gap:2rem}}
-.visita__pin{width:5.5rem;height:5.5rem;justify-self:center}
-.visita__linea{margin:0 0 .35rem;font-size:1.35rem;font-weight:900;letter-spacing:-.02em}
-.visita__horario{margin:0 0 1.15rem;font-size:.98rem}
-
-/* Pie -------------------------------------------------------------------- */
-.pie{
-  border-top:var(--borde) solid var(--tinta);
-  background:var(--tinta);color:var(--crema-claro);
-  padding-block:2rem;
+@keyframes respirar{
+  0%,100%{opacity:.82;transform:scaleY(1)}
+  50%    {opacity:1;transform:scaleY(1.06)}
 }
-.pie__interior{display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between}
-.pie a{color:var(--crema-claro)}
-.pie__marca{font-size:1.4rem}
-.pie__legal{font-size:.82rem;opacity:.72;margin:.6rem 0 0;width:100%}
 
-/* Animaciones ------------------------------------------------------------ */
-/* Solo transform y opacity. El titular NO se anima: es el LCP. */
-.revelar{
-  opacity:0;
-  transform:translateY(18px) rotate(var(--giro,0deg));
-  transition:opacity .5s ease,transform .5s ease;
+.hero__titulo{
+  font-family:var(--serif);
+  font-weight:400;
+  /* En 360px arranca en 3.6rem: ocupa el ancho y golpea. */
+  font-size:clamp(3.6rem,17vw,8rem);
+  line-height:.94;
+  letter-spacing:-.035em;
+  margin:0;
 }
-.revelar.visible{opacity:1;transform:translateY(0) rotate(var(--giro,0deg))}
+.hero__bajada{
+  color:var(--tenue);
+  font-size:1.075rem;
+  max-width:32ch;
+  margin:1.5rem 0 0;
+}
+.hero__acciones{display:flex;flex-wrap:wrap;align-items:center;gap:1.5rem;margin-top:2.5rem}
 
-.hero__marco{animation:aterrizar .7s cubic-bezier(.2,.8,.3,1) both}
-@keyframes aterrizar{from{opacity:0;transform:translate(28px,-20px) rotate(4deg)}}
-.estela{animation:pasar .9s cubic-bezier(.2,.8,.3,1) both}
-.estela:nth-child(2){animation-delay:.06s}
-.estela:nth-child(3){animation-delay:.12s}
-.estela:nth-child(4){animation-delay:.18s}
-@keyframes pasar{from{opacity:0;transform:rotate(-32deg) scaleX(0)}}
+.boton{
+  display:inline-block;
+  background:var(--brasa);color:var(--carbon);
+  font-family:var(--sans);font-size:1rem;font-weight:700;
+  text-decoration:none;
+  padding:.95rem 1.75rem;border-radius:999px;
+  transition:background .15s ease,transform .15s ease;
+}
+.boton:hover{background:#FFC152;transform:translateY(-2px)}
+.enlace-suave{
+  color:var(--tenue);text-decoration:none;font-size:.95rem;
+  border-bottom:1px solid var(--ceniza);padding-bottom:3px;
+}
+.enlace-suave:hover{color:var(--crema);border-color:var(--brasa)}
+
+/* Listas de producto ------------------------------------------------------ */
+.dos{display:grid;gap:2.5rem;margin-top:3rem}
+@media(min-width:44rem){.dos{grid-template-columns:1fr 1fr;gap:3.5rem}}
+
+.plato__nombre{
+  font-family:var(--serif);font-size:1.75rem;font-weight:400;
+  margin:0 0 .5rem;letter-spacing:-.01em;
+}
+.plato p{margin:0;color:var(--tenue)}
+.plato__detalle{
+  display:block;margin-top:.85rem;
+  font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--brasa);
+}
+
+/* Mercado: tres columnas de texto, sin cajas. El aire es la separación. */
+.tres{display:grid;gap:2.75rem;margin-top:3rem}
+@media(min-width:48rem){.tres{grid-template-columns:repeat(3,1fr);gap:3rem}}
+.grupo__nombre{
+  font-family:var(--serif);font-size:1.3rem;font-weight:400;
+  margin:0 0 1rem;padding-bottom:.75rem;
+  border-bottom:1px solid var(--ceniza);
+}
+.grupo ul{margin:0;padding:0;list-style:none;color:var(--tenue)}
+.grupo li{padding:.3rem 0;font-size:.95rem}
+
+/* Sección del calor: la luz vuelve, más fría --------------------------- */
+.calor{position:relative;overflow:hidden}
+.calor::before{
+  content:"";position:absolute;z-index:-1;
+  top:-30%;right:-25%;width:70vw;height:70vw;max-width:34rem;max-height:34rem;
+  background:radial-gradient(circle,rgba(166,221,224,.13) 0%,transparent 68%);
+  border-radius:50%;
+}
+
+/* Llamado principal ------------------------------------------------------- */
+.llamado{position:relative;text-align:center;overflow:hidden}
+.llamado::before{
+  content:"";position:absolute;z-index:-1;
+  bottom:-55%;left:50%;translate:-50% 0;
+  width:120vw;height:60vh;
+  background:radial-gradient(ellipse at 50% 100%,rgba(245,166,35,.26) 0%,transparent 68%);
+}
+.llamado .bajada{margin-inline:auto}
+.llamado .boton{margin-top:2.25rem}
+
+/* Visita ------------------------------------------------------------------ */
+.visita__caja{margin-top:2.5rem}
+.visita__dir{
+  font-family:var(--serif);font-size:1.5rem;line-height:1.35;
+  margin:0 0 .5rem;
+}
+.visita__horario{color:var(--tenue);margin:0 0 1.75rem}
+
+/* Pie --------------------------------------------------------------------- */
+.pie{border-top:1px solid var(--ceniza);padding-block:2.5rem;color:var(--tenue);font-size:.875rem}
+.pie__interior{display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between;align-items:center}
+
+/* Movimiento -------------------------------------------------------------- */
+.revelar{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+.revelar.visible{opacity:1;transform:none}
 
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
@@ -355,236 +231,160 @@ a{color:inherit}
 </head>
 
 <body>
-<a class="saltar" href="#contenido">Saltar al contenido</a>
 
 <header class="barra">
   <div class="envoltura barra__interior">
     <a class="marca" href="#">
-      <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true">
-        <path d="M20 4 L34 32 A22 22 0 0 1 6 32 Z" fill="#F5A623" stroke="#3D3B62" stroke-width="3" stroke-linejoin="round"/>
-        <circle cx="20" cy="17" r="3" fill="#E23B2E"/>
-        <circle cx="14" cy="26" r="2.6" fill="#E23B2E"/>
-        <circle cx="26" cy="26" r="2.6" fill="#6DB33F"/>
+      <!-- Marca simplificada, 32px. Derivada del logo, legible a este tamaño. -->
+      <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M16 3 L27 25 A17 17 0 0 1 5 25 Z" fill="#F5A623"/>
+        <circle cx="16" cy="13" r="2.4" fill="#E23B2E"/>
+        <circle cx="11" cy="20" r="2" fill="#E23B2E"/>
+        <circle cx="21" cy="20" r="2" fill="#6DB33F"/>
       </svg>
-      <span class="marca__texto">Pizzería Piloto<span>Pizzería y mercado</span></span>
+      <span class="marca__nombre">Pizzería Piloto</span>
     </a>
-    <a class="barra__enlace" href="#pase">Entrar al grupo</a>
+    <a class="barra__enlace" href="#grupo">Entrar al grupo</a>
   </div>
 </header>
 
-<main id="contenido">
+<main>
 
-  <!-- Hero ============================================================== -->
+  <!-- HERO ============================================================== -->
   <section class="hero">
-    <div class="estelas" aria-hidden="true">
-      <i class="estela"></i><i class="estela"></i><i class="estela"></i><i class="estela"></i>
+    <div class="horno" aria-hidden="true">
+      <div class="horno__halo"></div>
+      <div class="horno__nucleo"></div>
     </div>
 
-    <div class="envoltura hero__rejilla">
-      <div>
-        <p class="mono rotulo">Pizzería &middot; Mercado</p>
-        <h1 class="titular titular-hero">Acabada de hacer.<br>Todavía quema.</h1>
-        <p class="entrada">
-          Napolitana con agregado de jamón y cebolla. Familiares para toda la casa.
-          Y al lado, el mercado con lo que hace falta en la cocina.
-        </p>
-        <div class="acciones">
-          <a class="boton boton--principal" href="#pase">Entrar al grupo</a>
-          <a class="boton boton--segundo" href="#visita">Dónde estamos</a>
-        </div>
-      </div>
-
-      <div class="hero__marco">
-        <svg class="sol" viewBox="0 0 100 100" aria-hidden="true">
-          <g class="sol__rayos" stroke="#E8801C" stroke-width="6" stroke-linecap="round">
-            <path d="M50 4v13M50 83v13M4 50h13M83 50h13M17 17l9 9M74 74l9 9M83 17l-9 9M26 74l-9 9"/>
-          </g>
-          <circle cx="50" cy="50" r="26" fill="#F5A623" stroke="#3D3B62" stroke-width="4"/>
-        </svg>
-
-        <!-- El logo del negocio. Sustituir por el archivo real optimizado. -->
-        <img class="hero__logo" src="assets/logo.png" width="800" height="800"
-             fetchpriority="high" decoding="async"
-             alt="Logo de Pizzería Piloto: una porción de pizza volando como un cohete entre nubes.">
-
-        <p class="mono sello">Servicio a domicilio</p>
+    <div class="envoltura">
+      <p class="etiqueta">Pizzería &amp; mercado</p>
+      <h1 class="hero__titulo">Todavía<br>quema.</h1>
+      <p class="hero__bajada">
+        Napolitana con jamón y cebolla. Sale del horno cuando la pides, no antes.
+      </p>
+      <div class="hero__acciones">
+        <a class="boton" href="#grupo">Entrar al grupo</a>
+        <a class="enlace-suave" href="#visita">Dónde estamos</a>
       </div>
     </div>
   </section>
 
   <!-- Pizzas ============================================================ -->
-  <section class="bloque" aria-labelledby="t-pizzas">
+  <section class="bloque borde-arriba" aria-labelledby="t-pizzas">
     <div class="envoltura">
-      <p class="mono rotulo revelar">Del horno</p>
-      <h2 class="titular titular-seccion revelar" id="t-pizzas">Dos pizzas.<br>Ninguna recalentada.</h2>
+      <p class="etiqueta revelar">Del horno</p>
+      <h2 class="titulo revelar" id="t-pizzas">Dos pizzas.<br>Ninguna recalentada.</h2>
 
-      <div class="pizzas__lista">
-        <article class="tarjeta revelar">
-          <span class="insignia">La oferta de la casa</span>
-          <h3 class="tarjeta__titulo">Napolitana</h3>
+      <div class="dos">
+        <article class="plato revelar">
+          <h3 class="plato__nombre">Napolitana</h3>
           <p>La de siempre, la que la gente viene a buscar. Se arma y va al horno cuando la pides.</p>
-          <ul class="agregos">
-            <li>+ Jamón</li>
-            <li>+ Cebolla</li>
-          </ul>
+          <span class="plato__detalle">Con jamón y cebolla</span>
         </article>
 
-        <article class="tarjeta revelar">
-          <span class="insignia insignia--agua">Para la casa completa</span>
-          <h3 class="tarjeta__titulo">Familiar</h3>
+        <article class="plato revelar">
+          <h3 class="plato__nombre">Familiar</h3>
           <p>Para cuando son cuatro, nadie quiere cocinar y hay que resolver rápido.</p>
-          <ul class="agregos">
-            <li>Alcanza para varios</li>
-          </ul>
+          <span class="plato__detalle">Alcanza para varios</span>
         </article>
       </div>
-
-      <p class="nota revelar">Todas salen al momento. Si encuentras cola, es buena señal.</p>
     </div>
   </section>
 
   <!-- Mercado =========================================================== -->
-  <section class="bloque" aria-labelledby="t-mercado">
+  <section class="bloque borde-arriba" aria-labelledby="t-mercado">
     <div class="envoltura">
-      <p class="mono rotulo revelar">Manifiesto de carga</p>
-      <h2 class="titular titular-seccion revelar" id="t-mercado">El mercado,<br>al lado del horno</h2>
-      <p class="entrada revelar">
-        No hace falta dar dos viajes. Mientras esperas la pizza, resuelves la compra.
+      <p class="etiqueta revelar">El mercado</p>
+      <h2 class="titulo revelar" id="t-mercado">Ya que estás,<br>resuelve la casa.</h2>
+      <p class="bajada revelar">
+        El aceite, el café, los espaguetis, la jamonada. Un solo viaje, no dos.
       </p>
 
-      <div class="manifiesto">
-        <section class="carga revelar" aria-labelledby="c-dulce">
-          <p class="carga__cabeza mono"><span>Carga 01</span><span>Dulce</span></p>
-          <div class="carga__cuerpo">
-            <h3 class="carga__titulo" id="c-dulce">Confituras</h3>
-            <ul class="carga__items">
-              <li>Pellys</li><li>Leche condensada</li><li>Sopas instantáneas</li>
-              <li>Barras de guayaba</li>
-            </ul>
-          </div>
+      <div class="tres">
+        <section class="grupo revelar" aria-labelledby="g-dulce">
+          <h3 class="grupo__nombre" id="g-dulce">Confituras</h3>
+          <ul>
+            <li>Pellys</li><li>Leche condensada</li>
+            <li>Sopas instantáneas</li><li>Barras de guayaba</li>
+          </ul>
         </section>
 
-        <section class="carga revelar" aria-labelledby="c-casa">
-          <p class="carga__cabeza mono"><span>Carga 02</span><span>Diario</span></p>
-          <div class="carga__cuerpo">
-            <h3 class="carga__titulo" id="c-casa">La casa por dentro</h3>
-            <ul class="carga__items">
-              <li>Aceite</li><li>Pan</li><li>Espaguetis</li><li>Fideos</li>
-              <li>Sazones</li><li>Café en polvo</li><li>Pasta de tomate</li>
-              <li>Salsa para pastas</li><li>Huevos</li><li>Jamonada de pollo</li>
-              <li>Sal</li><li>Azúcar</li>
-            </ul>
-          </div>
+        <section class="grupo revelar" aria-labelledby="g-casa">
+          <h3 class="grupo__nombre" id="g-casa">La casa</h3>
+          <ul>
+            <li>Aceite</li><li>Pan</li><li>Espaguetis</li><li>Fideos</li>
+            <li>Sazones</li><li>Café en polvo</li><li>Pasta de tomate</li>
+            <li>Salsa para pastas</li><li>Huevos</li><li>Jamonada de pollo</li>
+            <li>Sal y azúcar</li>
+          </ul>
         </section>
 
-        <section class="carga revelar" aria-labelledby="c-tomar">
-          <p class="carga__cabeza mono"><span>Carga 03</span><span>Frío</span></p>
-          <div class="carga__cuerpo">
-            <h3 class="carga__titulo" id="c-tomar">Para tomar</h3>
-            <ul class="carga__items">
-              <li>Ron</li><li>Cerveza</li><li>Refrescos de pomo</li><li>Refrescos de lata</li>
-              <li>Energizantes</li><li>Jugos</li><li>Pomos de agua</li>
-            </ul>
-          </div>
+        <section class="grupo revelar" aria-labelledby="g-tomar">
+          <h3 class="grupo__nombre" id="g-tomar">Para tomar</h3>
+          <ul>
+            <li>Ron</li><li>Cerveza</li><li>Refrescos de pomo y lata</li>
+            <li>Energizantes</li><li>Jugos</li><li>Pomos de agua</li>
+          </ul>
         </section>
-      </div>
-
-      <p class="nota revelar">Las ofertas cambian según lo que entre. En el grupo avisamos primero.</p>
-    </div>
-  </section>
-
-  <!-- Escala técnica ==================================================== -->
-  <section class="bloque fresco" aria-labelledby="t-fresco">
-    <div class="envoltura">
-      <p class="mono rotulo revelar">Escala técnica</p>
-      <h2 class="titular titular-seccion titular-seccion--agua revelar" id="t-fresco">Con este calor,<br>párate aquí</h2>
-
-      <div class="fresco__lista">
-        <article class="tarjeta revelar">
-          <svg width="42" height="42" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="#3D3B62" stroke-width="3" stroke-linejoin="round">
-            <path d="M18 6h12v6l4 8v22a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4V20l4-8z" fill="#A6DDE0"/>
-            <path d="M14 28h20" stroke-linecap="round"/>
-          </svg>
-          <h3 class="tarjeta__titulo">Bien frío</h3>
-          <p>Refrescos, cerveza, jugos y pomos de agua. Fríos de verdad, no del tiempo.</p>
-        </article>
-
-        <article class="tarjeta revelar">
-          <svg width="42" height="42" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="#3D3B62" stroke-width="3" stroke-linejoin="round">
-            <path d="M6 20h36v6a6 6 0 0 1-6 6H12a6 6 0 0 1-6-6z" fill="#F5A623"/>
-            <path d="M12 20a12 12 0 0 1 24 0" fill="#E23B2E"/>
-            <path d="M8 40h32" stroke-linecap="round"/>
-          </svg>
-          <h3 class="tarjeta__titulo">Entremeses en oferta</h3>
-          <p>Algo salado para acompañar mientras esperas, sin que te cueste el día.</p>
-        </article>
-
-        <article class="tarjeta revelar">
-          <svg width="42" height="42" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="#3D3B62" stroke-width="3" stroke-linejoin="round">
-            <path d="M24 8C13 8 5 16 4 24h40C43 16 35 8 24 8z" fill="#E23B2E"/>
-            <path d="M24 24v16" stroke-linecap="round"/>
-            <path d="M24 40c0 2.5 3 3.5 5 2" stroke-linecap="round"/>
-          </svg>
-          <h3 class="tarjeta__titulo">Sombra y asiento</h3>
-          <p>Un lugar para sentarte, quitarte el sol de arriba y tomarte algo con calma.</p>
-        </article>
       </div>
     </div>
   </section>
 
-  <!-- Pase de abordaje ================================================== -->
-  <section class="bloque" id="pase" aria-labelledby="t-pase">
+  <!-- El calor ========================================================== -->
+  <section class="bloque borde-arriba calor" aria-labelledby="t-calor">
     <div class="envoltura">
-      <p class="mono rotulo revelar">Vuelos a domicilio</p>
-      <h2 class="titular titular-seccion revelar" id="t-pase">Te lo llevamos</h2>
+      <p class="etiqueta revelar">Con este calor</p>
+      <h2 class="titulo revelar" id="t-calor">Párate aquí<br>un momento.</h2>
+      <p class="bajada revelar">
+        Sombra, un asiento y algo bien frío. Que el sol espere afuera.
+      </p>
 
-      <div class="pase revelar">
-        <p class="pase__cabeza mono"><span>Pizzería Piloto</span><span>Pase de abordaje</span></p>
-
-        <dl class="pase__datos">
-          <div class="dato"><dt>Sale de</dt><dd>El horno</dd></div>
-          <div class="dato"><dt>Llega a</dt><dd>Tu casa</dd></div>
-          <div class="dato"><dt>Vuelo</dt><dd>PP&middot;01</dd></div>
-          <div class="dato"><dt>Sale</dt><dd>Caliente</dd></div>
-        </dl>
-
-        <div class="pase__corte"></div>
-
-        <div class="pase__pie">
-          <p>
-            El domicilio tiene un costo adicional. Lo coordinas directo con los
-            administradores en el grupo, que es donde también salen las ofertas del día.
-          </p>
-          <!-- TODO: sustituir por el enlace real del grupo. -->
-          <a class="boton boton--principal" href="https://chat.whatsapp.com/EJEMPLO0000000000000000">
-            Entrar al grupo de WhatsApp
-          </a>
-        </div>
+      <div class="tres">
+        <section class="grupo revelar">
+          <h3 class="grupo__nombre">Bien frío</h3>
+          <ul><li>Refrescos, cerveza, jugos y pomos de agua. Fríos de verdad, no del tiempo.</li></ul>
+        </section>
+        <section class="grupo revelar">
+          <h3 class="grupo__nombre">Entremeses</h3>
+          <ul><li>Algo salado para acompañar mientras esperas, en oferta.</li></ul>
+        </section>
+        <section class="grupo revelar">
+          <h3 class="grupo__nombre">Sombra y asiento</h3>
+          <ul><li>Un lugar para sentarte y tomarte algo con calma.</li></ul>
+        </section>
       </div>
+    </div>
+  </section>
+
+  <!-- El grupo ========================================================== -->
+  <section class="bloque borde-arriba llamado" id="grupo" aria-labelledby="t-grupo">
+    <div class="envoltura">
+      <p class="etiqueta revelar">El grupo</p>
+      <h2 class="titulo revelar" id="t-grupo">En el grupo<br>se entera primero.</h2>
+      <p class="bajada revelar">
+        Las ofertas salen ahí antes que en ningún lado. Cuando entra algo nuevo al
+        mercado, ahí se avisa.
+      </p>
+      <!-- TODO: sustituir por el enlace real del grupo. -->
+      <a class="boton revelar" href="https://chat.whatsapp.com/EJEMPLO0000000000000000">
+        Entrar al grupo de WhatsApp
+      </a>
     </div>
   </section>
 
   <!-- Visita ============================================================ -->
-  <section class="bloque" id="visita" aria-labelledby="t-visita">
+  <section class="bloque borde-arriba" id="visita" aria-labelledby="t-visita">
     <div class="envoltura">
-      <p class="mono rotulo revelar">Dónde estamos</p>
-      <h2 class="titular titular-seccion revelar" id="t-visita">Pasa por aquí</h2>
+      <p class="etiqueta revelar">Dónde estamos</p>
+      <h2 class="titulo revelar" id="t-visita">Pasa por aquí.</h2>
 
       <div class="visita__caja revelar">
-        <svg class="visita__pin" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="#3D3B62" stroke-width="3" stroke-linejoin="round">
-          <path d="M24 4c-8 0-14 6-14 14 0 10 14 26 14 26s14-16 14-26c0-8-6-14-14-14z" fill="#E23B2E"/>
-          <circle cx="24" cy="18" r="5.5" fill="#FDF1DC"/>
-        </svg>
-        <div>
-          <!-- TODO: sustituir por la dirección real. -->
-          <p class="visita__linea">1234 SW 8th St<br>Miami, FL 33135</p>
-          <p class="visita__horario">Lunes a domingo, de 11:00 a.m. a 11:00 p.m.</p>
-          <div class="acciones">
-            <a class="boton boton--segundo" href="https://maps.google.com/?q=1234+SW+8th+St,+Miami,+FL+33135"
-               target="_blank" rel="noopener">Abrir en el mapa</a>
-            <a class="boton boton--principal" href="https://chat.whatsapp.com/EJEMPLO0000000000000000">Entrar al grupo</a>
-          </div>
-        </div>
+        <!-- TODO: sustituir por la dirección real. -->
+        <p class="visita__dir">1234 SW 8th St<br>Miami, FL 33135</p>
+        <p class="visita__horario">Lunes a domingo, de 11:00 a.m. a 11:00 p.m.</p>
+        <a class="enlace-suave" href="https://maps.google.com/?q=1234+SW+8th+St,+Miami,+FL+33135"
+           target="_blank" rel="noopener">Abrir en el mapa</a>
       </div>
     </div>
   </section>
@@ -593,33 +393,27 @@ a{color:inherit}
 
 <footer class="pie">
   <div class="envoltura pie__interior">
-    <p class="titular pie__marca">Pizzería Piloto</p>
-    <a class="barra__enlace" href="https://chat.whatsapp.com/EJEMPLO0000000000000000">Entrar al grupo de WhatsApp</a>
-    <p class="pie__legal">Pizzas napolitanas y familiares, mercado y servicio a domicilio con costo adicional.</p>
+    <span>Pizzería Piloto — pizzería y mercado</span>
+    <a class="barra__enlace" href="https://chat.whatsapp.com/EJEMPLO0000000000000000">Entrar al grupo</a>
   </div>
 </footer>
 
 <script>
-/* Revelado al entrar en pantalla. Si no hay soporte o el usuario pidió menos
-   movimiento, todo queda visible: el contenido nunca depende del script. */
 (function () {
   var objetivos = document.querySelectorAll('.revelar');
-  var quieto = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  if (quieto || !('IntersectionObserver' in window)) {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      !('IntersectionObserver' in window)) {
     for (var i = 0; i < objetivos.length; i++) objetivos[i].classList.add('visible');
     return;
   }
-
-  var observador = new IntersectionObserver(function (entradas) {
-    entradas.forEach(function (entrada) {
-      if (!entrada.isIntersecting) return;
-      entrada.target.classList.add('visible');
-      observador.unobserve(entrada.target);
+  var obs = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      e.target.classList.add('visible');
+      obs.unobserve(e.target);
     });
-  }, { rootMargin: '0px 0px -10% 0px' });
-
-  objetivos.forEach(function (el) { observador.observe(el); });
+  }, { rootMargin: '0px 0px -12% 0px' });
+  objetivos.forEach(function (el) { obs.observe(el); });
 })();
 </script>
 </body>
