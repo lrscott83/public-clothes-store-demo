@@ -1,13 +1,29 @@
-Falta el logo.
+Falta el logo. El sitio ya lo espera acá, con este nombre exacto:
 
-Guardá acá el logo del negocio como `logo.png` (o `logo.webp`):
+    assets/logo.png
 
-  - ancho 400 px
-  - por debajo de 40 KB
-  - optimizado en https://squoosh.app
+Hasta que lo pongas, la barra de arriba muestra el hueco donde va.
 
-Es la imagen más pesada de la página y el elemento LCP del hero. Si pesa de más,
-arrastra la métrica de rendimiento sin importar cuán liviano sea el resto del sitio.
+TAMAÑO
+------
+Se muestra a 32x32 px en la barra, así que con 96x96 alcanza y sobra
+(96 = 3x, para pantallas de alta densidad). Exportalo a menos de 20 KB.
+Pasalo por https://squoosh.app si hace falta.
 
-Si usás otra extensión, actualizá las cuatro referencias en ../index.html:
-og:image, icon, apple-touch-icon y el <img> del hero.
+No subas el original de 780x780: el navegador se lo descarga entero para
+mostrarlo a 32 px. Es peso tirado a la basura en cada visita.
+
+DÓNDE SE USA (4 referencias en ../index.html)
+---------------------------------------------
+  línea  13   og:image          vista previa al compartir por WhatsApp
+  línea  16   rel="icon"        favicon de la pestaña
+  línea  17   apple-touch-icon  ícono al guardar en pantalla de inicio
+  línea 265   <img> de la barra el logo visible arriba a la izquierda
+
+Si usás otra extensión (.webp, .svg), cambiá las cuatro.
+
+UN DETALLE
+----------
+og:image quiere una imagen grande, no de 96 px: la vista previa de WhatsApp
+la muestra a buen tamaño. Si te importa cómo se ve al compartir el enlace,
+poné un `logo-og.png` de ~1200x630 y apuntá solo la línea 13 a ese archivo.
