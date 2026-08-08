@@ -265,13 +265,30 @@ h1,h2,h3{margin:0}
 .pie{border-top:1px solid var(--filo);margin-top:2rem;padding-block:2.25rem;color:var(--tenue);font-size:.875rem}
 .pie__interior{text-align:center}
 .pie__linea{margin:0}
-.pie__credito{margin:.65rem 0 0;font-size:.8rem;opacity:.72}
+.pie__credito{margin:.8rem 0 0;font-size:.85rem}
 .pie__credito a{
-  color:var(--tenue);text-decoration:none;
-  border-bottom:1px solid var(--filo);padding-bottom:1px;
-  transition:color .15s ease,border-color .15s ease;
+  position:relative;
+  font-weight:800;color:var(--crema);text-decoration:none;
+  padding-bottom:4px;
+  animation:destellar 3.4s ease-in-out infinite;
 }
-.pie__credito a:hover{color:var(--brasa);border-color:var(--brasa)}
+/* El subrayado es una barra propia, no un border-bottom: así se le puede dar
+   grosor, redondeo y un barrido de luz que recorre el ancho. */
+.pie__credito a::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,var(--brasa),var(--fuego),var(--brasa),var(--fuego));
+  background-size:200% 100%;
+  animation:barrer 3.4s linear infinite;
+}
+/* Un latido de luz, no un parpadeo. El texto que prende y apaga es incómodo de
+   leer y las pautas de accesibilidad lo desaconsejan; esto llama igual. */
+@keyframes destellar{
+  0%,100%{color:var(--crema);text-shadow:none}
+  50%    {color:#FFD79A;text-shadow:0 0 14px rgba(245,166,35,.45)}
+}
+@keyframes barrer{to{background-position:-200% 0}}
+.pie__credito a:hover{color:var(--brasa);animation-play-state:paused}
+.pie__credito a:hover::after{animation-play-state:paused}
 
 /* ---- Entrada escalonada: se ve al cargar, no al hacer scroll ----------- */
 .entra{opacity:0;transform:translateY(22px);animation:asomar .55s cubic-bezier(.2,.75,.3,1) forwards}
