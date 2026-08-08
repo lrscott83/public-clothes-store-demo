@@ -261,6 +261,31 @@ h1,h2,h3{margin:0}
 .visita__dir{font-family:var(--serif);font-size:1.5rem;line-height:1.35;margin:0 0 .4rem}
 .visita__horario{color:var(--tenue);margin:0 0 1.1rem}
 
+/* ---- Botón flotante: volver arriba ------------------------------------- */
+/* No lleva verde: ese color es solo de WhatsApp. Un botón secundario que
+   compite con el llamado principal le resta al llamado principal. */
+.arriba{
+  position:fixed;z-index:50;
+  right:max(1rem,env(safe-area-inset-right));
+  bottom:max(1rem,env(safe-area-inset-bottom));
+  width:48px;height:48px;
+  display:grid;place-items:center;
+  padding:0;cursor:pointer;
+  background:var(--superficie-alta);color:var(--crema);
+  border:1.5px solid var(--filo);border-radius:50%;
+  box-shadow:0 10px 28px rgba(0,0,0,.5);
+  /* Oculto de verdad mientras no se usa: sin visibility queda recibiendo
+     clics invisibles encima del contenido. */
+  opacity:0;visibility:hidden;transform:translateY(16px) scale(.85);
+  transition:opacity .28s ease,transform .28s cubic-bezier(.2,.8,.3,1),
+             visibility .28s,border-color .15s ease,color .15s ease,background .15s ease;
+}
+.arriba.visible{opacity:1;visibility:visible;transform:none}
+.arriba:hover{border-color:var(--brasa);color:var(--brasa);background:var(--superficie)}
+.arriba:active{transform:scale(.92)}
+.arriba svg{transition:transform .18s ease}
+.arriba:hover svg{transform:translateY(-2px)}
+
 /* ---- Pie --------------------------------------------------------------- */
 .pie{border-top:1px solid var(--filo);margin-top:2rem;padding-block:2.25rem;color:var(--tenue);font-size:.875rem}
 .pie__interior{text-align:center}
@@ -306,6 +331,8 @@ h1,h2,h3{margin:0}
 
 @media(prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
+  /* El botón sigue apareciendo y funcionando: solo deja de deslizarse. */
+  .arriba{transition:opacity .01s,visibility .01s}
   *,*::before,*::after{animation:none!important;transition:none!important}
   .entra,.revelar{opacity:1;transform:none}
   .chispa{display:none}
@@ -536,7 +563,38 @@ h1,h2,h3{margin:0}
   </div>
 </footer>
 
+<button class="arriba" id="arriba" type="button" aria-label="Volver arriba">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 19V5M5 12l7-7 7 7"/>
+  </svg>
+</button>
+
 <script>
+/* Volver arriba. Aparece cuando el hero sale de pantalla — se usa un
+   IntersectionObserver en vez de escuchar el scroll, que dispara cientos de
+   veces por gesto. */
+(function () {
+  var boton = document.getElementById('arriba');
+  var hero = document.querySelector('.hero');
+  if (!boton || !hero) return;
+
+  var quieto = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  boton.addEventListener('click', function () {
+    window.scrollTo({ top: 0, behavior: quieto ? 'auto' : 'smooth' });
+  });
+
+  if (!('IntersectionObserver' in window)) {
+    boton.classList.add('visible');
+    return;
+  }
+
+  new IntersectionObserver(function (entradas) {
+    boton.classList.toggle('visible', !entradas[0].isIntersecting);
+  }, { threshold: 0 }).observe(hero);
+})();
+
 (function () {
   var objetivos = document.querySelectorAll('.revelar');
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
