@@ -131,8 +131,11 @@ protagonista. Tres ideas: **bebidas bien frías** para este calor, **ofertas de 
 y **un lugar para reposar del sol** — sombra, sentarse, tomarse algo tranquilo.
 Vendé la sensación de alivio, no la lista de productos.
 
-**5. Servicio a domicilio.** Contamos con entrega a domicilio **con un costo adicional**.
-Para coordinarlo hay que contactar a los administradores por el grupo.
+**5. El grupo.** El llamado principal. Las ofertas salen en el grupo antes que en
+ningún lado, y ahí se avisa cuando entra algo nuevo al mercado.
+
+> **No hay servicio a domicilio.** Ese servicio no se presta por ahora — no debe
+> aparecer en el sitio en ninguna forma.
 
 **6. Dónde visitarnos.**
 
