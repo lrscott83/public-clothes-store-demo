@@ -137,6 +137,7 @@ h1,h2,h3{margin:0}
   background:rgba(245,166,35,.07);transform:translateY(-2px);
 }
 .boton-linea svg{flex:none}
+.boton-linea--chico{font-size:.9rem;padding:.62rem 1.15rem;gap:.45rem}
 
 .enlace-suave{
   color:var(--tenue);text-decoration:none;font-size:.95rem;
@@ -200,7 +201,7 @@ h1,h2,h3{margin:0}
   line-height:1.1;letter-spacing:-.02em;
 }
 .hero__bajada{color:var(--tenue);font-size:1rem;max-width:38ch;margin:.65rem 0 0}
-.hero__acciones{display:flex;flex-wrap:wrap;align-items:center;gap:1.1rem;margin-top:1.35rem}
+.hero__acciones{display:flex;flex-wrap:wrap;align-items:center;gap:.7rem;margin-top:1.35rem}
 
 /* ---- LA REJILLA: todo lo que hay, arriba y a la vista ------------------ */
 .rejilla{display:grid;gap:1rem;grid-template-columns:repeat(2,1fr)}
@@ -264,13 +265,30 @@ h1,h2,h3{margin:0}
 .pie{border-top:1px solid var(--filo);margin-top:2rem;padding-block:2.25rem;color:var(--tenue);font-size:.875rem}
 .pie__interior{text-align:center}
 .pie__linea{margin:0}
-.pie__credito{margin:.65rem 0 0;font-size:.8rem;opacity:.72}
+.pie__credito{margin:.8rem 0 0;font-size:.85rem}
 .pie__credito a{
-  color:var(--tenue);text-decoration:none;
-  border-bottom:1px solid var(--filo);padding-bottom:1px;
-  transition:color .15s ease,border-color .15s ease;
+  position:relative;
+  font-weight:800;color:var(--crema);text-decoration:none;
+  padding-bottom:4px;
+  animation:destellar 3.4s ease-in-out infinite;
 }
-.pie__credito a:hover{color:var(--brasa);border-color:var(--brasa)}
+/* El subrayado es una barra propia, no un border-bottom: así se le puede dar
+   grosor, redondeo y un barrido de luz que recorre el ancho. */
+.pie__credito a::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,var(--brasa),var(--fuego),var(--brasa),var(--fuego));
+  background-size:200% 100%;
+  animation:barrer 3.4s linear infinite;
+}
+/* Un latido de luz, no un parpadeo. El texto que prende y apaga es incómodo de
+   leer y las pautas de accesibilidad lo desaconsejan; esto llama igual. */
+@keyframes destellar{
+  0%,100%{color:var(--crema);text-shadow:none}
+  50%    {color:#FFD79A;text-shadow:0 0 14px rgba(245,166,35,.45)}
+}
+@keyframes barrer{to{background-position:-200% 0}}
+.pie__credito a:hover{color:var(--brasa);animation-play-state:paused}
+.pie__credito a:hover::after{animation-play-state:paused}
 
 /* ---- Entrada escalonada: se ve al cargar, no al hacer scroll ----------- */
 .entra{opacity:0;transform:translateY(22px);animation:asomar .55s cubic-bezier(.2,.75,.3,1) forwards}
@@ -342,7 +360,14 @@ h1,h2,h3{margin:0}
           <svg width="21" height="21" aria-hidden="true"><use href="#g-wa"/></svg>
           Entrar al grupo
         </a>
-        <a class="enlace-suave" href="#visita">Dónde estamos</a>
+        <a class="boton-linea boton-linea--chico" href="#visita">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2c-4 0-7 3-7 7 0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/>
+            <circle cx="12" cy="9" r="2.5"/>
+          </svg>
+          Dónde estamos
+        </a>
       </div>
     </div>
   </section>
@@ -488,9 +513,9 @@ h1,h2,h3{margin:0}
           <a class="boton-linea" href="https://maps.google.com/?q=1234+SW+8th+St%2C+Miami%2C+FL+33135"
              target="_blank" rel="noopener">
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 2c-4 0-7 3-7 7 0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/>
-              <circle cx="12" cy="9" r="2.5"/>
+                 stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">
+              <path d="M9 3 3 5.5v15L9 18l6 2.5 6-2.5v-15L15 5.5 9 3z"/>
+              <path d="M9 3v15M15 5.5v15"/>
             </svg>
             Abrir en el mapa
           </a>
