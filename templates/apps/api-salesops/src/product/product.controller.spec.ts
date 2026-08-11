@@ -36,6 +36,16 @@ const REAL_PNG_BYTES = Buffer.from(
   'base64',
 );
 
+/**
+ * A real, decodable 1x1 AVIF. `file-type` reports it as `image/avif` — a MIME
+ * string the allowlist must carry explicitly, because sharp decodes AVIF
+ * happily and rejecting it would turn a supported format into a 400.
+ */
+const REAL_AVIF_BYTES = Buffer.from(
+  'AAAAHGZ0eXBhdmlmAAAAAG1pZjFhdmlmbWlhZgAAANZtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABwaWN0AAAAAAAAAAAAAAAAAAAAACJpbG9jAAAAAERAAAEAAQAAAAAA+gABAAAAAAAAABsAAAAjaWluZgAAAAAAAQAAABVpbmZlAgAAAAABAABhdjAxAAAAAA5waXRtAAAAAAABAAAAVmlwcnAAAAA4aXBjbwAAAAxhdjFDgSACAAAAABRpc3BlAAAAAAAAAAEAAAABAAAAEHBpeGkAAAAAAwgICAAAABZpcG1hAAAAAAAAAAEAAQOBAgMAAAAjbWRhdBIACgc4AAaQENBpMg4cQmLk4AAWAACQNY45wA==',
+  'base64',
+);
+
 /** Definitely not an image — no magic number any decoder recognizes. */
 const NOT_AN_IMAGE_BYTES = Buffer.from('this is definitely not an image file');
 
@@ -409,15 +419,15 @@ describe('ProductController', () => {
         expect(response.body.image).toBe('products/22222222-2222-2222-2222-222222222222.webp');
       });
 
-      it('a filename claiming a real image extension but carrying non-image bytes is rejected by sharp — 400, never an uncaught rejection', async () => {
+      it('a filename claiming a real image extension but carrying non-image bytes is rejected — 400, never an uncaught rejection', async () => {
         service.findById.mockResolvedValue(sampleResponse);
 
-        // Reverse of the case above: filename claims `.jpg` (and the
-        // Content-Type header claims `image/jpeg`, passing the cheap pipe
-        // filter), but the bytes decode to nothing. `normalizeImage`'s sharp
-        // call is the ONLY layer that inspects real content (design.md
-        // D10) — this must reject with a controlled 400, never crash the
-        // process with an uncaught rejection.
+        // Reverse of the case above: the filename claims `.jpg` AND the
+        // Content-Type header claims `image/jpeg`, so every client-supplied
+        // signal agrees and lies. The bytes decode to nothing. Two
+        // independent layers now catch this — the pipe's magic-number
+        // inspection first, `normalizeImage`'s sharp decode behind it — and
+        // either way it is a controlled 400, never an uncaught rejection.
         const response = await request(app.getHttpServer())
           .post('/products/product-uuid-1/image')
           .attach('image', NOT_AN_IMAGE_BYTES, { filename: 'photo.jpg', contentType: 'image/jpeg' });
@@ -425,6 +435,50 @@ describe('ProductController', () => {
         expect(response.status).toBe(400);
         expect(store.put).not.toHaveBeenCalled();
         expect(service.update).not.toHaveBeenCalled();
+      });
+
+      it('non-image bytes never reach sharp — the magic-number filter rejects them first', async () => {
+        service.findById.mockResolvedValue(sampleResponse);
+
+        // The point of validating magic numbers in the pipe is NOT that it
+        // catches more than sharp does — sharp rejects this too. It is that
+        // attacker-controlled bytes stop at a pure-JS signature check and
+        // never reach libvips, a large native decoder. Asserting the 400
+        // alone cannot tell the two layers apart, so this asserts the
+        // rejection happened at a point where the request body was still
+        // just bytes: nothing downstream of the pipe ran.
+        const response = await request(app.getHttpServer())
+          .post('/products/product-uuid-1/image')
+          .attach('image', NOT_AN_IMAGE_BYTES, { filename: 'x.png', contentType: 'image/png' });
+
+        expect(response.status).toBe(400);
+        // The pipe runs before the handler body, so the product lookup that
+        // opens the handler never happened. If sharp had been the rejecting
+        // layer, findById would have been called first.
+        expect(service.findById).not.toHaveBeenCalled();
+      });
+
+      it('accepts AVIF, a format sharp decodes — the allowlist matches real capability, not a guess', async () => {
+        service.findById.mockResolvedValue(sampleResponse);
+        store.put.mockResolvedValue('products/33333333-3333-3333-3333-333333333333.webp');
+        service.update.mockResolvedValue({
+          ...sampleResponse,
+          image: 'products/33333333-3333-3333-3333-333333333333.webp',
+        });
+
+        // `file-type` reports AVIF as `image/avif`, which no client-declared
+        // Content-Type can talk it out of once magic numbers are inspected.
+        // sharp decodes AVIF, so rejecting it here would fail an upload the
+        // system is perfectly able to serve — the allowlist has to describe
+        // what the pipeline actually supports.
+        const response = await request(app.getHttpServer())
+          .post('/products/product-uuid-1/image')
+          .attach('image', REAL_AVIF_BYTES, { filename: 'photo.avif', contentType: 'image/avif' });
+
+        expect(response.status).toBe(200);
+        expect(store.put).toHaveBeenCalledWith(
+          expect.objectContaining({ declaredMimeType: 'image/webp' }),
+        );
       });
     });
   });
