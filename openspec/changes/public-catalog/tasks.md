@@ -57,9 +57,9 @@ Chain strategy: N/A
 
 **Done when**: 1.3 is green; no filesystem/adapter code in this file. 1 commit.
 
-- [ ] 1.5 RED: `packages/infra-db/src/product/prisma-product.repository.spec.ts` — `search` does case-insensitive `OR` over name/description; list behaviour unchanged when `search` is absent (spec: public-catalog "Case-insensitive search matches name and description").
-- [ ] 1.6a GREEN: add `search?: string` to `ProductListFilter` in `packages/domain/src/product/product-repository.port.ts` (additive).
-- [ ] 1.6b GREEN: implement in `packages/infra-db/src/product/prisma-product.repository.ts` — `contains` + `mode: 'insensitive'` on name/description.
+- [x] 1.5 RED: `packages/infra-db/src/product/prisma-product.repository.spec.ts` — `search` does case-insensitive `OR` over name/description; list behaviour unchanged when `search` is absent (spec: public-catalog "Case-insensitive search matches name and description").
+- [x] 1.6a GREEN: add `search?: string` to `ProductListFilter` in `packages/domain/src/product/product-repository.port.ts` (additive).
+- [x] 1.6b GREEN: implement in `packages/infra-db/src/product/prisma-product.repository.ts` — `contains` + `mode: 'insensitive'` on name/description.
 
 **Done when**: 1.5 is green AND full existing `prisma-product.repository.spec.ts` suite stays green with zero edits to pre-existing assertions. 1 commit.
 

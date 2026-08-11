@@ -148,6 +148,14 @@ export class PrismaProductRepository implements IProductRepository {
       where: {
         ...(filter?.includeInactive ? {} : { active: true }),
         ...(filter?.categoryId ? { categoryId: filter.categoryId } : {}),
+        ...(filter?.search
+          ? {
+              OR: [
+                { name: { contains: filter.search, mode: 'insensitive' } },
+                { description: { contains: filter.search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
       },
       orderBy: { order: 'asc' },
     });

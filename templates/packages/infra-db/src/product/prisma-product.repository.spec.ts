@@ -150,4 +150,31 @@ describe('PrismaProductRepository', () => {
     const filtered = await repository.list({ categoryId });
     expect(filtered.map((p) => p.id)).toEqual([matching.id]);
   });
+
+  it('list() search does a case-insensitive OR over name and description', async () => {
+    const byName = await repository.create(
+      validInput({ name: 'Camisa Azul', description: 'algodón premium' }),
+    );
+    const byDescription = await repository.create(
+      validInput({ name: 'Pantalón Negro', description: 'corte azul marino' }),
+    );
+    const neither = await repository.create(validInput({ name: 'Gorra Roja', description: 'lana' }));
+
+    const matchedInName = await repository.list({ search: 'AZUL' });
+    expect(matchedInName.map((p) => p.id).sort()).toEqual([byName.id, byDescription.id].sort());
+    expect(matchedInName.map((p) => p.id)).not.toContain(neither.id);
+
+    const matchedInDescription = await repository.list({ search: 'PREMIUM' });
+    expect(matchedInDescription.map((p) => p.id)).toEqual([byName.id]);
+  });
+
+  it('list() behaviour is unchanged when search is absent', async () => {
+    const active = await repository.create(validInput({ name: 'Activo' }));
+
+    const withoutSearch = await repository.list();
+    const withUndefinedFilter = await repository.list({ categoryId });
+
+    expect(withoutSearch.map((p) => p.id)).toContain(active.id);
+    expect(withUndefinedFilter.map((p) => p.id)).toContain(active.id);
+  });
 });

@@ -5,6 +5,8 @@ export interface ProductListFilter {
   readonly categoryId?: string;
   /** When omitted or `false`, `active: false` products are excluded (default listing). */
   readonly includeInactive?: boolean;
+  /** Case-insensitive substring match over `name` OR `description`. Omitted -> no search filter. */
+  readonly search?: string;
 }
 
 /** Partial update payload — `id`/`createdAt` are immutable once persisted. */
