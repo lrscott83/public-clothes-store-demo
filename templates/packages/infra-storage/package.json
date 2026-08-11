@@ -1,0 +1,12 @@
+{
+  "name": "@store-mgmt/infra-storage",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "smoke": "node scripts/sharp-smoke.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.35.3"
+  }
+}
