@@ -1,8 +1,22 @@
 # Apply Progress: public-catalog
 
-**Batch**: 3 of N (Phase 2 — `packages/infra-storage`)
+**Batch**: 5 of N (Phase 4 — `apps/api-public`, the new anonymous read API)
 **Mode**: Strict TDD
 **Delivery**: commits only, branch `public-catalog`, no PRs
+
+## Reconciliation note (found at the start of this batch, not introduced by it)
+
+Two commits exist on `public-catalog` after Batch 4's apply-progress save
+that this file never recorded: `48f95f4` (a prior reconciliation of Phase
+2's commit count, docs-only) and `98f1ef4` ("inspect image magic numbers
+instead of trusting Content-Type" — a real security fix to Phase 3's
+`apps/api-salesops` upload endpoint: turns `FileTypeValidator`'s magic-number
+sniffing back ON, widens the MIME allowlist to include `image/avif`, and adds
+2 tests). Both are real, already-committed work — not something this batch
+redid. `git log` was checked before starting Phase 4 specifically to catch
+this (see the orchestrator's own "check spec/commit history" discipline).
+The commit list and test counts below are corrected to include them; no
+code from either commit was touched or re-authored by this batch.
 
 ## Completed Tasks (Phase 0 — Risk Spikes)
 
@@ -67,6 +81,62 @@ into `product.module.ts`).
 
 **All 4 Phase 3 tasks complete.** 1 commit. Also fixed a Phase-2-origin
 latent DI bug this phase's wiring exposed — see "Issues Found" below.
+
+## Completed Tasks (Phase 4 — `apps/api-public`, NEW app)
+
+- [x] 4.1 RED / 4.2 GREEN: `host-slug.ts` — pure, Nest-free parser (D2):
+      strips the port, prefers `X-Forwarded-Host` over `Host`, rejects a
+      single-label host, a reserved first label (`www`/`api`/`admin`), and a
+      first label failing the slug grammar. 1 commit.
+- [x] 4.3 RED / 4.4 GREEN: `public-tenant.guard.ts` + `run-in-tenant.ts` (5-line
+      copy of `api-common`'s helper, D3) — resolves the tenant via
+      `ICompanyRepository.findBySlug`, requires no JWT/Membership, never opens
+      `tenantContext.run(...)` itself (D2). Unknown slug / inactive company /
+      `schemaName: null` all produce the exact same 404 (status, body, AND
+      headers minus `Date`) — proven with a real Nest+supertest app, not just
+      exception-object comparison. 1 commit.
+- [x] 4.5 RED / 4.6 GREEN: `public-product.service.ts` — filters `active:true`
+      always + category (resolved from slug) + search via
+      `IProductRepository.list`, computes `finalPrice` per row from
+      `packages/domain`'s pure `pricing.ts`, sorts the FULL filtered set in
+      memory (all 4 `orden` values), then slices. An unknown category slug
+      short-circuits to an empty page WITHOUT querying the product
+      repository. `WARN` log tripwire at >2000 materialized rows. 1 commit.
+- [x] 4.7 RED / 4.8 GREEN: `dto/*.ts` (`PublicProductDto`/`PublicMoneyDto`/
+      `PublicProductListResponseDto`), `image-url.ts` (content-keyed URL
+      assembly, D6), `to-public-product-dto.ts` mapper,
+      `parse-public-product-query.ts`, `public-product.controller.ts`
+      (`GET /public/products`, `/public/products/:id`),
+      `public-category.controller.ts` (`GET /public/categories`),
+      `store.controller.ts` (`GET /public/store`), `public-tenant.module.ts`
+      (`@Global()`, mirrors `api-common`'s `AuthModule` DI-scope precedent).
+      DTO contract test asserts the response key set equals the §3 allow-list
+      EXACTLY (key-set equality, not `not.toHaveProperty`) and every field's
+      value type — `percentDiscountPrice`/`discountPrice`/both `amount`s are
+      decimal strings, never JSON numbers. 1 commit.
+- [x] 4.9 RED / 4.10 GREEN: `product-image.controller.ts` — the full D6
+      matrix: missing/inactive product → 404; stale `imageKey` → 404; ref
+      failing `assertProductImageRef` → 404 + `PRODUCT_IMAGE_REF_INVALID` log;
+      `store.open()` returning `null` → 404 + `PRODUCT_IMAGE_MISSING` log
+      (never 500, never a placeholder); matching `If-None-Match` → empty 304
+      with the same `Cache-Control`; otherwise 200 with
+      `Content-Type`/`Content-Length`/`ETag`/
+      `Cache-Control: public, max-age=31536000, immutable`, no `Vary`, no
+      `Set-Cookie`, streamed via `StreamableFile(Readable.from(...))`, never
+      buffered. `companyId` passed explicitly to `store.open()` (D1). 1 commit.
+- [x] 4.11: `test/tenant-isolation.e2e-spec.ts` + `jest-e2e.json` — two REAL
+      companies/tenant schemas, ONE booted `AppModule`/HTTP server; isolation
+      proven from the `Host` header alone (store/list/detail all correct per
+      Host; neither store can read the other's product by its exact real id;
+      unknown-slug and inactive-company 404 identically; a real
+      `orden=precio-asc` query against the real repository/service pipeline,
+      no mocks). 1 commit.
+
+**All 6 Phase 4 code/test work units complete** (7th is this docs commit,
+matching Phase 0/1/2's precedent). `apps/static-store` lint re-verified
+byte-identical to task 1.8's recorded baseline (same 5 warnings, same
+files/lines) — Phase 4 touched nothing under `apps/static-store`,
+`packages/storefront`, or `packages/api-common`.
 
 ## Spike Results (PASS/FAIL with evidence) — Phase 0
 
@@ -475,6 +545,174 @@ controller-level tests per tasks.md's literal scope for this phase). Lint
 (`--max-warnings 0`) and `tsc --noEmit` both clean on `api-salesops` and on
 `packages/infra-storage`.
 
+## Phase 4 Evidence
+
+### 4.1-4.2 — `host-slug`: **PASS**
+
+RED confirmed by running the spec before `host-slug.ts` existed:
+`Could not locate module ./host-slug.js`. GREEN: pure function, no Nest/
+Express import — 12 tests covering the full D2 parse table (two-label
+resolve, port stripping, `X-Forwarded-Host` preference over `Host`,
+single-label rejection, all 3 reserved labels, disallowed chars, leading
+hyphen, case-insensitivity, both-headers-absent).
+```
+Test Suites: 1 passed, 1 total
+Tests:       12 passed, 12 total
+```
+
+### 4.3-4.4 — `PublicTenantGuard` + `run-in-tenant.ts`: **PASS**
+
+RED confirmed by temporarily removing the just-written `public-tenant.guard.ts`
+and re-running the spec (`Could not locate module`), then restoring it —
+done explicitly because the spec and guard were authored in the same pass
+and this is the honest way to prove RED still held. GREEN: 8 tests,
+including the byte-identical-404 proof, run against a REAL Nest
+`TestingModule` + `supertest` HTTP server (not just comparing thrown
+exception objects) — response `status`, `body`, and every header except
+`Date` are asserted equal across the unknown-slug, inactive-company, and
+`schemaName: null` branches. A dedicated test also asserts the guard's own
+source never imports `@store-mgmt/api-common` (D3), and another proves the
+guard succeeds with no `req.user` ever set and no `MEMBERSHIP_REPOSITORY`/
+`PassportModule` in the `TestingModule` — compiling at all is part of the
+proof (if the guard depended on the authenticated chain, `.compile()` would
+have thrown first).
+```
+Test Suites: 1 passed, 1 total
+Tests:       8 passed, 8 total
+```
+Discovered mid-batch: `import.meta.url` breaks this codebase's ts-jest
+setup (it compiles to CommonJS; a file using `import.meta` forces ESM
+output for just that file, producing `ReferenceError: exports is not
+defined`). Fixed by using `__dirname`/`node:path` instead — the same
+pattern every other file in this repo already uses.
+
+### 4.5-4.6 — `PublicProductService`: **PASS**
+
+RED: `Could not locate module ./public-product.service.js`. GREEN: 7 tests.
+The core triangulating fixture deliberately makes `Product.order` and
+`finalPrice` DISAGREE (`X`: order 5, 50% off → cheaper; `Y`: order 1, no
+discount → pricier) so that `orden=precio-asc` ranking `X` before `Y` proves
+`finalPrice` — not the featured order — actually drives the sort. A second
+fixture proves the mirror case for `precio-desc`, and a third proves
+`destacado` still uses `Product.order`. Page-boundary test: 13 products,
+`orden=precio-asc`, `pageSize=12` — page 1 has exactly 12 items/`total: 13`/
+`pageCount: 2`; page 2 has exactly 1 item, and it's specifically the
+13th-ranked product by `finalPrice` (not merely "some product"). A
+beyond-the-end page returns `items: []` with `total` still exact. An unknown
+`categorySlug` short-circuits to an empty result and the test asserts
+`productRepository.list` was NEVER called — locking in "no wasted/wrong
+query" as part of the contract, not just the visible output.
+```
+Test Suites: 1 passed, 1 total
+Tests:       7 passed, 7 total
+```
+
+### 4.7-4.8 — DTO contract + public endpoints: **PASS**
+
+RED confirmed for all three new controller specs simultaneously (product,
+category, store) — each failed on `Could not locate module`. GREEN: 22 new
+tests across the three controllers (product: 13, category: 2, store: 2,
+plus the pre-existing guard/service/host-slug specs untouched). The DTO
+contract test asserts `Object.keys(item).sort()` against the exact,
+alphabetized §3 allow-list — a key-set equality, not a list of
+`not.toHaveProperty` calls, so no field can silently reappear if a future
+edit widens the mapper. A companion test builds the fixture with **non-null**
+`sku`/`barcode`/`cost` specifically so the absence proof is "the mapper never
+copies these fields" rather than "the fixture happened to leave them empty".
+Value-type assertions cover every §3 row: `percentDiscountPrice`/
+`discountPrice`/both `Money.amount`s are `typeof === 'string'` with EXACT
+expected values (`"20.00"`, `"5.00"`, `"100.00"`, `"75.00"`), `order` is the
+one `typeof === 'number'`, `isOffer`/`isNew` are booleans. Query-forwarding
+tests confirm `q`/`categoria`/`orden`/`pagina`/`porPagina` reach the service
+verbatim and that defaults apply when absent; `orden`/`porPagina` reject
+unknown values with 400 (own-URL, a typo is a bug) while an out-of-range
+`pagina` never 400s, matching the §3 table exactly.
+```
+Test Suites: 3 passed, 3 total (product, category, store controllers)
+Tests:       22 passed, 22 total
+```
+One `turbo/no-undeclared-env-vars` lint warning surfaced
+(`PUBLIC_ASSET_BASE_URL` used in `image-url.ts`) — fixed by adding it to
+`turbo.json`'s `globalEnv` (additive, same pattern `STORAGE_PATH` already
+uses).
+
+### 4.9-4.10 — `ProductImageController`: **PASS**
+
+RED: `Could not locate module ./product-image.controller.js`. GREEN: 8
+tests covering every D6 branch — missing product (`store.open` never
+called), stale `imageKey` (`store.open` never called), an invalid ref
+(`assertProductImageRef` failure) mapped to 404 with a
+`PRODUCT_IMAGE_REF_INVALID` log (asserted via a `Logger.prototype.error`
+spy, not just the status code), `store.open()` returning `null` mapped to
+404 with a `PRODUCT_IMAGE_MISSING` log, a matching `If-None-Match` producing
+an EMPTY 304 body with the SAME `Cache-Control` header, and a fresh 200
+whose headers are asserted individually (`Content-Type`, `Content-Length`,
+`ETag`, `Cache-Control`, explicit absence of `Vary`/`Set-Cookie`) plus the
+exact streamed byte content (two chunks from an async generator, concatenated
+correctly — proves the `AsyncIterable` → `Readable.from` → `StreamableFile`
+chain actually carries real bytes end to end). A dedicated test asserts
+`store.open` is called with the resolved tenant's `companyId` EXPLICITLY
+(D1), not read from anywhere ambient. `image-url.spec.ts` (8 more tests)
+locks in `computeImageKey`/`assemblePublicImageUrl` — written in 4.7-4.8 to
+satisfy the DTO's `imageUrl` field, so these are approval tests for
+already-correct code, not a RED-first cycle for those two — plus genuine
+RED/GREEN coverage for the new `imageKeyMatchesRef` staleness check.
+```
+Test Suites: 2 passed, 2 total (product-image.controller, image-url)
+Tests:       16 passed, 16 total
+```
+One test fix needed: `response.text` is `undefined` for a binary
+`Content-Type` (`image/webp`) — superagent parses it into `response.body`
+as a `Buffer` instead. Fixed the assertion to check whichever one is
+populated.
+
+### 4.11 — Tenant isolation e2e: **PASS**
+
+Ran against the REAL test database (`172.17.0.1:5432/store_mgmt_test`)
+after building `packages/domain`, `packages/infra-db`, and
+`packages/infra-storage` to `dist/` first (the e2e suite runs against the
+BUILT workspace deps, exactly as the prompt's own warning flagged — skipping
+this step would have made a green result meaningless). 5 tests, one booted
+`AppModule`, one HTTP server, two real provisioned tenant schemas:
+`GET /public/store` returns the correct, DIFFERENT store per `Host`;
+`GET /public/products` for each store contains its own product and never the
+other's; neither store's subdomain can read the other's product by its
+EXACT real id (both directions asserted, plus a same-store sanity read to
+prove the 404 is isolation and not a broken route); an unknown slug and a
+freshly-provisioned inactive company 404 IDENTICALLY on the same running
+instance; a real `orden=precio-asc` query against the real
+`PrismaProductRepository`/`PublicProductService` pipeline (zero mocks)
+returns the cheaper of two real seeded products first.
+```
+Test Suites: 1 passed, 1 total
+Tests:       5 passed, 5 total
+```
+Post-run hygiene check: queried the master DB directly for any leftover
+`Company` row matching `slug: {contains: 'store'}` — **0 leftover companies**.
+(One unrelated tenant schema remained in `information_schema.schemata`,
+pre-existing from before this session — not created or left behind by this
+batch's `dropStores` calls, which always ran in `afterAll`/`finally`.)
+
+### Regression proof — everything outside `apps/api-public`: **PASS, byte-identical**
+
+Re-ran every pre-existing suite this phase could plausibly have touched,
+against the SAME baseline numbers this file already recorded:
+
+| Suite | Before Phase 4 | After Phase 4 |
+|---|---|---|
+| `packages/domain` unit | 341/341 | 341/341 (unchanged) |
+| `packages/infra-db` unit | 437/437 | 437/437 (unchanged) |
+| `packages/infra-storage` unit | 14/14 | 14/14 (unchanged) |
+| `apps/api-salesops` unit | 493/493 (per this file) → **495/495** (corrected: `98f1ef4`'s 2 new tests, not yet reconciled in this file until now) | 495/495 (unchanged by this batch) |
+| `apps/api-salesops` e2e | 125/125 | 125/125 (unchanged) |
+| `apps/static-store` lint | 5 warnings, 0 errors (task 1.8's recorded baseline) | 5 warnings, 0 errors — same file/line set |
+
+Zero pre-existing test files edited anywhere outside `apps/api-public`.
+`git status --porcelain` outside `templates/apps/api-public/**`,
+`templates/turbo.json`, and `templates/pnpm-lock.yaml` showed nothing after
+this batch's commits — confirming the "purely additive outside `api-public`"
+constraint held.
+
 ## TDD Cycle Evidence
 
 | Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
@@ -496,13 +734,25 @@ controller-level tests per tasks.md's literal scope for this phase). Lint
 | 3.1-3.2 (`POST /products/:id/image`) | `apps/api-salesops/src/product/product.controller.spec.ts` | Unit (Nest TestingModule + supertest, real `sharp` decode via `normalizeImage`, `PRODUCT_IMAGE_STORE` mocked) | ✅ 15/15 pre-existing (this file), 486/486 whole app, zero edits | ✅ Written and confirmed failing — 6/7 new cases 404 (route didn't exist), 1/7 vacuously 404 (unmatched route, not yet meaningful) | ✅ 22/22 Passed (15 pre-existing + 7 new) | ✅ 7 cases up front (happy path, 403, 413, 400-MIME, 404-product, hostile-filename-earns-webp, reverse-garbage-rejected-by-sharp) — spec's full scenario set covered in one RED batch | ✅ Folded `UnsupportedImageError` into the existing `withDomainErrorMapping` catch (no new helper needed); corrected `@HttpCode` 201→200 to match design.md §5 on self-review |
 | 3.3 (`InfraStorageModule` wiring) | No new test file — proven by `test:e2e`'s full-`AppModule` boot | Integration (real Nest DI, real Postgres) | ✅ 125/125 pre-existing e2e, zero edits | N/A — wiring change, not new behaviour | ❌ FIRST run: all 10 e2e suites failed (`Nest can't resolve dependencies of the FsProductImageStore`) — pre-existing Phase 2 DI bug this wiring exposed. Fixed via `@Optional()` in `fs-product-image.store.ts` (not a test file). Re-run: ✅ 125/125 Passed | N/A — bugfix, not new logic to triangulate | ➖ None needed beyond the fix itself |
 | 3.4 (regression) | Full `apps/api-salesops` `pnpm test` + `pnpm test:e2e` | Unit + Integration | ✅ Baseline captured BEFORE Phase 3: 486/486 unit, 125/125 e2e | N/A — regression proof, not new code | ✅ After: 493/493 unit (+7), 125/125 e2e (unchanged) | N/A | N/A |
+| 4.1-4.2 (host-slug) | `apps/api-public/src/tenant/host-slug.spec.ts` | Unit (pure function) | N/A (new file) | ✅ Written — `Could not locate module ./host-slug.js` | ✅ 12/12 Passed | ✅ 12 cases (port strip, header preference, single-label, 3 reserved labels, bad chars, leading hyphen, case, both-absent) | ➖ None needed |
+| 4.3-4.4 (PublicTenantGuard) | `apps/api-public/src/tenant/public-tenant.guard.spec.ts` | Unit (Nest TestingModule + supertest) | N/A (new file) | ✅ Confirmed by temporarily removing the just-written guard and re-running (`Could not locate module`), then restoring | ✅ 8/8 Passed | ✅ byte-identical-404 (3 scenarios, full HTTP response diff), no-req.user proof, no-api-common-import proof | ✅ Fixed an `import.meta.url`/CJS-compile mismatch (switched to `__dirname`) |
+| 4.5-4.6 (PublicProductService) | `apps/api-public/src/product/public-product.service.spec.ts` | Unit | N/A (new file) | ✅ Written — `Could not locate module ./public-product.service.js` | ✅ 7/7 Passed | ✅ order-vs-finalPrice-disagree fixture, precio-desc mirror, 13-item page-boundary (exact 13th-ranked item on page 2), beyond-the-end empty page, unknown-category short-circuit (asserts repository never queried) | ➖ None needed |
+| 4.7-4.8 (DTO + public endpoints) | `public-product.controller.spec.ts`, `public-category.controller.spec.ts`, `store.controller.spec.ts` | Unit (Nest TestingModule + supertest) | N/A (new files) | ✅ All 3 confirmed failing together — `Could not locate module` | ✅ 22/22 Passed (13+2+2 new, plus pre-existing specs untouched) | ✅ key-set equality (not `not.toHaveProperty`), non-null cost/sku/barcode fixture, exact decimal-string values, query-forwarding + defaults, 400 on bad `orden`/`porPagina`, 200 on out-of-range `pagina` | ➖ None needed |
+| 4.9-4.10 (ProductImageController) | `product-image.controller.spec.ts`, `image-url.spec.ts` | Unit (Nest TestingModule + supertest) | ✅ 44/44 pre-existing api-public suite re-run before starting, zero edits | ✅ Written — `Could not locate module ./product-image.controller.js` | ✅ 16/16 Passed (8 new controller + 8 image-url, incl. approval tests for pre-existing pure functions) | ✅ full D6 branch matrix (missing, stale key, invalid ref + log spy, missing file + log spy, 304, 200 with exact headers + exact streamed bytes, explicit companyId arg) | ➖ None needed |
+| 4.11 (tenant isolation e2e) | `apps/api-public/test/tenant-isolation.e2e-spec.ts` | Integration (real Postgres, real HTTP server) | ✅ 60/60 pre-existing api-public unit suite re-run before starting | N/A — proof against the already-built app, not new production code | ✅ 5/5 Passed | ✅ store/list/detail per-Host correctness, bidirectional cross-tenant 404, unknown-vs-inactive byte-identical 404, real sort query | ➖ None needed |
 
-### Test Summary
-- **Total tests written this batch (Phase 3)**: 7 (all in `product.controller.spec.ts`)
-- **Total tests passing this batch**: 22/22 (`product.controller.spec.ts`, 15 pre-existing + 7 new); 493/493 whole-app unit; 125/125 e2e
-- **Cumulative automated tests across Phase 0-3**: domain 341/341, infra-db 437/437, infra-storage 14/14, api-salesops unit 493/493, api-salesops e2e 125/125
-- **Pure functions created this batch**: 0 (this phase wires existing pure/adapter code — `normalizeImage`, `FsProductImageStore` — into a new controller route; no new pure logic introduced)
-- **Production bug found and fixed this batch**: 1 (`FsProductImageStore` constructor DI resolution, `packages/infra-storage`, see 3.3 row and "Issues Found")
+### Test Summary — Phase 3 (kept for continuity with the prior record)
+- **Total tests written that batch**: 7 (all in `product.controller.spec.ts`)
+- **Total tests passing that batch**: 22/22 (`product.controller.spec.ts`); 493/493 whole-app unit; 125/125 e2e
+- **Pure functions created that batch**: 0
+- **Production bug found and fixed that batch**: 1 (`FsProductImageStore` constructor DI resolution)
+
+### Test Summary — Phase 4 (this batch)
+- **Total tests written this batch**: 60 unit (`apps/api-public/src`) + 5 e2e (`apps/api-public/test`) = 65
+- **Total tests passing this batch**: 60/60 unit, 5/5 e2e — both suites 100% green
+- **Cumulative automated tests across Phase 0-4**: domain 341/341, infra-db 437/437, infra-storage 14/14, api-salesops unit 495/495 (493 previously recorded + 2 from the previously-unreconciled `98f1ef4`, see the reconciliation note above), api-salesops e2e 125/125, **api-public unit 60/60 (NEW app)**, **api-public e2e 5/5 (NEW app)**
+- **Pure functions created this batch**: 5 (`resolveHostSlug`, `computeImageKey`, `assemblePublicImageUrl`, `imageKeyMatchesRef`, `parsePublicProductQuery`) plus `PublicProductService`'s internal sort comparators
+- **Production bug found and fixed this batch**: 1 (test infrastructure, not app code — `import.meta.url` in `public-tenant.guard.spec.ts` broke this repo's CommonJS ts-jest compilation; fixed via `__dirname`)
 
 ## Files Changed — Phase 0
 
@@ -566,6 +816,40 @@ controller-level tests per tasks.md's literal scope for this phase). Lint
 | `openspec/changes/public-catalog/tasks.md` | Modified | Phase 3 checkboxes ticked (3.1-3.4) |
 | `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
 
+## Files Changed — Phase 4
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `templates/apps/api-public/src/tenant/host-slug.ts` + `.spec.ts` | Created | D2 pure parser (4.1-4.2) |
+| `templates/apps/api-public/src/tenant/run-in-tenant.ts` | Created | 5-line copy of `api-common`'s helper (D3) |
+| `templates/apps/api-public/src/tenant/public-tenant.guard.ts` + `.spec.ts` | Created | D2 anonymous tenant guard (4.3-4.4) |
+| `templates/apps/api-public/src/tenant/public-tenant.module.ts` | Created | `@Global()` module binding `PublicTenantGuard` + `COMPANY_REPOSITORY` |
+| `templates/apps/api-public/src/product/public-product.service.ts` + `.spec.ts` | Created | D5 sort-then-paginate pipeline (4.5-4.6) |
+| `templates/apps/api-public/src/product/dto/{public-money,public-product,index}.ts` | Created | §3 `PublicProductDto`/`PublicMoneyDto` (4.7-4.8) |
+| `templates/apps/api-public/src/product/image-url.ts` + `.spec.ts` | Created | D6 content-keyed URL assembly (4.7-4.8, 4.9-4.10) |
+| `templates/apps/api-public/src/product/to-public-product-dto.ts` | Created | domain `Product` → `PublicProductDto` mapper |
+| `templates/apps/api-public/src/product/parse-public-product-query.ts` | Created | §3 query-param parsing/validation |
+| `templates/apps/api-public/src/product/public-product.controller.ts` + `.spec.ts` | Created | `GET /public/products`, `/public/products/:id` |
+| `templates/apps/api-public/src/product/public-product.module.ts` | Created | wires product/image controllers + repositories |
+| `templates/apps/api-public/src/product/product-image.controller.ts` + `.spec.ts` | Created | D6 image serving (4.9-4.10) |
+| `templates/apps/api-public/src/category/dto/public-category.dto.ts` | Created | §3 category shape |
+| `templates/apps/api-public/src/category/public-category.controller.ts` + `.spec.ts` | Created | `GET /public/categories` |
+| `templates/apps/api-public/src/category/public-category.module.ts` | Created | wires category controller + repository |
+| `templates/apps/api-public/src/store/store.controller.ts` + `.spec.ts` | Created | `GET /public/store` |
+| `templates/apps/api-public/src/store/store.module.ts` | Created | wires store controller |
+| `templates/apps/api-public/src/test-support/tenant-test-helpers.ts` | Created | `overridePublicTenant`/`mockTenantContextService` (mirrors `api-salesops`'s `auth-test-helpers.ts`) |
+| `templates/apps/api-public/src/app.module.ts` | Modified | imports `PublicTenantModule`/`StoreModule`/`PublicCategoryModule`/`PublicProductModule` |
+| `templates/apps/api-public/jest.setup.js` | Created | mirrors `api-salesops`'s test-DB env override |
+| `templates/apps/api-public/package.json` | Modified | `@store-mgmt/domain`/`infra-db`/`infra-storage` deps, `supertest`/`@types/supertest`, `test:e2e` script, `setupFiles` |
+| `templates/apps/api-public/env.example` | Modified | documents `DATABASE_URL`/`STORAGE_PATH`/`PUBLIC_ASSET_BASE_URL` for real dev use |
+| `templates/apps/api-public/test/jest-e2e.json` | Created | mirrors `api-salesops`'s e2e jest config |
+| `templates/apps/api-public/test/support/catalog-e2e-helper.ts` | Created | direct-write tenant provisioning (no auth/write endpoints to go through) |
+| `templates/apps/api-public/test/tenant-isolation.e2e-spec.ts` | Created | 4.11's two-slug isolation proof |
+| `templates/turbo.json` | Modified (additive) | `PUBLIC_ASSET_BASE_URL` added to `globalEnv` |
+| `templates/pnpm-lock.yaml` | Modified | lockfile update from the new workspace deps above |
+| `openspec/changes/public-catalog/tasks.md` | Modified | Phase 4 checkboxes ticked (4.1-4.11) |
+| `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
+
 ## Deviations from Design
 
 Phase 0-2: None — implementation matches design.md D1-D10 for everything
@@ -588,6 +872,28 @@ Evidence" above:
    `imageUrl` assembly is explicitly owned by `apps/api-public` (not built
    until Phase 4) per design.md's own file map.
 
+Phase 3 (found at the start of Phase 4, not introduced by it — see the
+reconciliation note at the top of this file): `98f1ef4` widened D10 rather
+than contradicting it — `FileTypeValidator`'s magic-number sniffing was
+turned back ON (Nest 11's default), narrowing "the pipe is a cheap filter"
+to "the pipe is a cheap filter that also stops obviously-hostile bytes
+before they reach `sharp`/libvips", and `image/avif` was added to the
+allowlist so a format `sharp` already decodes doesn't start 400ing the
+moment signature detection is switched on. Not this batch's decision to
+make or remake — recorded here only so the design-deviation history stays
+complete.
+
+Phase 4 — one deviation, not a silent one: design.md D5 says `nombre` sorts
+"with `localeCompare` against the store's locale". `api-public` has no
+access to `web-catalog`'s per-store `StoreConfig.locale` (design D9) in
+this phase — that wiring is Phase 5. `PublicProductService` hardcodes
+`'es'` for the `nombre` sort locale, documented in code
+(`NAME_SORT_LOCALE`) and here: every route/query-param name in this app is
+already Spanish-first (`/public/products?categoria=&orden=`), so this
+matches the app's actual audience today; a genuinely multi-locale store is
+out of this phase's scope and would need the locale threaded through from
+`web-catalog` in a later phase.
+
 ## Issues Found
 
 Phase 2 note (unchanged from the prior record): tasks 2.1-2.4 were
@@ -607,7 +913,22 @@ Evidence" §3.3 for the full root-cause and fix. Fixed via `@Optional()`
 fix in a non-frozen package, zero test files touched, e2e suite re-verified
 green (125/125) after the fix.
 
-## Commits (18 total, in order)
+Phase 4 — one issue found and fixed, in TEST infrastructure only (never
+shipped to `dist/`, no app-code behavior affected): `public-tenant.guard.spec.ts`
+initially used `import.meta.url` to resolve its own source file's path for a
+static-import-scan assertion. This repo's ts-jest setup compiles to
+CommonJS; a single file using `import.meta` forces TypeScript to emit ESM
+output for just that file, which Jest then fails to load
+(`ReferenceError: exports is not defined`) because nothing else in the
+transform pipeline expects ESM output. Fixed by switching to
+`__dirname`/`node:path`, the pattern every other spec file in this repo
+already uses — no precedent anywhere in the codebase for `import.meta.url`
+inside a Jest-run `.ts` file. Also found and reconciled (not fixed, since
+nothing was broken): two commits landed on `public-catalog` after Batch 4's
+apply-progress was last saved (`48f95f4`, `98f1ef4`) that this file never
+recorded — see the reconciliation note at the top of this file.
+
+## Commits (18 total through Phase 3; +7 this batch = 25 total, in order)
 
 Phase 0 (7):
 1. `65a1604` feat(public-catalog): scaffold bare api-public and web-catalog, prove wildcard-subdomain Host header (0.1a+0.1b)
@@ -646,28 +967,61 @@ Phase 3 (1, per tasks.md's explicit "1 commit" done-criterion):
     DI fix and the tasks.md/apply-progress.md updates in the same commit,
     matching the task's own 1-commit budget.
 
+Reconciliation + a real Phase-3-scope security fix, found at the start of
+this batch, not made by it (see the reconciliation note at the top of this
+file):
+19. `48f95f4` docs(public-catalog): reconcile apply-progress commit list
+    (reconciliation) — corrected Phase 2's commit count 17→18 for the
+    `5ac2472` docs commit.
+20. `98f1ef4` fix(public-catalog): inspect image magic numbers instead of
+    trusting Content-Type — re-enables `FileTypeValidator`'s magic-number
+    sniffing on the `api-salesops` upload pipe, adds `image/avif` to the
+    allowlist, adds 2 tests. Widens D10, does not contradict it (see
+    "Deviations from Design" above).
+
+Phase 4 (7, matching tasks.md's explicit "7 commits total for Phase 4"):
+21. `cd88a0b` feat(public-catalog): add host-slug parser for public tenant
+    resolution (4.1-4.2)
+22. `5f606b7` feat(public-catalog): add PublicTenantGuard for anonymous
+    tenant resolution (4.3-4.4)
+23. `1e0ebab` feat(public-catalog): add PublicProductService
+    sort-then-paginate pipeline (4.5-4.6)
+24. `1f05e2b` feat(public-catalog): add public product/category/store
+    endpoints and DTO contract (4.7-4.8)
+25. `3542394` feat(public-catalog): serve public product images with the
+    D6 404/cache matrix (4.9-4.10)
+26. `955ddfd` test(public-catalog): prove tenant isolation e2e against one
+    running api-public instance (4.11)
+27. (this commit) docs(public-catalog): record Phase 4 apply-progress
+
 ## Remaining Tasks
 
-Phase 4 through Phase 7 — NOT started, per explicit scope instruction
-("Phase 3 ONLY... then STOP"). Next tasks in file order:
-- [ ] Phase 4: `apps/api-public` full build-out (7 commits — host-slug,
-      public tenant guard, sort-then-paginate service, DTO contract, image
-      serving, e2e two-slug isolation)
+Phase 4 COMPLETE (all 11 tasks, 4.1-4.11). Phase 5 through Phase 7 — NOT
+started, per explicit scope instruction ("Phase 4 ONLY... then STOP"). Next
+tasks in file order:
 - [ ] Phase 5: `apps/web-catalog` public storefront (4 commits)
 - [ ] Phase 6: `apps/web-catalog` `/admin` (6 commits)
 - [ ] Phase 7: final verification
 
 ## Status
 
-Phase 0-2: 20/20 work units complete (carried forward from the prior
-batch's own count — 4 spikes + 8 Phase 1 tasks + 6 Phase 2 tasks — not
-re-audited this batch, out of Phase 3's assigned scope).
-Phase 3: 4/4 tasks complete (3.1-3.4), 1 commit, matching tasks.md's
-explicit done-criteria. `api-salesops` unit suite: 486→493 tests (+7, zero
-regressions, zero pre-existing assertions edited). `api-salesops` e2e suite:
-125→125 tests (unchanged count, zero regressions) — dropped to 0/10 passing
-mid-batch when `InfraStorageModule` wiring exposed a latent Phase 2 DI bug,
-fixed in `packages/infra-storage` (not a test edit), back to 125/125.
-Lint (`--max-warnings 0`) and `tsc --noEmit` clean on both `api-salesops`
-and `packages/infra-storage`. Ready for the next `sdd-apply` batch (Phase 4
-— `apps/api-public`, a NEW app).
+Phase 0-3: 24/24 work units complete (carried forward from the prior
+batch's own count, plus the two Phase-3-scope commits `48f95f4`/`98f1ef4`
+found and reconciled at the start of this batch — see the reconciliation
+note at the top of this file).
+
+Phase 4: 11/11 tasks complete (4.1-4.11), 6 code/test commits + this
+trailing docs commit = 7, matching tasks.md's explicit "7 commits total for
+Phase 4" done-criterion. `apps/api-public` unit suite: 0→60 tests (new app,
+9 suites). `apps/api-public` e2e suite: 0→5 tests (new app, 1 suite),
+running against real Postgres after building `domain`/`infra-db`/
+`infra-storage` to `dist/` first. Every pre-existing suite outside
+`apps/api-public` re-verified byte-identical to its last-recorded baseline:
+`domain` 341/341, `infra-db` 437/437, `infra-storage` 14/14, `api-salesops`
+unit 495/495 (493 previously recorded + 2 from `98f1ef4`, now reconciled),
+`api-salesops` e2e 125/125, `static-store` lint 5 warnings/0 errors (same
+file/line set as task 1.8's recorded baseline). Lint
+(`--max-warnings 0`) and `tsc --noEmit` clean on `apps/api-public`. Zero
+edits to any pre-existing test file anywhere outside `apps/api-public`.
+Ready for the next `sdd-apply` batch (Phase 5 — `apps/web-catalog` public
+storefront).

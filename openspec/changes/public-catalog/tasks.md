@@ -99,32 +99,32 @@ Chain strategy: N/A
 
 ## Phase 4 — `apps/api-public` (NEW app)
 
-- [ ] 4.1 RED: `apps/api-public/src/tenant/host-slug.spec.ts` — parse table: strips port, prefers `X-Forwarded-Host` over `Host`, single-label host, reserved label (`www`/`api`/`admin`), bad chars.
-- [ ] 4.2 GREEN: `apps/api-public/src/tenant/host-slug.ts` — pure, Nest-free (D2).
+- [x] 4.1 RED: `apps/api-public/src/tenant/host-slug.spec.ts` — parse table: strips port, prefers `X-Forwarded-Host` over `Host`, single-label host, reserved label (`www`/`api`/`admin`), bad chars.
+- [x] 4.2 GREEN: `apps/api-public/src/tenant/host-slug.ts` — pure, Nest-free (D2).
 
 **Done when**: 4.1 is green. 1 commit.
 
-- [ ] 4.3 RED: `apps/api-public/src/tenant/public-tenant.guard.spec.ts` — unknown slug, inactive company, `schemaName: null` all → `404`, and asserts the three responses are byte-identical (spec: salesops-tenancy, D4); asserts `JwtAuthGuard`/Membership branch/`RolesGuard` are never invoked.
-- [ ] 4.4 GREEN: `apps/api-public/src/tenant/public-tenant.guard.ts` + `run-in-tenant.ts` (5-line copy, D3) — resolves via `findBySlug` (1.2), opens `tenantContext.run(...)` directly (D2), using 0.2's proven schema-independence.
+- [x] 4.3 RED: `apps/api-public/src/tenant/public-tenant.guard.spec.ts` — unknown slug, inactive company, `schemaName: null` all → `404`, and asserts the three responses are byte-identical (spec: salesops-tenancy, D4); asserts `JwtAuthGuard`/Membership branch/`RolesGuard` are never invoked.
+- [x] 4.4 GREEN: `apps/api-public/src/tenant/public-tenant.guard.ts` + `run-in-tenant.ts` (5-line copy, D3) — resolves via `findBySlug` (1.2), opens `tenantContext.run(...)` directly (D2), using 0.2's proven schema-independence.
 
 **Done when**: 4.3 is green including the byte-identical assertion. 1 commit.
 
-- [ ] 4.5 RED: `apps/api-public/src/product/public-product.service.spec.ts` — fixture where `order` and `finalPrice` disagree, asserts sort-then-paginate correctness; page boundaries and `total` vs page length exact (spec: public-catalog, "Sorts by finalPrice", "Page 2 reflects the global sort").
-- [ ] 4.6 GREEN: `apps/api-public/src/product/public-product.service.ts` — filters `active:true` + category + search server-side, computes `finalPrice` via imported `packages/domain` pricing (never SQL/browser), sorts in memory, slices (D5). `WARN` log tripwire at >2000 materialized rows.
+- [x] 4.5 RED: `apps/api-public/src/product/public-product.service.spec.ts` — fixture where `order` and `finalPrice` disagree, asserts sort-then-paginate correctness; page boundaries and `total` vs page length exact (spec: public-catalog, "Sorts by finalPrice", "Page 2 reflects the global sort").
+- [x] 4.6 GREEN: `apps/api-public/src/product/public-product.service.ts` — filters `active:true` + category + search server-side, computes `finalPrice` via imported `packages/domain` pricing (never SQL/browser), sorts in memory, slices (D5). `WARN` log tripwire at >2000 materialized rows.
 
 **Done when**: 4.5 is green; no reimplementation of pricing math in this file. 1 commit.
 
-- [ ] 4.7 RED: DTO contract test — response key set equals the §3 allow-list (no `cost`/`sku`/`barcode`) AND every field's value type matches (decimal strings for `percentDiscountPrice`/`discountPrice`/both `amount`s — a JSON number is a FAILURE) (spec: public-catalog, "cost/sku/barcode absent", "Both discounts returned uncollapsed").
-- [ ] 4.8 GREEN: `apps/api-public/src/product/dto/*.ts` (`PublicProductDto` per §3 table), `public-product.controller.ts` (`GET /public/products`, `/public/products/:id`), `category/`, `store/`, `health/` modules (§3).
+- [x] 4.7 RED: DTO contract test — response key set equals the §3 allow-list (no `cost`/`sku`/`barcode`) AND every field's value type matches (decimal strings for `percentDiscountPrice`/`discountPrice`/both `amount`s — a JSON number is a FAILURE) (spec: public-catalog, "cost/sku/barcode absent", "Both discounts returned uncollapsed").
+- [x] 4.8 GREEN: `apps/api-public/src/product/dto/*.ts` (`PublicProductDto` per §3 table), `public-product.controller.ts` (`GET /public/products`, `/public/products/:id`), `category/`, `store/`, `health/` modules (§3).
 
 **Done when**: 4.7 is green. 1 commit.
 
-- [ ] 4.9 RED: `apps/api-public/src/product/product-image.controller.spec.ts` + `image-url.spec.ts` — 404 matrix (absent, inactive, cross-tenant, stale `imageKey`, invalid ref, `open()` null); `ETag`/`304`/`Cache-Control` header exactness (D6, spec: public-catalog image scenarios).
-- [ ] 4.10 GREEN: `apps/api-public/src/product/image-url.ts` (assembles `/public/products/:id/image/:imageKey`) + `product-image.controller.ts` — streams via `IProductImageStore.open()`, never buffers.
+- [x] 4.9 RED: `apps/api-public/src/product/product-image.controller.spec.ts` + `image-url.spec.ts` — 404 matrix (absent, inactive, cross-tenant, stale `imageKey`, invalid ref, `open()` null); `ETag`/`304`/`Cache-Control` header exactness (D6, spec: public-catalog image scenarios).
+- [x] 4.10 GREEN: `apps/api-public/src/product/image-url.ts` (assembles `/public/products/:id/image/:imageKey`) + `product-image.controller.ts` — streams via `IProductImageStore.open()`, never buffers.
 
 **Done when**: 4.9 is green. 1 commit.
 
-- [ ] 4.11 `apps/api-public/test/*.e2e-spec.ts` + `jest-e2e.json` — two slugs against ONE app instance; isolation proven from the `Host` header alone (mirrors 0.1's proof at the app level).
+- [x] 4.11 `apps/api-public/test/*.e2e-spec.ts` + `jest-e2e.json` — two slugs against ONE app instance; isolation proven from the `Host` header alone (mirrors 0.1's proof at the app level).
 
 **Done when**: e2e suite is green. 1 commit. **7 commits total for Phase 4.**
 
