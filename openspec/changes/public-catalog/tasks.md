@@ -35,10 +35,10 @@ Chain strategy: N/A
 | 0.4 `MN` formatter | The one Risk-table entry rated High likelihood; isolated pure function, doesn't gate other spikes, but rides on 0.1's `web-catalog` skeleton so it's proven before deeper Phase 5 work |
 | 0.5 Mounted volume | **Cannot** run before an adapter exists to write/read through — moved to Phase 2.6, right after `FsProductImageStore` lands, still pulled forward of the full upload+serving feature (Phases 3-4) |
 
-- [ ] 0.1a Scaffold bare `apps/api-public` (Nest, `GET /health` only, no tenant resolution — §3) and bare `apps/web-catalog` (RR7, one loader echoing `request.headers.get('host')`).
-- [ ] 0.1b Proof: `curl -H "Host: default.localhost:3000"` reaches both dev servers with the header intact. If Vite rejects it, fix via `server.allowedHosts` as part of GREEN (config, not redesign). Document result in each app's README.
-- [ ] 0.2 Proof: a test calling `PrismaCompanyRepository.findById` (existing method) with NO `tenantContext.run(...)` wrapper succeeds — confirms `PrismaMasterService` is schema-independent (D2). Commit as `packages/infra-db/src/company/prisma-master-independence.spec.ts`.
-- [ ] 0.3 Proof: add `sharp` to a scratch script in `packages/infra-storage` scaffold (package.json only), run `pnpm install` + a one-line decode/encode smoke test. Document install size/behaviour in the package README.
+- [x] 0.1a Scaffold bare `apps/api-public` (Nest, `GET /health` only, no tenant resolution — §3) and bare `apps/web-catalog` (RR7, one loader echoing `request.headers.get('host')`).
+- [x] 0.1b Proof: `curl -H "Host: default.localhost:3000"` reaches both dev servers with the header intact. If Vite rejects it, fix via `server.allowedHosts` as part of GREEN (config, not redesign). Document result in each app's README.
+- [x] 0.2 Proof: a test calling `PrismaCompanyRepository.findById` (existing method) with NO `tenantContext.run(...)` wrapper succeeds — confirms `PrismaMasterService` is schema-independent (D2). Commit as `packages/infra-db/src/company/prisma-master-independence.spec.ts`.
+- [x] 0.3 Proof: add `sharp` to a scratch script in `packages/infra-storage` scaffold (package.json only), run `pnpm install` + a one-line decode/encode smoke test. Document install size/behaviour in the package README.
 - [ ] 0.4a RED: `apps/web-catalog/app/shared/lib/money.test.ts` — asserts `Intl.NumberFormat({currency:'MN'})` throws (proves the risk), then asserts the local formatter returns a string for `MN` without throwing (spec: public-catalog "MN formats without throwing").
 - [ ] 0.4b GREEN: `apps/web-catalog/app/shared/lib/money.ts` — explicit `MN` branch; USD/EUR fall through to `Intl.NumberFormat` (spec: "USD/EUR format normally").
 
