@@ -73,8 +73,8 @@ Chain strategy: N/A
 
 ## Phase 2 — `packages/infra-storage` (NEW package)
 
-- [ ] 2.1 RED: `packages/infra-storage/src/product-image/fs-product-image.store.spec.ts` — put→open round trip on a tmpdir; `open()` returns `null` for a missing ref; ref rejection reuses 1.3's `assertProductImageRef` (`..`, absolute, backslash).
-- [ ] 2.2 GREEN: `packages/infra-storage/src/product-image/fs-product-image.store.ts` — `FsProductImageStore implements IProductImageStore`, resolves under `<STORAGE_PATH>/<companyId>/`, streams (never buffers, D6/D1). Scaffold package.json/tsconfig (jest, mirroring `infra-db`'s `.spec.ts` convention) + `infra-storage.module.ts` binding `PRODUCT_IMAGE_STORE`.
+- [x] 2.1 RED: `packages/infra-storage/src/product-image/fs-product-image.store.spec.ts` — put→open round trip on a tmpdir; `open()` returns `null` for a missing ref; ref rejection reuses 1.3's `assertProductImageRef` (`..`, absolute, backslash).
+- [x] 2.2 GREEN: `packages/infra-storage/src/product-image/fs-product-image.store.ts` — `FsProductImageStore implements IProductImageStore`, resolves under `<STORAGE_PATH>/<companyId>/`, streams (never buffers, D6/D1). Scaffold package.json/tsconfig (jest, mirroring `infra-db`'s `.spec.ts` convention) + `infra-storage.module.ts` binding `PRODUCT_IMAGE_STORE`.
 
 **Done when**: 2.1 is green; package auto-registers via `pnpm-workspace.yaml`'s `packages/*` glob (no manual wiring needed). 1 commit.
 

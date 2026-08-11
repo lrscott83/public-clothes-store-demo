@@ -739,9 +739,46 @@ importers:
 
   packages/infra-storage:
     dependencies:
+      '@nestjs/common':
+        specifier: ^11.1.28
+        version: 11.1.28(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@store-mgmt/domain':
+        specifier: workspace:*
+        version: link:../domain
       sharp:
         specifier: ^0.35.3
-        version: 0.35.3
+        version: 0.35.3(@types/node@22.20.0)
+    devDependencies:
+      '@store-mgmt/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@store-mgmt/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/jest':
+        specifier: ^30.0.0
+        version: 30.0.0
+      '@types/node':
+        specifier: ^22
+        version: 22.20.0
+      cross-env:
+        specifier: ^7.0.3
+        version: 7.0.3
+      eslint:
+        specifier: ^9.31.0
+        version: 9.39.4(jiti@2.7.0)
+      jest:
+        specifier: ^30.0.0
+        version: 30.4.2(@types/node@22.20.0)
+      rimraf:
+        specifier: ^6.1.3
+        version: 6.1.3
+      ts-jest:
+        specifier: ^29.4.11
+        version: 29.4.11(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(jest-util@30.4.1)(jest@30.4.2(@types/node@22.20.0))(typescript@5.8.3)
+      typescript:
+        specifier: ^5
+        version: 5.8.3
 
   packages/storefront:
     dependencies:
@@ -11566,7 +11603,7 @@ snapshots:
 
   setprototypeof@1.2.0: {}
 
-  sharp@0.35.3:
+  sharp@0.35.3(@types/node@22.20.0):
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
@@ -11597,6 +11634,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.35.3
       '@img/sharp-win32-ia32': 0.35.3
       '@img/sharp-win32-x64': 0.35.3
+      '@types/node': 22.20.0
 
   shebang-command@2.0.0:
     dependencies:
