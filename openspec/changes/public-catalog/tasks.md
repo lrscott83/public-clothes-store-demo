@@ -83,8 +83,8 @@ Chain strategy: N/A
 
 **Done when**: 2.3 is green using the `sharp` dependency proven installable in spike 0.3. 1 commit.
 
-- [ ] 2.5 Spike 0.5 proof, now unblocked: write a file via `FsProductImageStore.put()` under a FIXED `STORAGE_PATH` (not a tmpdir), kill and restart the test process, confirm `open()` still resolves the bytes. Document `STORAGE_PATH` + volume requirement in `packages/infra-storage/README.md`.
-- [ ] 2.6 Explicitly flagged, not silently dropped: full container-volume-mount proof (docker-compose service definition) is **not** in this task list — no compose file wires `api-public`/`api-salesops`/`web-catalog` in this repo today, and design §4's file map does not name one. 2.5's process-restart proof covers the mechanism the feature depends on (stable path outlives the writing process); actual container deployment config is a follow-up if/when a real deployment target is defined.
+- [x] 2.5 Spike 0.5 proof, now unblocked: write a file via `FsProductImageStore.put()` under a FIXED `STORAGE_PATH` (not a tmpdir), kill and restart the test process, confirm `open()` still resolves the bytes. Document `STORAGE_PATH` + volume requirement in `packages/infra-storage/README.md`.
+- [x] 2.6 Explicitly flagged, not silently dropped: full container-volume-mount proof (docker-compose service definition) is **not** in this task list — no compose file wires `api-public`/`api-salesops`/`web-catalog` in this repo today, and design §4's file map does not name one. 2.5's process-restart proof covers the mechanism the feature depends on (stable path outlives the writing process); actual container deployment config is a follow-up if/when a real deployment target is defined.
 
 **Done when**: 2.5's restart proof passes and the README documents the requirement + the 2.6 scope note. 1 commit.
 
