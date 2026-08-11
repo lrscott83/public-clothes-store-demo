@@ -78,8 +78,8 @@ Chain strategy: N/A
 
 **Done when**: 2.1 is green; package auto-registers via `pnpm-workspace.yaml`'s `packages/*` glob (no manual wiring needed). 1 commit.
 
-- [ ] 2.3 RED: `packages/infra-storage/src/product-image/normalize-image.spec.ts` — EXIF rotate honoured; output is always `webp`; oversize (`>1600px`) downscaled, `withoutEnlargement`; non-image input → decode error, never a throw that crashes the process (D10).
-- [ ] 2.4 GREEN: `packages/infra-storage/src/product-image/normalize-image.ts` — the only file importing `sharp`: `.rotate()` → `.resize({width:1600, withoutEnlargement:true})` → `.webp({quality:82})`.
+- [x] 2.3 RED: `packages/infra-storage/src/product-image/normalize-image.spec.ts` — EXIF rotate honoured; output is always `webp`; oversize (`>1600px`) downscaled, `withoutEnlargement`; non-image input → decode error, never a throw that crashes the process (D10).
+- [x] 2.4 GREEN: `packages/infra-storage/src/product-image/normalize-image.ts` — the only file importing `sharp`: `.rotate()` → `.resize({width:1600, withoutEnlargement:true})` → `.webp({quality:82})`.
 
 **Done when**: 2.3 is green using the `sharp` dependency proven installable in spike 0.3. 1 commit.
 
