@@ -135,8 +135,8 @@ Chain strategy: N/A
 
 **Done when**: unknown-slug loader path returns 404 (own test, mirrors `api-public`'s D4 case per D9). 1 commit.
 
-- [ ] 5.3 RED: `apps/web-catalog/app/catalog/**/*.test.tsx` — `/productos` URL params (`categoria`, `q`, `orden`, `pagina`, `porPagina`) forwarded verbatim; empty-result state; badge stack (Nuevo + `-10%` + `-$5.00` together) renders all three (spec: public-catalog).
-- [ ] 5.4 GREEN: `/productos` route + `product-card`/`products-grid` components — design copied from `static-store/app/routes/products.tsx` (frozen, read-only reference, never imported); uses 0.4's `money.ts`.
+- [x] 5.3 RED: `apps/web-catalog/app/catalog/**/*.test.tsx` — `/productos` URL params (`categoria`, `q`, `orden`, `pagina`, `porPagina`) forwarded verbatim; empty-result state; badge stack (Nuevo + `-10%` + `-$5.00` together) renders all three (spec: public-catalog).
+- [x] 5.4 GREEN: `/productos` route + `product-card`/`products-grid` components — design copied from `static-store/app/routes/products.tsx` (frozen, read-only reference, never imported); uses 0.4's `money.ts`.
 
 **Done when**: 5.3 is green. 1 commit.
 
