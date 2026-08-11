@@ -39,7 +39,7 @@ Chain strategy: N/A
 - [x] 0.1b Proof: `curl -H "Host: default.localhost:3000"` reaches both dev servers with the header intact. If Vite rejects it, fix via `server.allowedHosts` as part of GREEN (config, not redesign). Document result in each app's README.
 - [x] 0.2 Proof: a test calling `PrismaCompanyRepository.findById` (existing method) with NO `tenantContext.run(...)` wrapper succeeds — confirms `PrismaMasterService` is schema-independent (D2). Commit as `packages/infra-db/src/company/prisma-master-independence.spec.ts`.
 - [x] 0.3 Proof: add `sharp` to a scratch script in `packages/infra-storage` scaffold (package.json only), run `pnpm install` + a one-line decode/encode smoke test. Document install size/behaviour in the package README.
-- [ ] 0.4a RED: `apps/web-catalog/app/shared/lib/money.test.ts` — asserts `Intl.NumberFormat({currency:'MN'})` throws (proves the risk), then asserts the local formatter returns a string for `MN` without throwing (spec: public-catalog "MN formats without throwing").
+- [x] 0.4a RED: `apps/web-catalog/app/shared/lib/money.test.ts` — asserts `Intl.NumberFormat({currency:'MN'})` throws (proves the risk), then asserts the local formatter returns a string for `MN` without throwing (spec: public-catalog "MN formats without throwing").
 - [ ] 0.4b GREEN: `apps/web-catalog/app/shared/lib/money.ts` — explicit `MN` branch; USD/EUR fall through to `Intl.NumberFormat` (spec: "USD/EUR format normally").
 
 **Done when**: both curls in 0.1b succeed (or the config fix is committed and re-proven), 0.2's test is green against existing code, 0.3's smoke script runs in this repo's pnpm/turbo, 0.4's RED test fails then passes. 5 commits.
