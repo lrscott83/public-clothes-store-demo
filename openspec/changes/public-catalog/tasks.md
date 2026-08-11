@@ -63,7 +63,7 @@ Chain strategy: N/A
 
 **Done when**: 1.5 is green AND full existing `prisma-product.repository.spec.ts` suite stays green with zero edits to pre-existing assertions. 1 commit.
 
-- [ ] 1.7 Add `frozenStorefrontBoundaryRule` (forbids `@store-mgmt/storefront*` in `web-catalog`) and `frozenLegacyAppRule` (forbids `@store-mgmt/domain*` in `apps/static-store`) to `packages/eslint-config/backend-boundaries.config.js`. No test harness exists for this package (repo convention) — verify manually: a scratch import of `@store-mgmt/storefront` inside a `web-catalog` file is rejected once 1.7 is wired in Phase 5/6; static-store today has 0 domain imports (explore.md claim 10, verified exhaustively) so the rule change alone produces 0 new lint errors.
+- [x] 1.7 Add `frozenStorefrontBoundaryRule` (forbids `@store-mgmt/storefront*` in `web-catalog`) and `frozenLegacyAppRule` (forbids `@store-mgmt/domain*` in `apps/static-store`) to `packages/eslint-config/backend-boundaries.config.js`. No test harness exists for this package (repo convention) — verify manually: a scratch import of `@store-mgmt/storefront` inside a `web-catalog` file is rejected once 1.7 is wired in Phase 5/6; static-store today has 0 domain imports (explore.md claim 10, verified exhaustively) so the rule change alone produces 0 new lint errors.
 
 **Done when**: both rules exist and are exported; not yet wired anywhere (wiring is 1.8 and Phase 5's scaffold). 1 commit.
 

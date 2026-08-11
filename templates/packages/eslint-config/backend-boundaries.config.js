@@ -6,8 +6,16 @@
 // - Tenant-side `infra-db` repositories must never import the master Prisma
 //   client (multi-tenant-by-schema, task 14.1 — enforces what task 6.4
 //   verified by hand).
-// Usage: consumers spread `domainBoundaryRule`, `webBackendBoundaryRule`, or
-// `tenantRepoBoundaryRule` into their own flat ESLint config.
+// - `web-catalog` must never import `@store-mgmt/storefront` — the design is
+//   copied by writing new code, the frozen package is never imported
+//   (public-catalog design.md D9/§6).
+// - `apps/static-store` must never import `@store-mgmt/domain` — the frozen
+//   legacy app imports zero domain symbols today (public-catalog explore.md
+//   claim 10, verified exhaustively); this rule keeps that a fact, not a
+//   memory (public-catalog design.md §6).
+// Usage: consumers spread `domainBoundaryRule`, `webBackendBoundaryRule`,
+// `tenantRepoBoundaryRule`, `frozenStorefrontBoundaryRule`, or
+// `frozenLegacyAppRule` into their own flat ESLint config.
 
 /** @type {import("eslint").Linter.Config} */
 export const domainBoundaryRule = {
@@ -136,6 +144,54 @@ export const tenantRepoBoundaryRule = {
             group: ["**/master-prisma-client.js", "**/master-prisma-client"],
             message:
               "Tenant-side repositories must resolve their Prisma client via TenantContextService.getClient() (design.md D2/D5), never the master PrismaMasterService — importing it here would silently bind a tenant repo to the wrong schema.",
+          },
+        ],
+      },
+    ],
+  },
+};
+
+// public-catalog design.md D9: `packages/storefront` is FROZEN. `web-catalog`
+// rewrites its own `StoreConfig` and copies the design of static-store's
+// routes by writing new code — it must never import the frozen package
+// itself. Consumer wires this into `apps/web-catalog/eslint.config.mjs`
+// (public-catalog Phase 5/6's scaffold) — meaningless in any other package.
+/** @type {import("eslint").Linter.Config} */
+export const frozenStorefrontBoundaryRule = {
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
+            group: ["@store-mgmt/storefront", "@store-mgmt/storefront/*"],
+            message:
+              "packages/storefront is FROZEN (public-catalog design.md D9). web-catalog copies its design by writing new code — it must never import the package itself.",
+          },
+        ],
+      },
+    ],
+  },
+};
+
+// public-catalog design.md §6: `apps/static-store` is a FROZEN legacy app.
+// Today it imports zero `@store-mgmt/domain` symbols (explore.md claim 10,
+// verified exhaustively) — that verified fact is what makes this change's
+// additive domain edits safe, and this rule is what keeps it a fact instead
+// of a memory. Consumer wires this into `apps/static-store/eslint.config.mjs`
+// (task 1.8, the ONLY authorised edit to a frozen app in this change) —
+// meaningless in any other package.
+/** @type {import("eslint").Linter.Config} */
+export const frozenLegacyAppRule = {
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
+            group: ["@store-mgmt/domain", "@store-mgmt/domain/*"],
+            message:
+              "apps/static-store is FROZEN (public-catalog design.md §6). It must not import @store-mgmt/domain — the legacy-safe constraint depends on this staying zero.",
           },
         ],
       },
