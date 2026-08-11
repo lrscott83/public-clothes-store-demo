@@ -1,7 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesGuard } from '@store-mgmt/api-common';
-import { InvalidMoneyError, InvalidProductError, USER_ROLES } from '@store-mgmt/domain';
+import { InvalidMoneyError, InvalidProductError, PRODUCT_IMAGE_STORE, USER_ROLES } from '@store-mgmt/domain';
 import { TenantContextService } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import {
@@ -19,6 +19,25 @@ type ProductServiceMock = {
   findById: jest.Mock;
   list: jest.Mock;
 };
+
+type ImageStoreMock = { put: jest.Mock };
+
+/**
+ * Minimal valid 1x1 PNG (real bytes, not a stub) — lets the upload tests
+ * exercise the REAL `sharp` decode inside `normalizeImage` (design.md D10:
+ * the pipe is a cheap filter, sharp is the real gate). `store.put` is
+ * mocked; `normalizeImage` is NOT — the security property under test is
+ * that `sharp` genuinely decodes/re-encodes bytes and that a hostile
+ * filename is never consulted (`PutProductImageInput` has no filename
+ * field at all).
+ */
+const REAL_PNG_BYTES = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
+
+/** Definitely not an image — no magic number any decoder recognizes. */
+const NOT_AN_IMAGE_BYTES = Buffer.from('this is definitely not an image file');
 
 const sampleResponse = {
   id: 'product-uuid-1',
@@ -42,7 +61,11 @@ const sampleResponse = {
 };
 
 /** Builds a test app with `JwtAuthGuard`/`TenantContextGuard` overridden to inject `req.user`/`req.tenant` (`roles: null` -> 401), keeping the REAL `RolesGuard`. */
-async function buildApp(service: ProductServiceMock, roles: number | null): Promise<INestApplication> {
+async function buildApp(
+  service: ProductServiceMock,
+  roles: number | null,
+  store: ImageStoreMock,
+): Promise<INestApplication> {
   const builder = overrideTenantContext(
     overrideJwtAuth(
       Test.createTestingModule({
@@ -50,6 +73,7 @@ async function buildApp(service: ProductServiceMock, roles: number | null): Prom
         providers: [
           { provide: ProductService, useValue: service },
           { provide: TenantContextService, useValue: mockTenantContextService() },
+          { provide: PRODUCT_IMAGE_STORE, useValue: store },
           RolesGuard,
         ],
       }),
@@ -65,6 +89,7 @@ async function buildApp(service: ProductServiceMock, roles: number | null): Prom
 describe('ProductController', () => {
   let app: INestApplication;
   let service: ProductServiceMock;
+  let store: ImageStoreMock;
 
   beforeEach(async () => {
     service = {
@@ -74,10 +99,13 @@ describe('ProductController', () => {
       findById: jest.fn(),
       list: jest.fn(),
     };
+    store = {
+      put: jest.fn(),
+    };
 
     // `admin` passes every role gate (super-root) — keeps pre-existing tests
     // focused on behavior, not on the role matrix (that's covered below).
-    app = await buildApp(service, USER_ROLES.admin);
+    app = await buildApp(service, USER_ROLES.admin, store);
   });
 
   afterEach(async () => {
@@ -246,7 +274,7 @@ describe('ProductController', () => {
   describe('RolesGuard enforcement (reads: any authenticated user; writes: owner/admin)', () => {
     it('rejects an unauthenticated read with 401', async () => {
       await app.close();
-      app = await buildApp(service, null);
+      app = await buildApp(service, null, store);
 
       const response = await request(app.getHttpServer()).get('/products');
       expect(response.status).toBe(401);
@@ -255,7 +283,7 @@ describe('ProductController', () => {
     it('admits a plain "user" caller on a read route', async () => {
       await app.close();
       service.list.mockResolvedValue([sampleResponse]);
-      app = await buildApp(service, USER_ROLES.user);
+      app = await buildApp(service, USER_ROLES.user, store);
 
       const response = await request(app.getHttpServer()).get('/products');
       expect(response.status).toBe(200);
@@ -263,7 +291,7 @@ describe('ProductController', () => {
 
     it('rejects a plain "user" caller writing with 403', async () => {
       await app.close();
-      app = await buildApp(service, USER_ROLES.user);
+      app = await buildApp(service, USER_ROLES.user, store);
 
       const response = await request(app.getHttpServer()).delete('/products/product-uuid-1');
       expect(response.status).toBe(403);
@@ -271,10 +299,133 @@ describe('ProductController', () => {
 
     it('admits an "owner" caller writing -> 200', async () => {
       await app.close();
-      app = await buildApp(service, USER_ROLES.owner);
+      app = await buildApp(service, USER_ROLES.owner, store);
 
       const response = await request(app.getHttpServer()).delete('/products/product-uuid-1');
       expect(response.status).toBe(200);
+    });
+  });
+
+  describe('POST /products/:id/image', () => {
+    it('owner/admin uploads a valid JPEG within the size limit — succeeds, Product.image updated', async () => {
+      service.findById.mockResolvedValue(sampleResponse);
+      store.put.mockResolvedValue('products/11111111-1111-1111-1111-111111111111.webp');
+      service.update.mockResolvedValue({
+        ...sampleResponse,
+        image: 'products/11111111-1111-1111-1111-111111111111.webp',
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/products/product-uuid-1/image')
+        .attach('image', REAL_PNG_BYTES, { filename: 'photo.jpg', contentType: 'image/jpeg' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.image).toBe('products/11111111-1111-1111-1111-111111111111.webp');
+      // Tenant-scoped: the store receives the ACTING caller's companyId, never
+      // a client-supplied one (spec: salesops-products, "Two companies'
+      // uploads never share a path").
+      expect(store.put).toHaveBeenCalledWith(
+        expect.objectContaining({ companyId: 'test-company-1', declaredMimeType: 'image/webp' }),
+      );
+      expect(service.update).toHaveBeenCalledWith('product-uuid-1', {
+        image: 'products/11111111-1111-1111-1111-111111111111.webp',
+      });
+    });
+
+    it('rejects a non-owner/admin role with 403, Product.image unchanged', async () => {
+      await app.close();
+      app = await buildApp(service, USER_ROLES.user, store);
+
+      const response = await request(app.getHttpServer())
+        .post('/products/product-uuid-1/image')
+        .attach('image', REAL_PNG_BYTES, { filename: 'photo.jpg', contentType: 'image/jpeg' });
+
+      expect(response.status).toBe(403);
+      expect(store.put).not.toHaveBeenCalled();
+      expect(service.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects an oversized file before any storage write', async () => {
+      const oversized = Buffer.alloc(11 * 1024 * 1024, 0);
+
+      const response = await request(app.getHttpServer())
+        .post('/products/product-uuid-1/image')
+        .attach('image', oversized, { filename: 'huge.jpg', contentType: 'image/jpeg' });
+
+      expect(response.status).toBe(413);
+      expect(store.put).not.toHaveBeenCalled();
+      expect(service.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a disallowed MIME type, no file written to storage', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/products/product-uuid-1/image')
+        .attach('image', Buffer.from('%PDF-1.4 not really'), {
+          filename: 'doc.pdf',
+          contentType: 'application/pdf',
+        });
+
+      expect(response.status).toBe(400);
+      expect(store.put).not.toHaveBeenCalled();
+      expect(service.update).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 when the target product does not exist, before any storage write', async () => {
+      service.findById.mockResolvedValue(null);
+
+      const response = await request(app.getHttpServer())
+        .post('/products/unknown-id/image')
+        .attach('image', REAL_PNG_BYTES, { filename: 'photo.jpg', contentType: 'image/jpeg' });
+
+      expect(response.status).toBe(404);
+      expect(store.put).not.toHaveBeenCalled();
+    });
+
+    describe('security: stored extension derives from the VALIDATED content, never the client filename (D10)', () => {
+      it('a hostile filename that disagrees with the real content is IGNORED — extension is the one the content earns', async () => {
+        service.findById.mockResolvedValue(sampleResponse);
+        store.put.mockResolvedValue('products/22222222-2222-2222-2222-222222222222.webp');
+        service.update.mockResolvedValue({
+          ...sampleResponse,
+          image: 'products/22222222-2222-2222-2222-222222222222.webp',
+        });
+
+        // Filename lies twice over — claims `.jpg`, then `.svg` — but the
+        // BYTES are a real, decodable PNG. `PutProductImageInput` has no
+        // filename field at all (design.md D1), so the only way the stored
+        // extension could ever reflect "payload.jpg.svg" is if some layer
+        // read the filename — none does.
+        const response = await request(app.getHttpServer())
+          .post('/products/product-uuid-1/image')
+          .attach('image', REAL_PNG_BYTES, { filename: 'payload.jpg.svg', contentType: 'image/png' });
+
+        expect(response.status).toBe(200);
+        // normalizeImage always re-encodes to webp (design.md D10 — "one
+        // format = one extension"), so the earned extension is .webp, never
+        // .svg, .jpg, or .png — proving content, not filename, decided it.
+        expect(store.put).toHaveBeenCalledWith(
+          expect.objectContaining({ declaredMimeType: 'image/webp' }),
+        );
+        expect(response.body.image).toBe('products/22222222-2222-2222-2222-222222222222.webp');
+      });
+
+      it('a filename claiming a real image extension but carrying non-image bytes is rejected by sharp — 400, never an uncaught rejection', async () => {
+        service.findById.mockResolvedValue(sampleResponse);
+
+        // Reverse of the case above: filename claims `.jpg` (and the
+        // Content-Type header claims `image/jpeg`, passing the cheap pipe
+        // filter), but the bytes decode to nothing. `normalizeImage`'s sharp
+        // call is the ONLY layer that inspects real content (design.md
+        // D10) — this must reject with a controlled 400, never crash the
+        // process with an uncaught rejection.
+        const response = await request(app.getHttpServer())
+          .post('/products/product-uuid-1/image')
+          .attach('image', NOT_AN_IMAGE_BYTES, { filename: 'photo.jpg', contentType: 'image/jpeg' });
+
+        expect(response.status).toBe(400);
+        expect(store.put).not.toHaveBeenCalled();
+        expect(service.update).not.toHaveBeenCalled();
+      });
     });
   });
 });

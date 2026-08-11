@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { CATEGORY_REPOSITORY, PRODUCT_REPOSITORY } from '@store-mgmt/domain';
 import { InfraDbModule, PrismaCategoryRepository, PrismaProductRepository } from '@store-mgmt/infra-db';
+import { InfraStorageModule } from '@store-mgmt/infra-storage';
 import { ProductController } from './product.controller.js';
 import { ProductService } from './product.service.js';
 
 @Module({
-  imports: [InfraDbModule],
+  imports: [InfraDbModule, InfraStorageModule],
   controllers: [ProductController],
   providers: [
     ProductService,

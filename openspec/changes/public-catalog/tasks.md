@@ -90,10 +90,10 @@ Chain strategy: N/A
 
 ## Phase 3 — `apps/api-salesops`: authenticated image upload
 
-- [ ] 3.1 RED: `apps/api-salesops/src/product/product.controller.spec.ts` — owner/admin uploads a valid JPEG → `Product.image` updated to relative path; non-owner/admin → rejected, `Product.image` unchanged; oversized file rejected before storage; disallowed MIME rejected, nothing written; stored extension derives from validated MIME, never the client filename (spec: salesops-products, all scenarios).
-- [ ] 3.2 GREEN: `POST /products/:id/image` in `apps/api-salesops/src/product/product.controller.ts` — `FileInterceptor('image')` + `ParseFilePipe([MaxFileSizeValidator(10MB), FileTypeValidator(/^image\/(jpeg|png|webp|heic|heif)$/)])`, `@Roles(owner, admin)`, same guard chain, same `runInTenant`; calls `store.put()` → `normalize-image` → `productRepository.update(id, {image: ref})`.
-- [ ] 3.3 `apps/api-salesops/src/product/product.module.ts` — import `InfraStorageModule`, provide `PRODUCT_IMAGE_STORE`.
-- [ ] 3.4 Regression: run full existing `apps/api-salesops` jest + e2e suites unmodified — confirm `search` (1.5/1.6) absent from `list` params leaves `list` behaviour byte-identical, and no pre-existing test needed an edit.
+- [x] 3.1 RED: `apps/api-salesops/src/product/product.controller.spec.ts` — owner/admin uploads a valid JPEG → `Product.image` updated to relative path; non-owner/admin → rejected, `Product.image` unchanged; oversized file rejected before storage; disallowed MIME rejected, nothing written; stored extension derives from validated MIME, never the client filename (spec: salesops-products, all scenarios).
+- [x] 3.2 GREEN: `POST /products/:id/image` in `apps/api-salesops/src/product/product.controller.ts` — `FileInterceptor('image')` + `ParseFilePipe([MaxFileSizeValidator(10MB), FileTypeValidator(/^image\/(jpeg|png|webp|heic|heif)$/)])`, `@Roles(owner, admin)`, same guard chain, same `runInTenant`; calls `store.put()` → `normalize-image` → `productRepository.update(id, {image: ref})`.
+- [x] 3.3 `apps/api-salesops/src/product/product.module.ts` — import `InfraStorageModule`, provide `PRODUCT_IMAGE_STORE`.
+- [x] 3.4 Regression: run full existing `apps/api-salesops` jest + e2e suites unmodified — confirm `search` (1.5/1.6) absent from `list` params leaves `list` behaviour byte-identical, and no pre-existing test needed an edit.
 
 **Done when**: 3.1 is green and the full pre-existing `api-salesops` suite is still green with zero edits to pre-existing test files. 1 commit.
 

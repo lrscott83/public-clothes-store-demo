@@ -43,6 +43,31 @@
 image upload endpoint — `POST /products/:id/image`, `InfraStorageModule` wired
 into `product.module.ts`).
 
+## Completed Tasks (Phase 3 — `apps/api-salesops` authenticated image upload)
+
+- [x] 3.1 RED: `apps/api-salesops/src/product/product.controller.spec.ts` — 7 new
+      test cases added to a new `describe('POST /products/:id/image')` suite
+      covering all 4 salesops-products ADDED requirements: valid upload
+      succeeds; non-owner/admin 403; oversized 413; disallowed MIME 400; 404
+      when the target product doesn't exist; and 2 dedicated security cases
+      (hostile filename ignored, non-image content rejected by `sharp`).
+- [x] 3.2 GREEN: `POST /products/:id/image` in `product.controller.ts` —
+      `FileInterceptor('image')` + two `ParseFilePipe`s (`MaxFileSizeValidator`
+      10MB → 413, `FileTypeValidator` allowlist → 400), `@Roles(owner, admin)`,
+      same guard chain, same `runInTenant`; calls `normalizeImage()` → `sharp`
+      decode/re-encode (the real gate, D10) → `productImageStore.put()` →
+      `productService.update(id, {image: ref})`.
+- [x] 3.3 `product.module.ts` — imports `InfraStorageModule`; `PRODUCT_IMAGE_STORE`
+      injected into `ProductController`'s constructor via `@Inject`.
+- [x] 3.4 Regression: full pre-existing `apps/api-salesops` jest suite (25
+      suites) AND `test:e2e` suite (10 suites) both re-run with ZERO edits to
+      any pre-existing assertion — confirmed byte-identical `list` behaviour
+      (no test sends `search`), confirmed the `search` filter's absence never
+      changes existing responses.
+
+**All 4 Phase 3 tasks complete.** 1 commit. Also fixed a Phase-2-origin
+latent DI bug this phase's wiring exposed — see "Issues Found" below.
+
 ## Spike Results (PASS/FAIL with evidence) — Phase 0
 
 ### Spike 0.1 — Wildcard subdomain Host header: **PASS**
@@ -351,6 +376,105 @@ identical value in both the writer and reader apps) and the concrete risk of
 skipping it (a container recreate silently discards uploaded images while
 `Product.image` DB rows keep pointing at refs that no longer exist).
 
+## Phase 3 Evidence
+
+### 3.1-3.2 — `POST /products/:id/image`: **PASS**
+
+RED confirmed first: ran `pnpm test -- product.controller` before adding any
+production code — 15/15 pre-existing tests green (safety net), then added 7
+new cases against the not-yet-existing route; all 7 failed (404, either
+"route doesn't exist" or, for the reverse-hostile case, a masked 404 from an
+unconfigured `findById` mock — caught and fixed in the RED step itself by
+adding the missing mock). GREEN: implemented `uploadImage()` — two chained
+`ParseFilePipe`s so size and MIME failures map to DISTINCT status codes
+(`MaxFileSizeValidator` → 413, `FileTypeValidator` → 400, design.md's
+testing-strategy bullet: "oversize -> 413; non-image -> 400"), `@Roles(owner,
+admin)`, `findById` 404-if-absent inside `runInTenant`, then
+`normalizeImage()` → `productImageStore.put()` →
+`productService.update(id, {image: ref})`. All 22 tests green
+(`pnpm test -- product.controller`), zero edits to any of the 15 pre-existing
+assertions.
+
+**Design deviation, documented not silent — `FileTypeValidator` default
+behaviour**: design.md D10 states "FileTypeValidator inspects the
+client-supplied Content-Type; calling it the security boundary is wrong" —
+true for the Nest version D10 was written against, but the INSTALLED
+`@nestjs/common@11.1.28` ships `FileTypeValidator` with REAL magic-number
+sniffing (`file-type` npm package) enabled BY DEFAULT
+(`skipMagicNumbersValidation` defaults to `false`). Left at the default, the
+pipe would become a SECOND independent content-decoding gate, splitting a
+hostile upload's rejection between two unrelated decoders and contradicting
+D10's own "sharp is the ONE real gate" premise — and the user's explicit ask
+that the hostile-content case be "rejected by sharp's decode (D10)," not by
+a second library. Fix: `new FileTypeValidator({ fileType: ..., skipMagicNumbersValidation: true })`
+restores the pipe to D10's intended "cheap client-declared-Content-Type
+filter" role, leaving `normalizeImage`'s `sharp` call as the sole real
+content gate. Verified by construction: the reverse security test (garbage
+bytes, honest `image/jpeg` Content-Type header) passes the pipe and is
+rejected only by `sharp`'s decode failure, mapped to 400 via
+`withDomainErrorMapping`'s `UnsupportedImageError` branch.
+
+**Design deviation, documented not silent — response status code**: design.md
+§5's end-to-end narrative writes `-> 200 {id, imageUrl}`. Initial
+implementation used `HttpStatus.CREATED` (201, mirroring `POST /products`'
+convention); corrected to `HttpStatus.OK` (200) to match design.md's literal
+contract once caught in self-review — `POST /products/:id/image` updates an
+EXISTING product's `image` field, it does not create a new resource, so 200
+is also the more accurate REST semantic. Response BODY returns the full
+`ProductResponseDto` (matching every other write endpoint in this controller
+— `create`/`update` both return it) rather than a narrower `{id, imageUrl}`
+shape: no component in Phase 3's scope assembles a public "imageUrl" at all
+(`image-url.ts`'s cache-key/URL-assembly logic is explicitly owned by
+`apps/api-public`, design.md's own file map, not built until Phase 4) — an
+`imageUrl` field on this response would either be undefined behaviour or
+would require api-salesops to duplicate api-public's URL-assembly logic,
+which the file map's ownership split does not intend. `Product.image` (the
+stored ref) IS present on the returned body, satisfying the spec's literal
+acceptance criterion ("`Product.image` is updated to the stored relative
+path").
+
+### 3.3 — `product.module.ts` wiring: **PASS, exposed a Phase-2-origin DI bug**
+
+Adding `imports: [InfraDbModule, InfraStorageModule]` is itself a one-line
+change, but it is the FIRST time in this feature that `InfraStorageModule`
+(created Phase 2) is pulled into a REAL NestJS DI container — Phase 2's own
+suite always called `new FsProductImageStore(basePath)` directly, never
+through `InfraStorageModule`'s `{ provide: PRODUCT_IMAGE_STORE, useClass:
+FsProductImageStore }` binding. Running `pnpm test:e2e` after wiring failed
+ALL 10 e2e suites (not just product's) with `Nest can't resolve dependencies
+of the FsProductImageStore (?)... argument String at index [0]` — because
+`AppModule` wires every controller/module together, one module failing to
+instantiate breaks the WHOLE app's DI graph. Root cause:
+`FsProductImageStore`'s constructor (`constructor(basePath: string =
+defaultStoragePath())`) has no `@Inject`/`@Optional` annotation, so
+`emitDecoratorMetadata` reports the param's design-time type as bare
+`String`, and Nest's DI tries (and fails) to resolve a provider for that
+token instead of ever reaching the JS default value. This is the EXACT same
+class of bug `TenantPrismaFactory`'s constructor already documents
+(`packages/infra-db/src/tenant/tenant-prisma-factory.ts:98-114`) — a latent
+Phase 2 defect this phase's wiring was the first to surface, not something I
+introduced. Fix: added `@Optional()` to the `basePath` parameter in
+`packages/infra-storage/src/product-image/fs-product-image.store.ts` (5-line
+change + comment), mirroring the established codebase precedent exactly.
+Re-ran `packages/infra-storage`'s own suite after the fix (14/14 green,
+zero edits) to prove the fix didn't change the class's direct-construction
+behaviour, then re-ran `api-salesops`'s `test:e2e` — all 10 suites, 125/125
+tests green again, matching the pre-Phase-3 baseline exactly. This fix
+touches ONLY `packages/infra-storage` (not frozen) and zero test files.
+
+### 3.4 — Regression proof: **PASS**
+
+Baseline captured BEFORE any Phase 3 code: `pnpm test` (api-salesops)
+25 suites / 486 tests green; `pnpm test:e2e` 10 suites / 125 tests green
+(after building `domain`/`infra-db`/`infra-storage` to `dist/` first — the
+e2e suite runs against the BUILT workspace deps, not source). After Phase 3:
+`pnpm test` 25 suites / 493 tests green (+7, all new, zero suites added or
+removed); `pnpm test:e2e` 10 suites / 125 tests green (identical count —
+zero suites/tests added, since Phase 3 added no e2e spec, only unit/
+controller-level tests per tasks.md's literal scope for this phase). Lint
+(`--max-warnings 0`) and `tsc --noEmit` both clean on `api-salesops` and on
+`packages/infra-storage`.
+
 ## TDD Cycle Evidence
 
 | Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
@@ -369,12 +493,16 @@ skipping it (a container recreate silently discards uploaded images while
 | 2.3-2.4 (normalizeImage) | `packages/infra-storage/src/product-image/normalize-image.spec.ts` | Unit (real `sharp`, in-memory buffers) | ✅ 6/6 (2.1/2.2 suite re-run, zero edits) | ✅ Written — referenced a function that didn't exist | ✅ Passed | ✅ EXIF rotate+strip, always-webp, oversize downscale, non-image decode error | ➖ None needed |
 | 2.5 (restart-proof) | `packages/infra-storage/src/product-image/restart-proof.spec.ts` | Integration (two real OS processes) | ✅ 13/13 (2.1-2.4 suites re-run before starting, zero edits) | ✅ Written and confirmed failing — `Cannot find module '.../restart-proof-write.js'` before the scripts existed | ✅ Passed (1/1) after creating both scripts | ➖ Skipped: single mechanism under test (cross-process persistence), no branching to triangulate — the "does NOT prove container restart" boundary is documentation, not a second code path | ➖ None needed |
 | 2.6 (README scope note) | N/A — documentation only, no code, no test file | N/A | N/A | N/A | N/A | N/A | N/A |
+| 3.1-3.2 (`POST /products/:id/image`) | `apps/api-salesops/src/product/product.controller.spec.ts` | Unit (Nest TestingModule + supertest, real `sharp` decode via `normalizeImage`, `PRODUCT_IMAGE_STORE` mocked) | ✅ 15/15 pre-existing (this file), 486/486 whole app, zero edits | ✅ Written and confirmed failing — 6/7 new cases 404 (route didn't exist), 1/7 vacuously 404 (unmatched route, not yet meaningful) | ✅ 22/22 Passed (15 pre-existing + 7 new) | ✅ 7 cases up front (happy path, 403, 413, 400-MIME, 404-product, hostile-filename-earns-webp, reverse-garbage-rejected-by-sharp) — spec's full scenario set covered in one RED batch | ✅ Folded `UnsupportedImageError` into the existing `withDomainErrorMapping` catch (no new helper needed); corrected `@HttpCode` 201→200 to match design.md §5 on self-review |
+| 3.3 (`InfraStorageModule` wiring) | No new test file — proven by `test:e2e`'s full-`AppModule` boot | Integration (real Nest DI, real Postgres) | ✅ 125/125 pre-existing e2e, zero edits | N/A — wiring change, not new behaviour | ❌ FIRST run: all 10 e2e suites failed (`Nest can't resolve dependencies of the FsProductImageStore`) — pre-existing Phase 2 DI bug this wiring exposed. Fixed via `@Optional()` in `fs-product-image.store.ts` (not a test file). Re-run: ✅ 125/125 Passed | N/A — bugfix, not new logic to triangulate | ➖ None needed beyond the fix itself |
+| 3.4 (regression) | Full `apps/api-salesops` `pnpm test` + `pnpm test:e2e` | Unit + Integration | ✅ Baseline captured BEFORE Phase 3: 486/486 unit, 125/125 e2e | N/A — regression proof, not new code | ✅ After: 493/493 unit (+7), 125/125 e2e (unchanged) | N/A | N/A |
 
 ### Test Summary
-- **Total tests written this batch (Phase 2)**: 1 (restart-proof; 2.1-2.4's 13 tests were written by a prior batch and are re-verified as the safety net here)
-- **Total tests passing this batch**: 1/1 new + 13/13 safety net = 14/14
-- **Cumulative automated tests across Phase 0+1+2**: domain 341/341, infra-db 437/437, infra-storage 14/14
-- **Pure functions created this batch**: 0 (2.5/2.6 are an integration proof + documentation, not new pure logic)
+- **Total tests written this batch (Phase 3)**: 7 (all in `product.controller.spec.ts`)
+- **Total tests passing this batch**: 22/22 (`product.controller.spec.ts`, 15 pre-existing + 7 new); 493/493 whole-app unit; 125/125 e2e
+- **Cumulative automated tests across Phase 0-3**: domain 341/341, infra-db 437/437, infra-storage 14/14, api-salesops unit 493/493, api-salesops e2e 125/125
+- **Pure functions created this batch**: 0 (this phase wires existing pure/adapter code — `normalizeImage`, `FsProductImageStore` — into a new controller route; no new pure logic introduced)
+- **Production bug found and fixed this batch**: 1 (`FsProductImageStore` constructor DI resolution, `packages/infra-storage`, see 3.3 row and "Issues Found")
 
 ## Files Changed — Phase 0
 
@@ -424,29 +552,62 @@ skipping it (a container recreate silently discards uploaded images while
 | `templates/.gitignore` | Modified | ignore `packages/infra-storage/.storage-restart-proof` (defense-in-depth; the spec's own hooks already clean it) | `544d3c4` |
 | `openspec/changes/public-catalog/tasks.md` | Modified | Phase 2 checkboxes ticked (2.1-2.6), per work unit | `88c69d1`/`fc98d4e`/`544d3c4` |
 
+## Files Changed — Phase 3
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `templates/apps/api-salesops/src/product/product.controller.ts` | Modified | `POST /products/:id/image` handler, `@Inject(PRODUCT_IMAGE_STORE)`, `UnsupportedImageError` folded into `withDomainErrorMapping` |
+| `templates/apps/api-salesops/src/product/product.controller.spec.ts` | Modified (additive) | 7 new tests + `PRODUCT_IMAGE_STORE` provider wired into `buildApp`'s shared test harness (mechanical signature change, zero pre-existing assertions edited) |
+| `templates/apps/api-salesops/src/product/product.module.ts` | Modified | `imports: [InfraDbModule, InfraStorageModule]` |
+| `templates/apps/api-salesops/package.json` | Modified | `@store-mgmt/infra-storage` dependency, `@types/multer` devDependency |
+| `templates/packages/infra-storage/src/index.ts` | Modified | barrel-exported `normalizeImage`/`UnsupportedImageError`/`NormalizedImage` (existed since Phase 2, not yet public) |
+| `templates/packages/infra-storage/src/product-image/fs-product-image.store.ts` | Modified (bugfix) | `@Optional()` on the `basePath` constructor param — fixes the Phase-2-origin DI resolution bug this phase's wiring exposed |
+| `templates/pnpm-lock.yaml` | Modified | lockfile update from the two new dependency edges above |
+| `openspec/changes/public-catalog/tasks.md` | Modified | Phase 3 checkboxes ticked (3.1-3.4) |
+| `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
+
 ## Deviations from Design
 
-None — implementation matches design.md D1-D10 for everything touched in
-Phase 0, Phase 1, and Phase 2. `InvalidProductImageRefError` (a named error
-class local to `product-image-store.port.ts`, mirroring
-`InvalidSchemaNameError`'s pattern in `schema-name.ts`) is an implementation
-detail left open by design.md, which specifies `assertProductImageRef`'s
-behaviour (throw on invalid ref) without naming the exact error class.
+Phase 0-2: None — implementation matches design.md D1-D10 for everything
+touched. `InvalidProductImageRefError` (a named error class local to
+`product-image-store.port.ts`, mirroring `InvalidSchemaNameError`'s pattern
+in `schema-name.ts`) is an implementation detail left open by design.md,
+which specifies `assertProductImageRef`'s behaviour (throw on invalid ref)
+without naming the exact error class.
+
+Phase 3 — two documented deviations, both explained in full under "Phase 3
+Evidence" above:
+1. `FileTypeValidator` set to `skipMagicNumbersValidation: true` — the
+   installed Nest version's default behaviour (real magic-number sniffing)
+   would contradict D10's "pipe is a cheap filter, sharp is the real gate"
+   premise if left at the default.
+2. Response status corrected from an initial 201 to `200`, matching
+   design.md §5's literal `-> 200 {id, imageUrl}`; response BODY is the full
+   `ProductResponseDto` (matching every other write endpoint in this
+   controller) rather than a narrower `{id, imageUrl}` shape, since
+   `imageUrl` assembly is explicitly owned by `apps/api-public` (not built
+   until Phase 4) per design.md's own file map.
 
 ## Issues Found
 
-None blocking. One process note, not a design or code issue: tasks 2.1-2.4
-were implemented by a prior agent that stalled before committing; the
+Phase 2 note (unchanged from the prior record): tasks 2.1-2.4 were
+implemented by a prior agent that stalled before committing; the
 orchestrator reviewed the diff, confirmed the test suite was green, and
-committed the work (`88c69d1`, `fc98d4e`) without rewriting it. Because that
-recovery happened outside a normal `sdd-apply` batch, this apply-progress
-record (Phase 2, Batch 3) is the FIRST persisted evidence of 2.1-2.4's
-RED/GREEN cycle and files-changed table — both are reconstructed here from
-the actual committed diffs and the orchestrator's verified test run
-(`pnpm --filter @store-mgmt/infra-storage test` → 2 suites, 13 tests, before
-this batch added 2.5's spec).
+committed the work (`88c69d1`, `fc98d4e`) without rewriting it.
 
-## Commits (14 total, in order)
+Phase 3 — one production bug found and fixed (not blocking, not a
+pre-existing test failure): `FsProductImageStore`'s constructor
+(`packages/infra-storage`) could not be resolved by NestJS's real DI
+container — a latent Phase 2 defect, first exposed by this phase's
+`InfraStorageModule` wiring (Phase 2's own tests always used direct
+`new FsProductImageStore(...)` construction, never Nest DI). See "Phase 3
+Evidence" §3.3 for the full root-cause and fix. Fixed via `@Optional()`
+(mirrors an identical, already-documented precedent in
+`packages/infra-db/src/tenant/tenant-prisma-factory.ts`) — a production-code
+fix in a non-frozen package, zero test files touched, e2e suite re-verified
+green (125/125) after the fix.
+
+## Commits (17 total, in order)
 
 Phase 0 (7):
 1. `65a1604` feat(public-catalog): scaffold bare api-public and web-catalog, prove wildcard-subdomain Host header (0.1a+0.1b)
@@ -474,13 +635,18 @@ Phase 2 (3):
 now 6 with the apply-progress doc commit. Phase 2's plan called for 3
 work-unit commits (2.1-2.2, 2.3-2.4, 2.5-2.6); landed exactly as 3.)
 
+Phase 3 (1, per tasks.md's explicit "1 commit" done-criterion):
+17. (this commit) feat(public-catalog): add authenticated product image
+    upload to api-salesops (3.1-3.4) — includes the `FsProductImageStore`
+    DI fix and the tasks.md/apply-progress.md updates in the same commit,
+    matching the task's own 1-commit budget. Exact SHA: see `git log`
+    (self-referencing a hash inside the commit that produces it is not
+    possible — the tree hash depends on this file's own content).
+
 ## Remaining Tasks
 
-Phase 3 through Phase 7 — NOT started, per explicit scope instruction
-("tasks 2.5 and 2.6 ONLY... then STOP"). Next tasks in file order:
-- [ ] Phase 3: `apps/api-salesops` image upload endpoint (`POST
-      /products/:id/image`, `@Roles(owner, admin)`, `InfraStorageModule`
-      wired into `product.module.ts`, existing suites must stay green)
+Phase 4 through Phase 7 — NOT started, per explicit scope instruction
+("Phase 3 ONLY... then STOP"). Next tasks in file order:
 - [ ] Phase 4: `apps/api-public` full build-out (7 commits — host-slug,
       public tenant guard, sort-then-paginate service, DTO contract, image
       serving, e2e two-slug isolation)
@@ -490,9 +656,15 @@ Phase 3 through Phase 7 — NOT started, per explicit scope instruction
 
 ## Status
 
-20/20 Phase 0+1+2 work units complete (4 spikes PASS + 8 Phase 1 tasks PASS +
-6 Phase 2 tasks PASS), including both of task 1.8's done-criteria and both of
-2.5/2.6's proof-and-boundary criteria proven with command output, not
-assumed. Ready for the next `sdd-apply` batch (Phase 3 —
-`apps/api-salesops` authenticated image upload, now unblocked by
-`FsProductImageStore` + `normalizeImage`).
+Phase 0-2: 20/20 work units complete (carried forward from the prior
+batch's own count — 4 spikes + 8 Phase 1 tasks + 6 Phase 2 tasks — not
+re-audited this batch, out of Phase 3's assigned scope).
+Phase 3: 4/4 tasks complete (3.1-3.4), 1 commit, matching tasks.md's
+explicit done-criteria. `api-salesops` unit suite: 486→493 tests (+7, zero
+regressions, zero pre-existing assertions edited). `api-salesops` e2e suite:
+125→125 tests (unchanged count, zero regressions) — dropped to 0/10 passing
+mid-batch when `InfraStorageModule` wiring exposed a latent Phase 2 DI bug,
+fixed in `packages/infra-storage` (not a test edit), back to 125/125.
+Lint (`--max-warnings 0`) and `tsc --noEmit` clean on both `api-salesops`
+and `packages/infra-storage`. Ready for the next `sdd-apply` batch (Phase 4
+— `apps/api-public`, a NEW app).

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
   assertProductImageRef,
   type IProductImageStore,
@@ -69,7 +69,20 @@ function isNotFound(err: unknown): boolean {
 export class FsProductImageStore implements IProductImageStore {
   private readonly basePath: string;
 
-  constructor(basePath: string = defaultStoragePath()) {
+  /**
+   * `@Optional()` is load-bearing, not decorative — discovered wiring Phase
+   * 3 (`apps/api-salesops` product.module.ts importing `InfraStorageModule`
+   * for real, the first consumer to put this class through Nest's actual DI
+   * container; Phase 2's own suite always called `new FsProductImageStore(...)`
+   * directly). `basePath: string` reflects as the `String` design-time type;
+   * without `@Optional()`, Nest tries to resolve a provider for `String`,
+   * finds none, and throws before the `= defaultStoragePath()` default ever
+   * gets a chance to apply — same class of bug `TenantPrismaFactory`'s
+   * constructor already documents (`packages/infra-db/src/tenant/tenant-prisma-factory.ts`).
+   * `@Optional()` makes Nest inject `undefined` instead of throwing, which
+   * is exactly what lets the default take over.
+   */
+  constructor(@Optional() basePath: string = defaultStoragePath()) {
     this.basePath = basePath;
   }
 
