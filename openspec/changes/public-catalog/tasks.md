@@ -67,7 +67,7 @@ Chain strategy: N/A
 
 **Done when**: both rules exist and are exported; not yet wired anywhere (wiring is 1.8 and Phase 5's scaffold). 1 commit.
 
-- [ ] 1.8 **Own commit, no other change bundled.** One-line edit: `apps/static-store/eslint.config.mjs` — import and spread `frozenLegacyAppRule` (mirrors the existing `webBackendBoundaryRule` line). No runtime code touched.
+- [x] 1.8 **Own commit, no other change bundled.** One-line edit: `apps/static-store/eslint.config.mjs` — import and spread `frozenLegacyAppRule` (mirrors the existing `webBackendBoundaryRule` line). No runtime code touched.
 
 **Done when**: `pnpm --filter static-store lint` passes with 0 new violations; `pnpm --filter static-store build` output is unchanged (byte-identical). This is the ONLY authorised edit to a frozen app in this change. 1 commit.
 
