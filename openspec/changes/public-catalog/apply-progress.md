@@ -607,7 +607,7 @@ Evidence" §3.3 for the full root-cause and fix. Fixed via `@Optional()`
 fix in a non-frozen package, zero test files touched, e2e suite re-verified
 green (125/125) after the fix.
 
-## Commits (17 total, in order)
+## Commits (18 total, in order)
 
 Phase 0 (7):
 1. `65a1604` feat(public-catalog): scaffold bare api-public and web-catalog, prove wildcard-subdomain Host header (0.1a+0.1b)
@@ -626,22 +626,25 @@ Phase 1 (5):
 12. `c3f7397` chore(static-store): wire frozenLegacyAppRule into lint config (1.8)
 13. `104419b` docs(public-catalog): record Phase 1 apply-progress
 
-Phase 2 (3):
+Phase 2 (4):
 14. `88c69d1` feat(public-catalog): add FsProductImageStore adapter (2.1-2.2)
 15. `fc98d4e` feat(public-catalog): normalize uploaded images to upright webp (2.3-2.4)
 16. `544d3c4` test(public-catalog): prove product images survive a process restart (2.5-2.6)
+17. `5ac2472` docs(public-catalog): record Phase 2 apply-progress
 
 (Task-numbered plan called for 5 commits for Phase 1, landed exactly as 5 —
 now 6 with the apply-progress doc commit. Phase 2's plan called for 3
-work-unit commits (2.1-2.2, 2.3-2.4, 2.5-2.6); landed exactly as 3.)
+work-unit commits (2.1-2.2, 2.3-2.4, 2.5-2.6); landed as 3 work-unit commits
+plus a 4th trailing docs commit, same pattern as Phase 0/1 — `5ac2472` was
+not yet in `git log` when this file's Phase 2 entry was last saved to
+Engram; corrected here while verifying Phase 3's own commit landed cleanly,
+not re-litigating Phase 2's scope.)
 
 Phase 3 (1, per tasks.md's explicit "1 commit" done-criterion):
-17. (this commit) feat(public-catalog): add authenticated product image
+18. `c7e2de9` feat(public-catalog): add authenticated product image
     upload to api-salesops (3.1-3.4) — includes the `FsProductImageStore`
     DI fix and the tasks.md/apply-progress.md updates in the same commit,
-    matching the task's own 1-commit budget. Exact SHA: see `git log`
-    (self-referencing a hash inside the commit that produces it is not
-    possible — the tree hash depends on this file's own content).
+    matching the task's own 1-commit budget.
 
 ## Remaining Tasks
 
