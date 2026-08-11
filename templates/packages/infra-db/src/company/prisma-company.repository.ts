@@ -77,6 +77,11 @@ export class PrismaCompanyRepository implements ICompanyRepository {
     return row ? toDomain(row) : null;
   }
 
+  async findBySlug(slug: string): Promise<DomainCompany | null> {
+    const row = await this.prisma.company.findUnique({ where: { slug } });
+    return row ? toDomain(row) : null;
+  }
+
   async create(input: CreateCompanyInput): Promise<DomainCompany> {
     try {
       const row = await this.prisma.company.create({

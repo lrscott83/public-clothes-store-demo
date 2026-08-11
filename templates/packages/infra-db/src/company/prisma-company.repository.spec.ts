@@ -72,6 +72,24 @@ describe('PrismaCompanyRepository', () => {
     expect(found).toBeNull();
   });
 
+  it('findBySlug() resolves an existing company, including isActive and schemaName', async () => {
+    const created = await prisma.company.create({ data: { name: 'Acme', slug: 'acme' } });
+    await prisma.company.update({ where: { id: created.id }, data: { schemaName: 'store_mgmt_tenant_acme' } });
+
+    const found = await repository.findBySlug('acme');
+
+    expect(found).not.toBeNull();
+    expect(found?.id).toBe(created.id);
+    expect(found?.slug).toBe('acme');
+    expect(found?.isActive).toBe(true);
+    expect(found?.schemaName).toBe('store_mgmt_tenant_acme');
+  });
+
+  it('findBySlug() returns null for an unknown slug', async () => {
+    const found = await repository.findBySlug('doesnotexist');
+    expect(found).toBeNull();
+  });
+
   it('create() persists a new Company with schemaName NULL — provisioning saga step 1', async () => {
     const created = await repository.create({ name: 'Tienda Nueva', slug: 'tienda-nueva' });
 

@@ -14,6 +14,8 @@ import type { Company, CreateCompanyInput } from './company.js';
 export interface ICompanyRepository {
   list(): Promise<Company[]>;
   findById(id: string): Promise<Company | null>;
+  /** Resolves on the unique `slug` column — never throws for an unknown slug. */
+  findBySlug(slug: string): Promise<Company | null>;
   /** Provisioning saga step 1 — `schemaName` always starts NULL. */
   create(input: CreateCompanyInput): Promise<Company>;
   /** Provisioning saga step 3, and that step's own compensation (`schemaName: null`). */

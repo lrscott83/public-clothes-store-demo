@@ -46,9 +46,9 @@ Chain strategy: N/A
 
 ## Phase 1 — Cross-Package Foundations
 
-- [ ] 1.1 RED: `packages/infra-db/src/company/prisma-company.repository.spec.ts` — `findBySlug` resolves an existing company incl. `isActive`/`schemaName`; returns `null` for unknown slug (spec: salesops-companies, both scenarios).
-- [ ] 1.2a GREEN: add `findBySlug(slug): Promise<Company | null>` to `packages/domain/src/company/company-repository.port.ts` (additive).
-- [ ] 1.2b GREEN: implement in `packages/infra-db/src/company/prisma-company.repository.ts` — `slug` already `@unique`, no migration.
+- [x] 1.1 RED: `packages/infra-db/src/company/prisma-company.repository.spec.ts` — `findBySlug` resolves an existing company incl. `isActive`/`schemaName`; returns `null` for unknown slug (spec: salesops-companies, both scenarios).
+- [x] 1.2a GREEN: add `findBySlug(slug): Promise<Company | null>` to `packages/domain/src/company/company-repository.port.ts` (additive).
+- [x] 1.2b GREEN: implement in `packages/infra-db/src/company/prisma-company.repository.ts` — `slug` already `@unique`, no migration.
 
 **Done when**: 1.1 is green, existing `ICompanyRepository` consumers untouched. 1 commit.
 
