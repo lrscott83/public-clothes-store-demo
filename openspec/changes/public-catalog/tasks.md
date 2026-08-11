@@ -52,8 +52,8 @@ Chain strategy: N/A
 
 **Done when**: 1.1 is green, existing `ICompanyRepository` consumers untouched. 1 commit.
 
-- [ ] 1.3 RED: `packages/domain/src/product/product-image-store.port.test.ts` — `assertProductImageRef` accepts `products/<uuid>.webp` and seeded shapes (`products/cafeteras/cafeteras1.jpeg`); rejects `..`, leading `/`, `\`.
-- [ ] 1.4 GREEN: create `packages/domain/src/product/product-image-store.port.ts` — `IProductImageStore`, `PRODUCT_IMAGE_STORE` symbol, `assertProductImageRef` (D1).
+- [x] 1.3 RED: `packages/domain/src/product/product-image-store.port.test.ts` — `assertProductImageRef` accepts `products/<uuid>.webp` and seeded shapes (`products/cafeteras/cafeteras1.jpeg`); rejects `..`, leading `/`, `\`.
+- [x] 1.4 GREEN: create `packages/domain/src/product/product-image-store.port.ts` — `IProductImageStore`, `PRODUCT_IMAGE_STORE` symbol, `assertProductImageRef` (D1).
 
 **Done when**: 1.3 is green; no filesystem/adapter code in this file. 1 commit.
 
