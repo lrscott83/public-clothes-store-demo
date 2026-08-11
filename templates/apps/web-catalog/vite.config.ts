@@ -1,9 +1,17 @@
 import { reactRouter } from '@react-router/dev/vite';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
-  plugins: [reactRouter(), tsconfigPaths()],
+  plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
+  css: {
+    // Tailwind 4 via `@tailwindcss/vite` needs no PostCSS config. Pin an
+    // empty inline one so Vite does not walk up into this legacy repo's
+    // root `postcss.config.js` (Tailwind 3 + autoprefixer, not installed
+    // here) — mirrors `apps/static-store/vite.config.ts`'s identical fix.
+    postcss: { plugins: [] },
+  },
   server: {
     port: 3000,
     host: true,

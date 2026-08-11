@@ -1,0 +1,19 @@
+/* App-level base rule (mirrors `apps/static-store/app/app.css`, read-only
+   design reference — new code, not a copy): apply the `--font-family`
+   custom property `web-common`'s `@theme` block registers, so a store's
+   typography stays consistent with its theme tokens. */
+@layer base {
+  html {
+    font-family: var(
+      --font-family,
+      'Inter',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      'Helvetica Neue',
+      Arial,
+      sans-serif
+    );
+  }
+}

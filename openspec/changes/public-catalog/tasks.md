@@ -130,8 +130,8 @@ Chain strategy: N/A
 
 ## Phase 5 — `apps/web-catalog`: public storefront
 
-- [ ] 5.1 `apps/web-catalog/app/shared/config/stores/{index,default.config}.ts` — `StoreConfig` REWRITTEN (not imported) per D9: `slug, brand, locale, theme.colors, logo, hero, nav, productsPage, footer`. Unknown slug → `404` from the loader.
-- [ ] 5.2 `apps/web-catalog/app/shared/lib/{public-api,tenant}.server.ts` — thin client to `api-public`, forwards `url.searchParams` verbatim; tenant resolution mirrors 4.2/4.4.
+- [x] 5.1 `apps/web-catalog/app/shared/config/stores/{index,default.config}.ts` — `StoreConfig` REWRITTEN (not imported) per D9: `slug, brand, locale, theme.colors, logo, hero, nav, productsPage, footer`. Unknown slug → `404` from the loader.
+- [x] 5.2 `apps/web-catalog/app/shared/lib/{public-api,tenant}.server.ts` — thin client to `api-public`, forwards `url.searchParams` verbatim; tenant resolution mirrors 4.2/4.4.
 
 **Done when**: unknown-slug loader path returns 404 (own test, mirrors `api-public`'s D4 case per D9). 1 commit.
 
