@@ -10,5 +10,10 @@ export default [
   // must be a sibling of the guarded block or it guards itself.
   route('admin/login', 'shared/routes/login.tsx'),
   route('admin/logout', 'shared/routes/logout.tsx'),
-  layout('shared/routes/_auth.tsx', [route('admin', 'admin/routes/index.tsx')]),
+  layout('shared/routes/_auth.tsx', [
+    route('admin', 'admin/routes/index.tsx'),
+    route('admin/productos', 'admin/routes/productos/index.tsx'),
+    route('admin/productos/nuevo', 'admin/routes/productos/nuevo.tsx'),
+    route('admin/productos/:id/editar', 'admin/routes/productos/editar.tsx'),
+  ]),
 ] satisfies RouteConfig;

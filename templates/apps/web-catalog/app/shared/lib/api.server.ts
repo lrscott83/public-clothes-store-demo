@@ -13,25 +13,29 @@ function unauthorized(setCookie?: string): Response {
   });
 }
 
-function fetchWithBearer(url: string, init: RequestInit, accessToken: string): Promise<Response> {
+function fetchWithAuth(url: string, init: RequestInit, accessToken: string, companyId: string): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${accessToken}`);
+  headers.set('X-Company-Id', companyId);
   return fetch(url, { ...init, headers });
 }
 
 /**
- * Calls `api-salesops` with the session's access token as a Bearer header
- * (design.md D7: authorization is resolved server-side by `api-salesops`;
- * this app carries no authoritative copy of it). A 401 triggers exactly one
- * refresh (`refreshSession`'s own Map de-dupe handles concurrent callers
- * sharing the same expired token) and one retry; a second 401 — or the
- * refresh call itself failing — means the refresh token is no longer
- * valid, so the session is destroyed and a 401 is thrown. Turning "no
- * session" into a login redirect is `withAuth`'s job (auth.guards.server.ts,
- * task 6.4), not this function's.
+ * Calls `api-salesops` with the session's access token as a Bearer header,
+ * and `companyId` as `X-Company-Id` — `TenantContextGuard` requires it
+ * explicitly (design D7: this app carries no authoritative copy of
+ * authorization; `companyId` itself is resolved once per request by
+ * `withAuth` via `company.server.ts`, not guessed here). A 401 triggers
+ * exactly one refresh (`refreshSession`'s own Map de-dupe handles
+ * concurrent callers sharing the same expired token) and one retry; a
+ * second 401 — or the refresh call itself failing — means the refresh
+ * token is no longer valid, so the session is destroyed and a 401 is
+ * thrown. Turning "no session" into a login redirect is `withAuth`'s job
+ * (auth.guards.server.ts, task 6.4), not this function's.
  */
 export async function makeAuthenticatedRequest(
   request: Request,
+  companyId: string,
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
@@ -41,7 +45,7 @@ export async function makeAuthenticatedRequest(
   }
 
   const url = `${apiSalesopsBaseUrl()}${path}`;
-  const response = await fetchWithBearer(url, init, sessionData.accessToken);
+  const response = await fetchWithAuth(url, init, sessionData.accessToken, companyId);
   if (response.status !== 401) {
     return response;
   }
@@ -59,7 +63,7 @@ export async function makeAuthenticatedRequest(
     throw unauthorized(await destroySession(request));
   }
 
-  const retryResponse = await fetchWithBearer(url, init, refreshedSession.accessToken);
+  const retryResponse = await fetchWithAuth(url, init, refreshedSession.accessToken, companyId);
   if (retryResponse.status === 401) {
     throw unauthorized(await destroySession(request));
   }

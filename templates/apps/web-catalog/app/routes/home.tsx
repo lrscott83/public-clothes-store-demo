@@ -3,7 +3,7 @@ import { resolveStoreConfig } from '../shared/lib/store-config.server';
 import type { StoreConfig } from '../shared/config/stores/types';
 import type { Route } from './+types/home';
 
-export function meta(_args: Route.MetaArgs) {
+export function meta() {
   return [{ title: 'Inicio' }];
 }
 

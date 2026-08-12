@@ -2,7 +2,7 @@ import { Form } from 'react-router';
 import { withAuth } from '../../shared/lib/auth.guards.server';
 import type { Route } from './+types/index';
 
-export function meta(_args: Route.MetaArgs) {
+export function meta() {
   return [{ title: 'Admin' }];
 }
 

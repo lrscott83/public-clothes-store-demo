@@ -159,7 +159,7 @@ Chain strategy: N/A
 
 **Done when**: `pnpm --filter web-catalog lint` passes at `--max-warnings 5` with the new rule active. 1 commit.
 
-- [ ] 6.5 RED+GREEN: `/admin/productos[/nuevo|/:id/editar]` — create/edit/soft-delete; 403 render on cross-company mutation attempt (server re-verifies membership, D7); no store-switcher UI present (spec: catalog-admin, all product-CRUD + cross-company scenarios).
+- [x] 6.5 RED+GREEN: `/admin/productos[/nuevo|/:id/editar]` — create/edit/soft-delete; 403 render on cross-company mutation attempt (server re-verifies membership, D7); no store-switcher UI present (spec: catalog-admin, all product-CRUD + cross-company scenarios).
 
 **Done when**: cross-company mutation test asserts rejection, never silent apply to either company. 1 commit.
 

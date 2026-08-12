@@ -6,7 +6,7 @@ import type { StoreConfig } from '../../shared/config/stores/types';
 import type { PublicProductDto } from '../../shared/lib/public-api.types';
 import type { Route } from './+types/product-detail';
 
-export function meta(_args: Route.MetaArgs) {
+export function meta() {
   return [{ title: 'Producto' }];
 }
 

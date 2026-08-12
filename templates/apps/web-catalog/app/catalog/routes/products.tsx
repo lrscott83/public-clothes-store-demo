@@ -17,7 +17,7 @@ import type { PublicCategoryDto, PublicProductListResponseDto } from '../../shar
 import type { ReactNode } from 'react';
 import type { Route } from './+types/products';
 
-export function meta(_args: Route.MetaArgs) {
+export function meta() {
   return [{ title: 'Productos' }];
 }
 

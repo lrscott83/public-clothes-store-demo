@@ -41,16 +41,17 @@ describe('makeAuthenticatedRequest', () => {
     vi.restoreAllMocks();
   });
 
-  it('attaches the session access token as a Bearer header', async () => {
+  it('attaches the session access token as a Bearer header and the resolved X-Company-Id', async () => {
     const request = await sessionRequest('refresh-attach');
     const fetchMock = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }));
     global.fetch = fetchMock as unknown as typeof fetch;
 
-    await makeAuthenticatedRequest(request, '/products');
+    await makeAuthenticatedRequest(request, 'company-1', '/products');
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('http://localhost:3001/products');
     expect((init.headers as Headers).get('Authorization')).toBe('Bearer access-1');
+    expect((init.headers as Headers).get('X-Company-Id')).toBe('company-1');
   });
 
   it('refreshes exactly once on a 401 and retries with the new access token', async () => {
@@ -66,7 +67,7 @@ describe('makeAuthenticatedRequest', () => {
       .mockResolvedValueOnce(new Response('ok', { status: 200 })); // retried api-salesops call
     global.fetch = fetchMock as unknown as typeof fetch;
 
-    const response = await makeAuthenticatedRequest(request, '/products');
+    const response = await makeAuthenticatedRequest(request, 'company-1', '/products');
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[1][0]).toBe('http://localhost:3002/auth/refresh');
@@ -90,7 +91,7 @@ describe('makeAuthenticatedRequest', () => {
 
     let caught: Response | undefined;
     try {
-      await makeAuthenticatedRequest(request, '/products');
+      await makeAuthenticatedRequest(request, 'company-1', '/products');
     } catch (err) {
       caught = err as Response;
     }
@@ -111,7 +112,7 @@ describe('makeAuthenticatedRequest', () => {
       .mockResolvedValueOnce(new Response(null, { status: 401 })); // api-idp rejects the refresh token
     global.fetch = fetchMock as unknown as typeof fetch;
 
-    await expect(makeAuthenticatedRequest(request, '/products')).rejects.toMatchObject({
+    await expect(makeAuthenticatedRequest(request, 'company-1', '/products')).rejects.toMatchObject({
       status: 401,
     });
   });
@@ -121,7 +122,7 @@ describe('makeAuthenticatedRequest', () => {
     const fetchMock = vi.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
 
-    await expect(makeAuthenticatedRequest(request, '/products')).rejects.toMatchObject({
+    await expect(makeAuthenticatedRequest(request, 'company-1', '/products')).rejects.toMatchObject({
       status: 401,
     });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -133,7 +134,7 @@ describe('makeAuthenticatedRequest', () => {
       .fn()
       .mockResolvedValue(new Response('server error', { status: 500 })) as unknown as typeof fetch;
 
-    const response = await makeAuthenticatedRequest(request, '/products');
+    const response = await makeAuthenticatedRequest(request, 'company-1', '/products');
     expect(response.status).toBe(500);
   });
 });

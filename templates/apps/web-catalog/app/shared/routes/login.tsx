@@ -2,7 +2,7 @@ import { Form, useActionData } from 'react-router';
 import { createSession, apiIdpBaseUrl } from '../lib/session.server';
 import type { Route } from './+types/login';
 
-export function meta(_args: Route.MetaArgs) {
+export function meta() {
   return [{ title: 'Ingresar' }];
 }
 
