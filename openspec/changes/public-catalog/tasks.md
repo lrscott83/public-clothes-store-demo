@@ -173,9 +173,9 @@ Chain strategy: N/A
 
 ## Phase 7 — Final Verification
 
-- [ ] 7.1 `pnpm turbo run lint typecheck test` across the whole monorepo — NestJS apps `--max-warnings 0`, `web-catalog` `--max-warnings 5`, zero regressions in any pre-existing suite.
-- [ ] 7.2 Diff audit: `apps/static-store` changed ONLY at 1.8's one line; `packages/storefront` and `packages/api-common` untouched; `api-idp` gains no new transitive dependency.
-- [ ] 7.3 Manual smoke: `default.localhost:3000/productos` lists the seeded tenant's products with search/filter/sort/pagination reflected in the URL; an unknown slug and an inactive company return the identical `404`.
-- [ ] 7.4 Manual smoke: owner logs in at `/admin`, CRUDs a product/category, uploads an image that survives the 2.5 restart proof's mechanism.
+- [x] 7.1 `pnpm turbo run lint typecheck test` across the whole monorepo — NestJS apps `--max-warnings 0`, `web-catalog` `--max-warnings 5`, zero regressions in any pre-existing suite.
+- [x] 7.2 Diff audit: `apps/static-store` changed ONLY at 1.8's one line; `packages/storefront` and `packages/api-common` untouched; `api-idp` gains no new transitive dependency.
+- [x] 7.3 Manual smoke: `default.localhost:3000/productos` lists the seeded tenant's products with search/filter/sort/pagination reflected in the URL; an unknown slug and an inactive company return the identical `404`.
+- [x] 7.4 Manual smoke: owner logs in at `/admin`, CRUDs a product/category, uploads an image that survives the 2.5 restart proof's mechanism.
 
 **Done when**: all four pass with no follow-up commits needed. Not a commit itself (verification only) unless 7.1 surfaces a fix, in which case that fix is its own commit.
