@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { listProducts, createProduct, getProduct, updateProduct, softDeleteProduct } from './products.server';
+import { listProducts, createProduct, getProduct, updateProduct, softDeleteProduct, uploadProductImage } from './products.server';
 import { createSession } from '../../shared/lib/session.server';
 import type { AdminProductDto, CreateProductInput } from './admin-api.types';
 
@@ -113,6 +113,39 @@ describe('products.server', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('http://localhost:3001/products/product-1');
     expect(init.method).toBe('DELETE');
+  });
+
+  it('uploadProductImage POSTs a multipart FormData, field "image", to /products/:id/image', async () => {
+    const request = await sessionRequest();
+    const uploaded: AdminProductDto = { ...PRODUCT, image: 'products/new-ref.webp' };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(uploaded), { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const file = new File(['bytes'], 'photo.png', { type: 'image/png' });
+    const formData = new FormData();
+    formData.set('image', file);
+
+    const result = await uploadProductImage(request, 'company-1', 'product-1', formData);
+
+    expect(result).toEqual(uploaded);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:3001/products/product-1/image');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get('image')).toBe(file);
+    // No explicit Content-Type — fetch must set the multipart boundary itself.
+    const headers = new Headers(init.headers);
+    expect(headers.has('Content-Type')).toBe(false);
+  });
+
+  it('uploadProductImage throws the raw Response on a non-ok result (e.g. 400 invalid image)', async () => {
+    const request = await sessionRequest();
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 400 })) as unknown as typeof fetch;
+    const formData = new FormData();
+    formData.set('image', new File(['bytes'], 'photo.png', { type: 'image/png' }));
+
+    await expect(uploadProductImage(request, 'company-1', 'product-1', formData)).rejects.toMatchObject({
+      status: 400,
+    });
   });
 
   it('throws the raw Response on a non-ok result — never masks a 403/404 as success', async () => {

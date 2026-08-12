@@ -62,3 +62,23 @@ export async function softDeleteProduct(request: Request, companyId: string, id:
     throw response;
   }
 }
+
+/**
+ * Calls `api-salesops`'s `POST /products/:id/image` (task 3.2), field
+ * `image` (design.md's image path end to end). No `Content-Type` header is
+ * set here — `fetch` derives the multipart boundary from the `FormData`
+ * body itself; setting one manually would drop the boundary and break the
+ * upload silently.
+ */
+export async function uploadProductImage(
+  request: Request,
+  companyId: string,
+  id: string,
+  formData: FormData,
+): Promise<AdminProductDto> {
+  const response = await makeAuthenticatedRequest(request, companyId, `/products/${encodeURIComponent(id)}/image`, {
+    method: 'POST',
+    body: formData,
+  });
+  return parseOrThrow(response);
+}

@@ -1,6 +1,6 @@
 import { Form, redirect, useActionData } from 'react-router';
 import { withAuth } from '../../../shared/lib/auth.guards.server';
-import { getProduct, updateProduct, softDeleteProduct } from '../../lib/products.server';
+import { getProduct, updateProduct, softDeleteProduct, uploadProductImage } from '../../lib/products.server';
 import { listCategories } from '../../lib/categories.server';
 import { ProductForm } from '../../components/product-form';
 import { parseProductFormData, productErrorMessage } from './nuevo';
@@ -21,12 +21,17 @@ export const loader = withAuth(async ({ request, params, companyId }) => {
 });
 
 /**
- * One route, two mutations, distinguished by a hidden `intent` field — same
- * `withAuth`-resolved `companyId` either way, so a soft-delete can never
- * apply to a DIFFERENT company than an edit would (design D7's
+ * One route, three mutations, distinguished by a hidden `intent` field —
+ * same `withAuth`-resolved `companyId` every time, so none of them can ever
+ * apply to a DIFFERENT company than the page was loaded for (design D7's
  * cross-company re-verification: `api-salesops`'s `TenantContextGuard`
  * still independently checks the caller's membership in `companyId` on
  * every request, this is not the only gate).
+ *
+ * `upload-image` (task 6.7) redirects back to THIS SAME edit route, not the
+ * list — the done-criterion is that the upload's result is visible to the
+ * admin who just performed it, so the loader must re-run and re-fetch the
+ * product's now-updated `image` ref.
  */
 export const action = withAuth(async ({ request, params, companyId }) => {
   const id = params.id!;
@@ -36,6 +41,12 @@ export const action = withAuth(async ({ request, params, companyId }) => {
   try {
     if (intent === 'delete') {
       await softDeleteProduct(request, companyId, id);
+    } else if (intent === 'upload-image') {
+      const image = formData.get('image');
+      const uploadFormData = new FormData();
+      uploadFormData.set('image', image as Blob);
+      await uploadProductImage(request, companyId, id, uploadFormData);
+      return redirect(`/admin/productos/${id}/editar`);
     } else {
       await updateProduct(request, companyId, id, parseProductFormData(formData));
     }
@@ -63,6 +74,27 @@ export function EditarProductoPage({ product, categories, error }: EditarProduct
 
         <Form method="post" className="mb-4">
           <ProductForm categories={categories} error={error} submitLabel="Guardar cambios" defaultValues={product} />
+        </Form>
+
+        <Form method="post" encType="multipart/form-data" className="mb-4 bg-surface border border-border rounded-lg p-6">
+          <input type="hidden" name="intent" value="upload-image" />
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-text">Imagen del producto</span>
+            <span className="text-xs text-text-muted">Imagen actual: {product.image}</span>
+            <input
+              name="image"
+              type="file"
+              accept="image/*"
+              required
+              className="text-sm text-text"
+            />
+          </label>
+          <button
+            type="submit"
+            className="mt-4 rounded-md bg-primary text-white font-medium px-4 py-2 hover:bg-primary-hover transition-colors"
+          >
+            Subir imagen
+          </button>
         </Form>
 
         <Form
