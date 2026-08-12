@@ -151,7 +151,7 @@ Chain strategy: N/A
 
 **Done when**: 6.1 is green. 1 commit.
 
-- [ ] 6.3 `apps/web-catalog/app/shared/lib/api.server.ts` — `makeAuthenticatedRequest`: Bearer attach, retry once on 401 via refresh, destroy session on second 401.
+- [x] 6.3 `apps/web-catalog/app/shared/lib/api.server.ts` — `makeAuthenticatedRequest`: Bearer attach, retry once on 401 via refresh, destroy session on second 401.
 
 **Done when**: manual/integration check against `api-idp` login round-trip. 1 commit.
 
