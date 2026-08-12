@@ -1,6 +1,6 @@
 # Apply Progress: public-catalog
 
-**Batch**: 7 of N (Phase 6 — `apps/web-catalog` `/admin`, in progress)
+**Batch**: 8 of N (Phase 6 — `apps/web-catalog` `/admin`, in progress)
 **Mode**: Strict TDD
 **Delivery**: commits only, branch `public-catalog`, no PRs
 
@@ -201,6 +201,42 @@ budget from task 6.4's done-criterion.
 **Phase 6 done-criterion for this work unit**: "6.1 is green." Met — 6.3
 (`api.server.ts`), 6.4 (`auth.guards.server.ts` + routes + eslint rule),
 6.5 (product CRUD), 6.6 (category CRUD), 6.7 (image upload) remain.
+
+- [x] 6.3 `apps/web-catalog/app/shared/lib/api.server.ts` —
+      `makeAuthenticatedRequest(request, path, init)`: attaches the
+      session's access token as `Authorization: Bearer` on every call to
+      `api-salesops` (D7 — this app carries no authoritative copy of
+      authorization, `api-salesops` resolves it server-side). A 401
+      triggers exactly one `refreshSession` call (6.2's `Map` de-dupe
+      already covers concurrent callers) and one retry with the new
+      token; a second 401, or the refresh call itself failing, means the
+      refresh token is dead — the session is destroyed and a 401 is
+      thrown. Deliberately does NOT redirect to login itself: turning "no
+      session" into a redirect is `withAuth`'s job (task 6.4), keeping
+      the two concerns separate. 6 tests. 1 commit.
+
+  **Bug caught by the test suite itself, not by review**: the first draft
+  of the "second 401 destroys the session" test reused the same
+  `refresh-1` token as an earlier test in the file. `refreshSession`'s
+  de-dupe `Map` (6.2) is module-scoped and persists across `it` blocks
+  within one file — the second test's `refreshSession` call silently hit
+  the FIRST test's cached, already-resolved promise instead of calling
+  `fetch` again, desyncing the mock queue and swallowing the expected
+  throw. Fixed by giving every test in `api.server.test.ts` its own
+  refresh token. Documented in a comment on the test file's helper so the
+  next person adding a case doesn't reintroduce it.
+
+  **Deviation — done-criterion not fully met**: 6.3's stated done-criterion
+  is "manual/integration check against api-idp login round-trip." No
+  Postgres or running `api-idp` instance is reachable in this environment
+  (checked: `localhost:5432` connection refused) — `api-idp` needs
+  Postgres to look up refresh tokens, so a real round-trip could not be
+  run here. Verified instead by reading `api-idp`'s actual `RefreshDto`/
+  `RefreshResponseDto` source (`{refreshToken}` in, `{accessToken,
+  refreshToken}` out) and matching `api.server.test.ts`'s mocks to that
+  exact contract. **This manual check is still owed** — do it against a
+  real `api-idp` before or during Phase 7's manual smoke tasks (7.3/7.4),
+  which already assume a running full stack.
 
 ## Spike Results (PASS/FAIL with evidence) — Phase 0
 
@@ -935,8 +971,9 @@ constraint held.
 | File | Action | What Was Done |
 |------|--------|----------------|
 | `templates/apps/web-catalog/app/shared/lib/session.server.ts` + test | Created | admin session cookie, token refresh de-dupe (D8, 6.1-6.2) |
-| `templates/turbo.json` | Modified (additive) | `API_IDP_URL` added to `globalEnv` |
-| `openspec/changes/public-catalog/tasks.md` | Modified | 6.1-6.2 checkboxes ticked |
+| `templates/apps/web-catalog/app/shared/lib/api.server.ts` + test | Created | `makeAuthenticatedRequest` to `api-salesops` (D7, 6.3) |
+| `templates/turbo.json` | Modified (additive) | `API_IDP_URL`, `API_SALESOPS_URL` added to `globalEnv` |
+| `openspec/changes/public-catalog/tasks.md` | Modified | 6.1-6.3 checkboxes ticked |
 | `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
 
 ## Deviations from Design
@@ -1096,20 +1133,28 @@ never before recorded here — reconciled now; +1 this batch):
 
 Phase 6 (in progress):
 32. `75e2672` feat(web-catalog): add the admin session cookie (6.1-6.2)
-33. (this commit) docs(public-catalog): record Phase 6 apply-progress
+33. `53cf098` docs(public-catalog): record Phase 6 apply-progress
     (partial — 6.1-6.2 only)
+34. `3304cb4` feat(web-catalog): add makeAuthenticatedRequest to
+    api-salesops (6.3)
+35. (this commit) docs(public-catalog): record Phase 6 apply-progress
+    (partial — 6.1-6.3)
 
 ## Remaining Tasks
 
-Phase 5 COMPLETE (all 5 tasks, 5.1-5.5). Phase 6 IN PROGRESS (1/6 work
-units — 6.1-6.2). Remaining in file order:
-- [ ] 6.3 `api.server.ts` — `makeAuthenticatedRequest`
+Phase 5 COMPLETE (all 5 tasks, 5.1-5.5). Phase 6 IN PROGRESS (2/6 work
+units — 6.1-6.2, 6.3). Remaining in file order:
 - [ ] 6.4 `auth.guards.server.ts` (`withAuth` only) + login/logout routes +
       `frozenStorefrontBoundaryRule` wiring
 - [ ] 6.5 `/admin/productos[/nuevo|/:id/editar]` CRUD
 - [ ] 6.6 `/admin/categorias[/nueva|/:id/editar]` CRUD
 - [ ] 6.7 Admin image-upload UI action
 - [ ] Phase 7: final verification
+
+**Owed before Phase 7's manual smoke tasks**: a real manual/integration
+check of `api.server.ts`'s `makeAuthenticatedRequest` against a running
+`api-idp` (6.3's stated done-criterion) — not reachable in this
+environment, see 6.3's evidence above.
 
 ## Status
 
@@ -1139,10 +1184,15 @@ suites, grown across the phase). `tsc --noEmit` clean. Lint: 3 warnings
 (`_args`, pre-existing pattern shared with `products.tsx`/`home.tsx`), 0
 errors, within the `--max-warnings 5` budget.
 
-Phase 6: 1/6 work units complete (6.1-6.2). `apps/web-catalog` full suite:
-79→90 tests (+11 for `session.test.ts`). `tsc --noEmit` clean. Lint: still
-3 warnings, 0 errors — `session.server.ts` introduced none. Zero edits to
-any pre-existing test file. `SESSION_SECRET` was already in
-`turbo.json`'s `globalEnv` (added speculatively in an earlier phase);
-`API_IDP_URL` added this batch. Ready for the next `sdd-apply` batch (6.3
-— `apps/web-catalog/app/shared/lib/api.server.ts`).
+Phase 6: 2/6 work units complete (6.1-6.2, 6.3). `apps/web-catalog` full
+suite: 79→96 tests (+11 `session.test.ts`, +6 `api.server.test.ts`). `tsc
+--noEmit` clean. Lint: still 3 warnings, 0 errors — neither
+`session.server.ts` nor `api.server.ts` introduced any. Zero edits to any
+pre-existing test file. `SESSION_SECRET` was already in `turbo.json`'s
+`globalEnv` (added speculatively in an earlier phase); `API_IDP_URL` and
+`API_SALESOPS_URL` added across these two work units. **Known gap**: 6.3's
+"manual/integration check against api-idp login round-trip" done-criterion
+was not run — no Postgres/`api-idp` reachable in this environment (see
+6.3's evidence). Owed before Phase 7's manual smoke tasks. Ready for the
+next `sdd-apply` batch (6.4 — `apps/web-catalog/app/shared/lib/
+auth.guards.server.ts`).
