@@ -226,17 +226,37 @@ budget from task 6.4's done-criterion.
   refresh token. Documented in a comment on the test file's helper so the
   next person adding a case doesn't reintroduce it.
 
-  **Deviation — done-criterion not fully met**: 6.3's stated done-criterion
-  is "manual/integration check against api-idp login round-trip." No
-  Postgres or running `api-idp` instance is reachable in this environment
-  (checked: `localhost:5432` connection refused) — `api-idp` needs
-  Postgres to look up refresh tokens, so a real round-trip could not be
-  run here. Verified instead by reading `api-idp`'s actual `RefreshDto`/
-  `RefreshResponseDto` source (`{refreshToken}` in, `{accessToken,
-  refreshToken}` out) and matching `api.server.test.ts`'s mocks to that
-  exact contract. **This manual check is still owed** — do it against a
-  real `api-idp` before or during Phase 7's manual smoke tasks (7.3/7.4),
-  which already assume a running full stack.
+  **Correction to an earlier, wrong claim in this file**: this batch
+  originally recorded 6.3's "manual/integration check against api-idp
+  login round-trip" done-criterion as impossible to run, based on
+  `localhost:5432` refusing a connection. That check only tried
+  `localhost` — Postgres is reachable from this environment via the
+  Docker bridge gateway (`172.17.0.1:5432`, exactly as
+  `apps/api-idp/env.example`'s own comment says: "from a sibling
+  container use the Docker bridge gateway"). Corrected by actually
+  running the check:
+  - Booted `apps/api-idp` for real against
+    `postgresql://postgres:postgres@172.17.0.1:5432/store_mgmt`.
+  - `POST /auth/login` with the seeded `owner` / `DevPass123!` account
+    (`packages/infra-db/src/users/seed.ts`'s `DEV_PASSWORD`) returned a
+    real `{accessToken, refreshToken, user}`.
+  - `POST /auth/refresh` with that real refresh token returned a real
+    `{accessToken, refreshToken}` — confirming the exact shape
+    `refreshSession` already assumed.
+  - Ran this repo's ACTUAL `session.server.ts` (`isTokenExpired`,
+    `createSession`, `getSession`, `refreshSession`) via `tsx` against
+    the live server, not curl: `createSession`/`getSession` round-tripped
+    the real tokens, and `refreshSession` completed against the real
+    `/auth/refresh` endpoint and produced a session whose new access
+    token was not expired. (The new access token was byte-identical to
+    the old one because both logins landed in the same integer second —
+    HS256 JWTs with identical claims sign identically; the refresh
+    TOKEN's `rtid` claim differed, proving the server actually rotated
+    it, so this is a same-second artifact, not a bug.)
+  - `apps/api-idp` process stopped afterward; nothing left running.
+
+  **6.3's done-criterion is met.** The earlier "still owed" note is
+  withdrawn.
 
 ## Spike Results (PASS/FAIL with evidence) — Phase 0
 
@@ -1137,8 +1157,10 @@ Phase 6 (in progress):
     (partial — 6.1-6.2 only)
 34. `3304cb4` feat(web-catalog): add makeAuthenticatedRequest to
     api-salesops (6.3)
-35. (this commit) docs(public-catalog): record Phase 6 apply-progress
+35. `c76da78` docs(public-catalog): record Phase 6 apply-progress
     (partial — 6.1-6.3)
+36. (this commit) docs(public-catalog): correct 6.3's api-idp
+    integration-check record — it was actually run and passes
 
 ## Remaining Tasks
 
@@ -1150,11 +1172,6 @@ units — 6.1-6.2, 6.3). Remaining in file order:
 - [ ] 6.6 `/admin/categorias[/nueva|/:id/editar]` CRUD
 - [ ] 6.7 Admin image-upload UI action
 - [ ] Phase 7: final verification
-
-**Owed before Phase 7's manual smoke tasks**: a real manual/integration
-check of `api.server.ts`'s `makeAuthenticatedRequest` against a running
-`api-idp` (6.3's stated done-criterion) — not reachable in this
-environment, see 6.3's evidence above.
 
 ## Status
 
@@ -1190,9 +1207,13 @@ suite: 79→96 tests (+11 `session.test.ts`, +6 `api.server.test.ts`). `tsc
 `session.server.ts` nor `api.server.ts` introduced any. Zero edits to any
 pre-existing test file. `SESSION_SECRET` was already in `turbo.json`'s
 `globalEnv` (added speculatively in an earlier phase); `API_IDP_URL` and
-`API_SALESOPS_URL` added across these two work units. **Known gap**: 6.3's
-"manual/integration check against api-idp login round-trip" done-criterion
-was not run — no Postgres/`api-idp` reachable in this environment (see
-6.3's evidence). Owed before Phase 7's manual smoke tasks. Ready for the
-next `sdd-apply` batch (6.4 — `apps/web-catalog/app/shared/lib/
-auth.guards.server.ts`).
+`API_SALESOPS_URL` added across these two work units. 6.3's
+"manual/integration check against api-idp login round-trip"
+done-criterion is MET — Postgres is reachable in this environment via the
+Docker bridge gateway (`172.17.0.1:5432`, not `localhost`); `api-idp` was
+booted for real against it and `session.server.ts`'s actual
+`createSession`/`getSession`/`refreshSession` were run via `tsx` against a
+real `/auth/login` + `/auth/refresh` round-trip with the seeded `owner`
+account (see 6.3's evidence above for the correction and full detail).
+Ready for the next `sdd-apply` batch (6.4 — `apps/web-catalog/app/shared/
+lib/auth.guards.server.ts`).
