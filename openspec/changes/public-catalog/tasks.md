@@ -140,7 +140,7 @@ Chain strategy: N/A
 
 **Done when**: 5.3 is green. 1 commit.
 
-- [ ] 5.5 `/productos/:id` product-detail route — client-degrades gracefully on unknown id (mirrors `static-store/product-detail.tsx`'s design, D9's per-page reference); calls `GET /public/products/:id`.
+- [x] 5.5 `/productos/:id` product-detail route — client-degrades gracefully on unknown id (mirrors `static-store/product-detail.tsx`'s design, D9's per-page reference); calls `GET /public/products/:id`.
 
 **Done when**: unknown-id case renders a graceful empty state, not a crash. 1 commit. **4 commits total for Phase 5.**
 
