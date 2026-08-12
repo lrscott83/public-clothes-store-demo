@@ -1,6 +1,6 @@
 # Apply Progress: public-catalog
 
-**Batch**: 5 of N (Phase 4 — `apps/api-public`, the new anonymous read API)
+**Batch**: 6 of N (Phase 5 — `apps/web-catalog` public storefront)
 **Mode**: Strict TDD
 **Delivery**: commits only, branch `public-catalog`, no PRs
 
@@ -137,6 +137,42 @@ matching Phase 0/1/2's precedent). `apps/static-store` lint re-verified
 byte-identical to task 1.8's recorded baseline (same 5 warnings, same
 files/lines) — Phase 4 touched nothing under `apps/static-store`,
 `packages/storefront`, or `packages/api-common`.
+
+## Completed Tasks (Phase 5 — `apps/web-catalog` public storefront)
+
+**Reconciliation**: 5.1-5.2 (`b5c51ed`) and 5.3-5.4 (`2c6fc47`) were already
+committed on the branch when this batch started but were never recorded
+here — same pattern as the Phase 3 reconciliation above. Recorded now
+alongside 5.5, which this batch completed.
+
+- [x] 5.1/5.2 `b5c51ed` — `StoreConfig` rewritten per D9 (`slug, brand,
+      locale, theme.colors, logo, hero, nav, productsPage, footer`), resolved
+      from the `Host` header via `tenant.server.ts` (mirrors 4.2/4.4's
+      host-slug parsing); `public-api.server.ts` — thin fetch client to
+      `api-public`, forwards `url.searchParams` verbatim, sends the inbound
+      `Host` as `X-Forwarded-Host`. `theme-css-vars.ts` maps `theme.colors`
+      to CSS custom properties. 1 commit.
+- [x] 5.3/5.4 `2c6fc47` — `/productos` route: `product-query.ts` parses
+      `categoria`/`q`/`orden`/`pagina`/`porPagina` from the URL verbatim and
+      round-trips them into the loader's fetch call; `ProductCard`/
+      `ProductGrid` render the badge stack (`Nuevo` + `-X%` + `-$X.XX`, all
+      three together when applicable) via `formatMoney` (0.4), never the
+      frozen `packages/storefront` formatter; empty-result state handled.
+      Wired into `app/routes.ts`. 1 commit.
+- [x] 5.5 (this batch) `/productos/:id` product-detail route —
+      `product-detail.tsx` calls `GET /public/products/:id` via `2c6fc47`'s
+      `fetchPublicProduct` (already returns `null` on 404, never throws);
+      unknown/inactive id renders a "Producto no encontrado." message
+      instead of crashing (mirrors `static-store/product-detail.tsx`'s
+      client-degrade design, D9's per-page reference — read-only, never
+      imported). Registered as `productos/:id` in `app/routes.ts`. 1 commit.
+
+**All 3 Phase 5 code/test work units complete** (4th is this docs commit,
+matching tasks.md's "4 commits total for Phase 5"). `web-catalog` full
+suite: 79/79 passing (14 files). `tsc --noEmit` clean. Lint: 3 warnings
+(`_args` unused in each route's `meta` — same shape as `products.tsx`'s and
+`home.tsx`'s pre-existing warnings), 0 errors, within the `--max-warnings 5`
+budget from task 6.4's done-criterion.
 
 ## Spike Results (PASS/FAIL with evidence) — Phase 0
 
@@ -850,6 +886,22 @@ constraint held.
 | `openspec/changes/public-catalog/tasks.md` | Modified | Phase 4 checkboxes ticked (4.1-4.11) |
 | `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
 
+## Files Changed — Phase 5
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `templates/apps/web-catalog/app/shared/config/stores/{index,default.config,types}.ts` | Modified | `StoreConfig` rewritten per D9 (5.1) |
+| `templates/apps/web-catalog/app/shared/lib/{public-api,tenant}.server.ts` + tests | Created | thin `api-public` client + Host-based tenant resolution (5.2) |
+| `templates/apps/web-catalog/app/shared/lib/theme-css-vars.ts` + test | Created | `theme.colors` → CSS custom properties |
+| `templates/apps/web-catalog/app/shared/lib/store-config.server.ts` + test | Created | loader-side `StoreConfig` resolution, 404 on unknown slug |
+| `templates/apps/web-catalog/app/catalog/lib/{product-query,badges}.ts` + tests | Created | URL param parsing (5.3) + badge-stack logic |
+| `templates/apps/web-catalog/app/catalog/components/{product-card,product-grid,product-badges}.tsx` + tests | Created | `/productos` grid + card rendering (5.4) |
+| `templates/apps/web-catalog/app/catalog/routes/products.tsx` + test | Created | `/productos` route, verbatim URL param forwarding |
+| `templates/apps/web-catalog/app/catalog/routes/product-detail.tsx` + test | Created | `/productos/:id` route, graceful 404 degrade (5.5) |
+| `templates/apps/web-catalog/app/routes.ts` | Modified | registers `productos` and `productos/:id` |
+| `openspec/changes/public-catalog/tasks.md` | Modified | Phase 5 checkboxes ticked (5.1-5.5) |
+| `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
+
 ## Deviations from Design
 
 Phase 0-2: None — implementation matches design.md D1-D10 for everything
@@ -992,14 +1044,22 @@ Phase 4 (7, matching tasks.md's explicit "7 commits total for Phase 4"):
     D6 404/cache matrix (4.9-4.10)
 26. `955ddfd` test(public-catalog): prove tenant isolation e2e against one
     running api-public instance (4.11)
-27. (this commit) docs(public-catalog): record Phase 4 apply-progress
+27. `bf6507b` docs(public-catalog): record Phase 4 apply-progress and
+    reconcile Phase 3's commit list
+
+Phase 5 (3 code commits already on the branch when this batch started,
+never before recorded here — reconciled now; +1 this batch):
+28. `b5c51ed` feat(web-catalog): resolve tenant StoreConfig from the Host
+    header (D9) (5.1-5.2)
+29. `2c6fc47` feat(web-catalog): add the /productos catalog page (5.3-5.4)
+30. `7ea5b90` feat(web-catalog): add the /productos/:id product-detail
+    route (5.5)
+31. (this commit) docs(public-catalog): record Phase 5 apply-progress
 
 ## Remaining Tasks
 
-Phase 4 COMPLETE (all 11 tasks, 4.1-4.11). Phase 5 through Phase 7 — NOT
-started, per explicit scope instruction ("Phase 4 ONLY... then STOP"). Next
-tasks in file order:
-- [ ] Phase 5: `apps/web-catalog` public storefront (4 commits)
+Phase 5 COMPLETE (all 5 tasks, 5.1-5.5). Phase 6 through Phase 7 — NOT
+started. Next tasks in file order:
 - [ ] Phase 6: `apps/web-catalog` `/admin` (6 commits)
 - [ ] Phase 7: final verification
 
@@ -1010,10 +1070,10 @@ batch's own count, plus the two Phase-3-scope commits `48f95f4`/`98f1ef4`
 found and reconciled at the start of this batch — see the reconciliation
 note at the top of this file).
 
-Phase 4: 11/11 tasks complete (4.1-4.11), 6 code/test commits + this
-trailing docs commit = 7, matching tasks.md's explicit "7 commits total for
-Phase 4" done-criterion. `apps/api-public` unit suite: 0→60 tests (new app,
-9 suites). `apps/api-public` e2e suite: 0→5 tests (new app, 1 suite),
+Phase 4: 11/11 tasks complete (4.1-4.11), 6 code/test commits + trailing
+docs commit `bf6507b` = 7, matching tasks.md's explicit "7 commits total
+for Phase 4" done-criterion. `apps/api-public` unit suite: 0→60 tests (new
+app, 9 suites). `apps/api-public` e2e suite: 0→5 tests (new app, 1 suite),
 running against real Postgres after building `domain`/`infra-db`/
 `infra-storage` to `dist/` first. Every pre-existing suite outside
 `apps/api-public` re-verified byte-identical to its last-recorded baseline:
@@ -1023,5 +1083,13 @@ unit 495/495 (493 previously recorded + 2 from `98f1ef4`, now reconciled),
 file/line set as task 1.8's recorded baseline). Lint
 (`--max-warnings 0`) and `tsc --noEmit` clean on `apps/api-public`. Zero
 edits to any pre-existing test file anywhere outside `apps/api-public`.
-Ready for the next `sdd-apply` batch (Phase 5 — `apps/web-catalog` public
-storefront).
+
+Phase 5: 5/5 tasks complete (5.1-5.5), 3 code/test commits + this trailing
+docs commit = 4, matching tasks.md's explicit "4 commits total for Phase
+5" done-criterion. `apps/web-catalog` full suite: 0→79 tests (14 suites,
+grown across the phase; +3 tests this batch for `product-detail.test.tsx`).
+`tsc --noEmit` clean. Lint: 3 warnings (`_args`, pre-existing pattern
+shared with `products.tsx`/`home.tsx`), 0 errors, within the
+`--max-warnings 5` budget. Zero edits to any pre-existing test file outside
+`product-detail.test.tsx` and `app/routes.ts`. Ready for the next
+`sdd-apply` batch (Phase 6 — `apps/web-catalog` `/admin`).
