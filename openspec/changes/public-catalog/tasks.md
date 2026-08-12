@@ -167,7 +167,7 @@ Chain strategy: N/A
 
 **Done when**: category soft-delete leaves the row persisted with `active=false`. 1 commit.
 
-- [ ] 6.7 Admin image-upload UI action — calls 3.2's endpoint via `makeAuthenticatedRequest` multipart, field `image`.
+- [x] 6.7 Admin image-upload UI action — calls 3.2's endpoint via `makeAuthenticatedRequest` multipart, field `image`.
 
 **Done when**: a successful upload updates the product's displayed image. 1 commit. **6 commits total for Phase 6.**
 
