@@ -3,14 +3,18 @@ import {
   Body,
   ConflictException,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
+  Inject,
+  NotFoundException,
+  Param,
   Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { DuplicateCompanySlugError, InvalidCompanyError } from '@store-mgmt/domain';
+import { COMPANY_REPOSITORY, DuplicateCompanySlugError, InvalidCompanyError, type ICompanyRepository } from '@store-mgmt/domain';
 import { JwtAuthGuard, type AuthenticatedUser } from '@store-mgmt/api-common';
 import { CreateCompanySaga } from './create-company.saga.js';
 // SECURITY (FIX 4): value import (NOT `import type`) — the global
@@ -19,6 +23,7 @@ import { CreateCompanySaga } from './create-company.saga.js';
 // Nest silently skips validation/whitelisting for that parameter.
 import { CreateCompanyDto } from './dto/create-company.dto.js';
 import type { CompanyResponseDto } from './dto/company-response.dto.js';
+import type { CompanyLookupResponseDto } from './dto/company-lookup-response.dto.js';
 
 interface AuthenticatedRequest extends Request {
   user: AuthenticatedUser;
@@ -35,7 +40,10 @@ interface AuthenticatedRequest extends Request {
  */
 @Controller('companies')
 export class CompanyController {
-  constructor(private readonly createCompanySaga: CreateCompanySaga) {}
+  constructor(
+    private readonly createCompanySaga: CreateCompanySaga,
+    @Inject(COMPANY_REPOSITORY) private readonly companyRepository: ICompanyRepository,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -44,6 +52,25 @@ export class CompanyController {
     return this.withDomainErrorMapping(() =>
       this.createCompanySaga.run({ name: body.name, slug: body.slug, ownerId: req.user.id }),
     );
+  }
+
+  /**
+   * Resolves a slug to `{id, slug, name}` (design gap found during
+   * public-catalog Phase 6 task 6.5: `web-catalog`'s admin needs the
+   * tenant's `companyId` to send as `X-Company-Id` on `api-salesops`
+   * calls, and cannot rely on `TenantContextGuard`'s ambiguous
+   * single-membership fallback once an admin belongs to >1 company).
+   * `JwtAuthGuard` ONLY — same reasoning as `POST /companies`: resolving
+   * a slug must work BEFORE any tenant is established for the request.
+   */
+  @Get(':slug')
+  @UseGuards(JwtAuthGuard)
+  async findBySlug(@Param('slug') slug: string): Promise<CompanyLookupResponseDto> {
+    const company = await this.companyRepository.findBySlug(slug);
+    if (!company) {
+      throw new NotFoundException();
+    }
+    return { id: company.id, slug: company.slug, name: company.name };
   }
 
   private async withDomainErrorMapping<T>(fn: () => Promise<T>): Promise<T> {

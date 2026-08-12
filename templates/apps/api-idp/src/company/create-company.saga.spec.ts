@@ -30,6 +30,7 @@ function buildCompanyRepoMock(): jest.Mocked<ICompanyRepository> {
   return {
     list: jest.fn(),
     findById: jest.fn(),
+    findBySlug: jest.fn(),
     create: jest.fn().mockResolvedValue(TEST_COMPANY),
     setSchemaName: jest.fn().mockImplementation((id: string, schemaName: string | null) =>
       Promise.resolve({ ...TEST_COMPANY, id, schemaName }),
