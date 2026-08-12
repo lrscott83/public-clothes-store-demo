@@ -1,6 +1,6 @@
 # Apply Progress: public-catalog
 
-**Batch**: 6 of N (Phase 5 — `apps/web-catalog` public storefront)
+**Batch**: 7 of N (Phase 6 — `apps/web-catalog` `/admin`, in progress)
 **Mode**: Strict TDD
 **Delivery**: commits only, branch `public-catalog`, no PRs
 
@@ -173,6 +173,34 @@ suite: 79/79 passing (14 files). `tsc --noEmit` clean. Lint: 3 warnings
 (`_args` unused in each route's `meta` — same shape as `products.tsx`'s and
 `home.tsx`'s pre-existing warnings), 0 errors, within the `--max-warnings 5`
 budget from task 6.4's done-criterion.
+
+## Completed Tasks (Phase 6 — `apps/web-catalog` `/admin`, IN PROGRESS)
+
+- [x] 6.1/6.2 `apps/web-catalog/app/shared/lib/session.{test,server}.ts` —
+      admin session per D8: `createCookieSessionStorage` cookie
+      `httpOnly: true`, `sameSite: 'lax'`, `path: '/'`, `secure` only in
+      production, 7-day `maxAge`, `domain` intentionally omitted
+      (load-bearing — sharing one session across tenant subdomains would
+      let an owner logged into store A arrive at store B's `/admin`
+      already authenticated). `SessionData = {accessToken, refreshToken,
+      userId}`, no `activeCompanyId` — the subdomain already fixes the
+      store. Cookie storage is built fresh per call (not cached at module
+      scope) so a missing `SESSION_SECRET` throws the first time a
+      request needs a session, rather than the import silently succeeding.
+      `isTokenExpired` exported (unlike poolops's module-private version)
+      for direct unit coverage of the 5s expiry buffer.
+      `refreshSession`'s `Map`-keyed-by-old-refresh-token de-dupe cache
+      (30s eviction) ported in intent from poolops, calls `api-idp`'s
+      `POST /auth/refresh` — proven with two parallel callers sharing one
+      expired refresh token producing exactly one IDP fetch. No backend
+      `logout` endpoint exists (unlike poolops), so `destroySession` only
+      clears the cookie, no API call. `API_IDP_URL` added to
+      `turbo.json`'s `globalEnv` (`SESSION_SECRET` was already declared).
+      11 tests. 1 commit.
+
+**Phase 6 done-criterion for this work unit**: "6.1 is green." Met — 6.3
+(`api.server.ts`), 6.4 (`auth.guards.server.ts` + routes + eslint rule),
+6.5 (product CRUD), 6.6 (category CRUD), 6.7 (image upload) remain.
 
 ## Spike Results (PASS/FAIL with evidence) — Phase 0
 
@@ -902,6 +930,15 @@ constraint held.
 | `openspec/changes/public-catalog/tasks.md` | Modified | Phase 5 checkboxes ticked (5.1-5.5) |
 | `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
 
+## Files Changed — Phase 6 (in progress)
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `templates/apps/web-catalog/app/shared/lib/session.server.ts` + test | Created | admin session cookie, token refresh de-dupe (D8, 6.1-6.2) |
+| `templates/turbo.json` | Modified (additive) | `API_IDP_URL` added to `globalEnv` |
+| `openspec/changes/public-catalog/tasks.md` | Modified | 6.1-6.2 checkboxes ticked |
+| `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
+
 ## Deviations from Design
 
 Phase 0-2: None — implementation matches design.md D1-D10 for everything
@@ -1054,13 +1091,24 @@ never before recorded here — reconciled now; +1 this batch):
 29. `2c6fc47` feat(web-catalog): add the /productos catalog page (5.3-5.4)
 30. `7ea5b90` feat(web-catalog): add the /productos/:id product-detail
     route (5.5)
-31. (this commit) docs(public-catalog): record Phase 5 apply-progress
+31. `43b1c5a` docs(public-catalog): record Phase 5 apply-progress and
+    reconcile its commit list
+
+Phase 6 (in progress):
+32. `75e2672` feat(web-catalog): add the admin session cookie (6.1-6.2)
+33. (this commit) docs(public-catalog): record Phase 6 apply-progress
+    (partial — 6.1-6.2 only)
 
 ## Remaining Tasks
 
-Phase 5 COMPLETE (all 5 tasks, 5.1-5.5). Phase 6 through Phase 7 — NOT
-started. Next tasks in file order:
-- [ ] Phase 6: `apps/web-catalog` `/admin` (6 commits)
+Phase 5 COMPLETE (all 5 tasks, 5.1-5.5). Phase 6 IN PROGRESS (1/6 work
+units — 6.1-6.2). Remaining in file order:
+- [ ] 6.3 `api.server.ts` — `makeAuthenticatedRequest`
+- [ ] 6.4 `auth.guards.server.ts` (`withAuth` only) + login/logout routes +
+      `frozenStorefrontBoundaryRule` wiring
+- [ ] 6.5 `/admin/productos[/nuevo|/:id/editar]` CRUD
+- [ ] 6.6 `/admin/categorias[/nueva|/:id/editar]` CRUD
+- [ ] 6.7 Admin image-upload UI action
 - [ ] Phase 7: final verification
 
 ## Status
@@ -1084,12 +1132,17 @@ file/line set as task 1.8's recorded baseline). Lint
 (`--max-warnings 0`) and `tsc --noEmit` clean on `apps/api-public`. Zero
 edits to any pre-existing test file anywhere outside `apps/api-public`.
 
-Phase 5: 5/5 tasks complete (5.1-5.5), 3 code/test commits + this trailing
-docs commit = 4, matching tasks.md's explicit "4 commits total for Phase
-5" done-criterion. `apps/web-catalog` full suite: 0→79 tests (14 suites,
-grown across the phase; +3 tests this batch for `product-detail.test.tsx`).
-`tsc --noEmit` clean. Lint: 3 warnings (`_args`, pre-existing pattern
-shared with `products.tsx`/`home.tsx`), 0 errors, within the
-`--max-warnings 5` budget. Zero edits to any pre-existing test file outside
-`product-detail.test.tsx` and `app/routes.ts`. Ready for the next
-`sdd-apply` batch (Phase 6 — `apps/web-catalog` `/admin`).
+Phase 5: 5/5 tasks complete (5.1-5.5), 3 code/test commits + trailing docs
+commit `43b1c5a` = 4, matching tasks.md's explicit "4 commits total for
+Phase 5" done-criterion. `apps/web-catalog` full suite: 0→79 tests (14
+suites, grown across the phase). `tsc --noEmit` clean. Lint: 3 warnings
+(`_args`, pre-existing pattern shared with `products.tsx`/`home.tsx`), 0
+errors, within the `--max-warnings 5` budget.
+
+Phase 6: 1/6 work units complete (6.1-6.2). `apps/web-catalog` full suite:
+79→90 tests (+11 for `session.test.ts`). `tsc --noEmit` clean. Lint: still
+3 warnings, 0 errors — `session.server.ts` introduced none. Zero edits to
+any pre-existing test file. `SESSION_SECRET` was already in
+`turbo.json`'s `globalEnv` (added speculatively in an earlier phase);
+`API_IDP_URL` added this batch. Ready for the next `sdd-apply` batch (6.3
+— `apps/web-catalog/app/shared/lib/api.server.ts`).
