@@ -1,6 +1,6 @@
 # Apply Progress: public-catalog
 
-**Batch**: 8 of N (Phase 6 — `apps/web-catalog` `/admin`, in progress)
+**Batch**: 9 of N (Phase 6 — `apps/web-catalog` `/admin`, in progress)
 **Mode**: Strict TDD
 **Delivery**: commits only, branch `public-catalog`, no PRs
 
@@ -253,10 +253,67 @@ budget from task 6.4's done-criterion.
     HS256 JWTs with identical claims sign identically; the refresh
     TOKEN's `rtid` claim differed, proving the server actually rotated
     it, so this is a same-second artifact, not a bug.)
-  - `apps/api-idp` process stopped afterward; nothing left running.
+  - `apps/api-idp` process stopped afterward.
 
   **6.3's done-criterion is met.** The earlier "still owed" note is
   withdrawn.
+
+  **Correction to THIS batch's own "nothing left running" claim**: the
+  `kill <pid>` above only killed `pnpm exec nest start`'s wrapper
+  process — Nest's actual `node .../api-idp/dist/main` child survived as
+  an orphan, still bound to port 3002, undetected until 6.4's manual
+  check below started a second `api-idp` and hit `EADDRINUSE`. Fixed by
+  killing the process found via `pgrep -fa`, not the backgrounded
+  shell's `$!`, and by verifying with `pgrep` AND a port check afterward
+  — not by assuming a `kill` on a wrapper PID succeeded.
+
+- [x] 6.4 `apps/web-catalog/app/shared/lib/auth.guards.server.ts` —
+      `withAuth` ONLY (D7: no `withRoles`/`withPublicRedirect`/
+      `withOptionalAuth`). `admin/login`/`admin/logout` registered as
+      siblings of `layout('shared/routes/_auth.tsx', [...])` in
+      `app/routes.ts`, never inside it (design §6 — one app, so login
+      can't guard itself). `frozenStorefrontBoundaryRule` was already
+      wired into `web-catalog/eslint.config.mjs` (Phase 5's scaffold) —
+      no change needed, done-criterion ("`pnpm --filter web-catalog lint`
+      passes at `--max-warnings 5` with the new rule active") already
+      held and still holds (3/5 warnings). 15 new tests
+      (`auth.guards.server.test.ts`, `login.test.tsx`, `logout.test.tsx`).
+      1 commit.
+
+  **Bug caught by `tsc`, not by review**: `withAuth`'s loader parameter
+  was typed to return `unknown`, which erased the wrapped loader's real
+  return type through the wrapper. `react-router typegen`'s inference for
+  `admin/routes/index.tsx`'s `loaderData` came out possibly-`undefined`
+  as a result. Fixed by making `withAuth<T>` generic over the loader's
+  actual return type.
+
+  **Beyond the done-criterion — a real, live manual smoke test** (not
+  required by 6.4's stated criterion, but the owner asked this session to
+  verify infrastructure claims for real rather than assume, so the same
+  discipline applied here): booted `api-idp` (real Postgres) AND
+  `web-catalog`'s own dev server (`react-router dev --port 3010`,
+  `SESSION_SECRET`/`API_IDP_URL` set), then drove the actual HTTP flow
+  with `curl` against a real `Host: default.localhost:3010` (the app
+  404s on a bare `Host: localhost` — D9's tenant resolution, expected,
+  not a bug):
+  1. `GET /admin` with no cookie → `302` to
+     `/admin/login?returnTo=%2Fadmin`.
+  2. `GET /admin/login` → `200`, real form (`name="login"`,
+     `name="password"`).
+  3. `POST /admin/login` with the seeded `owner`/`DevPass123!` → `302` to
+     `/admin`, real `Set-Cookie`.
+  4. `GET /admin` with that cookie → `200`, renders "Sesión activa:
+     d59fdd3a-ba44-4d08-a640-0a790fc947d0" — the REAL user id from the
+     REAL login response, proving `withAuth` → `_auth.tsx` →
+     `admin/routes/index.tsx`'s `loaderData` round-trips correctly.
+  5. `POST /admin/logout` → `302` to `/admin/login`, `Set-Cookie` with
+     `Expires=Thu, 01 Jan 1970...` (cookie cleared).
+  6. `GET /admin` again with the now-stale cookie → `302` back to
+     `/admin/login?returnTo=%2Fadmin` — logout actually destroyed the
+     session, `withAuth` doesn't trust a stale cookie.
+  Both dev servers stopped afterward and verified dead by `pgrep` AND a
+  TCP connect check on both ports (3002, 3010) — not by trusting the
+  `kill` exit code alone, per the correction immediately above.
 
 ## Spike Results (PASS/FAIL with evidence) — Phase 0
 
@@ -992,8 +1049,15 @@ constraint held.
 |------|--------|----------------|
 | `templates/apps/web-catalog/app/shared/lib/session.server.ts` + test | Created | admin session cookie, token refresh de-dupe (D8, 6.1-6.2) |
 | `templates/apps/web-catalog/app/shared/lib/api.server.ts` + test | Created | `makeAuthenticatedRequest` to `api-salesops` (D7, 6.3) |
+| `templates/apps/web-catalog/app/shared/lib/auth.guards.server.ts` + test | Created | `withAuth` (D7, 6.4) |
+| `templates/apps/web-catalog/app/shared/lib/session.server.ts` | Modified | `apiIdpBaseUrl` exported (was private) for `login.tsx` to reuse |
+| `templates/apps/web-catalog/app/shared/routes/_auth.tsx` | Created | `/admin` layout, `withAuth`-wrapped loader |
+| `templates/apps/web-catalog/app/shared/routes/login.tsx` + test | Created | `POST /auth/login` action, generic error on any failure |
+| `templates/apps/web-catalog/app/shared/routes/logout.tsx` + test | Created | action-only session destroy |
+| `templates/apps/web-catalog/app/admin/routes/index.tsx` | Created | placeholder `/admin` landing page (real content: 6.5-6.7) |
+| `templates/apps/web-catalog/app/routes.ts` | Modified | registers `admin/login`, `admin/logout`, the `_auth` layout |
 | `templates/turbo.json` | Modified (additive) | `API_IDP_URL`, `API_SALESOPS_URL` added to `globalEnv` |
-| `openspec/changes/public-catalog/tasks.md` | Modified | 6.1-6.3 checkboxes ticked |
+| `openspec/changes/public-catalog/tasks.md` | Modified | 6.1-6.4 checkboxes ticked |
 | `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
 
 ## Deviations from Design
@@ -1159,15 +1223,17 @@ Phase 6 (in progress):
     api-salesops (6.3)
 35. `c76da78` docs(public-catalog): record Phase 6 apply-progress
     (partial — 6.1-6.3)
-36. (this commit) docs(public-catalog): correct 6.3's api-idp
+36. `ad491ae` docs(public-catalog): correct 6.3's api-idp
     integration-check record — it was actually run and passes
+37. `b065483` feat(web-catalog): add withAuth, login/logout routes,
+    /admin layout (6.4)
+38. (this commit) docs(public-catalog): record Phase 6 apply-progress
+    (partial — 6.1-6.4), including 6.4's live manual smoke test
 
 ## Remaining Tasks
 
-Phase 5 COMPLETE (all 5 tasks, 5.1-5.5). Phase 6 IN PROGRESS (2/6 work
-units — 6.1-6.2, 6.3). Remaining in file order:
-- [ ] 6.4 `auth.guards.server.ts` (`withAuth` only) + login/logout routes +
-      `frozenStorefrontBoundaryRule` wiring
+Phase 5 COMPLETE (all 5 tasks, 5.1-5.5). Phase 6 IN PROGRESS (3/6 work
+units — 6.1-6.2, 6.3, 6.4). Remaining in file order:
 - [ ] 6.5 `/admin/productos[/nuevo|/:id/editar]` CRUD
 - [ ] 6.6 `/admin/categorias[/nueva|/:id/editar]` CRUD
 - [ ] 6.7 Admin image-upload UI action
@@ -1201,19 +1267,27 @@ suites, grown across the phase). `tsc --noEmit` clean. Lint: 3 warnings
 (`_args`, pre-existing pattern shared with `products.tsx`/`home.tsx`), 0
 errors, within the `--max-warnings 5` budget.
 
-Phase 6: 2/6 work units complete (6.1-6.2, 6.3). `apps/web-catalog` full
-suite: 79→96 tests (+11 `session.test.ts`, +6 `api.server.test.ts`). `tsc
---noEmit` clean. Lint: still 3 warnings, 0 errors — neither
-`session.server.ts` nor `api.server.ts` introduced any. Zero edits to any
-pre-existing test file. `SESSION_SECRET` was already in `turbo.json`'s
-`globalEnv` (added speculatively in an earlier phase); `API_IDP_URL` and
-`API_SALESOPS_URL` added across these two work units. 6.3's
-"manual/integration check against api-idp login round-trip"
-done-criterion is MET — Postgres is reachable in this environment via the
-Docker bridge gateway (`172.17.0.1:5432`, not `localhost`); `api-idp` was
-booted for real against it and `session.server.ts`'s actual
-`createSession`/`getSession`/`refreshSession` were run via `tsx` against a
-real `/auth/login` + `/auth/refresh` round-trip with the seeded `owner`
-account (see 6.3's evidence above for the correction and full detail).
-Ready for the next `sdd-apply` batch (6.4 — `apps/web-catalog/app/shared/
-lib/auth.guards.server.ts`).
+Phase 6: 3/6 work units complete (6.1-6.2, 6.3, 6.4). `apps/web-catalog`
+full suite: 79→111 tests (+11 `session.test.ts`, +6 `api.server.test.ts`,
++4 `auth.guards.server.test.ts`, +5 `login.test.tsx`, +2
+`logout.test.tsx`). `tsc --noEmit` clean. Lint: still 3 warnings, 0
+errors. Zero edits to any pre-existing test file. `SESSION_SECRET` was
+already in `turbo.json`'s `globalEnv`; `API_IDP_URL` and
+`API_SALESOPS_URL` added across 6.2-6.3. 6.3's "manual/integration check
+against api-idp login round-trip" done-criterion is MET — Postgres is
+reachable in this environment via the Docker bridge gateway
+(`172.17.0.1:5432`, not `localhost`); `api-idp` was booted for real
+against it and `session.server.ts`'s actual functions were run via `tsx`
+against a real `/auth/login` + `/auth/refresh` round-trip with the seeded
+`owner` account. 6.4 went further: both `api-idp` AND `web-catalog`'s own
+dev server were booted for real, and the full login → guarded `/admin` →
+logout → re-guarded HTTP flow was driven with `curl` against a real
+`Host: default.localhost:3010`, confirming `withAuth`,
+`_auth.tsx`, `login.tsx`, and `logout.tsx` all work together, not just in
+isolation (see 6.3's and 6.4's evidence above for full detail, including
+a correction to this batch's own earlier "nothing left running" claim —
+an orphaned `api-idp` process from 6.3's check was still running,
+undiscovered until 6.4's check hit `EADDRINUSE`; fixed by verifying
+process death with `pgrep` + a port check, not a `kill` exit code alone).
+Ready for the next `sdd-apply` batch (6.5 —
+`/admin/productos[/nuevo|/:id/editar]` CRUD).
