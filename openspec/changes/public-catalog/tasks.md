@@ -146,8 +146,8 @@ Chain strategy: N/A
 
 ## Phase 6 — `apps/web-catalog`: `/admin`
 
-- [ ] 6.1 RED: `apps/web-catalog/app/shared/lib/session.test.ts` — cookie is `httpOnly`, `sameSite: 'lax'`, `domain: undefined` (D8, load-bearing); access token never appears in a loader payload; `isTokenExpired` local decode; refresh de-dupe `Map` (spec: catalog-admin "never exposes the token to the client").
-- [ ] 6.2 GREEN: `apps/web-catalog/app/shared/lib/session.server.ts` — `SessionData = {accessToken, refreshToken, userId}`, no `activeCompanyId` (D8).
+- [x] 6.1 RED: `apps/web-catalog/app/shared/lib/session.test.ts` — cookie is `httpOnly`, `sameSite: 'lax'`, `domain: undefined` (D8, load-bearing); access token never appears in a loader payload; `isTokenExpired` local decode; refresh de-dupe `Map` (spec: catalog-admin "never exposes the token to the client").
+- [x] 6.2 GREEN: `apps/web-catalog/app/shared/lib/session.server.ts` — `SessionData = {accessToken, refreshToken, userId}`, no `activeCompanyId` (D8).
 
 **Done when**: 6.1 is green. 1 commit.
 
