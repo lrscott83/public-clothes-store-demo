@@ -15,5 +15,8 @@ export default [
     route('admin/productos', 'admin/routes/productos/index.tsx'),
     route('admin/productos/nuevo', 'admin/routes/productos/nuevo.tsx'),
     route('admin/productos/:id/editar', 'admin/routes/productos/editar.tsx'),
+    route('admin/categorias', 'admin/routes/categorias/index.tsx'),
+    route('admin/categorias/nueva', 'admin/routes/categorias/nueva.tsx'),
+    route('admin/categorias/:id/editar', 'admin/routes/categorias/editar.tsx'),
   ]),
 ] satisfies RouteConfig;

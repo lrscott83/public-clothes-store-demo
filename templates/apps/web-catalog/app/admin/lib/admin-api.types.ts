@@ -58,3 +58,16 @@ export interface AdminCategoryDto {
   createdAt: string;
   updatedAt: string;
 }
+
+/** Mirrors `apps/api-salesops`'s `CreateCategoryDto` exactly. */
+export interface CreateCategoryInput {
+  name: string;
+  slug: string;
+  image?: string;
+  icon?: string;
+  order: number;
+  active?: boolean;
+}
+
+/** Mirrors `apps/api-salesops`'s `UpdateCategoryDto` — every field optional. */
+export type UpdateCategoryInput = Partial<CreateCategoryInput>;
