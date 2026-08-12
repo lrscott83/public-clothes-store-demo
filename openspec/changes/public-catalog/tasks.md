@@ -163,7 +163,7 @@ Chain strategy: N/A
 
 **Done when**: cross-company mutation test asserts rejection, never silent apply to either company. 1 commit.
 
-- [ ] 6.6 RED+GREEN: `/admin/categorias[/nueva|/:id/editar]` — same CRUD/soft-delete/re-verification discipline as 6.5 (spec: catalog-admin "Admin updates a category", "Deletes are always soft").
+- [x] 6.6 RED+GREEN: `/admin/categorias[/nueva|/:id/editar]` — same CRUD/soft-delete/re-verification discipline as 6.5 (spec: catalog-admin "Admin updates a category", "Deletes are always soft").
 
 **Done when**: category soft-delete leaves the row persisted with `active=false`. 1 commit.
 
