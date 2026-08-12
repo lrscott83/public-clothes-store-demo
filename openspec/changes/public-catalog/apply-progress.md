@@ -1,6 +1,6 @@
 # Apply Progress: public-catalog
 
-**Batch**: 9 of N (Phase 6 — `apps/web-catalog` `/admin`, in progress)
+**Batch**: 10 of N (Phase 6 — `apps/web-catalog` `/admin`, in progress)
 **Mode**: Strict TDD
 **Delivery**: commits only, branch `public-catalog`, no PRs
 
@@ -314,6 +314,79 @@ budget from task 6.4's done-criterion.
   Both dev servers stopped afterward and verified dead by `pgrep` AND a
   TCP connect check on both ports (3002, 3010) — not by trusting the
   `kill` exit code alone, per the correction immediately above.
+
+- [x] 6.5 RED+GREEN: `/admin/productos[/nuevo|/:id/editar]` —
+      create/edit/soft-delete; 403 render on cross-company mutation
+      attempt; no store-switcher UI. 2 commits (`5c12a7e` api-idp,
+      `540d224` web-catalog).
+
+  **Design gap found and resolved before any route code could be
+  written**: `api-salesops`'s `TenantContextGuard` requires
+  `X-Company-Id` explicitly, or falls back to the caller's SOLE active
+  `Membership` — ambiguous once an admin belongs to >1 company
+  (catalog-admin spec's own "no store-switcher" scenario admits this
+  case exists). No endpoint anywhere resolved a slug to a company id
+  with only a JWT (verified exhaustively via a dedicated exploration
+  agent — checked `api-idp`'s login/signup responses, both apps'
+  `CompanyController`s, and every membership-shaped route). Presented
+  the owner two options (`GET /companies/:slug` on `api-idp` vs.
+  `GET /users/me/memberships`); owner chose the slug endpoint. Added
+  `GET /companies/:slug` to `api-idp` (`JwtAuthGuard` only, returns
+  `{id, slug, name}` — never the full `Company` row), and
+  `company.server.ts`'s `resolveCompanyId` in `web-catalog`. `withAuth`
+  now resolves `companyId` once per request (after any token refresh)
+  and passes it to every guarded loader/action; `makeAuthenticatedRequest`
+  gained a `companyId` parameter, attached as `X-Company-Id`.
+
+  **Built**: `app/admin/lib/{products,categories}.server.ts` (thin
+  CRUD clients — a non-ok response is thrown as the RAW `Response`,
+  never parsed into a generic error, so callers can inspect the exact
+  status). `/admin/productos` (list), `/admin/productos/nuevo`
+  (create), `/admin/productos/:id/editar` (update + soft-delete, one
+  hidden `intent` field distinguishes the two mutations) — all
+  `withAuth`-guarded, nested under `_auth.tsx`. `image` is a raw ref
+  path text field, matching `api-salesops`'s current `CreateProductDto`
+  contract exactly — the upload UI that fills it in for the admin is
+  task 6.7, not this one. 17 new tests across `company.server.test.ts`,
+  `api.server.test.ts` (extended), `auth.guards.server.test.ts`
+  (extended), `products.server.test.ts`, `categories.server.test.ts`,
+  and the three route test files.
+
+  **6.5's explicit done-criterion** — "cross-company mutation test
+  asserts rejection, never silent apply to either company" — is
+  covered by `editar.test.tsx` for BOTH the update and soft-delete
+  mutations: a `403` from `api-salesops` (`TenantContextGuard`
+  rejecting a caller with no active membership in the resolved
+  `companyId`) returns a plain `{error}` object, never a
+  `Response`/redirect — asserted explicitly with
+  `expect(result).not.toBeInstanceOf(Response)` — so a failed mutation
+  can never be mistaken for a successful one. Two more tests in the
+  same file prove the 403 tests aren't a blanket failure: a same-company
+  update/delete still succeeds and redirects normally.
+
+  **Beyond the unit tests — a real, live create→edit→delete cycle**:
+  booted `api-idp`, `api-salesops`, AND `web-catalog`'s own dev server
+  for real, logged in as the seeded `owner`, and drove the full admin
+  flow with `curl` against `Host: default.localhost:3010`: `GET
+  /admin/productos` (real empty-state render, real `companyId`
+  resolution, real `api-salesops` call) → `POST .../nuevo` (created a
+  real product row, verified via direct SQL against the tenant
+  schema — `store_mgmt_tenant_459ae1f5_...`) → `POST .../editar` (name
+  and `order` changed) → `POST .../editar` with `intent=delete`
+  (`active` flipped to `false`, row still exists — never a hard
+  delete). Verified the final row directly via SQL after all three
+  steps. Test artifact removed afterward (direct `DELETE` on the row I
+  created — cleanup of my own test data, not a violation of the
+  app's own soft-delete-only discipline, which governs the
+  APPLICATION's behavior, not ad-hoc verification cleanup). All three
+  dev servers verified dead by `pgrep` AND a port check on 3001, 3002,
+  3010.
+
+  **Also**: removed the unused `Route.MetaArgs` parameter from every
+  route's `meta()` export across the whole app (was `_args`, now no
+  parameter) — this batch's new routes would have pushed the lint
+  count from 3 to 8 against the `--max-warnings 5` budget; fixing the
+  pattern everywhere brought it back to 0.
 
 ## Spike Results (PASS/FAIL with evidence) — Phase 0
 
@@ -1057,7 +1130,19 @@ constraint held.
 | `templates/apps/web-catalog/app/admin/routes/index.tsx` | Created | placeholder `/admin` landing page (real content: 6.5-6.7) |
 | `templates/apps/web-catalog/app/routes.ts` | Modified | registers `admin/login`, `admin/logout`, the `_auth` layout |
 | `templates/turbo.json` | Modified (additive) | `API_IDP_URL`, `API_SALESOPS_URL` added to `globalEnv` |
-| `openspec/changes/public-catalog/tasks.md` | Modified | 6.1-6.4 checkboxes ticked |
+| `templates/apps/api-idp/src/company/company.controller.ts` + spec | Modified | `GET /companies/:slug` (6.5's design gap) |
+| `templates/apps/api-idp/src/company/dto/company-lookup-response.dto.ts` | Created | `{id, slug, name}` |
+| `templates/apps/api-idp/src/company/create-company.saga.spec.ts` | Modified | pre-existing `findBySlug` mock gap fixed |
+| `templates/apps/web-catalog/app/shared/lib/company.server.ts` + test | Created | `resolveCompanyId` (6.5) |
+| `templates/apps/web-catalog/app/shared/lib/auth.guards.server.ts` | Modified | `withAuth` resolves and exposes `companyId` |
+| `templates/apps/web-catalog/app/shared/lib/api.server.ts` | Modified | `makeAuthenticatedRequest` attaches `X-Company-Id` |
+| `templates/apps/web-catalog/app/admin/lib/{products,categories}.server.ts` + tests | Created | admin CRUD clients (6.5) |
+| `templates/apps/web-catalog/app/admin/lib/admin-api.types.ts` | Created | mirrors `api-salesops`'s product/category DTOs |
+| `templates/apps/web-catalog/app/admin/components/product-form.tsx` | Created | shared create/edit form |
+| `templates/apps/web-catalog/app/admin/routes/productos/{index,nuevo,editar}.tsx` + tests | Created | list/create/edit+soft-delete (6.5) |
+| `templates/apps/web-catalog/app/routes.ts` | Modified | registers the three `productos` routes |
+| every route's `meta()` export | Modified | dropped the unused `Route.MetaArgs` parameter |
+| `openspec/changes/public-catalog/tasks.md` | Modified | 6.1-6.5 checkboxes ticked |
 | `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
 
 ## Deviations from Design
@@ -1227,14 +1312,20 @@ Phase 6 (in progress):
     integration-check record — it was actually run and passes
 37. `b065483` feat(web-catalog): add withAuth, login/logout routes,
     /admin layout (6.4)
-38. (this commit) docs(public-catalog): record Phase 6 apply-progress
+38. `a5d91c9` docs(public-catalog): record Phase 6 apply-progress
     (partial — 6.1-6.4), including 6.4's live manual smoke test
+39. `5c12a7e` feat(api-idp): add GET /companies/:slug for admin
+    companyId resolution (6.5's design gap)
+40. `540d224` feat(web-catalog): add /admin/productos CRUD with
+    cross-company rejection (6.5)
+41. (this commit) docs(public-catalog): record Phase 6 apply-progress
+    (partial — 6.1-6.5), including 6.5's design-gap resolution and
+    live create->edit->delete smoke test
 
 ## Remaining Tasks
 
-Phase 5 COMPLETE (all 5 tasks, 5.1-5.5). Phase 6 IN PROGRESS (3/6 work
-units — 6.1-6.2, 6.3, 6.4). Remaining in file order:
-- [ ] 6.5 `/admin/productos[/nuevo|/:id/editar]` CRUD
+Phase 5 COMPLETE (all 5 tasks, 5.1-5.5). Phase 6 IN PROGRESS (4/6 work
+units — 6.1-6.2, 6.3, 6.4, 6.5). Remaining in file order:
 - [ ] 6.6 `/admin/categorias[/nueva|/:id/editar]` CRUD
 - [ ] 6.7 Admin image-upload UI action
 - [ ] Phase 7: final verification
@@ -1289,5 +1380,22 @@ a correction to this batch's own earlier "nothing left running" claim —
 an orphaned `api-idp` process from 6.3's check was still running,
 undiscovered until 6.4's check hit `EADDRINUSE`; fixed by verifying
 process death with `pgrep` + a port check, not a `kill` exit code alone).
-Ready for the next `sdd-apply` batch (6.5 —
-`/admin/productos[/nuevo|/:id/editar]` CRUD).
+
+Phase 6: 4/6 work units complete (6.1-6.2, 6.3, 6.4, 6.5). `apps/web-catalog`
+full suite: 111→126 tests (+2 `company.server.test.ts`, +1
+`api.server.test.ts` extended, +2 `auth.guards.server.test.ts` extended,
++6 `products.server.test.ts`, +1 `categories.server.test.ts`, +4
+`nuevo.test.tsx`, +4 `editar.test.tsx`, +2 `index.test.tsx`). `tsc
+--noEmit` clean on both `apps/web-catalog` and `apps/api-idp`. Lint: 0
+warnings, 0 errors on both (web-catalog's `_args` pattern removed
+app-wide; api-idp already ran at `--max-warnings 0`). `apps/api-idp`
+unit suite: 71/71 (7 new for `GET /companies/:slug`, 1 pre-existing gap
+fixed). 6.5 required resolving a real design gap first (`X-Company-Id`
+had no resolution path anywhere in the codebase) — presented to the
+owner as a choice, owner picked `GET /companies/:slug`; see 6.5's
+evidence above for the full investigation and resolution. Verified with
+a live create→edit→soft-delete cycle against the real tenant database
+(api-idp + api-salesops + web-catalog all booted for real), not just
+mocked unit tests — see 6.5's evidence above. All three dev servers and
+the test product row cleaned up afterward. Ready for the next
+`sdd-apply` batch (6.6 — `/admin/categorias[/nueva|/:id/editar]` CRUD).
