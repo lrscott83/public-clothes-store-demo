@@ -112,7 +112,7 @@ export function isTokenExpired(token: string): boolean {
 
 const DEFAULT_API_IDP_URL = 'http://localhost:3002';
 
-function apiIdpBaseUrl(): string {
+export function apiIdpBaseUrl(): string {
   return process.env.API_IDP_URL ?? DEFAULT_API_IDP_URL;
 }
 

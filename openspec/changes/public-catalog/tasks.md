@@ -155,7 +155,7 @@ Chain strategy: N/A
 
 **Done when**: manual/integration check against `api-idp` login round-trip. 1 commit.
 
-- [ ] 6.4 `apps/web-catalog/app/shared/lib/auth.guards.server.ts` — `withAuth` ONLY (D7: no `withRoles`/`withPublicRedirect`/`withOptionalAuth` — not ported, no use case here). Login/logout routes as siblings of `layout('shared/routes/_auth.tsx', [...])` in `app/routes.ts`; wire `frozenStorefrontBoundaryRule` (1.7) into `web-catalog/eslint.config.mjs`.
+- [x] 6.4 `apps/web-catalog/app/shared/lib/auth.guards.server.ts` — `withAuth` ONLY (D7: no `withRoles`/`withPublicRedirect`/`withOptionalAuth` — not ported, no use case here). Login/logout routes as siblings of `layout('shared/routes/_auth.tsx', [...])` in `app/routes.ts`; wire `frozenStorefrontBoundaryRule` (1.7) into `web-catalog/eslint.config.mjs`.
 
 **Done when**: `pnpm --filter web-catalog lint` passes at `--max-warnings 5` with the new rule active. 1 commit.
 

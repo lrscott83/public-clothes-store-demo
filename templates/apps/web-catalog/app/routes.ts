@@ -1,7 +1,14 @@
-import { type RouteConfig, index, route } from '@react-router/dev/routes';
+import { type RouteConfig, index, layout, route } from '@react-router/dev/routes';
 
 export default [
   index('routes/home.tsx'),
   route('productos', 'catalog/routes/products.tsx'),
   route('productos/:id', 'catalog/routes/product-detail.tsx'),
+
+  // admin/login and admin/logout sit OUTSIDE the _auth.tsx layout —
+  // design.md §6: with one app (unlike poolops's separate web-idp), login
+  // must be a sibling of the guarded block or it guards itself.
+  route('admin/login', 'shared/routes/login.tsx'),
+  route('admin/logout', 'shared/routes/logout.tsx'),
+  layout('shared/routes/_auth.tsx', [route('admin', 'admin/routes/index.tsx')]),
 ] satisfies RouteConfig;
