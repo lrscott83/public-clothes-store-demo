@@ -5,6 +5,7 @@ export * from './models/expense.js';
 export * from './enums/index.js';
 export * from './currency/index.js';
 export * from './product/index.js';
+export * from './image/index.js';
 export * from './inventory/index.js';
 export * from './customer/index.js';
 export * from './sales/index.js';

@@ -3,5 +3,4 @@ export * from './category.js';
 export * from './pricing.js';
 export * from './product-repository.port.js';
 export * from './category-repository.port.js';
-export * from './product-image-store.port.js';
 export * from './errors.js';
