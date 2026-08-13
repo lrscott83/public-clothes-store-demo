@@ -1,6 +1,8 @@
 import type { AdminCategoryDto } from '../lib/admin-api.types';
 
 export interface CategoryFormProps {
+  /** `create` shows the file picker; `edit` has its own upload form beside this one. */
+  mode: 'create' | 'edit';
   submitLabel: string;
   error?: string;
   defaultValues?: Partial<AdminCategoryDto>;
@@ -8,12 +10,14 @@ export interface CategoryFormProps {
 
 /**
  * Shared by `nueva.tsx` and `editar.tsx` — same fields either way, since
- * `UpdateCategoryInput` is `Partial<CreateCategoryInput>`. `image`/`icon`
- * are raw ref paths (text inputs), matching `api-salesops`'s current
- * `CreateCategoryDto` contract — no upload UI for categories (task 6.7
- * only covers the product image endpoint).
+ * `UpdateCategoryInput` is `Partial<CreateCategoryInput>`. `icon` stays a
+ * genuinely free-text field (design.md §1, out of scope) — it is never an
+ * image. `image` is never a field of this form: in `create` mode the admin
+ * picks a file, uploaded via `uploadCategoryImage` right after the category
+ * row is created; in `edit` mode there is no image control here at all —
+ * `editar.tsx` owns its own upload/replace/remove UI beside this form.
  */
-export function CategoryForm({ submitLabel, error, defaultValues }: CategoryFormProps) {
+export function CategoryForm({ mode, submitLabel, error, defaultValues }: CategoryFormProps) {
   return (
     <div className="bg-surface border border-border rounded-lg p-8 shadow-card">
       {error && (
@@ -66,16 +70,12 @@ export function CategoryForm({ submitLabel, error, defaultValues }: CategoryForm
           />
         </label>
 
-        <label className="flex flex-col gap-1 sm:col-span-2">
-          <span className="text-sm font-medium text-text">Imagen (ruta, opcional)</span>
-          <input
-            name="image"
-            type="text"
-            placeholder="categories/remeras.jpg"
-            defaultValue={defaultValues?.image ?? undefined}
-            className="rounded-md border border-border bg-background px-3 py-2 text-text"
-          />
-        </label>
+        {mode === 'create' && (
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-sm font-medium text-text">Imagen (opcional)</span>
+            <input name="imageFile" type="file" accept="image/*" className="text-sm text-text" />
+          </label>
+        )}
       </div>
 
       <button

@@ -1,8 +1,8 @@
 import { Form, redirect, useActionData } from 'react-router';
 import { withAuth } from '../../../shared/lib/auth.guards.server';
-import { createCategory } from '../../lib/categories.server';
+import { createCategory, uploadCategoryImage } from '../../lib/categories.server';
 import { CategoryForm } from '../../components/category-form';
-import type { CreateCategoryInput } from '../../lib/admin-api.types';
+import type { AdminCategoryDto, CreateCategoryInput } from '../../lib/admin-api.types';
 
 export function meta() {
   return [{ title: 'Nueva categoría — Admin' }];
@@ -10,14 +10,12 @@ export function meta() {
 
 /** Builds `CreateCategoryInput` from `<CategoryForm>`'s raw `FormData` — shared shape with `editar.tsx`'s update path. */
 export function parseCategoryFormData(formData: FormData): CreateCategoryInput {
-  const image = String(formData.get('image') ?? '').trim();
   const icon = String(formData.get('icon') ?? '').trim();
 
   return {
     name: String(formData.get('name') ?? ''),
     slug: String(formData.get('slug') ?? ''),
     order: Number(formData.get('order') ?? 0),
-    ...(image && { image }),
     ...(icon && { icon }),
   };
 }
@@ -26,13 +24,30 @@ export const action = withAuth(async ({ request, companyId }) => {
   const formData = await request.formData();
   const input = parseCategoryFormData(formData);
 
+  let created: AdminCategoryDto;
   try {
-    await createCategory(request, companyId, input);
+    created = await createCategory(request, companyId, input);
   } catch (err) {
     if (err instanceof Response) {
       return { error: categoryErrorMessage(err.status) };
     }
     throw err;
+  }
+
+  // design.md D6 — create first, then upload against the id we just got. If the
+  // upload fails the row still exists WITHOUT an image, which is a legal state
+  // since admin-image-crud; we say so instead of pretending the create failed.
+  const file = formData.get('imageFile');
+  if (file instanceof File && file.size > 0) {
+    const uploadFormData = new FormData();
+    uploadFormData.set('image', file);
+    try {
+      await uploadCategoryImage(request, companyId, created.id, uploadFormData);
+    } catch {
+      return {
+        error: 'La categoría se creó, pero la imagen no se pudo subir. Podés subirla desde la edición.',
+      };
+    }
   }
 
   return redirect('/admin/categorias');
@@ -58,8 +73,8 @@ export function NuevaCategoriaPage({ error }: NuevaCategoriaPageProps = {}) {
     <main className="min-h-screen bg-background px-4 py-12">
       <div className="container mx-auto max-w-2xl">
         <h1 className="text-2xl font-bold text-text mb-6">Nueva categoría</h1>
-        <Form method="post">
-          <CategoryForm error={error} submitLabel="Crear categoría" />
+        <Form method="post" encType="multipart/form-data">
+          <CategoryForm mode="create" error={error} submitLabel="Crear categoría" />
         </Form>
       </div>
     </main>
