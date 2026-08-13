@@ -5,6 +5,8 @@ import {
   createCategory,
   updateCategory,
   softDeleteCategory,
+  uploadCategoryImage,
+  deleteCategoryImage,
 } from './categories.server';
 import { createSession } from '../../shared/lib/session.server';
 import type { AdminCategoryDto, CreateCategoryInput } from './admin-api.types';
@@ -113,5 +115,59 @@ describe('categories.server', () => {
     global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 403 })) as unknown as typeof fetch;
 
     await expect(getCategory(request, 'company-1', 'cat-1')).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('uploadCategoryImage POSTs a multipart FormData, field "image", to /categories/:id/image', async () => {
+    const request = await sessionRequest();
+    const uploaded: AdminCategoryDto = { ...CATEGORY, image: 'categories/new-ref.webp' };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(uploaded), { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const file = new File(['bytes'], 'photo.png', { type: 'image/png' });
+    const formData = new FormData();
+    formData.set('image', file);
+
+    const result = await uploadCategoryImage(request, 'company-1', 'cat-1', formData);
+
+    expect(result).toEqual(uploaded);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:3001/categories/cat-1/image');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get('image')).toBe(file);
+    // No explicit Content-Type — fetch must set the multipart boundary itself.
+    const headers = new Headers(init.headers);
+    expect(headers.has('Content-Type')).toBe(false);
+  });
+
+  it('uploadCategoryImage throws the raw Response on a non-ok result (e.g. 400 invalid image)', async () => {
+    const request = await sessionRequest();
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 400 })) as unknown as typeof fetch;
+    const formData = new FormData();
+    formData.set('image', new File(['bytes'], 'photo.png', { type: 'image/png' }));
+
+    await expect(uploadCategoryImage(request, 'company-1', 'cat-1', formData)).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+
+  it('deleteCategoryImage DELETEs /categories/:id/image', async () => {
+    const request = await sessionRequest();
+    const cleared: AdminCategoryDto = { ...CATEGORY, image: null };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(cleared), { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await deleteCategoryImage(request, 'company-1', 'cat-1');
+
+    expect(result).toEqual(cleared);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:3001/categories/cat-1/image');
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('deleteCategoryImage throws the raw Response on a non-ok result', async () => {
+    const request = await sessionRequest();
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 404 })) as unknown as typeof fetch;
+
+    await expect(deleteCategoryImage(request, 'company-1', 'cat-1')).rejects.toMatchObject({ status: 404 });
   });
 });

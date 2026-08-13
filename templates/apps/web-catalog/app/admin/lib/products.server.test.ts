@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { listProducts, createProduct, getProduct, updateProduct, softDeleteProduct, uploadProductImage } from './products.server';
+import {
+  listProducts,
+  createProduct,
+  getProduct,
+  updateProduct,
+  softDeleteProduct,
+  uploadProductImage,
+  deleteProductImage,
+} from './products.server';
 import { createSession } from '../../shared/lib/session.server';
 import type { AdminProductDto, CreateProductInput } from './admin-api.types';
 
@@ -153,5 +161,26 @@ describe('products.server', () => {
     global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 403 })) as unknown as typeof fetch;
 
     await expect(getProduct(request, 'company-1', 'product-1')).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('deleteProductImage DELETEs /products/:id/image', async () => {
+    const request = await sessionRequest();
+    const cleared: AdminProductDto = { ...PRODUCT, image: null };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(cleared), { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await deleteProductImage(request, 'company-1', 'product-1');
+
+    expect(result).toEqual(cleared);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:3001/products/product-1/image');
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('deleteProductImage throws the raw Response on a non-ok result', async () => {
+    const request = await sessionRequest();
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 404 })) as unknown as typeof fetch;
+
+    await expect(deleteProductImage(request, 'company-1', 'product-1')).rejects.toMatchObject({ status: 404 });
   });
 });

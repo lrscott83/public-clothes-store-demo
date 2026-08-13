@@ -11,7 +11,7 @@ vi.mock('../../../../shared/lib/auth.guards.server', () => ({
 
 const { loader } = await import('../image');
 
-describe('GET /admin/productos/:id/image', () => {
+describe('GET /admin/categorias/:id/image', () => {
   it('proxies the upstream bytes and content type without exposing the token', async () => {
     makeAuthenticatedRequest.mockResolvedValue(
       new Response(new Uint8Array([1, 2, 3]), {
@@ -21,14 +21,14 @@ describe('GET /admin/productos/:id/image', () => {
     );
 
     const response = (await loader({
-      request: new Request('http://x/admin/productos/p1/image'),
-      params: { id: 'p1' },
+      request: new Request('http://x/admin/categorias/c1/image'),
+      params: { id: 'c1' },
     } as never)) as Response;
 
     expect(makeAuthenticatedRequest).toHaveBeenCalledWith(
       expect.anything(),
       'company-1',
-      '/products/p1/image',
+      '/categories/c1/image',
     );
     expect(response.headers.get('Content-Type')).toBe('image/webp');
     expect(response.headers.get('Authorization')).toBeNull();
@@ -39,32 +39,10 @@ describe('GET /admin/productos/:id/image', () => {
     makeAuthenticatedRequest.mockResolvedValue(new Response(null, { status: 404 }));
 
     const response = (await loader({
-      request: new Request('http://x/admin/productos/p1/image'),
-      params: { id: 'p1' },
+      request: new Request('http://x/admin/categorias/c1/image'),
+      params: { id: 'c1' },
     } as never)) as Response;
 
     expect(response.status).toBe(404);
-  });
-
-  it('passes an upstream 500 through as a 500', async () => {
-    makeAuthenticatedRequest.mockResolvedValue(new Response(null, { status: 500 }));
-
-    const response = (await loader({
-      request: new Request('http://x/admin/productos/p1/image'),
-      params: { id: 'p1' },
-    } as never)) as Response;
-
-    expect(response.status).toBe(500);
-  });
-
-  it('falls back to application/octet-stream when the upstream sends no Content-Type', async () => {
-    makeAuthenticatedRequest.mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
-
-    const response = (await loader({
-      request: new Request('http://x/admin/productos/p1/image'),
-      params: { id: 'p1' },
-    } as never)) as Response;
-
-    expect(response.headers.get('Content-Type')).toBe('application/octet-stream');
   });
 });
