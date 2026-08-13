@@ -332,6 +332,20 @@ describe('image panel', () => {
 
     expect(screen.getByRole('button', { name: 'Quitar imagen' })).toBeInTheDocument();
   });
+
+  it('labels the upload button "Subir imagen" when there is no image yet', () => {
+    renderEditar({ product: { ...product, image: null }, categories: [category] });
+
+    expect(screen.getByRole('button', { name: 'Subir imagen' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reemplazar imagen' })).not.toBeInTheDocument();
+  });
+
+  it('labels the same button "Reemplazar imagen" once an image already exists', () => {
+    renderEditar({ product: { ...product, image: 'products/x.webp' }, categories: [category] });
+
+    expect(screen.getByRole('button', { name: 'Reemplazar imagen' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Subir imagen' })).not.toBeInTheDocument();
+  });
 });
 
 /**
@@ -361,15 +375,6 @@ describe('action', () => {
       if (url.includes('/companies/')) return Promise.resolve(companyLookupResponse());
       return Promise.resolve(new Response(JSON.stringify({ id: 'p1' }), { status: 200 }));
     }) as unknown as typeof fetch;
-
-    // `restoreAllMocks()` in earlier describe blocks' `afterEach` can clear
-    // these wrappers' default implementation — re-establish the passthrough
-    // fresh before every test in this block, regardless of run order.
-    const actual = await vi.importActual<typeof import('../../../lib/products.server')>(
-      '../../../lib/products.server',
-    );
-    vi.mocked(deleteProductImage).mockImplementation(actual.deleteProductImage);
-    vi.mocked(updateProduct).mockImplementation(actual.updateProduct);
   });
 
   afterEach(() => {
