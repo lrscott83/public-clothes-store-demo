@@ -227,7 +227,7 @@ export class ProductController {
             // action is done. A failed cleanup leaves an orphaned file,
             // which is acceptable residue, not a reason to report failure.
             this.logger.warn(
-              `PRODUCT_IMAGE_CLEANUP_FAILED: company ${req.tenant.companyId}, product ${id}, ref ${previousRef}: ${String(err)}`,
+              `IMAGE_CLEANUP_FAILED: company ${req.tenant.companyId}, product ${id}, ref ${previousRef}: ${String(err)}`,
             );
           }
         }
@@ -255,6 +255,43 @@ export class ProductController {
         throw new NotFoundException(`Product "${id}" not found`);
       }
       return streamImage(this.imageStore, req.tenant.companyId, existing.image, res);
+    });
+  }
+
+  /**
+   * Removes a product's image (design.md D7). Same post-commit ordering as a
+   * replace: the row stops pointing at the file BEFORE the bytes go, so a
+   * failed update can never leave a row pointing at something deleted. Only
+   * upload-minted refs are removed from disk — a seeded ref may be shared by
+   * other rows and we cannot prove otherwise.
+   */
+  @Delete(':id/image')
+  @HttpCode(HttpStatus.OK)
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
+  async removeImage(
+    @Param('id') id: string,
+    @Req() req: TenantScopedRequest,
+  ): Promise<ProductResponseDto> {
+    return this.runInTenant(req.tenant, async () => {
+      const existing = await this.productService.findById(id);
+      if (!existing) {
+        throw new NotFoundException(`Product "${id}" not found`);
+      }
+
+      const previousRef = existing.image;
+      const updated = await this.productService.update(id, { image: null });
+
+      if (isUploadMintedRef(previousRef, 'products')) {
+        try {
+          await this.imageStore.delete(req.tenant.companyId, previousRef);
+        } catch (err) {
+          this.logger.warn(
+            `IMAGE_CLEANUP_FAILED: company ${req.tenant.companyId}, product ${id}, ref ${previousRef}: ${String(err)}`,
+          );
+        }
+      }
+
+      return updated;
     });
   }
 

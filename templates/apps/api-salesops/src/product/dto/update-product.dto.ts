@@ -11,7 +11,7 @@ export class UpdateProductDto {
   discountPrice?: string;
   cost?: MoneyAmountDto;
   categoryId?: string;
-  image?: string;
+  image?: string | null;
   isNew?: boolean;
   order?: number;
   active?: boolean;

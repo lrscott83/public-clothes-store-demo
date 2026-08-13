@@ -596,4 +596,63 @@ describe('ProductController', () => {
       expect(response.status).toBe(404);
     });
   });
+
+  describe('DELETE /products/:id/image', () => {
+    const MINTED_REF = 'products/3fa85f64-5717-4562-b3fc-2c963f66afa6.webp';
+
+    it('nulls the column and then deletes the minted bytes — in that order', async () => {
+      const callOrder: string[] = [];
+      service.findById.mockResolvedValue({ ...sampleResponse, image: MINTED_REF });
+      service.update.mockImplementation(async () => {
+        callOrder.push('update');
+        return { ...sampleResponse, image: null };
+      });
+      store.delete.mockImplementation(async () => {
+        callOrder.push('delete');
+      });
+
+      const response = await request(app.getHttpServer()).delete('/products/product-uuid-1/image');
+
+      expect(response.status).toBe(200);
+      expect(response.body.image).toBeNull();
+      expect(service.update).toHaveBeenCalledWith('product-uuid-1', { image: null });
+      expect(store.delete).toHaveBeenCalledWith('test-company-1', MINTED_REF);
+      // Ordering is the whole point: deleting BEFORE the update would risk a
+      // row pointing at bytes that no longer exist if the update then failed.
+      expect(callOrder).toEqual(['update', 'delete']);
+    });
+
+    it('never deletes a seeded ref the store did not mint', async () => {
+      service.findById.mockResolvedValue({
+        ...sampleResponse,
+        image: 'products/cafeteras/cafeteras1.jpeg',
+      });
+      service.update.mockResolvedValue({ ...sampleResponse, image: null });
+
+      const response = await request(app.getHttpServer()).delete('/products/product-uuid-1/image');
+
+      expect(response.status).toBe(200);
+      expect(service.update).toHaveBeenCalledWith('product-uuid-1', { image: null });
+      expect(store.delete).not.toHaveBeenCalled();
+    });
+
+    it('succeeds when cleanup fails — the row is already updated', async () => {
+      service.findById.mockResolvedValue({ ...sampleResponse, image: MINTED_REF });
+      service.update.mockResolvedValue({ ...sampleResponse, image: null });
+      store.delete.mockRejectedValue(new Error('EACCES'));
+
+      const response = await request(app.getHttpServer()).delete('/products/product-uuid-1/image');
+
+      expect(response.status).toBe(200);
+      expect(response.body.image).toBeNull();
+    });
+
+    it('404s for a product that does not exist', async () => {
+      service.findById.mockResolvedValue(null);
+
+      const response = await request(app.getHttpServer()).delete('/products/nope/image');
+
+      expect(response.status).toBe(404);
+    });
+  });
 });
