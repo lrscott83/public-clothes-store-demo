@@ -1,10 +1,7 @@
 export { InfraStorageModule } from './infra-storage.module.js';
-export {
-  FsProductImageStore,
-  UnsupportedProductImageMimeTypeError,
-} from './product-image/fs-product-image.store.js';
+export { FsImageStore, UnsupportedImageMimeTypeError } from './image/fs-image.store.js';
 export {
   normalizeImage,
   UnsupportedImageError,
   type NormalizedImage,
-} from './product-image/normalize-image.js';
+} from './image/normalize-image.js';
