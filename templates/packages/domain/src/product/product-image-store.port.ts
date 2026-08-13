@@ -36,6 +36,17 @@ export interface IProductImageStore {
   put(input: PutProductImageInput): Promise<ProductImageRef>;
   /** `null` when the ref resolves to nothing. A missing file is an ANSWER here, not a throw. */
   open(companyId: string, ref: ProductImageRef): Promise<ProductImageContent | null>;
+  /**
+   * Removes the bytes a ref points at. Idempotent: a ref that resolves to
+   * nothing is a no-op, never a throw — the caller's intent ("these bytes
+   * should not exist") is already satisfied.
+   *
+   * Callers own the decision of WHAT is safe to delete. The upload path only
+   * ever passes a ref this store itself minted (`products/<uuid>.<ext>`),
+   * never a seeded or hand-authored one — the store deletes only what the
+   * store made. See `apps/api-salesops`'s `uploadImage`.
+   */
+  delete(companyId: string, ref: ProductImageRef): Promise<void>;
 }
 
 /** DI token for `IProductImageStore` — consumers inject by this symbol. */

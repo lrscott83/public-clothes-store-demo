@@ -20,7 +20,7 @@ type ProductServiceMock = {
   list: jest.Mock;
 };
 
-type ImageStoreMock = { put: jest.Mock };
+type ImageStoreMock = { put: jest.Mock; delete: jest.Mock };
 
 /**
  * Minimal valid 1x1 PNG (real bytes, not a stub) — lets the upload tests
@@ -111,6 +111,7 @@ describe('ProductController', () => {
     };
     store = {
       put: jest.fn(),
+      delete: jest.fn().mockResolvedValue(undefined),
     };
 
     // `admin` passes every role gate (super-root) — keeps pre-existing tests
@@ -389,6 +390,68 @@ describe('ProductController', () => {
 
       expect(response.status).toBe(404);
       expect(store.put).not.toHaveBeenCalled();
+    });
+
+    describe('post-commit cleanup of the replaced image', () => {
+      const OLD_UPLOADED_REF = 'products/33333333-3333-3333-3333-333333333333.webp';
+      const NEW_REF = 'products/44444444-4444-4444-4444-444444444444.webp';
+
+      function arrangeReupload(previousImage: string): void {
+        service.findById.mockResolvedValue({ ...sampleResponse, image: previousImage });
+        store.put.mockResolvedValue(NEW_REF);
+        service.update.mockResolvedValue({ ...sampleResponse, image: NEW_REF });
+      }
+
+      it('deletes the previously-uploaded file, and only AFTER the DB update commits', async () => {
+        arrangeReupload(OLD_UPLOADED_REF);
+        const callOrder: string[] = [];
+        service.update.mockImplementation(async () => {
+          callOrder.push('update');
+          return { ...sampleResponse, image: NEW_REF };
+        });
+        store.delete.mockImplementation(async () => {
+          callOrder.push('delete');
+        });
+
+        const response = await request(app.getHttpServer())
+          .post('/products/product-uuid-1/image')
+          .attach('image', REAL_PNG_BYTES, { filename: 'photo.png', contentType: 'image/png' });
+
+        expect(response.status).toBe(200);
+        expect(store.delete).toHaveBeenCalledWith('test-company-1', OLD_UPLOADED_REF);
+        // Ordering is the whole point: deleting BEFORE the update would
+        // destroy the live file if the update then failed.
+        expect(callOrder).toEqual(['update', 'delete']);
+      });
+
+      it.each([
+        ['a seeded catalog ref', 'products/cafeteras/cafeteras1.jpeg'],
+        ['an absolute URL left by older data', 'https://example.com/cafetera.png'],
+        ['an empty image (first upload ever)', ''],
+      ])('never deletes %s — the store removes only refs the store itself minted', async (_label, previousImage) => {
+        arrangeReupload(previousImage);
+
+        const response = await request(app.getHttpServer())
+          .post('/products/product-uuid-1/image')
+          .attach('image', REAL_PNG_BYTES, { filename: 'photo.png', contentType: 'image/png' });
+
+        expect(response.status).toBe(200);
+        expect(store.delete).not.toHaveBeenCalled();
+      });
+
+      it('a failing cleanup never turns a successful upload into an error', async () => {
+        arrangeReupload(OLD_UPLOADED_REF);
+        store.delete.mockRejectedValue(new Error('EACCES: permission denied'));
+
+        const response = await request(app.getHttpServer())
+          .post('/products/product-uuid-1/image')
+          .attach('image', REAL_PNG_BYTES, { filename: 'photo.png', contentType: 'image/png' });
+
+        // The bytes are stored and the row is updated — the user's action
+        // fully succeeded. An orphaned file is the acceptable residue.
+        expect(response.status).toBe(200);
+        expect(response.body.image).toBe(NEW_REF);
+      });
     });
 
     describe('security: stored extension derives from the VALIDATED content, never the client filename (D10)', () => {

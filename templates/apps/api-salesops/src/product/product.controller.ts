@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  Logger,
   MaxFileSizeValidator,
   NotFoundException,
   Param,
@@ -79,6 +80,23 @@ const MAX_PRODUCT_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_PRODUCT_IMAGE_MIME_TYPES = /^image\/(jpeg|png|webp|avif|heic|heif)$/;
 
 /**
+ * Exactly the shape `FsProductImageStore.put` mints: `products/<uuid>.<ext>`.
+ *
+ * The cleanup below deletes ONLY refs matching this — the store removes only
+ * what the store made. A seeded catalog ref (`products/cafeteras/x.jpeg`), an
+ * absolute URL from older data, or anything an operator typed by hand into the
+ * admin form's still-editable `image` field is never touched, because we
+ * cannot prove another product does not point at it. A `randomUUID()` ref, by
+ * contrast, was minted for one product at one moment.
+ */
+const UPLOAD_MINTED_REF =
+  /^products\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(webp|jpeg|png)$/;
+
+function isUploadMintedRef(ref: string | null | undefined): ref is string {
+  return typeof ref === 'string' && UPLOAD_MINTED_REF.test(ref);
+}
+
+/**
  * REST delivery for the Product module. Validates `price`/`cost` currency at
  * the boundary (`price`/`cost` MAY differ) and maps `InvalidProductError`
  * (e.g. missing/nonexistent `categoryId`) and `InvalidMoneyError` (malformed
@@ -91,6 +109,7 @@ const ALLOWED_PRODUCT_IMAGE_MIME_TYPES = /^image\/(jpeg|png|webp|avif|heic|heif)
 @Controller('products')
 @UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)
 export class ProductController {
+  private readonly logger = new Logger(ProductController.name);
   private readonly runInTenant: ReturnType<typeof createRunInTenant>;
 
   constructor(
@@ -194,13 +213,35 @@ export class ProductController {
         throw new NotFoundException(`Product "${id}" not found`);
       }
       return this.withDomainErrorMapping(async () => {
+        const previousRef = existing.image;
         const normalized = await normalizeImage(file.buffer);
         const ref = await this.productImageStore.put({
           companyId: req.tenant.companyId,
           bytes: normalized.bytes,
           declaredMimeType: normalized.contentType,
         });
-        return this.productService.update(id, { image: ref });
+        const updated = await this.productService.update(id, { image: ref });
+
+        // AFTER the update commits, never before: deleting first would
+        // destroy the live file if the update then failed. Once the row
+        // points at the new ref, the old one is already unreachable — the
+        // public image URL is keyed on the CURRENT ref (`imageKeyMatchesRef`
+        // in api-public), so a stale URL 404s whether or not these bytes
+        // still exist. This just reclaims the disk.
+        if (isUploadMintedRef(previousRef) && previousRef !== ref) {
+          try {
+            await this.productImageStore.delete(req.tenant.companyId, previousRef);
+          } catch (err) {
+            // The upload succeeded and the row is updated — the caller's
+            // action is done. A failed cleanup leaves an orphaned file,
+            // which is acceptable residue, not a reason to report failure.
+            this.logger.warn(
+              `PRODUCT_IMAGE_CLEANUP_FAILED: company ${req.tenant.companyId}, product ${id}, ref ${previousRef}: ${String(err)}`,
+            );
+          }
+        }
+
+        return updated;
       });
     });
   }

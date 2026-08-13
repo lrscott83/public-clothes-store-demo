@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { Injectable, Optional } from '@nestjs/common';
 import {
@@ -121,6 +121,22 @@ export class FsProductImageStore implements IProductImageStore {
       contentType: contentTypeFor(ref),
       byteLength,
     };
+  }
+
+  async delete(companyId: string, ref: ProductImageRef): Promise<void> {
+    // Same gate as `put`/`open` — a destructive operation gets no weaker a
+    // traversal check than a read.
+    assertProductImageRef(ref);
+
+    try {
+      await unlink(this.resolve(companyId, ref));
+    } catch (err) {
+      // Idempotent by contract: the bytes are already gone, which is the
+      // outcome the caller asked for. Any OTHER error (EACCES, EISDIR) is a
+      // real fault and propagates.
+      if (isNotFound(err)) return;
+      throw err;
+    }
   }
 
   private resolve(companyId: string, ref: string): string {
