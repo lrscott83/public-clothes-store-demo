@@ -29,6 +29,8 @@ dist-pages
 
 # Agent tooling
 .atl/
+.worktrees/
+.superpowers/
 
 # Playwright MCP artifacts
 .playwright-mcp/
