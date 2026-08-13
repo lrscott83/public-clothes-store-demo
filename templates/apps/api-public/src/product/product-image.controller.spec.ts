@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { PRODUCT_IMAGE_STORE } from '@store-mgmt/domain';
+import { IMAGE_STORE } from '@store-mgmt/domain';
 import { TenantContextService } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import { mockTenantContextService, overridePublicTenant, SAMPLE_TENANT } from '../test-support/tenant-test-helpers.js';
@@ -53,7 +53,7 @@ async function buildApp(
       controllers: [ProductImageController],
       providers: [
         { provide: PublicProductService, useValue: service },
-        { provide: PRODUCT_IMAGE_STORE, useValue: store },
+        { provide: IMAGE_STORE, useValue: store },
         { provide: TenantContextService, useValue: mockTenantContextService() },
       ],
     }),
@@ -117,7 +117,7 @@ describe('ProductImageController', () => {
     expect(store.open).not.toHaveBeenCalled();
   });
 
-  it('a ref that fails assertProductImageRef returns 404 and logs PRODUCT_IMAGE_REF_INVALID, never 400', async () => {
+  it('a ref that fails assertImageRef returns 404 and logs PRODUCT_IMAGE_REF_INVALID, never 400', async () => {
     // Legacy/external image value (design.md §5's "seeded rows satisfy the
     // ref grammar IF the bytes are on the volume" — this one does not
     // satisfy the grammar at all, e.g. a pre-migration absolute URL).

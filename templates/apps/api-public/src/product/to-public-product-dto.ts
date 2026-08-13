@@ -23,7 +23,7 @@ export function toPublicProductDto(item: PublicProductListItem, categorySlug: st
     discountPrice: discountPriceToDecimalString(product.discountPrice),
     isOffer: isOffer(product),
     isNew: product.isNew,
-    imageUrl: assemblePublicImageUrl(product.id, product.image),
+    imageUrl: product.image === null ? null : assemblePublicImageUrl(product.id, product.image),
     order: product.order,
   };
 }

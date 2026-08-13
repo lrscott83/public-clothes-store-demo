@@ -12,10 +12,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
-  InvalidProductImageRefError,
-  PRODUCT_IMAGE_STORE,
-  assertProductImageRef,
-  type IProductImageStore,
+  IMAGE_STORE,
+  InvalidImageRefError,
+  assertImageRef,
+  type IImageStore,
 } from '@store-mgmt/domain';
 import { TenantContextService } from '@store-mgmt/infra-db';
 import type { Response } from 'express';
@@ -36,7 +36,7 @@ function notFound(): NotFoundException {
  * (only `PublicTenantGuard`), but never serves an inactive product's image
  * and never serves one tenant's file to another tenant's subdomain —
  * `findActiveById` is scoped to the resolved tenant schema, and
- * `IProductImageStore.open` additionally takes `req.tenant.companyId`
+ * `IImageStore.open` additionally takes `req.tenant.companyId`
  * explicitly (D1: tenancy is in the signature, not ambient state; defense
  * in depth on top of Postgres schema isolation). Bytes are streamed via
  * `StreamableFile`, never buffered.
@@ -54,7 +54,7 @@ export class ProductImageController {
 
   constructor(
     private readonly publicProductService: PublicProductService,
-    @Inject(PRODUCT_IMAGE_STORE) private readonly productImageStore: IProductImageStore,
+    @Inject(IMAGE_STORE) private readonly imageStore: IImageStore,
     tenantContext: TenantContextService,
   ) {
     this.runInTenant = createRunInTenant(tenantContext);
@@ -74,7 +74,7 @@ export class ProductImageController {
       }
 
       const ref = item.product.image;
-      if (!this.isValidRef(ref, id)) {
+      if (ref === null || !this.isValidRef(ref, id)) {
         throw notFound();
       }
 
@@ -92,7 +92,7 @@ export class ProductImageController {
         return undefined;
       }
 
-      const content = await this.productImageStore.open(req.tenant.companyId, ref);
+      const content = await this.imageStore.open(req.tenant.companyId, ref);
       if (!content) {
         this.logger.error(
           `PRODUCT_IMAGE_MISSING: company ${req.tenant.companyId}, product ${id}, ref ${ref}`,
@@ -110,10 +110,10 @@ export class ProductImageController {
 
   private isValidRef(ref: string, productId: string): boolean {
     try {
-      assertProductImageRef(ref);
+      assertImageRef(ref);
       return true;
     } catch (err) {
-      if (err instanceof InvalidProductImageRefError) {
+      if (err instanceof InvalidImageRefError) {
         this.logger.error(`PRODUCT_IMAGE_REF_INVALID: product ${productId}, ref ${JSON.stringify(ref)}`);
         return false;
       }
