@@ -103,3 +103,20 @@ describe('createProduct — invariants', () => {
     expect(product.categoryId).toBe('category-uuid-1');
   });
 });
+
+describe('createProduct — optional image', () => {
+  it('defaults a missing image to null', () => {
+    const product = createProduct({ ...validInput(), image: undefined });
+
+    expect(product.image).toBeNull();
+  });
+
+  it('keeps an explicitly provided ref', () => {
+    const product = createProduct({
+      ...validInput(),
+      image: 'products/cafeteras/cafeteras1.jpeg',
+    });
+
+    expect(product.image).toBe('products/cafeteras/cafeteras1.jpeg');
+  });
+});

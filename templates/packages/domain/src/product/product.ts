@@ -25,7 +25,7 @@ export interface Product {
   readonly discountPrice: bigint;
   readonly cost: Money;
   readonly categoryId: string;
-  readonly image: string;
+  readonly image: string | null;
   readonly isNew: boolean;
   readonly order: number;
   readonly active: boolean;
@@ -50,7 +50,7 @@ export interface CreateProductInput {
   readonly discountPrice?: bigint;
   readonly cost: Money;
   readonly categoryId: string;
-  readonly image: string;
+  readonly image?: string | null;
   readonly isNew?: boolean;
   readonly order: number;
   readonly active?: boolean;
@@ -138,7 +138,7 @@ export function createProduct(input: CreateProductInput): Product {
     discountPrice,
     cost: input.cost,
     categoryId: input.categoryId,
-    image: input.image,
+    image: input.image ?? null,
     isNew: input.isNew ?? false,
     order: input.order,
     active: input.active ?? true,

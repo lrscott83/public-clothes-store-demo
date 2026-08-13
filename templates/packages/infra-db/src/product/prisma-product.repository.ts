@@ -31,7 +31,7 @@ interface ProductRow {
   readonly cost: { toString(): string };
   readonly costCurrency: string;
   readonly categoryId: string;
-  readonly image: string;
+  readonly image: string | null;
   readonly isNew: boolean;
   readonly order: number;
   readonly active: boolean;
@@ -95,7 +95,7 @@ export class PrismaProductRepository implements IProductRepository {
         cost: moneyToDecimalString(input.cost),
         costCurrency: input.cost.currency,
         categoryId: input.categoryId,
-        image: input.image,
+        image: input.image ?? null,
         isNew: input.isNew ?? false,
         order: input.order,
         active: input.active ?? true,
