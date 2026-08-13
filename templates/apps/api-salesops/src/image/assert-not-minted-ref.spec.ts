@@ -24,4 +24,16 @@ describe('assertNotMintedRef', () => {
       assertNotMintedRef('categories/3fa85f64-5717-4562-b3fc-2c963f66afa6.webp', 'categories'),
     ).toThrow(BadRequestException);
   });
+
+  it('rejects a minted ref from a DIFFERENT collection too — D4 has no collection carve-out', () => {
+    expect(() =>
+      assertNotMintedRef('categories/3fa85f64-5717-4562-b3fc-2c963f66afa6.webp', 'products'),
+    ).toThrow(BadRequestException);
+  });
+
+  it('rejects a products-minted ref while validating for categories, symmetrically', () => {
+    expect(() =>
+      assertNotMintedRef('products/3fa85f64-5717-4562-b3fc-2c963f66afa6.webp', 'categories'),
+    ).toThrow(BadRequestException);
+  });
 });

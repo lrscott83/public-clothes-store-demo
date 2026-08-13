@@ -13,6 +13,14 @@
 /** Which catalogue entity the bytes belong to. Becomes the ref's first path segment. */
 export type ImageCollection = 'products' | 'categories';
 
+/**
+ * Canonical, ordered list of every `ImageCollection` value — the single
+ * source of truth other code iterates over (e.g. a write-guard that must
+ * reject a minted ref from ANY collection, design.md D4) instead of
+ * re-declaring the union as a duplicate literal array.
+ */
+export const IMAGE_COLLECTIONS: readonly ImageCollection[] = ['products', 'categories'];
+
 /** Opaque to the domain — e.g. `'products/<uuid>.webp'`. Never a full path. */
 export type ImageRef = string;
 
