@@ -147,7 +147,7 @@ export class ProductController {
    * `FileInterceptor` + `ParseFilePipe` are a cheap client-declared-Content-Type
    * filter (size, then MIME allowlist — 413 vs 400 respectively); the REAL
    * content gate is `normalizeImage`'s `sharp` decode (design.md D10).
-   * `PutProductImageInput` carries no filename field at all — the stored
+   * `PutImageInput` carries no filename field at all — the stored
    * extension can only ever come from the normalized (always-WebP) output,
    * never the client-supplied filename.
    */

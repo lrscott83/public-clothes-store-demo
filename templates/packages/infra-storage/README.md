@@ -1,8 +1,8 @@
 # infra-storage
 
-Puts product image bytes on disk behind `IProductImageStore`
-(`packages/domain`, design.md D1). `FsProductImageStore` (put/open,
-`src/product-image/fs-product-image.store.ts`) and `normalize-image.ts`
+Puts product/category image bytes on disk behind `IImageStore`
+(`packages/domain`, design.md D1). `FsImageStore` (put/open/delete,
+`src/image/fs-image.store.ts`) and `normalize-image.ts`
 (EXIF-rotate → resize → webp, the only file that imports `sharp`) have
 landed. This doc also records the two proofs task 2.5 and 2.6 require: that
 bytes survive a process restart under a fixed `STORAGE_PATH`, and the
@@ -48,8 +48,8 @@ non-empty, valid WebP buffer.
 
 ## `STORAGE_PATH` — where product image bytes actually live
 
-`FsProductImageStore` resolves every ref under `<STORAGE_PATH>/<companyId>/<ref>`
-(`src/product-image/fs-product-image.store.ts`). `STORAGE_PATH` is read once,
+`FsImageStore` resolves every ref under `<STORAGE_PATH>/<companyId>/<ref>`
+(`src/image/fs-image.store.ts`). `STORAGE_PATH` is read once,
 at construction:
 
 ```ts
@@ -70,12 +70,12 @@ the guaranteed outcome for every image the writer app produces.
 
 ## Task 2.5 — process-restart persistence proof: PASS
 
-**Claim proven**: a file written through `FsProductImageStore.put()` under a
+**Claim proven**: a file written through `FsImageStore.put()` under a
 FIXED `STORAGE_PATH` (never a `tmpdir`/`mkdtemp` path, unlike every other spec
 in this package) is still readable via `open()` after the writing process has
 fully died and a brand-new, unrelated process has started.
 
-**How**: `src/product-image/restart-proof.spec.ts` spawns two independent
+**How**: `src/image/restart-proof.spec.ts` spawns two independent
 `node` OS processes via `execFileSync` — `scripts/restart-proof-write.js`
 (writes, then exits; the parent blocks until it has genuinely terminated) and
 only THEN `scripts/restart-proof-read.js` (a second process, no shared memory

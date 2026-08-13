@@ -3,11 +3,11 @@
 
 // Task 2.5 / spike 0.5 — half of the process-restart proof.
 //
-// Run as its OWN `node` process (spawned by
-// `src/product-image/restart-proof.spec.ts`, never `require`d in-process),
-// so that when it exits, the process that called `FsProductImageStore.put()`
-// is genuinely gone — not just "the function returned". The companion
-// `restart-proof-read.js` runs afterwards as a SECOND, unrelated process.
+// Spawned by `restart-proof.spec.ts` as its OWN `node` process, never
+// `require`d in-process, so that when it exits, the process that called
+// `FsImageStore.put()` is genuinely gone — not just "the function
+// returned". The companion `restart-proof-read.js` runs afterwards as a
+// SECOND, unrelated process.
 //
 // Requires the compiled `dist/` output (same artifact `api-salesops` and
 // `api-public` will actually import), not the raw `.ts` source — the caller
