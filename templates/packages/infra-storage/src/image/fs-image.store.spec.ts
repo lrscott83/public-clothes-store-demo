@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { InvalidProductImageRefError } from '@store-mgmt/domain';
-import { FsProductImageStore, UnsupportedProductImageMimeTypeError } from './fs-product-image.store.js';
+import { InvalidImageRefError } from '@store-mgmt/domain';
+import { FsImageStore, UnsupportedImageMimeTypeError } from './fs-image.store.js';
 
 async function drain(stream: AsyncIterable<Uint8Array>): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -12,13 +12,13 @@ async function drain(stream: AsyncIterable<Uint8Array>): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-describe('FsProductImageStore', () => {
+describe('FsImageStore', () => {
   let basePath: string;
-  let store: FsProductImageStore;
+  let store: FsImageStore;
 
   beforeEach(async () => {
     basePath = await mkdtemp(join(tmpdir(), 'infra-storage-'));
-    store = new FsProductImageStore(basePath);
+    store = new FsImageStore(basePath);
   });
 
   afterEach(async () => {
@@ -30,6 +30,7 @@ describe('FsProductImageStore', () => {
 
     const ref = await store.put({
       companyId: 'company-a',
+      collection: 'products',
       bytes,
       declaredMimeType: 'image/webp',
     });
@@ -54,10 +55,10 @@ describe('FsProductImageStore', () => {
   });
 
   it.each(['../escape.webp', '/etc/passwd.webp', 'products\\evil.webp'])(
-    'open() rejects the path-traversal ref %s via assertProductImageRef, never touching disk',
+    'open() rejects the path-traversal ref %s via assertImageRef, never touching disk',
     async (hostileRef) => {
       await expect(store.open('company-a', hostileRef)).rejects.toBeInstanceOf(
-        InvalidProductImageRefError,
+        InvalidImageRefError,
       );
     },
   );
@@ -65,6 +66,7 @@ describe('FsProductImageStore', () => {
   it('derives the stored extension from declaredMimeType alone — png in, .png out', async () => {
     const ref = await store.put({
       companyId: 'company-a',
+      collection: 'products',
       bytes: new Uint8Array([9, 9]),
       declaredMimeType: 'image/png',
     });
@@ -75,17 +77,18 @@ describe('FsProductImageStore', () => {
   it(
     'rejects a declaredMimeType outside the image allowlist — the "adapter re-checks" ' +
       'promise from the port doc (design.md D1/D10), never writing anything to disk. ' +
-      'PutProductImageInput has no filename field at all, so a hostile CLIENT FILENAME ' +
+      'PutImageInput has no filename field at all, so a hostile CLIENT FILENAME ' +
       'cannot influence the stored extension by construction; this proves the one input ' +
       'that COULD smuggle a bad extension — a mismatched declaredMimeType — is rejected too',
     async () => {
       await expect(
         store.put({
           companyId: 'company-a',
+          collection: 'products',
           bytes: new Uint8Array([1, 2, 3]),
           declaredMimeType: 'application/x-msdownload',
         }),
-      ).rejects.toBeInstanceOf(UnsupportedProductImageMimeTypeError);
+      ).rejects.toBeInstanceOf(UnsupportedImageMimeTypeError);
 
       // The rejection happens before any directory is even created for this
       // company — proving it is truly nothing-written, not "written then
@@ -96,9 +99,10 @@ describe('FsProductImageStore', () => {
     },
   );
 
-  it('scopes storage per company: company B cannot open company A’s ref even with the identical ref string', async () => {
+  it("scopes storage per company: company B cannot open company A's ref even with the identical ref string", async () => {
     const ref = await store.put({
       companyId: 'company-a',
+      collection: 'products',
       bytes: new Uint8Array([7, 7, 7]),
       declaredMimeType: 'image/webp',
     });
@@ -111,6 +115,7 @@ describe('FsProductImageStore', () => {
   it('delete() removes the bytes — a subsequent open() of the same ref returns null', async () => {
     const ref = await store.put({
       companyId: 'company-a',
+      collection: 'products',
       bytes: new Uint8Array([4, 2]),
       declaredMimeType: 'image/webp',
     });
@@ -136,10 +141,10 @@ describe('FsProductImageStore', () => {
   });
 
   it.each(['../escape.webp', '/etc/passwd.webp', 'products\\evil.webp'])(
-    'delete() rejects the path-traversal ref %s via assertProductImageRef, never touching disk',
+    'delete() rejects the path-traversal ref %s via assertImageRef, never touching disk',
     async (hostileRef) => {
       await expect(store.delete('company-a', hostileRef)).rejects.toBeInstanceOf(
-        InvalidProductImageRefError,
+        InvalidImageRefError,
       );
     },
   );
@@ -161,13 +166,14 @@ describe('FsProductImageStore', () => {
   );
 
   it(
-    'scopes deletion per company: company B deleting company A’s exact ref string leaves ' +
-      'A’s bytes intact. Deletion is destructive and irreversible, so the per-company ' +
+    "scopes deletion per company: company B deleting company A's exact ref string leaves " +
+      "A's bytes intact. Deletion is destructive and irreversible, so the per-company " +
       'path scoping matters more here than on open() — a cross-tenant delete would be ' +
       'silent data loss, not merely a leaked read',
     async () => {
       const ref = await store.put({
         companyId: 'company-a',
+        collection: 'products',
         bytes: new Uint8Array([7, 7, 7]),
         declaredMimeType: 'image/webp',
       });
@@ -179,4 +185,54 @@ describe('FsProductImageStore', () => {
       await expect(drain(survived!.stream)).resolves.toEqual(Buffer.from([7, 7, 7]));
     },
   );
+
+  describe('put — collection prefix', () => {
+    it('mints a products ref for the products collection', async () => {
+      const store = new FsImageStore(basePath);
+
+      const ref = await store.put({
+        companyId: 'company-1',
+        collection: 'products',
+        bytes: new Uint8Array([1, 2, 3]),
+        declaredMimeType: 'image/webp',
+      });
+
+      expect(ref).toMatch(
+        /^products\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$/,
+      );
+    });
+
+    it('mints a categories ref for the categories collection', async () => {
+      const store = new FsImageStore(basePath);
+
+      const ref = await store.put({
+        companyId: 'company-1',
+        collection: 'categories',
+        bytes: new Uint8Array([1, 2, 3]),
+        declaredMimeType: 'image/png',
+      });
+
+      expect(ref).toMatch(
+        /^categories\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.png$/,
+      );
+    });
+
+    it('keeps the two collections in separate directories for the same company', async () => {
+      const store = new FsImageStore(basePath);
+      const bytes = new Uint8Array([1, 2, 3]);
+
+      const productRef = await store.put({
+        companyId: 'company-1', collection: 'products', bytes, declaredMimeType: 'image/webp',
+      });
+      const categoryRef = await store.put({
+        companyId: 'company-1', collection: 'categories', bytes, declaredMimeType: 'image/webp',
+      });
+
+      // Deleting one must not affect the other, even though both are the same bytes.
+      await store.delete('company-1', productRef);
+
+      expect(await store.open('company-1', productRef)).toBeNull();
+      expect(await store.open('company-1', categoryRef)).not.toBeNull();
+    });
+  });
 });

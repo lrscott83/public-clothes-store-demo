@@ -12,7 +12,7 @@
 // Requires the compiled `dist/` output (same artifact `api-salesops` and
 // `api-public` will actually import), not the raw `.ts` source — the caller
 // rebuilds `dist/` before spawning this script.
-const { FsProductImageStore } = require('../dist/index.js');
+const { FsImageStore } = require('../dist/image/fs-image.store.js');
 
 // Fixed literal, not a fixture file: the read side asserts against this
 // exact byte sequence.
@@ -25,9 +25,10 @@ async function main() {
     process.exit(1);
   }
 
-  const store = new FsProductImageStore(basePath);
+  const store = new FsImageStore(basePath);
   const ref = await store.put({
     companyId,
+    collection: 'products',
     bytes: PAYLOAD,
     declaredMimeType: 'image/webp',
   });

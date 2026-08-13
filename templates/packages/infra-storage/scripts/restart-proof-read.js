@@ -5,9 +5,9 @@
 //
 // Spawned by `restart-proof.spec.ts` only AFTER `restart-proof-write.js` has
 // fully exited (its own `node` invocation has already died). This process
-// has no memory of the write: it opens `FsProductImageStore` fresh against
+// has no memory of the write: it opens `FsImageStore` fresh against
 // the same FIXED `basePath` and proves the bytes are still there.
-const { FsProductImageStore } = require('../dist/index.js');
+const { FsImageStore } = require('../dist/image/fs-image.store.js');
 
 async function drain(stream) {
   const chunks = [];
@@ -24,7 +24,7 @@ async function main() {
     process.exit(1);
   }
 
-  const store = new FsProductImageStore(basePath);
+  const store = new FsImageStore(basePath);
   const content = await store.open(companyId, ref);
   if (!content) {
     console.error('NOT_FOUND');

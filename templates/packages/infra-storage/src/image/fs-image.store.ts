@@ -4,16 +4,16 @@ import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { Injectable, Optional } from '@nestjs/common';
 import {
-  assertProductImageRef,
-  type IProductImageStore,
-  type ProductImageContent,
-  type ProductImageRef,
-  type PutProductImageInput,
+  assertImageRef,
+  type IImageStore,
+  type ImageContent,
+  type ImageRef,
+  type PutImageInput,
 } from '@store-mgmt/domain';
 
 /**
  * `declaredMimeType` -> stored extension. Deliberately an ALLOWLIST, not a
- * pass-through: `PutProductImageInput` has no filename field at all (design.md
+ * pass-through: `PutImageInput` has no filename field at all (design.md
  * D1), so the "extension from a client-supplied filename" attack surface does
  * not exist at this port. This map is the "adapter re-checks" half of the
  * port doc's promise on `declaredMimeType` — an unrecognised value is
@@ -25,22 +25,22 @@ const EXTENSION_BY_MIME_TYPE: Readonly<Record<string, string>> = {
   'image/png': 'png',
 };
 
-export class UnsupportedProductImageMimeTypeError extends Error {
+export class UnsupportedImageMimeTypeError extends Error {
   constructor(mimeType: string) {
-    super(`Unsupported product image MIME type: ${JSON.stringify(mimeType)}`);
-    this.name = 'UnsupportedProductImageMimeTypeError';
+    super(`Unsupported image MIME type: ${JSON.stringify(mimeType)}`);
+    this.name = 'UnsupportedImageMimeTypeError';
   }
 }
 
 function extensionFor(declaredMimeType: string): string {
   const extension = EXTENSION_BY_MIME_TYPE[declaredMimeType];
   if (!extension) {
-    throw new UnsupportedProductImageMimeTypeError(declaredMimeType);
+    throw new UnsupportedImageMimeTypeError(declaredMimeType);
   }
   return extension;
 }
 
-function contentTypeFor(ref: ProductImageRef): string {
+function contentTypeFor(ref: ImageRef): string {
   const extension = ref.slice(ref.lastIndexOf('.') + 1).toLowerCase();
   if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
   if (extension === 'png') return 'image/png';
@@ -56,7 +56,7 @@ function isNotFound(err: unknown): boolean {
 }
 
 /**
- * `IProductImageStore` adapter (design.md D1): puts/opens product image bytes
+ * `IImageStore` adapter (design.md D1): puts/opens image bytes
  * under `<basePath>/<companyId>/<ref>`. `companyId` is an explicit argument on
  * both methods (never ambient state) so a ref belonging to one tenant cannot
  * be opened through another tenant's request even if it is guessed.
@@ -66,14 +66,14 @@ function isNotFound(err: unknown): boolean {
  * opinion on image formats beyond the extension allowlist above.
  */
 @Injectable()
-export class FsProductImageStore implements IProductImageStore {
+export class FsImageStore implements IImageStore {
   private readonly basePath: string;
 
   /**
    * `@Optional()` is load-bearing, not decorative — discovered wiring Phase
    * 3 (`apps/api-salesops` product.module.ts importing `InfraStorageModule`
    * for real, the first consumer to put this class through Nest's actual DI
-   * container; Phase 2's own suite always called `new FsProductImageStore(...)`
+   * container; Phase 2's own suite always called `new FsImageStore(...)`
    * directly). `basePath: string` reflects as the `String` design-time type;
    * without `@Optional()`, Nest tries to resolve a provider for `String`,
    * finds none, and throws before the `= defaultStoragePath()` default ever
@@ -86,12 +86,13 @@ export class FsProductImageStore implements IProductImageStore {
     this.basePath = basePath;
   }
 
-  async put(input: PutProductImageInput): Promise<ProductImageRef> {
+  async put(input: PutImageInput): Promise<ImageRef> {
     const extension = extensionFor(input.declaredMimeType);
-    const ref: ProductImageRef = `products/${randomUUID()}.${extension}`;
+    // The ONE line that used to be product-specific (design.md D1).
+    const ref: ImageRef = `${input.collection}/${randomUUID()}.${extension}`;
     // Defensive, not decorative: proves the ref we just built agrees with the
     // same grammar `open()` (and every other consumer) enforces.
-    assertProductImageRef(ref);
+    assertImageRef(ref);
 
     const destination = this.resolve(input.companyId, ref);
     await mkdir(dirname(destination), { recursive: true });
@@ -100,11 +101,11 @@ export class FsProductImageStore implements IProductImageStore {
     return ref;
   }
 
-  async open(companyId: string, ref: ProductImageRef): Promise<ProductImageContent | null> {
+  async open(companyId: string, ref: ImageRef): Promise<ImageContent | null> {
     // Reuses 1.3/1.4's port-level validator — the writer and the reader agree
     // by construction. This IS the path-traversal gate; it throws (never
     // returns null) because a malformed ref is a caller bug, not "missing file".
-    assertProductImageRef(ref);
+    assertImageRef(ref);
 
     const filePath = this.resolve(companyId, ref);
 
@@ -123,10 +124,10 @@ export class FsProductImageStore implements IProductImageStore {
     };
   }
 
-  async delete(companyId: string, ref: ProductImageRef): Promise<void> {
+  async delete(companyId: string, ref: ImageRef): Promise<void> {
     // Same gate as `put`/`open` — a destructive operation gets no weaker a
     // traversal check than a read.
-    assertProductImageRef(ref);
+    assertImageRef(ref);
 
     try {
       await unlink(this.resolve(companyId, ref));
