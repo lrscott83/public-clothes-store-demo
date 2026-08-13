@@ -17,6 +17,8 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  StreamableFile,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -33,8 +35,9 @@ import {
 } from '@store-mgmt/domain';
 import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
 import { normalizeImage, UnsupportedImageError } from '@store-mgmt/infra-storage';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { assertNotMintedRef } from '../image/assert-not-minted-ref.js';
+import { streamImage } from '../image/stream-image.js';
 import { ProductService } from './product.service.js';
 import type {
   CreateProductDto,
@@ -100,7 +103,7 @@ export class ProductController {
   constructor(
     private readonly productService: ProductService,
     tenantContext: TenantContextService,
-    @Inject(IMAGE_STORE) private readonly productImageStore: IImageStore,
+    @Inject(IMAGE_STORE) private readonly imageStore: IImageStore,
   ) {
     this.runInTenant = createRunInTenant(tenantContext);
   }
@@ -202,8 +205,9 @@ export class ProductController {
       return this.withDomainErrorMapping(async () => {
         const previousRef = existing.image;
         const normalized = await normalizeImage(file.buffer);
-        const ref = await this.productImageStore.put({
+        const ref = await this.imageStore.put({
           companyId: req.tenant.companyId,
+          collection: 'products',
           bytes: normalized.bytes,
           declaredMimeType: normalized.contentType,
         });
@@ -217,7 +221,7 @@ export class ProductController {
         // still exist. This just reclaims the disk.
         if (isUploadMintedRef(previousRef, 'products') && previousRef !== ref) {
           try {
-            await this.productImageStore.delete(req.tenant.companyId, previousRef);
+            await this.imageStore.delete(req.tenant.companyId, previousRef);
           } catch (err) {
             // The upload succeeded and the row is updated — the caller's
             // action is done. A failed cleanup leaves an orphaned file,
@@ -230,6 +234,27 @@ export class ProductController {
 
         return updated;
       });
+    });
+  }
+
+  /**
+   * Admin image read (design.md D5). Any authenticated member may read; this
+   * mirrors the rest of the catalogue, where reads are open and writes are
+   * owner/admin-only. Unlike `GET /public/products/:id/image/:key`, this
+   * serves inactive rows.
+   */
+  @Get(':id/image')
+  async getImage(
+    @Param('id') id: string,
+    @Req() req: TenantScopedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    return this.runInTenant(req.tenant, async () => {
+      const existing = await this.productService.findById(id);
+      if (!existing) {
+        throw new NotFoundException(`Product "${id}" not found`);
+      }
+      return streamImage(this.imageStore, req.tenant.companyId, existing.image, res);
     });
   }
 

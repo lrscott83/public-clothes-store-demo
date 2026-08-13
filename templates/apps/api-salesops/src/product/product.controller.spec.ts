@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesGuard } from '@store-mgmt/api-common';
@@ -20,7 +21,7 @@ type ProductServiceMock = {
   list: jest.Mock;
 };
 
-type ImageStoreMock = { put: jest.Mock; delete: jest.Mock };
+type ImageStoreMock = { put: jest.Mock; delete: jest.Mock; open: jest.Mock };
 
 /**
  * Minimal valid 1x1 PNG (real bytes, not a stub) — lets the upload tests
@@ -112,6 +113,7 @@ describe('ProductController', () => {
     store = {
       put: jest.fn(),
       delete: jest.fn().mockResolvedValue(undefined),
+      open: jest.fn(),
     };
 
     // `admin` passes every role gate (super-root) — keeps pre-existing tests
@@ -543,6 +545,55 @@ describe('ProductController', () => {
           expect.objectContaining({ declaredMimeType: 'image/webp' }),
         );
       });
+    });
+  });
+
+  describe('GET /products/:id/image', () => {
+    const IMAGE_REF = 'products/3fa85f64-5717-4562-b3fc-2c963f66afa6.webp';
+
+    it('serves the bytes of an INACTIVE product — the public endpoint will not', async () => {
+      service.findById.mockResolvedValue({ ...sampleResponse, active: false, image: IMAGE_REF });
+      store.open.mockResolvedValue({
+        stream: Readable.from([Buffer.from([1, 2, 3])]),
+        contentType: 'image/webp',
+        byteLength: 3,
+      });
+
+      const response = await request(app.getHttpServer()).get('/products/product-uuid-1/image');
+
+      expect(response.status).toBe(200);
+      expect(store.open).toHaveBeenCalledWith('test-company-1', IMAGE_REF);
+    });
+
+    it('sets a private, no-store cache header so a replace is visible immediately', async () => {
+      service.findById.mockResolvedValue({ ...sampleResponse, image: IMAGE_REF });
+      store.open.mockResolvedValue({
+        stream: Readable.from([Buffer.from([1])]),
+        contentType: 'image/webp',
+        byteLength: 1,
+      });
+
+      const response = await request(app.getHttpServer()).get('/products/product-uuid-1/image');
+
+      expect(response.headers['cache-control']).toBe('private, no-store');
+    });
+
+    it('404s when the product has no image', async () => {
+      service.findById.mockResolvedValue({ ...sampleResponse, image: null });
+
+      const response = await request(app.getHttpServer()).get('/products/product-uuid-1/image');
+
+      expect(response.status).toBe(404);
+      expect(store.open).not.toHaveBeenCalled();
+    });
+
+    it('404s when the row points at bytes that are gone', async () => {
+      service.findById.mockResolvedValue({ ...sampleResponse, image: IMAGE_REF });
+      store.open.mockResolvedValue(null);
+
+      const response = await request(app.getHttpServer()).get('/products/product-uuid-1/image');
+
+      expect(response.status).toBe(404);
     });
   });
 });
