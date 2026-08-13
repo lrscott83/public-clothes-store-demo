@@ -1,7 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesGuard } from '@store-mgmt/api-common';
-import { InvalidMoneyError, InvalidProductError, PRODUCT_IMAGE_STORE, USER_ROLES } from '@store-mgmt/domain';
+import { IMAGE_STORE, InvalidMoneyError, InvalidProductError, USER_ROLES } from '@store-mgmt/domain';
 import { TenantContextService } from '@store-mgmt/infra-db';
 import request from 'supertest';
 import {
@@ -83,7 +83,7 @@ async function buildApp(
         providers: [
           { provide: ProductService, useValue: service },
           { provide: TenantContextService, useValue: mockTenantContextService() },
-          { provide: PRODUCT_IMAGE_STORE, useValue: store },
+          { provide: IMAGE_STORE, useValue: store },
           RolesGuard,
         ],
       }),

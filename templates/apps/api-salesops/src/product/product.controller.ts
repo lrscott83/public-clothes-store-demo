@@ -24,15 +24,17 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard, Roles, RolesGuard, TenantContextGuard, createRunInTenant } from '@store-mgmt/api-common';
 import {
+  IMAGE_STORE,
   InvalidMoneyError,
   InvalidProductError,
-  PRODUCT_IMAGE_STORE,
+  isUploadMintedRef,
   USER_ROLES,
-  type IProductImageStore,
+  type IImageStore,
 } from '@store-mgmt/domain';
 import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
 import { normalizeImage, UnsupportedImageError } from '@store-mgmt/infra-storage';
 import type { Request } from 'express';
+import { assertNotMintedRef } from '../image/assert-not-minted-ref.js';
 import { ProductService } from './product.service.js';
 import type {
   CreateProductDto,
@@ -80,23 +82,6 @@ const MAX_PRODUCT_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_PRODUCT_IMAGE_MIME_TYPES = /^image\/(jpeg|png|webp|avif|heic|heif)$/;
 
 /**
- * Exactly the shape `FsProductImageStore.put` mints: `products/<uuid>.<ext>`.
- *
- * The cleanup below deletes ONLY refs matching this — the store removes only
- * what the store made. A seeded catalog ref (`products/cafeteras/x.jpeg`), an
- * absolute URL from older data, or anything an operator typed by hand into the
- * admin form's still-editable `image` field is never touched, because we
- * cannot prove another product does not point at it. A `randomUUID()` ref, by
- * contrast, was minted for one product at one moment.
- */
-const UPLOAD_MINTED_REF =
-  /^products\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(webp|jpeg|png)$/;
-
-function isUploadMintedRef(ref: string | null | undefined): ref is string {
-  return typeof ref === 'string' && UPLOAD_MINTED_REF.test(ref);
-}
-
-/**
  * REST delivery for the Product module. Validates `price`/`cost` currency at
  * the boundary (`price`/`cost` MAY differ) and maps `InvalidProductError`
  * (e.g. missing/nonexistent `categoryId`) and `InvalidMoneyError` (malformed
@@ -115,7 +100,7 @@ export class ProductController {
   constructor(
     private readonly productService: ProductService,
     tenantContext: TenantContextService,
-    @Inject(PRODUCT_IMAGE_STORE) private readonly productImageStore: IProductImageStore,
+    @Inject(IMAGE_STORE) private readonly productImageStore: IImageStore,
   ) {
     this.runInTenant = createRunInTenant(tenantContext);
   }
@@ -129,6 +114,7 @@ export class ProductController {
   ): Promise<ProductResponseDto> {
     assertCurrency(body.price);
     assertCurrency(body.cost);
+    assertNotMintedRef(body.image, 'products');
     return this.runInTenant(req.tenant, () =>
       this.withDomainErrorMapping(() => this.productService.create(body)),
     );
@@ -166,6 +152,7 @@ export class ProductController {
     @Body() body: UpdateProductDto,
     @Req() req: TenantScopedRequest,
   ): Promise<ProductResponseDto> {
+    assertNotMintedRef(body.image, 'products');
     if (body.price !== undefined) {
       assertCurrency(body.price);
     }
@@ -228,7 +215,7 @@ export class ProductController {
         // public image URL is keyed on the CURRENT ref (`imageKeyMatchesRef`
         // in api-public), so a stale URL 404s whether or not these bytes
         // still exist. This just reclaims the disk.
-        if (isUploadMintedRef(previousRef) && previousRef !== ref) {
+        if (isUploadMintedRef(previousRef, 'products') && previousRef !== ref) {
           try {
             await this.productImageStore.delete(req.tenant.companyId, previousRef);
           } catch (err) {

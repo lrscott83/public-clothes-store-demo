@@ -18,7 +18,8 @@ export class CreateProductDto {
   discountPrice?: string;
   cost!: MoneyAmountDto;
   categoryId!: string;
-  image!: string;
+  /** Optional since admin-image-crud: a product may have no image (design.md §3). */
+  image?: string;
   isNew?: boolean;
   order!: number;
   active?: boolean;

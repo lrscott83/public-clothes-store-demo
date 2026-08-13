@@ -18,6 +18,7 @@ import { JwtAuthGuard, Roles, RolesGuard, TenantContextGuard, createRunInTenant 
 import { InvalidCategoryError, USER_ROLES } from '@store-mgmt/domain';
 import { TenantContextService, type TenantContext } from '@store-mgmt/infra-db';
 import type { Request } from 'express';
+import { assertNotMintedRef } from '../image/assert-not-minted-ref.js';
 import { CategoryService } from './category.service.js';
 import type { CategoryResponseDto, CreateCategoryDto, UpdateCategoryDto } from './dto/index.js';
 
@@ -50,6 +51,7 @@ export class CategoryController {
     @Body() body: CreateCategoryDto,
     @Req() req: TenantScopedRequest,
   ): Promise<CategoryResponseDto> {
+    assertNotMintedRef(body.image, 'categories');
     return this.runInTenant(req.tenant, () =>
       this.withDomainErrorMapping(() => this.categoryService.create(body)),
     );
@@ -84,6 +86,7 @@ export class CategoryController {
     @Body() body: UpdateCategoryDto,
     @Req() req: TenantScopedRequest,
   ): Promise<CategoryResponseDto> {
+    assertNotMintedRef(body.image, 'categories');
     return this.runInTenant(req.tenant, () =>
       this.withDomainErrorMapping(() => this.categoryService.update(id, body)),
     );
