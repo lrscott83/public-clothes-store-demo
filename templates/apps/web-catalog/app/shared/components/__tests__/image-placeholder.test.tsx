@@ -22,4 +22,10 @@ describe('ProductImage', () => {
 
     expect(screen.getByLabelText('Remera (sin imagen)')).toBeInTheDocument();
   });
+
+  it('exposes the placeholder as an accessible group, not an img — locks in the fix for the role="img"/queryByRole("img") collision', () => {
+    render(<ProductImage src={null} alt="Remera" className="h-64" />);
+
+    expect(screen.getByRole('group', { name: 'Remera (sin imagen)' })).toBeInTheDocument();
+  });
 });

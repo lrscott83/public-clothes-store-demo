@@ -3,7 +3,7 @@ export interface ProductImageProps {
   src: string | null;
   alt: string;
   /** Sizing classes. Applied to the image AND the placeholder, so the box never moves. */
-  className?: string;
+  className: string;
 }
 
 /**
@@ -13,17 +13,24 @@ export interface ProductImageProps {
  * storefront card and detail, and by both admin lists and forms, so "no image"
  * looks deliberate everywhere instead of accidental in each place.
  */
-export function ProductImage({ src, alt, className = '' }: ProductImageProps) {
+export function ProductImage({ src, alt, className }: ProductImageProps) {
   if (src !== null) {
     return <img src={src} alt={alt} className={className} />;
   }
 
   return (
-    // No `role="img"` here on purpose: it would give this div an accessible
-    // role of "img", so `getByRole('img')` queries (used throughout this
-    // app's tests to assert "no photo rendered") would match the placeholder
-    // too. The `aria-label` alone is enough for assistive tech.
+    // `role="group"`, NOT `role="img"`: an explicit `role="img"` here would
+    // give this div the SAME accessible role as a real `<img>`, so
+    // `getByRole('img')` queries (used throughout this app's tests to assert
+    // "no photo rendered") would match the placeholder too — that collision
+    // is exactly what broke the brief's own Step 1 test against its own
+    // Step 3 sample implementation. `role="group"` still gives assistive
+    // tech a real accessible node (unlike the implicit "generic" role a
+    // bare `<div>` would get, which browsers/screen readers are inconsistent
+    // about exposing outside linear reading mode) without colliding with
+    // `"img"`. `aria-label` supplies the accessible name either way.
     <div
+      role="group"
       aria-label={`${alt} (sin imagen)`}
       className={`flex items-center justify-center bg-background ${className}`}
     >
