@@ -1,6 +1,7 @@
 import { formatMoney } from '../../shared/lib/money';
 import { fetchPublicProduct } from '../../shared/lib/public-api.server';
 import { resolveStoreConfig } from '../../shared/lib/store-config.server';
+import { ProductImage } from '../../shared/components/image-placeholder';
 import { ProductBadges } from '../components/product-badges';
 import type { StoreConfig } from '../../shared/config/stores/types';
 import type { PublicProductDto } from '../../shared/lib/public-api.types';
@@ -44,7 +45,7 @@ export function ProductDetailPage({ config, product }: ProductDetailPageProps) {
       <div className="container mx-auto px-4 py-12 grid md:grid-cols-2 gap-8">
         <div className="relative">
           <ProductBadges item={product} locale={config.locale} />
-          <img
+          <ProductImage
             src={product.imageUrl}
             alt={product.name}
             className="w-full rounded-lg object-cover shadow-card"

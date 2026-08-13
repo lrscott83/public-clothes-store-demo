@@ -1,4 +1,5 @@
 import { formatMoney } from '../../shared/lib/money';
+import { ProductImage } from '../../shared/components/image-placeholder';
 import { ProductBadges } from './product-badges';
 import type { PublicProductDto } from '../../shared/lib/public-api.types';
 
@@ -25,7 +26,7 @@ export function ProductCard({ item, locale }: ProductCardProps) {
       <ProductBadges item={item} locale={locale} />
 
       <div className="w-full overflow-hidden">
-        <img
+        <ProductImage
           src={item.imageUrl}
           alt={item.name}
           className="w-full h-64 object-cover transition-transform duration-300 group-hover:scale-105"

@@ -32,6 +32,10 @@ describe('resolveImageUrl', () => {
       'http://localhost:3003/public/products/abc/image/def.webp',
     );
   });
+
+  it('passes null through unchanged — a product with no image has nothing to resolve', () => {
+    expect(resolveImageUrl(null)).toBeNull();
+  });
 });
 
 describe('public-api.server fetch client', () => {

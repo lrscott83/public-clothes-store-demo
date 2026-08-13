@@ -28,7 +28,7 @@ export interface PublicProductDto {
   readonly discountPrice: string;
   readonly isOffer: boolean;
   readonly isNew: boolean;
-  readonly imageUrl: string;
+  readonly imageUrl: string | null;
   readonly order: number;
 }
 

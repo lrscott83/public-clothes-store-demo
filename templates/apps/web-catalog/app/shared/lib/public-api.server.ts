@@ -16,9 +16,13 @@ function apiPublicBaseUrl(): string {
  * default) against `api-public`'s own origin. A bare `/public/products/...`
  * path is meaningless to the BROWSER, which loads `<img src>` against
  * `web-catalog`'s different origin/port — this is the one place that gap is
- * closed.
+ * closed. `null` (no image, design.md D8) passes through unchanged — there
+ * is nothing to resolve.
  */
-export function resolveImageUrl(imageUrl: string): string {
+export function resolveImageUrl(imageUrl: string | null): string | null {
+  if (imageUrl === null) {
+    return null;
+  }
   if (/^https?:\/\//.test(imageUrl)) {
     return imageUrl;
   }
