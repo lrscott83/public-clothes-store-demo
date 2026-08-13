@@ -1,6 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { action } from '../editar';
+import { render, screen } from '@testing-library/react';
+import { createRoutesStub } from 'react-router';
+import { action, EditarProductoPage, type EditarProductoPageProps } from '../editar';
 import { createSession } from '../../../../shared/lib/session.server';
+import { deleteProductImage, updateProduct } from '../../../lib/products.server';
+import type { AdminCategoryDto, AdminProductDto } from '../../../lib/admin-api.types';
+
+/**
+ * `deleteProductImage`/`updateProduct` are wrapped, not stubbed out — each
+ * wrapper's default implementation IS the real function (`vi.fn(actual.fn)`),
+ * so the pre-existing describe blocks below (cross-company rejection, image
+ * upload) keep exercising real `makeAuthenticatedRequest`/`fetch` behavior
+ * unchanged. Task 6.4's own `describe('action', ...)` block only reads
+ * `.mock.calls` off these same references to assert the new `remove-image`
+ * branch's wiring and the no-`image`-leak guarantee — it doesn't need a
+ * behavior override, just a spy.
+ */
+vi.mock('../../../lib/products.server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../lib/products.server')>();
+  return {
+    ...actual,
+    deleteProductImage: vi.fn(actual.deleteProductImage),
+    updateProduct: vi.fn(actual.updateProduct),
+  };
+});
 
 function companyLookupResponse() {
   return new Response(JSON.stringify({ id: 'company-1', slug: 'default', name: 'Urbana Ropa' }), {
@@ -245,5 +268,164 @@ describe('editar action — image upload (task 6.7)', () => {
 
     expect(result).toEqual({ error: expect.any(String) });
     expect(result).not.toBeInstanceOf(Response);
+  });
+});
+
+const category: AdminCategoryDto = {
+  id: 'cat-1',
+  name: 'Remeras',
+  slug: 'remeras',
+  image: null,
+  icon: null,
+  order: 1,
+  active: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
+const product: AdminProductDto = {
+  id: 'product-1',
+  name: 'Remera Oversize',
+  description: 'Remera de algodón 100%.',
+  sku: null,
+  barcode: null,
+  price: { amount: '100.00', currency: 'USD' },
+  percentDiscountPrice: '0.00',
+  discountPrice: '0.00',
+  cost: { amount: '50.00', currency: 'USD' },
+  finalPrice: { amount: '100.00', currency: 'USD' },
+  isOffer: false,
+  categoryId: 'cat-1',
+  image: 'products/remera.jpg',
+  isNew: false,
+  order: 1,
+  active: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
+function renderEditar(props: EditarProductoPageProps) {
+  const Stub = createRoutesStub([{ path: '/', Component: () => <EditarProductoPage {...props} /> }]);
+  return render(<Stub />);
+}
+
+describe('image panel', () => {
+  it('shows the current image through the proxy route, not the raw ref', () => {
+    renderEditar({ product: { ...product, image: 'products/x.webp' }, categories: [category] });
+
+    expect(screen.getByRole('img', { name: product.name })).toHaveAttribute(
+      'src',
+      `/admin/productos/${product.id}/image`,
+    );
+    expect(screen.queryByText('products/x.webp')).not.toBeInTheDocument();
+  });
+
+  it('shows the placeholder and no remove button when there is no image', () => {
+    renderEditar({ product: { ...product, image: null }, categories: [category] });
+
+    expect(screen.getByLabelText(`${product.name} (sin imagen)`)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Quitar imagen' })).not.toBeInTheDocument();
+  });
+
+  it('offers removal when there is an image', () => {
+    renderEditar({ product: { ...product, image: 'products/x.webp' }, categories: [category] });
+
+    expect(screen.getByRole('button', { name: 'Quitar imagen' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Task 6.4's own action coverage: the `remove-image` branch's wiring, and
+ * the security property the brief calls out explicitly — a regular
+ * field-edit submission must never be able to smuggle an `image` value into
+ * `updateProduct`'s payload (that's the only way a normal edit could revert
+ * or hijack the photo, since `upload-image`/`remove-image` are the only
+ * branches allowed to touch it).
+ */
+describe('action', () => {
+  const originalSecret = process.env.SESSION_SECRET;
+  const originalIdpUrl = process.env.API_IDP_URL;
+  const originalApiUrl = process.env.API_SALESOPS_URL;
+  const originalFetch = global.fetch;
+  let cookie = '';
+
+  beforeEach(async () => {
+    process.env.SESSION_SECRET = 'test-secret';
+    process.env.API_IDP_URL = 'http://localhost:3002';
+    process.env.API_SALESOPS_URL = 'http://localhost:3001';
+
+    const created = await createSession(freshJwt(), 'refresh-image-panel', 'user-1');
+    cookie = created.headers.get('Set-Cookie') ?? '';
+
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/companies/')) return Promise.resolve(companyLookupResponse());
+      return Promise.resolve(new Response(JSON.stringify({ id: 'p1' }), { status: 200 }));
+    }) as unknown as typeof fetch;
+
+    // `restoreAllMocks()` in earlier describe blocks' `afterEach` can clear
+    // these wrappers' default implementation — re-establish the passthrough
+    // fresh before every test in this block, regardless of run order.
+    const actual = await vi.importActual<typeof import('../../../lib/products.server')>(
+      '../../../lib/products.server',
+    );
+    vi.mocked(deleteProductImage).mockImplementation(actual.deleteProductImage);
+    vi.mocked(updateProduct).mockImplementation(actual.updateProduct);
+  });
+
+  afterEach(() => {
+    process.env.SESSION_SECRET = originalSecret;
+    process.env.API_IDP_URL = originalIdpUrl;
+    process.env.API_SALESOPS_URL = originalApiUrl;
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  function requestWith(formData: FormData) {
+    const req = new Request('http://ignored/admin/productos/p1/editar', {
+      method: 'POST',
+      headers: { Cookie: cookie, host: 'default.localhost:3010' },
+    });
+    Object.defineProperty(req, 'formData', { value: async () => formData });
+    return req;
+  }
+
+  function fullProductFormData(): FormData {
+    const formData = new FormData();
+    formData.set('name', 'Remera Oversize (editada)');
+    formData.set('description', 'Remera de algodón 100%.');
+    formData.set('categoryId', 'cat-1');
+    formData.set('order', '1');
+    formData.set('priceAmount', '120.00');
+    formData.set('priceCurrency', 'USD');
+    formData.set('costAmount', '55.00');
+    formData.set('costCurrency', 'USD');
+    return formData;
+  }
+
+  it('removes the image on intent=remove-image and returns to this page', async () => {
+    const formData = new FormData();
+    formData.set('intent', 'remove-image');
+
+    const result = (await action({
+      request: requestWith(formData),
+      params: { id: 'p1' },
+    } as never)) as Response;
+
+    expect(deleteProductImage).toHaveBeenCalledWith(expect.anything(), 'company-1', 'p1');
+    expect(result.headers.get('Location')).toBe('/admin/productos/p1/editar');
+  });
+
+  it('does not send image in the update payload — a field edit cannot revert the photo', async () => {
+    const formData = fullProductFormData();
+    formData.set('image', 'products/attacker-chosen.webp');
+
+    await action({ request: requestWith(formData), params: { id: 'p1' } } as never);
+
+    expect(updateProduct).toHaveBeenCalledWith(
+      expect.anything(),
+      'company-1',
+      'p1',
+      expect.not.objectContaining({ image: expect.anything() }),
+    );
   });
 });
