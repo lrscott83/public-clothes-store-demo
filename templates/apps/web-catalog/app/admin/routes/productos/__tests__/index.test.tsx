@@ -58,3 +58,20 @@ describe('ProductosAdminPage', () => {
     expect(screen.getByTestId('product-status-product-1')).toHaveTextContent('Inactivo');
   });
 });
+
+describe('thumbnail column', () => {
+  it('shows a thumbnail for a product with an image', () => {
+    renderPage([{ ...PRODUCT, image: 'products/x.webp' }]);
+
+    expect(screen.getByRole('img', { name: PRODUCT.name })).toHaveAttribute(
+      'src',
+      `/admin/productos/${PRODUCT.id}/image`,
+    );
+  });
+
+  it('shows the placeholder for a product without one', () => {
+    renderPage([{ ...PRODUCT, image: null }]);
+
+    expect(screen.getByLabelText(`${PRODUCT.name} (sin imagen)`)).toBeInTheDocument();
+  });
+});

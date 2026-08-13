@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { withAuth } from '../../../shared/lib/auth.guards.server';
+import { ProductImage } from '../../../shared/components/image-placeholder';
 import { listCategories } from '../../lib/categories.server';
 import type { AdminCategoryDto } from '../../lib/admin-api.types';
 import type { Route } from './+types/index';
@@ -38,6 +39,7 @@ export function CategoriasAdminPage({ categories }: CategoriasAdminPageProps) {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-border text-sm text-text-muted">
+                  <th className="py-2 pr-4 w-16" />
                   <th className="py-2 pr-4">Nombre</th>
                   <th className="py-2 pr-4">Slug</th>
                   <th className="py-2 pr-4">Orden</th>
@@ -48,6 +50,13 @@ export function CategoriasAdminPage({ categories }: CategoriasAdminPageProps) {
               <tbody>
                 {categories.map((category) => (
                   <tr key={category.id} className="border-b border-border">
+                    <td className="py-2 pr-4">
+                      <ProductImage
+                        src={category.image === null ? null : `/admin/categorias/${category.id}/image`}
+                        alt={category.name}
+                        className="h-12 w-12 rounded border border-border object-cover"
+                      />
+                    </td>
                     <td className="py-2 pr-4 text-text">{category.name}</td>
                     <td className="py-2 pr-4 text-text-muted">{category.slug}</td>
                     <td className="py-2 pr-4 text-text-muted">{category.order}</td>

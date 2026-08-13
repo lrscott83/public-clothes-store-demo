@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { withAuth } from '../../../shared/lib/auth.guards.server';
+import { ProductImage } from '../../../shared/components/image-placeholder';
 import { listProducts } from '../../lib/products.server';
 import { listCategories } from '../../lib/categories.server';
 import type { AdminCategoryDto, AdminProductDto } from '../../lib/admin-api.types';
@@ -46,6 +47,7 @@ export function ProductosAdminPage({ products, categories }: ProductosAdminPageP
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-border text-sm text-text-muted">
+                  <th className="py-2 pr-4 w-16" />
                   <th className="py-2 pr-4">Nombre</th>
                   <th className="py-2 pr-4">Categoría</th>
                   <th className="py-2 pr-4">Precio</th>
@@ -56,6 +58,13 @@ export function ProductosAdminPage({ products, categories }: ProductosAdminPageP
               <tbody>
                 {products.map((product) => (
                   <tr key={product.id} className="border-b border-border">
+                    <td className="py-2 pr-4">
+                      <ProductImage
+                        src={product.image === null ? null : `/admin/productos/${product.id}/image`}
+                        alt={product.name}
+                        className="h-12 w-12 rounded border border-border object-cover"
+                      />
+                    </td>
                     <td className="py-2 pr-4 text-text">{product.name}</td>
                     <td className="py-2 pr-4 text-text-muted">{categoryName(product.categoryId)}</td>
                     <td className="py-2 pr-4 text-text-muted">

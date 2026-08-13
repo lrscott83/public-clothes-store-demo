@@ -37,3 +37,20 @@ describe('CategoriasAdminPage', () => {
     expect(screen.getByTestId('category-status-cat-1')).toHaveTextContent('Inactivo');
   });
 });
+
+describe('thumbnail column', () => {
+  it('shows a thumbnail for a category with an image', () => {
+    renderPage([{ ...CATEGORY, image: 'categories/x.webp' }]);
+
+    expect(screen.getByRole('img', { name: CATEGORY.name })).toHaveAttribute(
+      'src',
+      `/admin/categorias/${CATEGORY.id}/image`,
+    );
+  });
+
+  it('shows the placeholder for a category without one', () => {
+    renderPage([{ ...CATEGORY, image: null }]);
+
+    expect(screen.getByLabelText(`${CATEGORY.name} (sin imagen)`)).toBeInTheDocument();
+  });
+});
