@@ -10,4 +10,14 @@ module.exports = {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   testEnvironment: 'node',
+  collectCoverageFrom: ['**/*.ts', '!**/*.spec.ts', '!**/index.ts', '!**/*.module.ts', '!**/main.ts'],
+  coverageDirectory: '../coverage',
+  coverageThreshold: {
+    global: {
+      statements: 92,
+      branches: 53,
+      functions: 90,
+      lines: 95,
+    },
+  },
 };

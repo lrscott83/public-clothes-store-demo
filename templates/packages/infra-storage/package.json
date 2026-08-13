@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.ts\" --fix --max-warnings 0",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --passWithNoTests",
+    "test:cov": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage --passWithNoTests",
     "smoke": "node scripts/sharp-smoke.mjs",
     "clean": "rimraf dist"
   },

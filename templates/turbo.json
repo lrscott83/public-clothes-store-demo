@@ -18,6 +18,10 @@
       "dependsOn": ["^test"],
       "outputs": ["coverage/**", "!coverage/lcov.info"]
     },
+    "test:cov": {
+      "dependsOn": ["^test:cov"],
+      "outputs": ["coverage/**", "!coverage/lcov.info"]
+    },
     "dev": {
       "dependsOn": ["^build"],
       "cache": false,

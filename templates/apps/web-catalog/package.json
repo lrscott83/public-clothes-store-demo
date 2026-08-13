@@ -10,7 +10,8 @@
     "lint": "eslint . --ext .ts,.tsx --max-warnings 5",
     "typecheck": "react-router typegen && tsc",
     "clean": "rimraf build .react-router",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage"
   },
   "dependencies": {
     "@react-router/node": "^7.7.1",

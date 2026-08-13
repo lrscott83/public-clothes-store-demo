@@ -4,6 +4,7 @@ dist-pages
 build
 .turbo
 .react-router
+coverage
 *.tsbuildinfo
 .env
 .env.*

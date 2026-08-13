@@ -15,6 +15,16 @@ module.exports = {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   testEnvironment: 'node',
+  collectCoverageFrom: ['**/*.ts', '!**/*.spec.ts', '!**/index.ts', '!**/*.module.ts', '!**/main.ts'],
+  coverageDirectory: '../coverage',
+  coverageThreshold: {
+    global: {
+      statements: 94,
+      branches: 76,
+      functions: 94,
+      lines: 94,
+    },
+  },
   // Every spec here is a REAL-Postgres integration test against ONE shared
   // database, and several fixture helpers across files reuse the exact same
   // natural keys (e.g. category slug "cafeteras"). Jest's default parallel

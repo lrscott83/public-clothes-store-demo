@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "clean": "rimraf dist",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:cov": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "test:e2e": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
@@ -71,6 +72,16 @@
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "collectCoverageFrom": ["**/*.ts", "!**/*.spec.ts", "!**/index.ts", "!**/*.module.ts", "!**/main.ts"],
+    "coverageDirectory": "../coverage",
+    "coverageThreshold": {
+      "global": {
+        "statements": 92,
+        "branches": 76,
+        "functions": 92,
+        "lines": 93
+      }
+    }
   }
 }
