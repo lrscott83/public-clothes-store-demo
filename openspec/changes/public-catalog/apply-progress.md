@@ -1,8 +1,22 @@
 # Apply Progress: public-catalog
 
-**Batch**: 10 of N (Phase 6 — `apps/web-catalog` `/admin`, in progress)
+**Batch**: 12 of 12 — Phase 0 through Phase 7 ALL COMPLETE. Ready for `sdd-archive`.
 **Mode**: Strict TDD
 **Delivery**: commits only, branch `public-catalog`, no PRs
+
+## Documentation-sync note (added during `sdd-verify`, 2026-08-13)
+
+This file stalled at commit `3070a34` (task 6.5) for three batches even
+though tasks 6.6, 6.7, and Phase 7 (final verification) all landed and are
+real, complete work — `tasks.md` (53/53 checked) and `git log` both confirm
+it, and Phase 7's evidence was fully captured in engram `sdd/public-catalog/
+apply-progress` (#2147) at the time, just never copied into this committed
+file. The first formal `sdd-verify` pass (2026-08-13) flagged this as two
+WARNINGs (artifact-sync gap, TDD-table gap) — 0 CRITICAL, nothing about the
+actual implementation was found wrong. The sections below for 6.6, 6.7, and
+Phase 7 are added now, sourced from `git show` on the actual commits and
+from engram #2147's Phase 7 record, to bring this file back in sync before
+`sdd-archive`.
 
 ## Reconciliation note (found at the start of this batch, not introduced by it)
 
@@ -174,7 +188,7 @@ suite: 79/79 passing (14 files). `tsc --noEmit` clean. Lint: 3 warnings
 `home.tsx`'s pre-existing warnings), 0 errors, within the `--max-warnings 5`
 budget from task 6.4's done-criterion.
 
-## Completed Tasks (Phase 6 — `apps/web-catalog` `/admin`, IN PROGRESS)
+## Completed Tasks (Phase 6 — `apps/web-catalog` `/admin`, COMPLETE)
 
 - [x] 6.1/6.2 `apps/web-catalog/app/shared/lib/session.{test,server}.ts` —
       admin session per D8: `createCookieSessionStorage` cookie
@@ -387,6 +401,108 @@ budget from task 6.4's done-criterion.
   parameter) — this batch's new routes would have pushed the lint
   count from 3 to 8 against the `--max-warnings 5` budget; fixing the
   pattern everywhere brought it back to 0.
+
+- [x] 6.6 RED+GREEN: `/admin/categorias[/nueva|/:id/editar]` — same
+      discipline as 6.5's product CRUD: list/create/edit/soft-delete,
+      `companyId` resolved once by `withAuth` and threaded through every
+      mutation so a cross-company request is rejected server-side, never
+      silently applied to either company. Delete is always soft
+      (`active=false`), never hard. 1 commit (`474a7c9`).
+
+  **Built**: `app/admin/lib/categories.server.ts` (extended with
+  create/update/delete methods, same raw-`Response`-on-error pattern as
+  6.5's `products.server.ts`), `admin-api.types.ts` (category DTOs added),
+  `app/admin/components/category-form.tsx` (shared create/edit form,
+  mirrors `product-form.tsx`), `/admin/categorias` (list),
+  `/admin/categorias/nueva` (create), `/admin/categorias/:id/editar`
+  (update + soft-delete, one hidden `intent` field distinguishes the two
+  mutations, same shape as 6.5). 11 files changed, +766/-7 lines. New
+  tests: `categories.server.test.ts` (extended), `editar.test.tsx`,
+  `index.test.tsx`, `nuevo.test.tsx` — cross-company rejection asserted
+  the same way as 6.5 (`expect(result).not.toBeInstanceOf(Response)`
+  never true on a 403), plus a same-company update/delete control case
+  proving the 403 tests aren't a blanket failure.
+
+- [x] 6.7 RED+GREEN: admin image-upload UI action — wires `POST
+      /products/:id/image` (task 3.2) into `/admin/productos/:id/editar`
+      via a new multipart `Form` (`intent=upload-image`),
+      `uploadProductImage` added to `products.server.ts`. Success
+      redirects back to the same edit route so the loader re-fetches and
+      the displayed image ref reflects the new upload — this IS the
+      mechanism live-verified end to end in Phase 7's 7.4 smoke test
+      (upload survives a fresh page load, confirmed via direct SQL and
+      on-disk file check). 1 commit (`dad4e27`).
+
+  **Built**: `editar.tsx` gained the multipart upload form alongside the
+  existing product-edit form (two distinct actions on one route,
+  distinguished by `intent`, same pattern 6.5/6.6 already established for
+  update-vs-delete). 4 files changed, +191/-5 lines. New test:
+  `editar.test.tsx` (extended) covers a successful upload, a rejected
+  upload (propagates `api-salesops`'s 413/400 as a plain error, never a
+  silent no-op), and confirms a failed upload never touches the product's
+  other fields.
+
+**All 7 Phase 6 work units complete** (6.1-6.7), matching tasks.md's plan.
+`apps/web-catalog` full suite: 126→146 tests (+9 `categories.server.test.ts`
+extended, +4 `nuevo.test.tsx`, +4 `editar.test.tsx`, +2 `index.test.tsx` for
+6.6; +5 `editar.test.tsx` extended for 6.7). `tsc --noEmit` clean. Lint: 0
+errors, within budget.
+
+## Completed Tasks (Phase 7 — final verification)
+
+- [x] 7.1 `pnpm turbo run lint typecheck test` (from `templates/`), full
+      monorepo: 42/42 turbo tasks green, 0 lint errors anywhere, 0
+      typecheck errors across all 12 packages/apps. Every suite's test
+      count reconciled against its last-documented baseline (see the
+      table in engram `sdd/public-catalog/apply-progress` #2147) —
+      `domain` 341/341, `infra-db` 437/437, `infra-storage` 14/14,
+      `api-common` 45/45 (untouched, confirms D3), `api-public` 60/60
+      (NEW app), `api-salesops` 495/495, `api-idp` 71/71, `storefront`
+      43/43 (frozen, untouched), `web-common` 11/11 (untouched),
+      `static-store` 96/96, `web-catalog` 146/146, `salesops-mvp` 534/534
+      (untouched legacy app). e2e (run separately, not covered by `turbo
+      run test`): `api-public` 5/5, `api-salesops` 125/125, `api-idp`
+      13/13. Zero regressions anywhere. 7.1 surfaced no bugs, so no fix
+      commit was needed for this task.
+- [x] 7.2 Diff audit against `main` (`git diff main...public-catalog`):
+      `packages/storefront` and `packages/api-common` both empty diffs
+      (zero changes, frozen packages untouched); `apps/static-store` only
+      the 2-line `frozenLegacyAppRule` wiring from task 1.8, no other file
+      touched; `apps/api-idp/package.json` diff empty (zero new
+      dependencies, transitive or direct) — its source diff is entirely
+      the 6.5 `GET /companies/:slug` endpoint. Whole-change diff stat: 162
+      files changed, +10346/-18 at the time of this task (grew to 172
+      files, +13095/-18 once 6.6/6.7 landed after this count was taken —
+      consistent growth, not a discrepancy).
+- [x] 7.3 Manual smoke test (public storefront), real dev servers
+      (`api-public`, `web-catalog`) against real dev Postgres
+      (`172.17.0.1:5432`), seeded tenant `default` (101 products, 12
+      categories): search, category filter, sort+pagination all verified
+      via `curl` at both the `api-public` and `web-catalog` SSR layers;
+      D4's byte-identical 404 re-confirmed live (unknown slug vs.
+      temporarily-deactivated company, diffed raw response bodies, zero
+      differences). All test infrastructure (temp inactive-company row,
+      both dev server process groups) cleaned up and verified dead
+      (`pgrep` + TCP-connect probe) afterward.
+- [x] 7.4 Manual smoke test (admin), real dev servers (`api-idp`,
+      `api-salesops`, `web-catalog`) against the same real dev Postgres:
+      logged in as the seeded `owner` account, full product CRUD
+      (create → 6.7's image upload, confirmed surviving a fresh page load
+      via direct SQL AND an on-disk file check at `STORAGE_PATH` →
+      update → soft-delete, SQL-confirmed `active=false` with the row
+      still present) and full category CRUD (create → update → soft-delete,
+      same SQL-confirmed pattern) both exercised live, not just via unit
+      tests. DB restored to its exact pre-test row counts afterward
+      (product 101, category 12, company 1); all three dev server process
+      groups verified dead by `pgrep` and a port check.
+
+**All 4 Phase 7 tasks complete.** 1 commit (`19baa4e`, docs-only — 7.1
+surfaced zero regressions, so no fix commit was needed). THE ENTIRE
+public-catalog CHANGE (Phase 0 through Phase 7) IS IMPLEMENTATION-COMPLETE.
+Full detail (exact commands, exact response bodies, exact SQL queries) is
+preserved in engram `sdd/public-catalog/apply-progress` (#2147) — this
+section summarizes it here so the committed file is self-sufficient and
+does not depend on engram to prove Phase 7 happened.
 
 ## Spike Results (PASS/FAIL with evidence) — Phase 0
 
@@ -990,6 +1106,16 @@ constraint held.
 | 4.7-4.8 (DTO + public endpoints) | `public-product.controller.spec.ts`, `public-category.controller.spec.ts`, `store.controller.spec.ts` | Unit (Nest TestingModule + supertest) | N/A (new files) | ✅ All 3 confirmed failing together — `Could not locate module` | ✅ 22/22 Passed (13+2+2 new, plus pre-existing specs untouched) | ✅ key-set equality (not `not.toHaveProperty`), non-null cost/sku/barcode fixture, exact decimal-string values, query-forwarding + defaults, 400 on bad `orden`/`porPagina`, 200 on out-of-range `pagina` | ➖ None needed |
 | 4.9-4.10 (ProductImageController) | `product-image.controller.spec.ts`, `image-url.spec.ts` | Unit (Nest TestingModule + supertest) | ✅ 44/44 pre-existing api-public suite re-run before starting, zero edits | ✅ Written — `Could not locate module ./product-image.controller.js` | ✅ 16/16 Passed (8 new controller + 8 image-url, incl. approval tests for pre-existing pure functions) | ✅ full D6 branch matrix (missing, stale key, invalid ref + log spy, missing file + log spy, 304, 200 with exact headers + exact streamed bytes, explicit companyId arg) | ➖ None needed |
 | 4.11 (tenant isolation e2e) | `apps/api-public/test/tenant-isolation.e2e-spec.ts` | Integration (real Postgres, real HTTP server) | ✅ 60/60 pre-existing api-public unit suite re-run before starting | N/A — proof against the already-built app, not new production code | ✅ 5/5 Passed | ✅ store/list/detail per-Host correctness, bidirectional cross-tenant 404, unknown-vs-inactive byte-identical 404, real sort query | ➖ None needed |
+| 5.1-5.2 (StoreConfig + tenant/public-api clients) | `app/shared/lib/{tenant,public-api}.server.test.ts` | Unit | N/A (new files) | ✅ Written against not-yet-existing clients | ✅ Passed | ✅ Host-header slug resolution, verbatim searchParams forwarding, `X-Forwarded-Host` propagation | ➖ None needed |
+| 5.3-5.4 (`/productos` route + card/grid) | `app/catalog/lib/product-query.test.ts`, `app/catalog/components/*.test.tsx` | Unit | ✅ Full suite re-run before starting, zero edits | ✅ Written — components/parser didn't exist | ✅ Passed | ✅ badge-stack combinations (Nuevo + %off + $off, each alone and all three together), empty-result state | ➖ None needed |
+| 5.5 (`/productos/:id` detail route) | `app/catalog/routes/product-detail.test.tsx` | Unit | ✅ 79/79 pre-existing web-catalog suite re-run before starting | ✅ Written — route didn't exist | ✅ Passed | ✅ found-product render, unknown/inactive-id graceful degrade (no crash) | ➖ None needed |
+| 6.1-6.2 (admin session) | `app/shared/lib/session.test.ts` | Unit | N/A (new file) | ✅ Written — module didn't exist | ✅ 11/11 Passed | ✅ cookie flags (httpOnly/sameSite/secure-in-prod/domain-omitted), `isTokenExpired` 5s buffer, concurrent-refresh de-dupe (two callers, one IDP fetch) | ➖ None needed |
+| 6.3 (`api.server.ts`) | `app/shared/lib/api.server.test.ts` | Unit | ✅ 90/90 pre-existing re-run before starting | ✅ Written — module didn't exist | ✅ 6/6 Passed | ✅ single-401-refresh-retry, second-401-destroys-session | ✅ Bug caught by the suite itself: a reused refresh token across `it` blocks hit 6.2's module-scoped de-dupe cache and desynced a mock queue — fixed by giving every test its own token |
+| 6.4 (`withAuth`, login/logout) | `auth.guards.server.test.ts`, `login.test.tsx`, `logout.test.tsx` | Unit | ✅ 96/96 pre-existing re-run before starting | ✅ Written — guard/routes didn't exist | ✅ 15/15 Passed | ✅ redirect-when-unauthenticated, real-loaderData-passthrough, login success/failure, logout clears cookie | ✅ Bug caught by `tsc`: `withAuth`'s loader param typed `unknown`, erasing the wrapped loader's return type — fixed by making it generic |
+| 6.5 (`/admin/productos` CRUD) | `products.server.test.ts`, `company.server.test.ts`, `{index,nuevo,editar}.test.tsx` | Unit | ✅ 111/111 pre-existing re-run before starting | ✅ Written — clients/routes didn't exist | ✅ 17/17 Passed | ✅ cross-company 403 rejection on both update and soft-delete (`expect(result).not.toBeInstanceOf(Response)`), same-company control case, no-store-switcher-UI check | ➖ None needed |
+| 6.6 (`/admin/categorias` CRUD) | `categories.server.test.ts` (extended), `{index,nuevo,editar}.test.tsx` | Unit | ✅ 126/126 pre-existing re-run before starting | ✅ Written — mirrors 6.5's not-yet-existing clients/routes | ✅ Passed (`app/admin/lib/categories.server.test.ts` +9 cases, +4 `nuevo.test.tsx`, +4 `editar.test.tsx`, +2 `index.test.tsx`) | ✅ cross-company 403 rejection (both mutations), soft-delete-never-hard assertion, same-company control case | ➖ None needed |
+| 6.7 (admin image-upload UI action) | `productos/__tests__/editar.test.tsx` (extended) | Unit | ✅ full suite re-run before starting, zero edits | ✅ Written — `uploadProductImage`/upload form didn't exist | ✅ Passed (+5 cases) | ✅ successful upload, rejected upload propagates `api-salesops`'s 413/400 (never a silent no-op), failed upload leaves other fields untouched | ➖ None needed |
+| 7.1-7.4 (final verification) | N/A — full-monorepo `turbo run lint typecheck test`/`test:e2e` re-run + 2 manual live smoke tests (storefront, admin), no new test files | Manual/E2E-style proof + full regression re-run | ✅ every suite's baseline reconciled (see the Phase 7 section above) | N/A — verification-only phase, no new production code | ✅ 42/42 turbo tasks, all e2e suites, both smoke tests all passed | N/A — verification phase, not new logic | ➖ None needed; 0 bugs found, 0 fix commits |
 
 ### Test Summary — Phase 3 (kept for continuity with the prior record)
 - **Total tests written that batch**: 7 (all in `product.controller.spec.ts`)
@@ -1116,7 +1242,7 @@ constraint held.
 | `openspec/changes/public-catalog/tasks.md` | Modified | Phase 5 checkboxes ticked (5.1-5.5) |
 | `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
 
-## Files Changed — Phase 6 (in progress)
+## Files Changed — Phase 6
 
 | File | Action | What Was Done |
 |------|--------|----------------|
@@ -1142,8 +1268,25 @@ constraint held.
 | `templates/apps/web-catalog/app/admin/routes/productos/{index,nuevo,editar}.tsx` + tests | Created | list/create/edit+soft-delete (6.5) |
 | `templates/apps/web-catalog/app/routes.ts` | Modified | registers the three `productos` routes |
 | every route's `meta()` export | Modified | dropped the unused `Route.MetaArgs` parameter |
-| `openspec/changes/public-catalog/tasks.md` | Modified | 6.1-6.5 checkboxes ticked |
+| `templates/apps/web-catalog/app/admin/components/category-form.tsx` | Created | shared create/edit form for categories (6.6) |
+| `templates/apps/web-catalog/app/admin/lib/categories.server.ts` | Modified | create/update/delete methods added |
+| `templates/apps/web-catalog/app/admin/lib/admin-api.types.ts` | Modified | category DTOs added |
+| `templates/apps/web-catalog/app/admin/routes/categorias/{index,nueva,editar}.tsx` + tests | Created | list/create/edit+soft-delete (6.6) |
+| `templates/apps/web-catalog/app/admin/lib/products.server.ts` | Modified | `uploadProductImage` added (6.7) |
+| `templates/apps/web-catalog/app/admin/routes/productos/editar.tsx` + test | Modified | multipart upload `Form`, `intent=upload-image` action (6.7) |
+| `templates/apps/web-catalog/app/routes.ts` | Modified | registers the three `categorias` routes |
+| `openspec/changes/public-catalog/tasks.md` | Modified | 6.1-6.7 checkboxes ticked |
 | `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
+
+## Files Changed — Phase 7
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `openspec/changes/public-catalog/tasks.md` | Modified | 7.1-7.4 checkboxes ticked (commit `19baa4e`) |
+| `openspec/changes/public-catalog/apply-progress.md` | Modified | this record |
+
+No production code changed in Phase 7 — 7.1's full-monorepo regression run
+surfaced zero bugs, so no fix commit was required.
 
 ## Deviations from Design
 
@@ -1223,7 +1366,7 @@ nothing was broken): two commits landed on `public-catalog` after Batch 4's
 apply-progress was last saved (`48f95f4`, `98f1ef4`) that this file never
 recorded — see the reconciliation note at the top of this file.
 
-## Commits (18 total through Phase 3; +7 this batch = 25 total, in order)
+## Commits (45 total, Phase 0 through Phase 7, in order — this file's own documentation-sync commit is the 46th, made during `sdd-verify`)
 
 Phase 0 (7):
 1. `65a1604` feat(public-catalog): scaffold bare api-public and web-catalog, prove wildcard-subdomain Host header (0.1a+0.1b)
@@ -1300,7 +1443,7 @@ never before recorded here — reconciled now; +1 this batch):
 31. `43b1c5a` docs(public-catalog): record Phase 5 apply-progress and
     reconcile its commit list
 
-Phase 6 (in progress):
+Phase 6 (7 work units, 6.1-6.7):
 32. `75e2672` feat(web-catalog): add the admin session cookie (6.1-6.2)
 33. `53cf098` docs(public-catalog): record Phase 6 apply-progress
     (partial — 6.1-6.2 only)
@@ -1318,17 +1461,27 @@ Phase 6 (in progress):
     companyId resolution (6.5's design gap)
 40. `540d224` feat(web-catalog): add /admin/productos CRUD with
     cross-company rejection (6.5)
-41. (this commit) docs(public-catalog): record Phase 6 apply-progress
-    (partial — 6.1-6.5), including 6.5's design-gap resolution and
-    live create->edit->delete smoke test
+41. `474a7c9` feat(web-catalog): add /admin/categorias CRUD with
+    cross-company rejection (6.6)
+42. `9782b27` docs(public-catalog): check off task 6.6 in the tasks
+    artifact
+43. `dad4e27` feat(web-catalog): add admin product image-upload action
+    (6.7)
+44. `7c80c10` docs(public-catalog): check off task 6.7 (image-upload UI)
+
+Phase 7 (1 commit, docs-only — 7.1 surfaced zero bugs):
+45. `19baa4e` docs(public-catalog): check off Phase 7 final verification
+    (7.1-7.4)
+
+(This file's own commit adding the present section — recording 6.6, 6.7,
+and Phase 7 that were real, landed, and complete but never written into
+this document — is the next commit after `19baa4e`, made during the first
+`sdd-verify` pass, 2026-08-13.)
 
 ## Remaining Tasks
 
-Phase 5 COMPLETE (all 5 tasks, 5.1-5.5). Phase 6 IN PROGRESS (4/6 work
-units — 6.1-6.2, 6.3, 6.4, 6.5). Remaining in file order:
-- [ ] 6.6 `/admin/categorias[/nueva|/:id/editar]` CRUD
-- [ ] 6.7 Admin image-upload UI action
-- [ ] Phase 7: final verification
+None. Phase 0 through Phase 7 are ALL COMPLETE (53/53 tasks). Ready for
+`sdd-archive`.
 
 ## Status
 
@@ -1397,5 +1550,29 @@ evidence above for the full investigation and resolution. Verified with
 a live create→edit→soft-delete cycle against the real tenant database
 (api-idp + api-salesops + web-catalog all booted for real), not just
 mocked unit tests — see 6.5's evidence above. All three dev servers and
-the test product row cleaned up afterward. Ready for the next
-`sdd-apply` batch (6.6 — `/admin/categorias[/nueva|/:id/editar]` CRUD).
+the test product row cleaned up afterward.
+
+Phase 6: 7/7 work units COMPLETE (6.1-6.7). `apps/web-catalog` full suite:
+126→146 tests (6.6 added category CRUD following the exact same
+cross-company-rejection discipline as 6.5's product CRUD; 6.7 wired the
+already-built `POST /products/:id/image` endpoint (task 3.2) into the
+admin edit route as a second `intent`-distinguished action on the same
+form). `tsc --noEmit` clean. Lint: 0 errors, within budget. 2 commits
+(`474a7c9` category CRUD, `dad4e27` image-upload action).
+
+Phase 7: 4/4 tasks COMPLETE (7.1-7.4). Full monorepo lint/typecheck/test/
+e2e re-run clean (42/42 turbo tasks, zero regressions against every
+phase's own recorded baseline), diff-audit confirmed frozen
+packages/apps untouched beyond the one authorised `static-store` line,
+two live end-to-end smoke tests (public storefront, admin) both passed
+against a real dev Postgres — including 6.7's image upload surviving a
+fresh page load, confirmed via direct SQL and an on-disk file check. 1
+commit (`19baa4e`, docs-only — 7.1 found zero bugs to fix). Full detail:
+see the "Completed Tasks (Phase 7)" section above and engram
+`sdd/public-catalog/apply-progress` (#2147).
+
+**THE ENTIRE public-catalog CHANGE (PHASE 0 THROUGH PHASE 7) IS
+IMPLEMENTATION-COMPLETE.** First formal `sdd-verify` pass ran 2026-08-13:
+0 CRITICAL, 2 WARNING (both about this file's own staleness relative to
+the real implementation — closed by this documentation-sync commit), 2
+SUGGESTION (informational, no action needed). Ready for `sdd-archive`.
