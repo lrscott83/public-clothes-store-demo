@@ -2,7 +2,7 @@ import sharp from 'sharp';
 
 /**
  * The only file in this package that imports `sharp` (design.md file map).
- * `FsProductImageStore` never touches image bytes for meaning — this is the
+ * `FsImageStore` never touches image bytes for meaning — this is the
  * one place that does.
  */
 const MAX_WIDTH_PX = 1600;

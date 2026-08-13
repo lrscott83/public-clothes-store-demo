@@ -5,8 +5,9 @@
  * `api-salesops` inject `IMAGE_STORE`; the concrete adapter (`FsImageStore`,
  * `packages/infra-storage`) is the only place that knows bytes live on disk.
  *
- * Generalised from `IProductImageStore` (design.md D1): the adapter was always
- * image-generic except for the one line that minted the ref prefix.
+ * Generalised from the earlier product-only image-store port (design.md D1):
+ * the adapter was always image-generic except for the one line that minted
+ * the ref prefix.
  */
 
 /** Which catalogue entity the bytes belong to. Becomes the ref's first path segment. */

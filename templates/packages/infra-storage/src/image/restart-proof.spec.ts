@@ -3,9 +3,9 @@ import { rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 /**
- * Task 2.5 / spike 0.5, now unblocked by `FsProductImageStore` (2.1/2.2).
+ * Task 2.5 / spike 0.5, now unblocked by `FsImageStore` (2.1/2.2).
  *
- * Proves: a file written through `FsProductImageStore.put()` under a FIXED
+ * Proves: a file written through `FsImageStore.put()` under a FIXED
  * `basePath` (never `os.tmpdir()`/`mkdtemp`, unlike 2.1's round-trip spec) is
  * still readable via `open()` after the WRITING PROCESS HAS DIED and a
  * brand-new one has started. `execFileSync` spawns a real, separate `node`
@@ -16,7 +16,7 @@ import { join, resolve } from 'node:path';
  * Read this test alongside `packages/infra-storage/README.md`'s "What this
  * proves / does not prove" section before assuming more than what runs here.
  */
-describe('FsProductImageStore — process-restart persistence (task 2.5 / spike 0.5)', () => {
+describe('FsImageStore — process-restart persistence (task 2.5 / spike 0.5)', () => {
   const packageRoot = resolve(__dirname, '../..');
   const basePath = join(packageRoot, '.storage-restart-proof');
   const companyId = 'restart-proof-company';
