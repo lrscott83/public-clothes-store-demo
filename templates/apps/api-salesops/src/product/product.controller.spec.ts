@@ -29,7 +29,7 @@ type ImageStoreMock = { put: jest.Mock; delete: jest.Mock; open: jest.Mock };
  * the pipe is a cheap filter, sharp is the real gate). `store.put` is
  * mocked; `normalizeImage` is NOT — the security property under test is
  * that `sharp` genuinely decodes/re-encodes bytes and that a hostile
- * filename is never consulted (`PutProductImageInput` has no filename
+ * filename is never consulted (`PutImageInput` has no filename
  * field at all).
  */
 const REAL_PNG_BYTES = Buffer.from(
@@ -229,6 +229,21 @@ describe('ProductController', () => {
 
       expect(response.status).toBe(400);
     });
+
+    it('rejects an upload-minted image ref with 400 — design.md D4, never routed to the service', async () => {
+      const response = await request(app.getHttpServer()).post('/products').send({
+        name: 'Cafetera Express',
+        description: 'x',
+        price: { amount: '100.00', currency: 'USD' },
+        cost: { amount: '60.00', currency: 'USD' },
+        categoryId: 'category-uuid-1',
+        image: 'products/3fa85f64-5717-4562-b3fc-2c963f66afa6.webp',
+        order: 1,
+      });
+
+      expect(response.status).toBe(400);
+      expect(service.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('GET /products', () => {
@@ -272,6 +287,15 @@ describe('ProductController', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.name).toBe('Updated');
+    });
+
+    it('rejects an upload-minted image ref with 400 — design.md D4, never routed to the service', async () => {
+      const response = await request(app.getHttpServer())
+        .patch('/products/product-uuid-1')
+        .send({ image: 'products/3fa85f64-5717-4562-b3fc-2c963f66afa6.webp' });
+
+      expect(response.status).toBe(400);
+      expect(service.update).not.toHaveBeenCalled();
     });
   });
 
@@ -466,7 +490,7 @@ describe('ProductController', () => {
         });
 
         // Filename lies twice over — claims `.jpg`, then `.svg` — but the
-        // BYTES are a real, decodable PNG. `PutProductImageInput` has no
+        // BYTES are a real, decodable PNG. `PutImageInput` has no
         // filename field at all (design.md D1), so the only way the stored
         // extension could ever reflect "payload.jpg.svg" is if some layer
         // read the filename — none does.

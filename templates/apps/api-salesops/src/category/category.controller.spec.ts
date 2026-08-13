@@ -124,6 +124,18 @@ describe('CategoryController', () => {
 
       expect(response.status).toBe(400);
     });
+
+    it('rejects an upload-minted image ref with 400 — design.md D4, never routed to the service', async () => {
+      const response = await request(app.getHttpServer()).post('/categories').send({
+        name: 'Cafeteras',
+        slug: 'cafeteras',
+        order: 1,
+        image: 'categories/3fa85f64-5717-4562-b3fc-2c963f66afa6.webp',
+      });
+
+      expect(response.status).toBe(400);
+      expect(service.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('GET /categories', () => {
@@ -167,6 +179,15 @@ describe('CategoryController', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.name).toBe('Cafeteras Updated');
+    });
+
+    it('rejects an upload-minted image ref with 400 — design.md D4, never routed to the service', async () => {
+      const response = await request(app.getHttpServer())
+        .patch('/categories/category-uuid-1')
+        .send({ image: 'categories/3fa85f64-5717-4562-b3fc-2c963f66afa6.webp' });
+
+      expect(response.status).toBe(400);
+      expect(service.update).not.toHaveBeenCalled();
     });
   });
 
