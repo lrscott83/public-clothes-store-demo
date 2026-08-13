@@ -63,3 +63,44 @@ export async function softDeleteCategory(request: Request, companyId: string, id
     throw response;
   }
 }
+
+/**
+ * Calls `api-salesops`'s `POST /categories/:id/image`, field `image`
+ * (design.md's image path end to end). No `Content-Type` header is set
+ * here — `fetch` derives the multipart boundary from the `FormData` body
+ * itself; setting one manually would drop the boundary and break the
+ * upload silently.
+ */
+export async function uploadCategoryImage(
+  request: Request,
+  companyId: string,
+  id: string,
+  formData: FormData,
+): Promise<AdminCategoryDto> {
+  const response = await makeAuthenticatedRequest(
+    request,
+    companyId,
+    `/categories/${encodeURIComponent(id)}/image`,
+    { method: 'POST', body: formData },
+  );
+  return parseOrThrow(response);
+}
+
+/** Raw upstream `Response` — the proxy route (D5b) streams its body straight through. */
+export async function fetchCategoryImage(request: Request, companyId: string, id: string): Promise<Response> {
+  return makeAuthenticatedRequest(request, companyId, `/categories/${encodeURIComponent(id)}/image`);
+}
+
+export async function deleteCategoryImage(
+  request: Request,
+  companyId: string,
+  id: string,
+): Promise<AdminCategoryDto> {
+  const response = await makeAuthenticatedRequest(
+    request,
+    companyId,
+    `/categories/${encodeURIComponent(id)}/image`,
+    { method: 'DELETE' },
+  );
+  return parseOrThrow(response);
+}

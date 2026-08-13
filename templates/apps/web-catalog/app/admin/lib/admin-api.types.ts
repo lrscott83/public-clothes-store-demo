@@ -18,7 +18,7 @@ export interface AdminProductDto {
   finalPrice: AdminMoneyDto;
   isOffer: boolean;
   categoryId: string;
-  image: string;
+  image: string | null;
   isNew: boolean;
   order: number;
   active: boolean;
@@ -37,7 +37,7 @@ export interface CreateProductInput {
   discountPrice?: string;
   cost: AdminMoneyDto;
   categoryId: string;
-  image: string;
+  image?: string;
   isNew?: boolean;
   order: number;
   active?: boolean;

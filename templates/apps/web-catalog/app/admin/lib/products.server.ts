@@ -82,3 +82,15 @@ export async function uploadProductImage(
   });
   return parseOrThrow(response);
 }
+
+/** Raw upstream `Response` — the proxy route (D5b) streams its body straight through. */
+export async function fetchProductImage(request: Request, companyId: string, id: string): Promise<Response> {
+  return makeAuthenticatedRequest(request, companyId, `/products/${encodeURIComponent(id)}/image`);
+}
+
+export async function deleteProductImage(request: Request, companyId: string, id: string): Promise<AdminProductDto> {
+  const response = await makeAuthenticatedRequest(request, companyId, `/products/${encodeURIComponent(id)}/image`, {
+    method: 'DELETE',
+  });
+  return parseOrThrow(response);
+}

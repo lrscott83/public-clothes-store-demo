@@ -178,7 +178,7 @@ export function ProductForm({ categories, submitLabel, error, defaultValues }: P
             type="text"
             required
             placeholder="products/remera.jpg"
-            defaultValue={defaultValues?.image}
+            defaultValue={defaultValues?.image ?? ''}
             className="rounded-md border border-border bg-background px-3 py-2 text-text"
           />
         </label>
