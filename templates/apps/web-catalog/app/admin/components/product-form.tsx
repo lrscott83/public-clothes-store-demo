@@ -3,6 +3,8 @@ import type { AdminCategoryDto, AdminProductDto } from '../lib/admin-api.types';
 const CURRENCIES = ['USD', 'EUR', 'MN'] as const;
 
 export interface ProductFormProps {
+  /** `create` shows the file picker; `edit` has its own upload form beside this one. */
+  mode: 'create' | 'edit';
   categories: AdminCategoryDto[];
   submitLabel: string;
   error?: string;
@@ -11,12 +13,13 @@ export interface ProductFormProps {
 
 /**
  * Shared by `nuevo.tsx` and `editar.tsx` — same fields either way, since
- * `UpdateProductInput` is `Partial<CreateProductInput>`. `image` is a raw
- * ref path (text input), matching `api-salesops`'s current `CreateProductDto`
- * contract — the upload UI that fills it in for the admin lands in task
- * 6.7, not here.
+ * `UpdateProductInput` is `Partial<CreateProductInput>`. `image` is never a
+ * field of this form: in `create` mode the admin picks a file, uploaded via
+ * `uploadProductImage` right after the product row is created; in `edit`
+ * mode there is no image control here at all — `editar.tsx` owns its own
+ * upload/replace/remove UI beside this form.
  */
-export function ProductForm({ categories, submitLabel, error, defaultValues }: ProductFormProps) {
+export function ProductForm({ mode, categories, submitLabel, error, defaultValues }: ProductFormProps) {
   return (
     <div className="bg-surface border border-border rounded-lg p-8 shadow-card">
       {error && (
@@ -171,17 +174,12 @@ export function ProductForm({ categories, submitLabel, error, defaultValues }: P
           />
         </label>
 
-        <label className="flex flex-col gap-1 sm:col-span-2">
-          <span className="text-sm font-medium text-text">Imagen (ruta)</span>
-          <input
-            name="image"
-            type="text"
-            required
-            placeholder="products/remera.jpg"
-            defaultValue={defaultValues?.image ?? ''}
-            className="rounded-md border border-border bg-background px-3 py-2 text-text"
-          />
-        </label>
+        {mode === 'create' && (
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-sm font-medium text-text">Imagen (opcional)</span>
+            <input name="imageFile" type="file" accept="image/*" className="text-sm text-text" />
+          </label>
+        )}
 
         <label className="flex items-center gap-2 sm:col-span-2">
           <input name="isNew" type="checkbox" defaultChecked={defaultValues?.isNew} />

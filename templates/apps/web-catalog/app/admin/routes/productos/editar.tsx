@@ -73,7 +73,13 @@ export function EditarProductoPage({ product, categories, error }: EditarProduct
         <h1 className="text-2xl font-bold text-text mb-6">Editar producto</h1>
 
         <Form method="post" className="mb-4">
-          <ProductForm categories={categories} error={error} submitLabel="Guardar cambios" defaultValues={product} />
+          <ProductForm
+            mode="edit"
+            categories={categories}
+            error={error}
+            submitLabel="Guardar cambios"
+            defaultValues={product}
+          />
         </Form>
 
         <Form method="post" encType="multipart/form-data" className="mb-4 bg-surface border border-border rounded-lg p-6">

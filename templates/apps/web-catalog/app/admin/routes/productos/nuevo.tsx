@@ -1,9 +1,9 @@
 import { Form, redirect, useActionData } from 'react-router';
 import { withAuth } from '../../../shared/lib/auth.guards.server';
-import { createProduct } from '../../lib/products.server';
+import { createProduct, uploadProductImage } from '../../lib/products.server';
 import { listCategories } from '../../lib/categories.server';
 import { ProductForm } from '../../components/product-form';
-import type { AdminCategoryDto } from '../../lib/admin-api.types';
+import type { AdminCategoryDto, AdminProductDto } from '../../lib/admin-api.types';
 import type { CreateProductInput } from '../../lib/admin-api.types';
 import type { Route } from './+types/nuevo';
 
@@ -27,7 +27,6 @@ export function parseProductFormData(formData: FormData): CreateProductInput {
     name: String(formData.get('name') ?? ''),
     description: String(formData.get('description') ?? ''),
     categoryId: String(formData.get('categoryId') ?? ''),
-    image: String(formData.get('image') ?? ''),
     order: Number(formData.get('order') ?? 0),
     price: {
       amount: String(formData.get('priceAmount') ?? ''),
@@ -49,13 +48,30 @@ export const action = withAuth(async ({ request, companyId }) => {
   const formData = await request.formData();
   const input = parseProductFormData(formData);
 
+  let created: AdminProductDto;
   try {
-    await createProduct(request, companyId, input);
+    created = await createProduct(request, companyId, input);
   } catch (err) {
     if (err instanceof Response) {
       return { error: productErrorMessage(err.status) };
     }
     throw err;
+  }
+
+  // design.md D6 — create first, then upload against the id we just got. If the
+  // upload fails the row still exists WITHOUT an image, which is a legal state
+  // since admin-image-crud; we say so instead of pretending the create failed.
+  const file = formData.get('imageFile');
+  if (file instanceof File && file.size > 0) {
+    const uploadFormData = new FormData();
+    uploadFormData.set('image', file);
+    try {
+      await uploadProductImage(request, companyId, created.id, uploadFormData);
+    } catch {
+      return {
+        error: 'El producto se creó, pero la imagen no se pudo subir. Podés subirla desde la edición.',
+      };
+    }
   }
 
   return redirect('/admin/productos');
@@ -82,8 +98,8 @@ export function NuevoProductoPage({ categories, error }: NuevoProductoPageProps)
     <main className="min-h-screen bg-background px-4 py-12">
       <div className="container mx-auto max-w-2xl">
         <h1 className="text-2xl font-bold text-text mb-6">Nuevo producto</h1>
-        <Form method="post">
-          <ProductForm categories={categories} error={error} submitLabel="Crear producto" />
+        <Form method="post" encType="multipart/form-data">
+          <ProductForm mode="create" categories={categories} error={error} submitLabel="Crear producto" />
         </Form>
       </div>
     </main>
