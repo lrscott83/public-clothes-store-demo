@@ -26,7 +26,7 @@ function toDomain(row: CategoryRow): DomainCategory {
     id: row.id,
     name: row.name,
     slug: row.slug,
-    image: row.image ?? undefined,
+    image: row.image,
     icon: row.icon ?? undefined,
     order: row.order,
     active: row.active,

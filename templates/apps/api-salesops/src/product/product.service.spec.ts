@@ -33,6 +33,7 @@ const sampleCategory: DomainCategory = {
   id: 'category-uuid-1',
   name: 'Cafeteras',
   slug: 'cafeteras',
+  image: null,
   order: 1,
   active: true,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),

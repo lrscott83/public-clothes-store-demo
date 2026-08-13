@@ -18,7 +18,7 @@ const sampleCategory: DomainCategory = {
   id: 'category-uuid-1',
   name: 'Cafeteras',
   slug: 'cafeteras',
-  image: undefined,
+  image: null,
   icon: undefined,
   order: 1,
   active: true,

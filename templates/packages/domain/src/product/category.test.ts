@@ -61,3 +61,22 @@ describe('assertValidCategorySlug', () => {
     expect(() => assertValidCategorySlug('cafeteras')).not.toThrow();
   });
 });
+
+describe('createCategory — optional image', () => {
+  it('defaults a missing image to null', () => {
+    const category = createCategory({ name: 'Cafeteras', slug: 'cafeteras', order: 1, image: undefined });
+
+    expect(category.image).toBeNull();
+  });
+
+  it('keeps an explicitly provided ref', () => {
+    const category = createCategory({
+      name: 'Cafeteras',
+      slug: 'cafeteras',
+      order: 1,
+      image: 'categories/cafeteras/cafeteras1.jpeg',
+    });
+
+    expect(category.image).toBe('categories/cafeteras/cafeteras1.jpeg');
+  });
+});

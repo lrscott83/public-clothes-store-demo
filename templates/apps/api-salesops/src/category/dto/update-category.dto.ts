@@ -2,7 +2,7 @@
 export class UpdateCategoryDto {
   name?: string;
   slug?: string;
-  image?: string;
+  image?: string | null;
   icon?: string;
   order?: number;
   active?: boolean;

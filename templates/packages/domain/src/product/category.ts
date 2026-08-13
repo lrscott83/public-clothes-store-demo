@@ -10,7 +10,7 @@ export interface Category {
   readonly id: string;
   readonly name: string;
   readonly slug: string;
-  readonly image?: string;
+  readonly image: string | null;
   readonly icon?: string;
   readonly order: number;
   readonly active: boolean;
@@ -27,7 +27,7 @@ export interface CreateCategoryInput {
   readonly id?: string;
   readonly name: string;
   readonly slug: string;
-  readonly image?: string;
+  readonly image?: string | null;
   readonly icon?: string;
   readonly order: number;
   readonly active?: boolean;
@@ -71,7 +71,7 @@ export function createCategory(input: CreateCategoryInput): Category {
     id: input.id ?? randomUUID(),
     name: input.name,
     slug: input.slug,
-    image: input.image,
+    image: input.image ?? null,
     icon: input.icon,
     order: input.order,
     active: input.active ?? true,
