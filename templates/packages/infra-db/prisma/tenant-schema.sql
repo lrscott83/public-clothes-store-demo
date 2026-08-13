@@ -67,7 +67,7 @@ CREATE TABLE "product" (
     "cost" DECIMAL(18,2) NOT NULL,
     "cost_currency" TEXT NOT NULL,
     "category_id" UUID NOT NULL,
-    "image" TEXT NOT NULL,
+    "image" TEXT,
     "is_new" BOOLEAN NOT NULL DEFAULT false,
     "order" INTEGER NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,

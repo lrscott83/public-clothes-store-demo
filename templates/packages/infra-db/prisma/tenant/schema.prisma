@@ -89,7 +89,7 @@ model Product {
   cost                 Decimal  @db.Decimal(18, 2)
   costCurrency         String   @map("cost_currency")
   categoryId           String   @map("category_id") @db.Uuid
-  image                String
+  image                String?
   isNew                Boolean  @default(false) @map("is_new")
   order                Int
   active               Boolean  @default(true)
