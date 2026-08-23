@@ -14,7 +14,10 @@ describe('commission review table snapshot', () => {
     const products = enrichProducts(catalog);
     const rows = buildCommissionReviewTable(products);
     const generated = formatReviewTableDocument(rows);
-    const committed = readFileSync(snapshotPath, 'utf-8');
+    // Compare CONTENT, not checkout line endings: Git may materialise the
+    // committed LF file as CRLF on Windows (`core.autocrlf`), which would
+    // fail a byte-equal comparison through no fault of the generator.
+    const committed = readFileSync(snapshotPath, 'utf-8').replace(/\r\n/g, '\n');
 
     expect(generated).toBe(committed);
   });

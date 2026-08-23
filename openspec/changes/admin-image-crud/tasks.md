@@ -1,6 +1,6 @@
 # admin-image-crud Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Make product and category images optional, uploadable, replaceable and removable from their admin CRUDs, with the raw storage ref no longer writable by a human.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** pnpm + turbo monorepo. NestJS 11 (`api-salesops`, `api-public`) with jest + supertest, co-located `*.spec.ts`. React Router 7 SSR (`web-catalog`) with vitest + jsdom + testing-library. Prisma 7 (master schema via migrations, tenant schema via generated DDL). `sharp` via `@store-mgmt/infra-storage`.
 
-**Spec:** [`openspec/changes/admin-image-crud/design.md`](./design.md) — read it before starting. Every task below argues from a decision in it (D1-D8).
+**Spec:** [`openspec/changes/admin-image-crud/design.md`](./design.md) â€” read it before starting. Every task below argues from a decision in it (D1-D8).
 
 ## Global Constraints
 
@@ -25,14 +25,14 @@
 ## File Structure
 
 **`packages/domain`**
-- Create `src/image/image-store.port.ts` — the generalised port: types, DI token, `assertImageRef`, `isUploadMintedRef`.
-- Create `src/image/index.ts` — barrel.
+- Create `src/image/image-store.port.ts` â€” the generalised port: types, DI token, `assertImageRef`, `isUploadMintedRef`.
+- Create `src/image/index.ts` â€” barrel.
 - Delete `src/product/product-image-store.port.ts` and its `.test.ts` (content moves).
 - Modify `src/product/index.ts` (drop the port export), `src/index.ts` (add `./image/index.js`), `src/product/product.ts` (`image` nullable).
 
 **`packages/infra-storage`**
-- Rename `src/product-image/fs-product-image.store.ts` → `src/image/fs-image.store.ts` (`FsImageStore`).
-- Move `src/product-image/normalize-image.ts` → `src/image/normalize-image.ts` (unchanged content).
+- Rename `src/product-image/fs-product-image.store.ts` â†’ `src/image/fs-image.store.ts` (`FsImageStore`).
+- Move `src/product-image/normalize-image.ts` â†’ `src/image/normalize-image.ts` (unchanged content).
 - Modify `src/infra-storage.module.ts`, `src/index.ts`.
 
 **`packages/infra-db`**
@@ -40,21 +40,21 @@
 - Modify the Prisma product repository mapper for the nullable column.
 
 **`apps/api-salesops`**
-- Create `src/image/assert-not-minted-ref.ts` — the D4 guard, shared by both controllers.
-- Create `src/image/stream-image.ts` — the D5 admin read, shared by both controllers.
+- Create `src/image/assert-not-minted-ref.ts` â€” the D4 guard, shared by both controllers.
+- Create `src/image/stream-image.ts` â€” the D5 admin read, shared by both controllers.
 - Modify `src/product/product.controller.ts`, `src/product/dto/*`, `src/category/category.controller.ts`, `src/category/category.module.ts`.
 
 **`apps/api-public`**
 - Modify `src/product/to-public-product-dto.ts`, `src/product/dto/public-product.dto.ts`, `src/product/product-image.controller.ts` (import renames only).
 
 **`apps/web-catalog`**
-- Create `app/shared/components/image-placeholder.tsx` — one placeholder, four call sites.
-- Create `app/admin/routes/productos/image.tsx` and `app/admin/routes/categorias/image.tsx` — D5b proxy routes.
+- Create `app/shared/components/image-placeholder.tsx` â€” one placeholder, four call sites.
+- Create `app/admin/routes/productos/image.tsx` and `app/admin/routes/categorias/image.tsx` â€” D5b proxy routes.
 - Modify both forms, both create/edit routes, both list routes, `app/routes.ts`, `app/admin/lib/*.server.ts`, `app/admin/lib/admin-api.types.ts`, `app/catalog/components/product-card.tsx`, `app/catalog/routes/product-detail.tsx`, `app/shared/lib/public-api.types.ts`.
 
 ---
 
-## Phase 1 — `packages/domain`: the port generalises
+## Phase 1 â€” `packages/domain`: the port generalises
 
 ### Task 1.1: `assertImageRef` and `isUploadMintedRef`
 
@@ -66,7 +66,7 @@
 - Consumes: nothing.
 - Produces: `ImageCollection`, `ImageRef`, `PutImageInput`, `ImageContent`, `IImageStore`, `IMAGE_STORE`, `InvalidImageRefError`, `assertImageRef(ref: string): void`, `isUploadMintedRef(ref: string | null | undefined, collection: ImageCollection): ref is string`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `templates/packages/domain/src/image/image-store.port.test.ts`:
 
@@ -127,12 +127,12 @@ describe('isUploadMintedRef', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @store-mgmt/domain test -- image-store.port`
-Expected: FAIL — cannot resolve `./image-store.port.js`.
+Expected: FAIL â€” cannot resolve `./image-store.port.js`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `templates/packages/domain/src/image/image-store.port.ts`. Start from the current
 `src/product/product-image-store.port.ts` and apply the renames; the doc comments below are
@@ -140,8 +140,8 @@ the parts that CHANGE, keep the rest of the originals.
 
 ```ts
 /**
- * Port for an image blob store. States the intent — put image bytes, open
- * image bytes, delete image bytes — never filesystem vocabulary
+ * Port for an image blob store. States the intent â€” put image bytes, open
+ * image bytes, delete image bytes â€” never filesystem vocabulary
  * (`ensureDir`/`saveFile`/`getFullPath`/`fileExists`). Both `api-public` and
  * `api-salesops` inject `IMAGE_STORE`; the concrete adapter (`FsImageStore`,
  * `packages/infra-storage`) is the only place that knows bytes live on disk.
@@ -153,7 +153,7 @@ the parts that CHANGE, keep the rest of the originals.
 /** Which catalogue entity the bytes belong to. Becomes the ref's first path segment. */
 export type ImageCollection = 'products' | 'categories';
 
-/** Opaque to the domain — e.g. `'products/<uuid>.webp'`. Never a full path. */
+/** Opaque to the domain â€” e.g. `'products/<uuid>.webp'`. Never a full path. */
 export type ImageRef = string;
 
 export interface PutImageInput {
@@ -176,7 +176,7 @@ export interface ImageContent {
  * `companyId` is an explicit argument on every method, never read from
  * `AsyncLocalStorage`. The adapter always resolves under `<base>/<companyId>/`,
  * so a ref belonging to tenant A cannot be opened through tenant B's request
- * even if it is guessed — tenancy is in the signature, not in ambient state.
+ * even if it is guessed â€” tenancy is in the signature, not in ambient state.
  */
 export interface IImageStore {
   put(input: PutImageInput): Promise<ImageRef>;
@@ -187,12 +187,12 @@ export interface IImageStore {
    * nothing is a no-op, never a throw.
    *
    * Callers own the decision of WHAT is safe to delete, and `isUploadMintedRef`
-   * below is how they decide — the store deletes only what the store minted.
+   * below is how they decide â€” the store deletes only what the store minted.
    */
   delete(companyId: string, ref: ImageRef): Promise<void>;
 }
 
-/** DI token for `IImageStore` — consumers inject by this symbol. */
+/** DI token for `IImageStore` â€” consumers inject by this symbol. */
 export const IMAGE_STORE = Symbol('IImageStore');
 
 /** Thrown by `assertImageRef` when a ref does not match the grammar below. */
@@ -207,7 +207,7 @@ export class InvalidImageRefError extends Error {
  * Deliberately permissive enough to cover the seeded rows
  * (`products/cafeteras/cafeteras1.jpeg`) without a migration, while still
  * rejecting path traversal (`..`), an absolute path (leading `/`), and a
- * Windows-style separator (`\`) — all three are excluded by the pattern
+ * Windows-style separator (`\`) â€” all three are excluded by the pattern
  * itself, so the writer and the reader agree by construction.
  */
 const IMAGE_REF_PATTERN = /^[a-z0-9][a-z0-9/_-]*\.(webp|jpe?g|png)$/;
@@ -223,7 +223,7 @@ export function assertImageRef(ref: string): void {
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
 /**
- * True when this ref was minted by `put` for THIS collection — i.e. it was
+ * True when this ref was minted by `put` for THIS collection â€” i.e. it was
  * created for one row at one moment and no human ever typed it.
  *
  * Every destructive path is gated on this (design.md D3). A seeded catalog ref
@@ -247,12 +247,12 @@ Create `templates/packages/domain/src/image/index.ts`:
 export * from './image-store.port.js';
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @store-mgmt/domain test -- image-store.port`
 Expected: PASS, all cases.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/packages/domain/src/image/
@@ -271,16 +271,16 @@ git commit -m "feat(domain): add the collection-aware IImageStore port"
 - Consumes: Task 1.1's exports.
 - Produces: `@store-mgmt/domain` exporting the new names and **no longer exporting** `IProductImageStore`, `ProductImageRef`, `PutProductImageInput`, `ProductImageContent`, `PRODUCT_IMAGE_STORE`, `assertProductImageRef`, `InvalidProductImageRefError`.
 
-This task deliberately leaves the repo RED across other packages — Tasks 2.x and 4.x repair them. Do not repair them here; the point is one reviewable rename commit.
+This task deliberately leaves the repo RED across other packages â€” Tasks 2.x and 4.x repair them. Do not repair them here; the point is one reviewable rename commit.
 
-- [ ] **Step 1: Delete the old port and its test**
+- [x] **Step 1: Delete the old port and its test**
 
 ```bash
 git rm templates/packages/domain/src/product/product-image-store.port.ts \
        templates/packages/domain/src/product/product-image-store.port.test.ts
 ```
 
-- [ ] **Step 2: Drop the export from the product barrel**
+- [x] **Step 2: Drop the export from the product barrel**
 
 In `templates/packages/domain/src/product/index.ts`, remove this line:
 
@@ -288,7 +288,7 @@ In `templates/packages/domain/src/product/index.ts`, remove this line:
 export * from './product-image-store.port.js';
 ```
 
-- [ ] **Step 3: Add the image barrel to the root barrel**
+- [x] **Step 3: Add the image barrel to the root barrel**
 
 In `templates/packages/domain/src/index.ts`, add after the `./product/index.js` line:
 
@@ -296,7 +296,7 @@ In `templates/packages/domain/src/index.ts`, add after the `./product/index.js` 
 export * from './image/index.js';
 ```
 
-- [ ] **Step 4: Verify the package is green and the old names are gone**
+- [x] **Step 4: Verify the package is green and the old names are gone**
 
 Run: `pnpm --filter @store-mgmt/domain typecheck && pnpm --filter @store-mgmt/domain test`
 Expected: PASS.
@@ -304,7 +304,7 @@ Expected: PASS.
 Run: `grep -rn "IProductImageStore\|PRODUCT_IMAGE_STORE\|assertProductImageRef" templates/packages/domain/src`
 Expected: no output.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A templates/packages/domain
@@ -313,7 +313,7 @@ git commit -m "refactor(domain): retire IProductImageStore in favour of IImageSt
 
 ---
 
-## Phase 2 — `packages/infra-storage`: one adapter, two collections
+## Phase 2 â€” `packages/infra-storage`: one adapter, two collections
 
 ### Task 2.1: `FsImageStore` mints under the requested collection
 
@@ -321,21 +321,21 @@ git commit -m "refactor(domain): retire IProductImageStore in favour of IImageSt
 - Create: `templates/packages/infra-storage/src/image/fs-image.store.ts` (from the old file)
 - Create: `templates/packages/infra-storage/src/image/fs-image.store.spec.ts` (from the old spec)
 - Delete: `templates/packages/infra-storage/src/product-image/fs-product-image.store.ts` and its spec
-- Modify: `templates/packages/infra-storage/src/product-image/restart-proof.spec.ts` → move to `src/image/restart-proof.spec.ts`
-- Move: `templates/packages/infra-storage/src/product-image/normalize-image.ts` (+ spec) → `src/image/`
+- Modify: `templates/packages/infra-storage/src/product-image/restart-proof.spec.ts` â†’ move to `src/image/restart-proof.spec.ts`
+- Move: `templates/packages/infra-storage/src/product-image/normalize-image.ts` (+ spec) â†’ `src/image/`
 
 **Interfaces:**
 - Consumes: `IImageStore`, `PutImageInput`, `ImageRef`, `ImageContent`, `assertImageRef` from `@store-mgmt/domain`.
 - Produces: `FsImageStore` (class, `@Injectable()`, `constructor(@Optional() basePath?: string)`), `UnsupportedImageMimeTypeError`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Move the existing spec to `templates/packages/infra-storage/src/image/fs-image.store.spec.ts`,
-rename `FsProductImageStore` → `FsImageStore` and add `collection` to every `put` call. Then
+rename `FsProductImageStore` â†’ `FsImageStore` and add `collection` to every `put` call. Then
 append this new block, which is the actual behaviour change:
 
 ```ts
-describe('put — collection prefix', () => {
+describe('put â€” collection prefix', () => {
   it('mints a products ref for the products collection', async () => {
     const store = new FsImageStore(tmpDir);
 
@@ -386,12 +386,12 @@ describe('put — collection prefix', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @store-mgmt/infra-storage test`
-Expected: FAIL — cannot resolve `./fs-image.store.js`.
+Expected: FAIL â€” cannot resolve `./fs-image.store.js`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 `git mv` the adapter to `src/image/fs-image.store.ts`, then apply exactly these changes and
 leave the rest of the file (the `@Optional()` doc comment, `resolve`, `open`, `delete`,
@@ -430,12 +430,12 @@ export class FsImageStore implements IImageStore {
 Also `git mv` `normalize-image.ts` (+ its spec) and `restart-proof.spec.ts` into `src/image/`,
 updating only their relative imports. `normalize-image.ts`'s contents do not change.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter @store-mgmt/infra-storage test`
 Expected: PASS, including the pre-existing restart-proof spec.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A templates/packages/infra-storage/src
@@ -454,7 +454,7 @@ git commit -m "feat(infra-storage): mint image refs under the requested collecti
 - Consumes: `FsImageStore` (2.1), `IMAGE_STORE` (1.1).
 - Produces: `InfraStorageModule` providing and exporting `IMAGE_STORE`; package barrel exporting `FsImageStore`, `UnsupportedImageMimeTypeError`, `normalizeImage`, `UnsupportedImageError`, `NormalizedImage`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `templates/packages/infra-storage/src/infra-storage.module.spec.ts`:
 
@@ -477,12 +477,12 @@ describe('InfraStorageModule', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @store-mgmt/infra-storage test -- infra-storage.module`
-Expected: FAIL — `IMAGE_STORE` has no provider (module still binds `PRODUCT_IMAGE_STORE`).
+Expected: FAIL â€” `IMAGE_STORE` has no provider (module still binds `PRODUCT_IMAGE_STORE`).
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 `templates/packages/infra-storage/src/infra-storage.module.ts`:
 
@@ -493,8 +493,8 @@ import { FsImageStore } from './image/fs-image.store.js';
 
 /**
  * Binds the concrete adapter to the domain's `IMAGE_STORE` token (design.md
- * D1). Unlike `InfraDbModule` — which exports concrete services for each
- * consumer app to bind against its OWN abstract token — this module owns the
+ * D1). Unlike `InfraDbModule` â€” which exports concrete services for each
+ * consumer app to bind against its OWN abstract token â€” this module owns the
  * binding itself: both `api-public` and `api-salesops` import
  * `InfraStorageModule` and inject `IMAGE_STORE` directly, with no per-app
  * rebinding. There is exactly one adapter for this port today, and it now
@@ -519,12 +519,12 @@ export {
 } from './image/normalize-image.js';
 ```
 
-- [ ] **Step 4: Run the full package suite**
+- [x] **Step 4: Run the full package suite**
 
 Run: `pnpm --filter @store-mgmt/infra-storage typecheck && pnpm --filter @store-mgmt/infra-storage test:cov`
 Expected: PASS, coverage at or above the package's frozen threshold.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/packages/infra-storage/src
@@ -533,7 +533,7 @@ git commit -m "refactor(infra-storage): bind and export the generalised image st
 
 ---
 
-## Phase 3 — Schema: a product may have no image
+## Phase 3 â€” Schema: a product may have no image
 
 ### Task 3.1: `Product.image` becomes nullable in both schemas
 
@@ -547,7 +547,7 @@ git commit -m "refactor(infra-storage): bind and export the generalised image st
 - Consumes: nothing.
 - Produces: a `product.image` column that accepts `NULL` in both the master schema and every tenant schema.
 
-- [ ] **Step 1: Edit both schema files**
+- [x] **Step 1: Edit both schema files**
 
 In **both** `prisma/master/schema.prisma` and `prisma/tenant/schema.prisma`, change the
 `Product` model's image line:
@@ -556,13 +556,13 @@ In **both** `prisma/master/schema.prisma` and `prisma/tenant/schema.prisma`, cha
   image                String?
 ```
 
-Leave `Category.image` alone — it is already `String?`.
+Leave `Category.image` alone â€” it is already `String?`.
 
-- [ ] **Step 2: Generate the master migration**
+- [x] **Step 2: Generate the master migration**
 
 Run: `pnpm --filter @store-mgmt/infra-db prisma:migrate -- --name product_image_nullable`
 
-Expected `migration.sql` (verify it matches — a `DROP`/`ADD` instead of an `ALTER` means the
+Expected `migration.sql` (verify it matches â€” a `DROP`/`ADD` instead of an `ALTER` means the
 schema edit was wrong and would destroy data):
 
 ```sql
@@ -570,7 +570,7 @@ schema edit was wrong and would destroy data):
 ALTER TABLE "product" ALTER COLUMN "image" DROP NOT NULL;
 ```
 
-- [ ] **Step 3: Regenerate the tenant DDL artifact**
+- [x] **Step 3: Regenerate the tenant DDL artifact**
 
 Run: `cd templates/packages/infra-db && node scripts/generate-tenant-schema-sql.ts`
 
@@ -578,12 +578,12 @@ Confirm `prisma/tenant-schema.sql`'s `product` table now declares `image TEXT` w
 `NOT NULL`. This file provisions NEW tenants; existing tenant schemas are altered by
 `scripts/tenant-migrate.ts`, which diffs against the same `schema.prisma`.
 
-- [ ] **Step 4: Verify the package still builds and tests green**
+- [x] **Step 4: Verify the package still builds and tests green**
 
 Run: `pnpm --filter @store-mgmt/infra-db prisma:generate && pnpm --filter @store-mgmt/infra-db typecheck`
 Expected: PASS. The generated client now types `image` as `string | null`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/packages/infra-db/prisma
@@ -603,12 +603,12 @@ git commit -m "feat(infra-db): allow product.image to be null in master and tena
 - Consumes: Task 3.1's nullable column.
 - Produces: `Product.image: string | null`; `CreateProductInput.image?: string | null`; `createProduct` defaulting a missing image to `null`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `templates/packages/domain/src/product/product.test.ts`:
 
 ```ts
-describe('createProduct — optional image', () => {
+describe('createProduct â€” optional image', () => {
   it('defaults a missing image to null', () => {
     const product = createProduct({ ...validCreateProductInput, image: undefined });
 
@@ -626,16 +626,16 @@ describe('createProduct — optional image', () => {
 });
 ```
 
-(`validCreateProductInput` is the fixture already used by that file — reuse it, do not
+(`validCreateProductInput` is the fixture already used by that file â€” reuse it, do not
 re-declare it.)
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @store-mgmt/domain test -- product.test`
-Expected: FAIL — `image` is a required `string`, so `undefined` is a type error and
+Expected: FAIL â€” `image` is a required `string`, so `undefined` is a type error and
 `product.image` is `undefined`, not `null`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `templates/packages/domain/src/product/product.ts`:
 
@@ -651,15 +651,15 @@ In `templates/packages/domain/src/product/product.ts`:
 ```
 
 Then update the Prisma product mapper in `templates/packages/infra-db/src/product/` so the
-row's `image` passes through unchanged (it is already `string | null` after 3.1 — remove any
+row's `image` passes through unchanged (it is already `string | null` after 3.1 â€” remove any
 non-null assertion or `?? ''` fallback the compiler now flags).
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter @store-mgmt/domain test && pnpm --filter @store-mgmt/infra-db typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/packages/domain/src/product templates/packages/infra-db/src/product
@@ -668,7 +668,7 @@ git commit -m "feat(domain): make Product.image optional, defaulting to null"
 
 ---
 
-## Phase 4 — `apps/api-salesops`: contracts and endpoints
+## Phase 4 â€” `apps/api-salesops`: contracts and endpoints
 
 ### Task 4.1: Reject upload-minted refs in create and update bodies
 
@@ -680,9 +680,9 @@ git commit -m "feat(domain): make Product.image optional, defaulting to null"
 
 **Interfaces:**
 - Consumes: `isUploadMintedRef`, `ImageCollection` from `@store-mgmt/domain`.
-- Produces: `assertNotMintedRef(image: string | null | undefined, collection: ImageCollection): void` — throws `BadRequestException`.
+- Produces: `assertNotMintedRef(image: string | null | undefined, collection: ImageCollection): void` â€” throws `BadRequestException`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `templates/apps/api-salesops/src/image/assert-not-minted-ref.spec.ts`:
 
@@ -697,7 +697,7 @@ describe('assertNotMintedRef', () => {
     ).toThrow(BadRequestException);
   });
 
-  it('allows a seeded catalogue ref — the deliberate escape hatch', () => {
+  it('allows a seeded catalogue ref â€” the deliberate escape hatch', () => {
     expect(() =>
       assertNotMintedRef('products/cafeteras/cafeteras1.jpeg', 'products'),
     ).not.toThrow();
@@ -716,12 +716,12 @@ describe('assertNotMintedRef', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @store-mgmt/api-salesops test -- assert-not-minted-ref`
-Expected: FAIL — module not found.
+Expected: FAIL â€” module not found.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `templates/apps/api-salesops/src/image/assert-not-minted-ref.ts`:
 
@@ -730,7 +730,7 @@ import { BadRequestException } from '@nestjs/common';
 import { isUploadMintedRef, type ImageCollection } from '@store-mgmt/domain';
 
 /**
- * design.md D4 — only the upload endpoint may assign an upload-minted ref.
+ * design.md D4 â€” only the upload endpoint may assign an upload-minted ref.
  *
  * Removing the admin's free-text field closes this hole in the UI but not in
  * the API: any holder of a valid token could still POST another row's minted
@@ -761,7 +761,7 @@ export function assertNotMintedRef(
 In `src/product/dto/create-product.dto.ts` make the field optional and document why:
 
 ```ts
-  /** Optional since admin-image-crud: a product may have no image (design.md §3). */
+  /** Optional since admin-image-crud: a product may have no image (design.md Â§3). */
   image?: string;
 ```
 
@@ -790,12 +790,12 @@ import { isUploadMintedRef } from '@store-mgmt/domain';
 
 Do the same in `category.controller.ts`'s `create` and `update` with `'categories'`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter @store-mgmt/api-salesops test -- assert-not-minted-ref product.controller category.controller`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/apps/api-salesops/src/image templates/apps/api-salesops/src/product templates/apps/api-salesops/src/category
@@ -804,7 +804,7 @@ git commit -m "feat(api-salesops): reject upload-minted image refs in create and
 
 ---
 
-### Task 4.2: `GET /products/:id/image` — the admin read
+### Task 4.2: `GET /products/:id/image` â€” the admin read
 
 **Files:**
 - Create: `templates/apps/api-salesops/src/image/stream-image.ts`
@@ -813,15 +813,15 @@ git commit -m "feat(api-salesops): reject upload-minted image refs in create and
 
 **Interfaces:**
 - Consumes: `IImageStore`, `assertImageRef` from `@store-mgmt/domain`.
-- Produces: `streamImage(store: IImageStore, companyId: string, ref: string | null, res: Response): Promise<StreamableFile>` — throws `NotFoundException` when the ref is absent, malformed, or resolves to no bytes.
+- Produces: `streamImage(store: IImageStore, companyId: string, ref: string | null, res: Response): Promise<StreamableFile>` â€” throws `NotFoundException` when the ref is absent, malformed, or resolves to no bytes.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `templates/apps/api-salesops/src/product/product.controller.spec.ts`:
 
 ```ts
 describe('GET /products/:id/image', () => {
-  it('serves the bytes of an INACTIVE product — the public endpoint will not', async () => {
+  it('serves the bytes of an INACTIVE product â€” the public endpoint will not', async () => {
     productService.findById.mockResolvedValue({
       ...existingProduct,
       active: false,
@@ -884,12 +884,12 @@ Add to that spec's setup, alongside the existing mocks:
 const response = { setHeader: jest.fn(), status: jest.fn() } as unknown as Response;
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @store-mgmt/api-salesops test -- product.controller`
-Expected: FAIL — `controller.getImage is not a function`.
+Expected: FAIL â€” `controller.getImage is not a function`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `templates/apps/api-salesops/src/image/stream-image.ts`:
 
@@ -900,14 +900,14 @@ import type { Response } from 'express';
 import { Readable } from 'node:stream';
 
 /**
- * design.md D5 — the ADMIN read path, shared by the product and category
+ * design.md D5 â€” the ADMIN read path, shared by the product and category
  * controllers.
  *
  * Deliberately NOT the public one: `api-public`'s image controller refuses to
  * serve an inactive row's image, and the admin list shows soft-deleted rows on
  * purpose, so reusing it would render broken exactly the rows an operator is
  * trying to inspect or restore. There is no content-derived cache key here
- * either — an operator who just replaced an image must see the new bytes on the
+ * either â€” an operator who just replaced an image must see the new bytes on the
  * next paint, which is the opposite of the public path's immutability.
  *
  * Bytes are streamed, never buffered. Every rejection is a 404: absent ref,
@@ -989,12 +989,12 @@ Update the two existing `this.productImageStore` call sites in `uploadImage`, an
         });
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter @store-mgmt/api-salesops test -- product.controller`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/apps/api-salesops/src/image templates/apps/api-salesops/src/product
@@ -1003,7 +1003,7 @@ git commit -m "feat(api-salesops): serve product images to the admin, including 
 
 ---
 
-### Task 4.3: `DELETE /products/:id/image` — remove
+### Task 4.3: `DELETE /products/:id/image` â€” remove
 
 **Files:**
 - Modify: `templates/apps/api-salesops/src/product/product.controller.ts`
@@ -1013,7 +1013,7 @@ git commit -m "feat(api-salesops): serve product images to the admin, including 
 - Consumes: `isUploadMintedRef`, `IImageStore.delete`, `ProductService.update`.
 - Produces: `ProductController.removeImage(id, req): Promise<ProductResponseDto>`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `product.controller.spec.ts`:
 
@@ -1021,7 +1021,7 @@ Append to `product.controller.spec.ts`:
 describe('DELETE /products/:id/image', () => {
   const mintedRef = 'products/3fa85f64-5717-4562-b3fc-2c963f66afa6.webp';
 
-  it('nulls the column and then deletes the minted bytes — in that order', async () => {
+  it('nulls the column and then deletes the minted bytes â€” in that order', async () => {
     const calls: string[] = [];
     productService.findById.mockResolvedValue({ ...existingProduct, image: mintedRef });
     productService.update.mockImplementation(async () => {
@@ -1053,7 +1053,7 @@ describe('DELETE /products/:id/image', () => {
     expect(imageStore.delete).not.toHaveBeenCalled();
   });
 
-  it('succeeds when cleanup fails — the row is already updated', async () => {
+  it('succeeds when cleanup fails â€” the row is already updated', async () => {
     productService.findById.mockResolvedValue({ ...existingProduct, image: mintedRef });
     productService.update.mockResolvedValue({ ...existingProduct, image: null });
     imageStore.delete.mockRejectedValue(new Error('EACCES'));
@@ -1071,12 +1071,12 @@ describe('DELETE /products/:id/image', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @store-mgmt/api-salesops test -- product.controller`
-Expected: FAIL — `controller.removeImage is not a function`.
+Expected: FAIL â€” `controller.removeImage is not a function`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Add to `ProductController`:
 
@@ -1085,7 +1085,7 @@ Add to `ProductController`:
    * Removes a product's image (design.md D7). Same post-commit ordering as a
    * replace: the row stops pointing at the file BEFORE the bytes go, so a
    * failed update can never leave a row pointing at something deleted. Only
-   * upload-minted refs are removed from disk — a seeded ref may be shared by
+   * upload-minted refs are removed from disk â€” a seeded ref may be shared by
    * other rows and we cannot prove otherwise.
    */
   @Delete(':id/image')
@@ -1119,7 +1119,7 @@ Add to `ProductController`:
   }
 ```
 
-`UpdateProductDto.image` must accept `null` — widen it to `image?: string | null;` and make
+`UpdateProductDto.image` must accept `null` â€” widen it to `image?: string | null;` and make
 `ProductService.update` pass `null` through (it already patches only when the key is
 present; confirm the `patch.image !== undefined` guard at `product.service.ts:104` lets
 `null` through, since `null !== undefined`).
@@ -1127,12 +1127,12 @@ present; confirm the `patch.image !== undefined` guard at `product.service.ts:10
 Also rename the existing `PRODUCT_IMAGE_CLEANUP_FAILED` log prefix in `uploadImage` to
 `IMAGE_CLEANUP_FAILED` so both paths emit one searchable token.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter @store-mgmt/api-salesops test -- product.controller`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/apps/api-salesops/src/product
@@ -1150,9 +1150,9 @@ git commit -m "feat(api-salesops): let an admin remove a product image"
 
 **Interfaces:**
 - Consumes: `streamImage` (4.2), `assertNotMintedRef` (4.1), `normalizeImage`, `IImageStore`.
-- Produces: `CategoryController.getImage`, `.uploadImage`, `.removeImage` — same signatures and semantics as the product ones, with `'categories'` as the collection.
+- Produces: `CategoryController.getImage`, `.uploadImage`, `.removeImage` â€” same signatures and semantics as the product ones, with `'categories'` as the collection.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `category.controller.spec.ts` (mirror the three product blocks from 4.2 and 4.3,
 swapping the collection). The one category-specific case that must be present:
@@ -1195,12 +1195,12 @@ describe('POST /categories/:id/image', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @store-mgmt/api-salesops test -- category.controller`
-Expected: FAIL — `controller.uploadImage is not a function`.
+Expected: FAIL â€” `controller.uploadImage is not a function`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Wire the store into `category.module.ts`:
 
@@ -1216,7 +1216,7 @@ import { InfraStorageModule } from '@store-mgmt/infra-storage';
 Inject it in `CategoryController`'s constructor exactly as the product one does
 (`@Inject(IMAGE_STORE) private readonly imageStore: IImageStore`), add
 `private readonly logger = new Logger(CategoryController.name);`, and copy the three
-endpoints from `ProductController` — `getImage`, `uploadImage`, `removeImage` — changing:
+endpoints from `ProductController` â€” `getImage`, `uploadImage`, `removeImage` â€” changing:
 
 - the service calls to `this.categoryService.*`
 - the not-found message to `Category "${id}" not found`
@@ -1224,17 +1224,17 @@ endpoints from `ProductController` — `getImage`, `uploadImage`, `removeImage` 
 - the log line's entity word to `category`
 
 Reuse the SAME upload validators as the product controller by exporting them from
-`src/image/`: move `MAX_PRODUCT_IMAGE_SIZE_BYTES` → `MAX_IMAGE_SIZE_BYTES` and
-`ALLOWED_PRODUCT_IMAGE_MIME_TYPES` → `ALLOWED_IMAGE_MIME_TYPES` into a new
+`src/image/`: move `MAX_PRODUCT_IMAGE_SIZE_BYTES` â†’ `MAX_IMAGE_SIZE_BYTES` and
+`ALLOWED_PRODUCT_IMAGE_MIME_TYPES` â†’ `ALLOWED_IMAGE_MIME_TYPES` into a new
 `src/image/upload-constraints.ts`, keeping their existing doc comments verbatim, and import
 them in both controllers. Two controllers must not carry two copies of an allowlist.
 
-- [ ] **Step 4: Run the app's full suite**
+- [x] **Step 4: Run the app's full suite**
 
 Run: `pnpm --filter @store-mgmt/api-salesops typecheck && pnpm --filter @store-mgmt/api-salesops test:cov && pnpm --filter @store-mgmt/api-salesops test:e2e`
 Expected: PASS, coverage at or above the frozen threshold.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/apps/api-salesops/src
@@ -1243,7 +1243,7 @@ git commit -m "feat(api-salesops): add category image read, upload and remove en
 
 ---
 
-## Phase 5 — `apps/api-public`: a product may have no URL
+## Phase 5 â€” `apps/api-public`: a product may have no URL
 
 ### Task 5.1: `imageUrl` becomes nullable
 
@@ -1258,7 +1258,7 @@ git commit -m "feat(api-salesops): add category image read, upload and remove en
 - Consumes: `Product.image: string | null` (3.2), `IMAGE_STORE` (1.1).
 - Produces: `PublicProductDto.imageUrl: string | null`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `to-public-product-dto.spec.ts`:
 
@@ -1282,17 +1282,17 @@ it('still assembles a URL when the product has an image', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @store-mgmt/api-public test -- to-public-product-dto`
-Expected: FAIL — `imageUrl` is a URL string built from `null`, not `null`.
+Expected: FAIL â€” `imageUrl` is a URL string built from `null`, not `null`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `dto/public-product.dto.ts`:
 
 ```ts
-  /** `null` when the product has no image — the client renders a placeholder (design.md D8). */
+  /** `null` when the product has no image â€” the client renders a placeholder (design.md D8). */
   readonly imageUrl: string | null;
 ```
 
@@ -1303,8 +1303,8 @@ In `to-public-product-dto.ts:26`:
 ```
 
 In `product-image.controller.ts` and `public-product.module.ts`, rename the imports only:
-`PRODUCT_IMAGE_STORE` → `IMAGE_STORE`, `IProductImageStore` → `IImageStore`,
-`assertProductImageRef` → `assertImageRef`, and the injected field to `imageStore`. The
+`PRODUCT_IMAGE_STORE` â†’ `IMAGE_STORE`, `IProductImageStore` â†’ `IImageStore`,
+`assertProductImageRef` â†’ `assertImageRef`, and the injected field to `imageStore`. The
 controller's `isValidRef` already guards a `string`; add the null check at its call site:
 
 ```ts
@@ -1314,12 +1314,12 @@ controller's `isValidRef` already guards a `string`; add the null check at its c
       }
 ```
 
-- [ ] **Step 4: Run the app's full suite**
+- [x] **Step 4: Run the app's full suite**
 
 Run: `pnpm --filter @store-mgmt/api-public typecheck && pnpm --filter @store-mgmt/api-public test:cov`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/apps/api-public/src
@@ -1328,7 +1328,7 @@ git commit -m "feat(api-public): return a null imageUrl for products with no ima
 
 ---
 
-## Phase 6 — `apps/web-catalog`: placeholder, proxy, and both CRUDs
+## Phase 6 â€” `apps/web-catalog`: placeholder, proxy, and both CRUDs
 
 ### Task 6.1: One placeholder, used by the storefront
 
@@ -1341,9 +1341,9 @@ git commit -m "feat(api-public): return a null imageUrl for products with no ima
 
 **Interfaces:**
 - Consumes: `PublicProductDto.imageUrl: string | null` (5.1).
-- Produces: `<ProductImage src={string | null} alt={string} className={string} />` — renders an `<img>` when `src` is a string, an inline-SVG placeholder in the same box otherwise.
+- Produces: `<ProductImage src={string | null} alt={string} className={string} />` â€” renders an `<img>` when `src` is a string, an inline-SVG placeholder in the same box otherwise.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `templates/apps/web-catalog/app/shared/components/__tests__/image-placeholder.test.tsx`:
 
@@ -1375,18 +1375,18 @@ describe('ProductImage', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter web-catalog test -- image-placeholder`
-Expected: FAIL — cannot resolve `../image-placeholder`.
+Expected: FAIL â€” cannot resolve `../image-placeholder`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `templates/apps/web-catalog/app/shared/components/image-placeholder.tsx`:
 
 ```tsx
 export interface ProductImageProps {
-  /** `null` when the row has no image — see design.md D8. */
+  /** `null` when the row has no image â€” see design.md D8. */
   src: string | null;
   alt: string;
   /** Sizing classes. Applied to the image AND the placeholder, so the box never moves. */
@@ -1441,13 +1441,13 @@ In `product-card.tsx`, replace the `<img>` with:
 Apply the same substitution in `product-detail.tsx:48`, keeping that element's own classes.
 In `public-api.types.ts:31`, widen `readonly imageUrl: string;` to `readonly imageUrl: string | null;`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter web-catalog test -- image-placeholder product-card product-detail`
-Expected: PASS. The existing card/detail tests must still pass unchanged — if one asserts on
+Expected: PASS. The existing card/detail tests must still pass unchanged â€” if one asserts on
 `img` for a product WITH an image, it keeps working.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/apps/web-catalog/app/shared/components templates/apps/web-catalog/app/catalog
@@ -1474,7 +1474,7 @@ git commit -m "feat(web-catalog): render a placeholder for products with no imag
   `uploadCategoryImage(request, companyId, id, formData)`.
   `AdminProductDto.image` and `CreateProductInput.image` become `string | null` / optional.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `templates/apps/web-catalog/app/admin/routes/productos/__tests__/image.test.tsx`:
 
@@ -1529,12 +1529,12 @@ describe('GET /admin/productos/:id/image', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter web-catalog test -- productos/__tests__/image`
-Expected: FAIL — cannot resolve `../image`.
+Expected: FAIL â€” cannot resolve `../image`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `templates/apps/web-catalog/app/admin/routes/productos/image.tsx`:
 
@@ -1548,7 +1548,7 @@ import { fetchProductImage } from '../../lib/products.server';
  *
  * The `<img>` runs in the browser, which holds this app's session cookie and
  * NO Bearer token. Pointing it straight at `api-salesops` would either 401 or
- * force us to ship the token to the client — strictly worse than the problem
+ * force us to ship the token to the client â€” strictly worse than the problem
  * it solves. So the fetch happens here, server-side, and only a same-origin URL
  * ever reaches the page.
  *
@@ -1578,7 +1578,7 @@ Create the categorias twin, importing `fetchCategoryImage` and hitting `/categor
 Add to `products.server.ts`:
 
 ```ts
-/** Raw upstream `Response` — the proxy route (D5b) streams its body straight through. */
+/** Raw upstream `Response` â€” the proxy route (D5b) streams its body straight through. */
 export async function fetchProductImage(
   request: Request,
   companyId: string,
@@ -1603,7 +1603,7 @@ export async function deleteProductImage(
 ```
 
 Add the category equivalents to `categories.server.ts`, plus `uploadCategoryImage` copied
-from `uploadProductImage` (keeping its "no `Content-Type` header" doc comment — the reason
+from `uploadProductImage` (keeping its "no `Content-Type` header" doc comment â€” the reason
 applies identically).
 
 In `admin-api.types.ts`: `AdminProductDto.image: string | null`, `CreateProductInput.image?: string`.
@@ -1615,12 +1615,12 @@ Register both routes in `app/routes.ts`, inside the `_auth.tsx` layout block:
     route('admin/categorias/:id/image', 'admin/routes/categorias/image.tsx'),
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter web-catalog test -- image && pnpm --filter web-catalog typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/apps/web-catalog/app/admin templates/apps/web-catalog/app/routes.ts
@@ -1640,12 +1640,12 @@ git commit -m "feat(web-catalog): proxy admin image bytes through a guarded reso
 - Consumes: `createProduct`, `uploadProductImage` (existing), `ProductImage` (6.1).
 - Produces: `ProductForm` with no `image` text input and a new `mode: 'create' | 'edit'` prop; `parseProductFormData(formData)` no longer reads `image`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Replace the image-related cases in `productos/__tests__/nuevo.test.tsx` with:
 
 ```tsx
-describe('ProductForm — image', () => {
+describe('ProductForm â€” image', () => {
   it('offers a file picker, not a raw path field', () => {
     render(<ProductForm mode="create" categories={[category]} submitLabel="Crear" />);
 
@@ -1666,7 +1666,7 @@ describe('ProductForm — image', () => {
 });
 
 describe('parseProductFormData', () => {
-  it('never carries image — the upload endpoint owns it', () => {
+  it('never carries image â€” the upload endpoint owns it', () => {
     const formData = new FormData();
     formData.set('name', 'Remera');
     formData.set('description', 'x');
@@ -1682,7 +1682,7 @@ describe('parseProductFormData', () => {
   });
 });
 
-describe('action — create then upload', () => {
+describe('action â€” create then upload', () => {
   it('creates the product first, then uploads the chosen file to its id', async () => {
     const calls: string[] = [];
     createProduct.mockImplementation(async () => {
@@ -1720,18 +1720,18 @@ describe('action — create then upload', () => {
     const result = await action({ request: requestWith(formDataWithFile()) } as never);
 
     expect(result).toEqual({
-      error: 'El producto se creó, pero la imagen no se pudo subir. Podés subirla desde la edición.',
+      error: 'El producto se creÃ³, pero la imagen no se pudo subir. PodÃ©s subirla desde la ediciÃ³n.',
     });
   });
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter web-catalog test -- productos/__tests__/nuevo`
-Expected: FAIL — `ProductForm` has no `mode` prop and still renders the text input.
+Expected: FAIL â€” `ProductForm` has no `mode` prop and still renders the text input.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `product-form.tsx`, add `mode` to the props, replace the doc comment's stale note about
 task 6.7, and swap the image block:
@@ -1775,7 +1775,7 @@ export const action = withAuth(async ({ request, companyId }) => {
     throw err;
   }
 
-  // design.md D6 — create first, then upload against the id we just got. If the
+  // design.md D6 â€” create first, then upload against the id we just got. If the
   // upload fails the row still exists WITHOUT an image, which is a legal state
   // since admin-image-crud; we say so instead of pretending the create failed.
   const file = formData.get('imageFile');
@@ -1786,7 +1786,7 @@ export const action = withAuth(async ({ request, companyId }) => {
       await uploadProductImage(request, companyId, created.id, uploadFormData);
     } catch {
       return {
-        error: 'El producto se creó, pero la imagen no se pudo subir. Podés subirla desde la edición.',
+        error: 'El producto se creÃ³, pero la imagen no se pudo subir. PodÃ©s subirla desde la ediciÃ³n.',
       };
     }
   }
@@ -1795,12 +1795,12 @@ export const action = withAuth(async ({ request, companyId }) => {
 });
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter web-catalog test -- productos`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/apps/web-catalog/app/admin
@@ -1817,9 +1817,9 @@ git commit -m "feat(web-catalog): pick an image file when creating a product"
 
 **Interfaces:**
 - Consumes: `deleteProductImage` (6.2), `ProductImage` (6.1), the `/admin/productos/:id/image` route (6.2).
-- Produces: an edit page with an image panel — thumbnail, replace, remove — and an `intent=remove-image` action branch.
+- Produces: an edit page with an image panel â€” thumbnail, replace, remove â€” and an `intent=remove-image` action branch.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `productos/__tests__/editar.test.tsx`:
 
@@ -1863,7 +1863,7 @@ describe('action', () => {
     expect(result.headers.get('Location')).toBe('/admin/productos/p1/editar');
   });
 
-  it('does not send image in the update payload — a field edit cannot revert the photo', async () => {
+  it('does not send image in the update payload â€” a field edit cannot revert the photo', async () => {
     const formData = fullProductFormData();
     formData.set('image', 'products/attacker-chosen.webp');
 
@@ -1879,12 +1879,12 @@ describe('action', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter web-catalog test -- productos/__tests__/editar`
-Expected: FAIL — no image panel, no `remove-image` branch.
+Expected: FAIL â€” no image panel, no `remove-image` branch.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Add the action branch beside the existing `delete` and `upload-image` ones:
 
@@ -1923,7 +1923,7 @@ Pass `mode="edit"` to `<ProductForm>`, and replace the upload `<Form>`'s
               method="post"
               className="mt-3"
               onSubmit={(event) => {
-                if (!confirm('¿Quitar la imagen? El archivo se elimina y no se puede recuperar.')) {
+                if (!confirm('Â¿Quitar la imagen? El archivo se elimina y no se puede recuperar.')) {
                   event.preventDefault();
                 }
               }}
@@ -1937,12 +1937,12 @@ Pass `mode="edit"` to `<ProductForm>`, and replace the upload `<Form>`'s
         </div>
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter web-catalog test -- productos`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/apps/web-catalog/app/admin/routes/productos
@@ -1962,41 +1962,41 @@ git commit -m "feat(web-catalog): show, replace and remove a product image from 
 - Consumes: `uploadCategoryImage`, `deleteCategoryImage`, `fetchCategoryImage` (6.2), `ProductImage` (6.1).
 - Produces: `CategoryForm` with a `mode` prop and no `image` text input; the categorias edit route gaining `upload-image` and `remove-image` intents.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Mirror 6.3's and 6.4's blocks in the two categorias test files, changing the route prefix to
 `/admin/categorias/`, the label to `Imagen (opcional)`, and the confirm copy. Add this
 category-specific case to `nueva.test.tsx`:
 
 ```tsx
-it('keeps the icon field as free text — it is not an uploaded image', () => {
+it('keeps the icon field as free text â€” it is not an uploaded image', () => {
   render(<CategoryForm mode="create" submitLabel="Crear" />);
 
-  const icon = screen.getByLabelText('Ícono (opcional)') as HTMLInputElement;
+  const icon = screen.getByLabelText('Ãcono (opcional)') as HTMLInputElement;
 
   expect(icon.type).toBe('text');
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter web-catalog test -- categorias`
-Expected: FAIL — `CategoryForm` has no `mode` prop.
+Expected: FAIL â€” `CategoryForm` has no `mode` prop.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Apply 6.3's and 6.4's changes to the category form and its two routes. `icon` stays exactly
-as it is (design.md §1, out of scope). Update the form's doc comment, which currently claims
+as it is (design.md Â§1, out of scope). Update the form's doc comment, which currently claims
 there is "no upload UI for categories".
 
 `parseCategoryFormData` (or the inline equivalent in `nueva.tsx`) stops emitting `image`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter web-catalog test -- categorias`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/apps/web-catalog/app/admin
@@ -2016,7 +2016,7 @@ git commit -m "feat(web-catalog): upload, replace and remove category images"
 - Consumes: `ProductImage` (6.1), the proxy routes (6.2).
 - Produces: a leading thumbnail column in both admin tables.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `productos/__tests__/index.test.tsx`:
 
@@ -2039,12 +2039,12 @@ describe('thumbnail column', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter web-catalog test -- productos/__tests__/index`
-Expected: FAIL — no image in the row.
+Expected: FAIL â€” no image in the row.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Add the header cell before `Nombre`:
 
@@ -2066,12 +2066,12 @@ And the body cell as the row's first `<td>`:
 
 Mirror it in the categorias list with `/admin/categorias/${category.id}/image` and `category.name`.
 
-- [ ] **Step 4: Run the app's full suite**
+- [x] **Step 4: Run the app's full suite**
 
 Run: `pnpm --filter web-catalog typecheck && pnpm --filter web-catalog lint && pnpm --filter web-catalog test:cov`
 Expected: PASS, coverage at or above the frozen threshold.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/apps/web-catalog/app/admin
@@ -2080,11 +2080,11 @@ git commit -m "feat(web-catalog): show image thumbnails in both admin lists"
 
 ---
 
-## Phase 7 — Final verification
+## Phase 7 â€” Final verification
 
 ### Task 7.1: Whole-repo green and invariants held
 
-- [ ] **Step 1: Run every gate**
+- [x] **Step 1: Run every gate**
 
 ```bash
 pnpm -r typecheck && pnpm -r lint && pnpm -r test
@@ -2093,7 +2093,7 @@ pnpm --filter @store-mgmt/api-salesops test:e2e
 
 Expected: all PASS.
 
-- [ ] **Step 2: Prove the old names are gone**
+- [x] **Step 2: Prove the old names are gone**
 
 ```bash
 grep -rn "IProductImageStore\|PRODUCT_IMAGE_STORE\|assertProductImageRef\|FsProductImageStore\|InvalidProductImageRefError" templates --include='*.ts' --include='*.tsx' | grep -v node_modules
@@ -2101,15 +2101,15 @@ grep -rn "IProductImageStore\|PRODUCT_IMAGE_STORE\|assertProductImageRef\|FsProd
 
 Expected: no output.
 
-- [ ] **Step 3: Prove no raw-ref input survives**
+- [x] **Step 3: Prove no raw-ref input survives**
 
 ```bash
 grep -rn 'name="image"' templates/apps/web-catalog/app/admin --include='*.tsx' | grep -v 'type="file"'
 ```
 
-Expected: no output — every remaining `name="image"` is a file input.
+Expected: no output â€” every remaining `name="image"` is a file input.
 
-- [ ] **Step 4: Prove both schemas moved together**
+- [x] **Step 4: Prove both schemas moved together**
 
 ```bash
 grep -n "image" templates/packages/infra-db/prisma/master/schema.prisma templates/packages/infra-db/prisma/tenant/schema.prisma | grep -i product -A0
@@ -2118,7 +2118,7 @@ grep -n "image" templates/packages/infra-db/prisma/tenant-schema.sql
 
 Expected: `image String?` in both schema files; `image TEXT` with no `NOT NULL` in the SQL artifact.
 
-- [ ] **Step 5: Commit any fixes and update this file**
+- [x] **Step 5: Commit any fixes and update this file**
 
 Check off every box above, then:
 
@@ -2133,11 +2133,11 @@ git commit -m "chore(admin-image-crud): final verification pass"
 
 Checked against `design.md` on completion of this plan:
 
-- D1 → Tasks 1.1, 1.2, 2.1, 2.2. D2 → Task 1.1 (grammar unchanged, tested for both collections).
-  D3 → Task 1.1 (`isUploadMintedRef` moved and collection-scoped). D4 → Task 4.1.
-  D5 → Task 4.2. D5b → Task 6.2. D6 → Task 6.3. D7 → Tasks 4.3, 4.4. D8 → Task 6.1.
-- §3 (data model) → Task 3.1. §4 (HTTP contract) → Tasks 4.1-4.4, 5.1.
-  §5 (admin UX) → Tasks 6.3-6.6. §6 (testing) → every task's Step 1.
-- §7's three risks each have a guard: the rename lands as its own commit (1.2), coverage is
+- D1 â†’ Tasks 1.1, 1.2, 2.1, 2.2. D2 â†’ Task 1.1 (grammar unchanged, tested for both collections).
+  D3 â†’ Task 1.1 (`isUploadMintedRef` moved and collection-scoped). D4 â†’ Task 4.1.
+  D5 â†’ Task 4.2. D5b â†’ Task 6.2. D6 â†’ Task 6.3. D7 â†’ Tasks 4.3, 4.4. D8 â†’ Task 6.1.
+- Â§3 (data model) â†’ Task 3.1. Â§4 (HTTP contract) â†’ Tasks 4.1-4.4, 5.1.
+  Â§5 (admin UX) â†’ Tasks 6.3-6.6. Â§6 (testing) â†’ every task's Step 1.
+- Â§7's three risks each have a guard: the rename lands as its own commit (1.2), coverage is
   checked per package as it closes (2.2, 4.4, 5.1, 6.6), and both schemas are edited in one
   task with a verification step (3.1, 7.1 Step 4).

@@ -30,10 +30,18 @@ describe('FsImageStore — process-restart persistence (task 2.5 / spike 0.5)', 
     // actually import (unlike every other spec in this package, which
     // ts-jest transforms `.ts` source in-process). Rebuild `dist/` here so
     // this proof never depends on a stale or missing prior `pnpm build`.
-    execFileSync(join(packageRoot, 'node_modules/.bin/tsc'), [], {
-      cwd: packageRoot,
-      stdio: 'pipe',
-    });
+    // Invoked as `node <typescript>/bin/tsc` rather than through the
+    // `node_modules/.bin/tsc` shim: that shim is a POSIX shell script that
+    // Windows cannot exec directly (ENOENT under `execFileSync`), while the
+    // JS entrypoint it wraps is identical on every platform.
+    execFileSync(
+      process.execPath,
+      [join(packageRoot, 'node_modules/typescript/bin/tsc')],
+      {
+        cwd: packageRoot,
+        stdio: 'pipe',
+      },
+    );
   });
 
   beforeEach(async () => {

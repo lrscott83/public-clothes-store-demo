@@ -442,16 +442,23 @@ interface RunDiffParams {
  * `--from-config-datasource` takes no argument and reads
  * `prisma.config.ts`, which resolves `process.env.DATABASE_URL`).
  *
+ * The CLI is invoked as `node <package>/node_modules/prisma/build/index.js`
+ * rather than through `npx`: on Windows there is no exec-able `npx` binary
+ * (only an `npx.cmd` shim, which `execFile` cannot spawn without a shell),
+ * so every child process failed to start and every tenant reported
+ * status `error`. Pointing Node directly at the same JS entrypoint `npx`
+ * wraps is identical on every platform and skips the shim entirely.
+ *
  * `execFile`'s own `timeout`/`killSignal` option is what actually enforces
  * the per-tenant budget — verified empirically (spike, 2026-08-05) to
- * reliably SIGKILL a still-running `npx prisma` subprocess and surface
+ * reliably SIGKILL a still-running Prisma CLI subprocess and surface
  * `err.killed === true`, rather than merely abandoning it while it keeps
  * running in the background.
  */
 function runDiff(params: RunDiffParams): Promise<DiffOutcome> {
   const { tenantUrl, configPath, toSchemaPath, cwd, timeoutMs, exitCode, script } = params;
   const args = [
-    'prisma',
+    path.join(cwd, 'node_modules', 'prisma', 'build', 'index.js'),
     'migrate',
     'diff',
     '--from-config-datasource',
@@ -465,7 +472,7 @@ function runDiff(params: RunDiffParams): Promise<DiffOutcome> {
 
   return new Promise((resolve) => {
     execFile(
-      'npx',
+      process.execPath,
       args,
       {
         cwd,

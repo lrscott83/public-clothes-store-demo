@@ -142,10 +142,20 @@ export async function assertAbsentFromPublicSchema(
   const client = new PgClient({ connectionString: process.env.DATABASE_URL ?? '' });
   await client.connect();
   try {
-    const { rows } = await client.query(
-      `SELECT 1 FROM public."${table}" WHERE "${column}" = $1`,
-      [value],
-    );
+    let rows: Array<Record<string, unknown>>;
+    try {
+      ({ rows } = await client.query(
+        `SELECT 1 FROM public."${table}" WHERE "${column}" = $1`,
+        [value],
+      ));
+    } catch (err) {
+      // A FRESH database (new contributor machine, new CI database) has no
+      // legacy tables in `public` at all — Postgres raises 42P01. That is
+      // isolation in its strongest form: nothing to leak into. Only a table
+      // that EXISTS with the row readable counts as a failure.
+      if ((err as { code?: string }).code === '42P01') return;
+      throw err;
+    }
     if (rows.length > 0) {
       throw new Error(
         `Row ${value} unexpectedly readable from public."${table}"."${column}" — tenant isolation broken`,
