@@ -22,7 +22,7 @@ The system MUST persist a `Product` entity as master data referenced by Ventas, 
 | discountPrice | decimal | ≥ 0, default 0, no currency |
 | cost | Money | required, amount ≥ 0, currency required (USD/EUR/MN); MAY differ from `price`'s currency |
 | categoryId | FK → Category.id | required |
-| image | string | — |
+| image | string | nullable, default null |
 | isNew | boolean | default false |
 | order | int | display order |
 | active | boolean | soft-delete |
@@ -34,7 +34,7 @@ The system MUST persist a `Product` entity as master data referenced by Ventas, 
 
 - GIVEN a valid `name`, `price > 0`, and an existing `categoryId`
 - WHEN the product is created
-- THEN it persists with `sku`/`barcode` nullable and `percentDiscountPrice`/`discountPrice` defaulted to 0
+- THEN it persists with `sku`/`barcode`/`image` nullable and `percentDiscountPrice`/`discountPrice` defaulted to 0
 
 #### Scenario: Product rejected without category
 
