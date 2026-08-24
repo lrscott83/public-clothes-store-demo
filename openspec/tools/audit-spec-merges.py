@@ -64,6 +64,11 @@ KNOWN_EXCEPTIONS = {
      "Self-Service Buyer Authentication Flow"):
         "DEFERRED by owner decision 2026-08-06 (storefront/checkout is frozen LEGACY). "
         "Documented in the merged salesops-customers spec.",
+    ("2026-08-07-delivery", "salesops-delivery",
+     "DeliveryAssignment Is a Two-State Bridge, Zero-Or-One Per Order"):
+        "RENAMED by delivery-hardening to 'DeliveryAssignment Is a Three-State "
+        "Bridge, Zero-Or-One Per Order' — the two-state claim became false when the "
+        "shipped enum gained `cancelled`. Present under the new title.",
 }
 
 # Change folders that are not expected to have reached openspec/specs/ at all.
