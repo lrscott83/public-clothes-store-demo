@@ -92,6 +92,15 @@ function parseCsvRecords(text: string): string[][] {
 }
 
 /**
+ * Capitalizes the first letter of every whitespace-separated word. Deliberately
+ * NO Spanish special-casing (no small-word exceptions) — "camisa de manga
+ * larga" becomes "Camisa De Manga Larga". Interior spacing is preserved.
+ */
+export function toTitleCase(name: string): string {
+  return name.replace(/(^|\s)(\S)/g, (_match, leading: string, first: string) => leading + first.toUpperCase());
+}
+
+/**
  * Parses an uploaded CSV buffer into typed rows. Whole-file failures (missing/
  * wrong header, more than `maxRows` data rows) return `{ ok: false, reason }`
  * with a Spanish reason naming either the expected header or the exceeded cap.

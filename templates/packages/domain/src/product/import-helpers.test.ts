@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseProductCsv } from './import-helpers.js';
+import { parseProductCsv, toTitleCase } from './import-helpers.js';
 
 const HEADER = 'categoria;nombre;precio;moneda;barcode;sku;descripcion';
 
@@ -62,5 +62,23 @@ describe('parseProductCsv', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toContain('1000');
+  });
+});
+
+describe('toTitleCase', () => {
+  it('capitalizes each whitespace-separated word', () => {
+    expect(toTitleCase('iphone case')).toBe('Iphone Case');
+  });
+
+  it('handles multi-word and multi-space input without collapsing spaces', () => {
+    expect(toTitleCase('ropa interior  de  invierno')).toBe('Ropa Interior  De  Invierno');
+  });
+
+  it('uppercases the first letter but preserves the rest of each word', () => {
+    expect(toTitleCase('ipHONE case')).toBe('IpHONE Case');
+  });
+
+  it('has no Spanish special-casing (no small-word exceptions)', () => {
+    expect(toTitleCase('camisa de manga larga')).toBe('Camisa De Manga Larga');
   });
 });
