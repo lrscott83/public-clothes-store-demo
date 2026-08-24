@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import App, { loader as rootLoader } from '../root';
 import routes from '../routes';
 import { loader as platformLayoutLoader } from '../shared/routes/_platform';
+import { createSession } from '../shared/lib/session.server';
 import { defaultStoreConfig } from '../shared/config/stores/default.config';
 
 /**
@@ -83,13 +84,32 @@ describe('root loader — admin host branching (design D4)', () => {
 
 describe('_platform layout loader — admin host passes through', () => {
   it('does NOT throw on an admin host', async () => {
-    await expect(
-      platformLayoutLoader({
-        request: requestFor('admin.localhost:3000', '/tiendas'),
-        params: {},
-        context: undefined,
-      } as never),
-    ).resolves.toBeDefined();
+    // The layout's session guard calls the platform list endpoint — stand in
+    // for api-idp, provide the secret the session storage requires, and a
+    // valid session cookie (the guard itself is covered by tiendas.test.tsx).
+    const originalSecret = process.env.SESSION_SECRET;
+    const originalFetch = global.fetch;
+    process.env.SESSION_SECRET = 'test-secret';
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify([]), { status: 200 })) as unknown as typeof fetch;
+
+    try {
+      const sessionResponse = await createSession('access-1', 'refresh-1', 'user-1', '/irrelevant');
+      const cookie = (sessionResponse.headers.get('Set-Cookie') ?? '').split(';')[0];
+      await expect(
+        platformLayoutLoader({
+          request: new Request('http://ignored/tiendas', {
+            headers: { host: 'admin.localhost:3000', Cookie: cookie },
+          }),
+          params: {},
+          context: undefined,
+        } as never),
+      ).resolves.toEqual({ companies: [] });
+    } finally {
+      process.env.SESSION_SECRET = originalSecret;
+      global.fetch = originalFetch;
+    }
   });
 });
 

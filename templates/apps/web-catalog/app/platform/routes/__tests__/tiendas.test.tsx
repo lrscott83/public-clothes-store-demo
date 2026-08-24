@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, createRoutesStub } from 'react-router';
 import { loader as platformLayoutLoader } from '../../../shared/routes/_platform';
 import { createSession } from '../../../shared/lib/session.server';
 import { TiendasPage, type PlatformCompanyDto } from '../tiendas';
+import { TiendasNuevaPage, action as tiendasNuevaAction } from '../tiendas-nueva';
 
 /**
  * Console session guard + list (spec: salesops-platform "Console Session
@@ -127,5 +128,127 @@ describe('TiendasPage — Spanish list', () => {
       </MemoryRouter>,
     );
     expect(screen.getByText(/no hay tiendas/i)).toBeInTheDocument();
+  });
+});
+
+describe('/tiendas/nueva — form', () => {
+  it('renders name, slug, type (only catalog), owner login, and temporary password fields', () => {
+    const Stub = createRoutesStub([
+      { path: '/tiendas/nueva', Component: () => <TiendasNuevaPage /> },
+    ]);
+    render(<Stub initialEntries={['/tiendas/nueva']} />);
+
+    expect(screen.getByLabelText(/nombre/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/slug/i)).toBeInTheDocument();
+    const typeSelect = screen.getByLabelText(/tipo/i) as HTMLSelectElement;
+    const options = Array.from(typeSelect.options).map((o) => o.value);
+    expect(options).toEqual(['catalog']);
+    expect(screen.getByLabelText(/usuario del propietario/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/contraseña temporal/i)).toBeInTheDocument();
+  });
+
+  it('submits to the platform endpoint as JSON with the session token', async () => {
+    const originalSecret = process.env.SESSION_SECRET;
+    const originalFetch = global.fetch;
+    process.env.SESSION_SECRET = 'test-secret';
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          company: { id: 'company-new', name: 'Mi Tienda', slug: 'mi-tienda', type: 'catalog' },
+          ownerLogin: 'dueño',
+          temporaryPassword: 'Secreto123!',
+        }),
+        { status: 201 },
+      ),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const cookie = await sessionCookie();
+
+    try {
+      const formData = new URLSearchParams({
+        name: 'Mi Tienda',
+        slug: 'mi-tienda',
+        type: 'catalog',
+        ownerLogin: 'dueño',
+        temporaryPassword: 'Secreto123!',
+      });
+      const request = new Request('http://ignored/tiendas/nueva', {
+        method: 'POST',
+        headers: {
+          host: 'admin.localhost:3000',
+          Cookie: cookie,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString(),
+      });
+
+      const result = (await tiendasNuevaAction({
+        request,
+        params: {},
+        context: undefined,
+      } as never)) as { success?: { temporaryPassword: string }; error?: string };
+
+      expect(result.error).toBeUndefined();
+      expect(result.success?.temporaryPassword).toBe('Secreto123!');
+
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/platform/companies');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(String(init.body))).toEqual({
+        name: 'Mi Tienda',
+        slug: 'mi-tienda',
+        type: 'catalog',
+        ownerLogin: 'dueño',
+        temporaryPassword: 'Secreto123!',
+      });
+      const headers = new Headers(init.headers);
+      expect(headers.get('Authorization')).toBe('Bearer access-1');
+      expect(headers.get('X-Company-Id')).toBeNull();
+    } finally {
+      process.env.SESSION_SECRET = originalSecret;
+      global.fetch = originalFetch;
+      vi.restoreAllMocks();
+    }
+  });
+});
+
+// Spec: "Temporary Password Show-Once Semantics" — console side. The
+// plaintext appears in EXACTLY ONE element of the success state; no other
+// element or form state retains it.
+describe('/tiendas/nueva — show-once success state', () => {
+  function renderSuccess() {
+    return render(
+      <MemoryRouter>
+        <TiendasNuevaPage
+          success={{
+            companyName: 'Mi Tienda',
+            ownerLogin: 'dueño',
+            temporaryPassword: 'Secreto123!',
+          }}
+        />
+      </MemoryRouter>,
+    );
+  }
+
+  it('renders the plaintext password exactly once', () => {
+    renderSuccess();
+    expect(screen.getAllByText('Secreto123!')).toHaveLength(1);
+    // And nowhere else in the whole document — count raw occurrences.
+    expect(document.body.innerHTML.split('Secreto123!').length - 1).toBe(1);
+  });
+
+  it('does NOT retain the password in any input/select/textarea value', () => {
+    renderSuccess();
+    const inputs = document.body.querySelectorAll('input, select, textarea');
+    for (const input of inputs) {
+      expect((input as HTMLInputElement).value).not.toBe('Secreto123!');
+    }
+  });
+
+  it('identifies the created store and owner login in Spanish', () => {
+    renderSuccess();
+    expect(screen.getByText('Mi Tienda')).toBeInTheDocument();
+    expect(screen.getByText('dueño')).toBeInTheDocument();
+    expect(screen.getByText(/guardala en un lugar seguro/i)).toBeInTheDocument();
   });
 });
