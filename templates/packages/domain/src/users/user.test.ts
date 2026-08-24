@@ -28,6 +28,13 @@ describe('createUser — invariants', () => {
     expect(Object.keys(user)).not.toContain('isEmailVerified');
   });
 
+  // Spec: salesops-identity "Default users are not superadmin" — the
+  // platform superadmin flag defaults to false for any user built without it.
+  it('defaults isSuperadmin to false', () => {
+    const user = createUser({ login: 'jdoe', passwordHash: VALID_HASH, fullName: 'Jane Doe' });
+    expect(user.isSuperadmin).toBe(false);
+  });
+
   it('rejects an empty login', () => {
     expect(() => createUser({ login: '', passwordHash: VALID_HASH, fullName: 'Jane Doe' })).toThrow(
       InvalidUserError,

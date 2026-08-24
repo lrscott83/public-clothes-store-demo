@@ -82,6 +82,10 @@ function sanitize(user: User): AuthenticatedUser {
     email: user.email,
     cellPhone: user.cellPhone,
     isActive: user.isActive,
+    // Master-side platform flag (spec: salesops-identity "Role Resolution at
+    // Authentication Time") — available after JwtAuthGuard ALONE, never baked
+    // into the JWT payload ({ sub, login } per ADR-2).
+    isSuperadmin: user.isSuperadmin,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };

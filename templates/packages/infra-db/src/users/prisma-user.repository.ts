@@ -13,6 +13,7 @@ interface UserRow {
   readonly email: string | null;
   readonly cellPhone: string | null;
   readonly isActive: boolean;
+  readonly isSuperadmin: boolean;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -26,6 +27,7 @@ function toDomain(row: UserRow): DomainUser {
     email: row.email,
     cellPhone: row.cellPhone,
     isActive: row.isActive,
+    isSuperadmin: row.isSuperadmin,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -81,6 +83,7 @@ export class PrismaUserRepository implements IUserRepository {
           email: input.email ?? null,
           cellPhone: input.cellPhone ?? null,
           isActive: input.isActive ?? true,
+          isSuperadmin: input.isSuperadmin ?? false,
         },
       });
       return toDomain(row);

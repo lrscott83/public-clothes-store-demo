@@ -21,6 +21,12 @@ export interface User {
   readonly email: string | null;
   readonly cellPhone: string | null;
   readonly isActive: boolean;
+  /**
+   * Platform superadmin flag (spec: salesops-identity "Platform Superadmin
+   * Flag on Master User") — a MASTER-level authorization fact, NOT a bit in
+   * the company-scoped `USER_ROLES` mask and independent of any Membership.
+   */
+  readonly isSuperadmin: boolean;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -38,6 +44,7 @@ export interface CreateUserInput {
   readonly email?: string | null;
   readonly cellPhone?: string | null;
   readonly isActive?: boolean;
+  readonly isSuperadmin?: boolean;
   readonly createdAt?: Date;
   readonly updatedAt?: Date;
 }
@@ -72,6 +79,7 @@ export function createUser(input: CreateUserInput): User {
     email: input.email ?? null,
     cellPhone: input.cellPhone ?? null,
     isActive: input.isActive ?? true,
+    isSuperadmin: input.isSuperadmin ?? false,
     createdAt: input.createdAt ?? now,
     updatedAt: input.updatedAt ?? now,
   };

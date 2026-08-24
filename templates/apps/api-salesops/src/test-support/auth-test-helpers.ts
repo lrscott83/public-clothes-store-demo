@@ -11,6 +11,9 @@ export const SAMPLE_AUTH_USER: Omit<SanitizedUser, 'roles'> = {
   email: null,
   cellPhone: null,
   isActive: true,
+  // Master-side platform flag — always resolved by `JwtStrategy.validate`
+  // (spec: salesops-identity "Role Resolution at Authentication Time").
+  isSuperadmin: false,
   // Present because `JwtStrategy` always resolves a CompanyUser assignment
   // before it will hand back a `req.user` at all — a fixture without it would
   // model a state the real strategy cannot produce.
