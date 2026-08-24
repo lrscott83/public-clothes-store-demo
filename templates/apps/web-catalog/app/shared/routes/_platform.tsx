@@ -1,4 +1,4 @@
-import { Outlet, redirect } from 'react-router';
+import { Outlet, redirect, useLoaderData } from 'react-router';
 import { isPlatformAdminHost } from '../lib/tenant.server';
 import { makePlatformRequest } from '../lib/platform-api.server';
 
@@ -62,13 +62,16 @@ function loginRedirectTarget(request: Request): string {
 }
 
 export default function PlatformLayout() {
+  // The guard's list data flows to children through Outlet context —
+  // `/tiendas` renders it; `/tiendas/nueva` ignores it.
+  const { companies } = useLoaderData<typeof loader>();
   return (
     <div data-testid="platform-shell" className="min-h-screen bg-background">
       <header className="border-b p-4">
         <h1 className="text-xl font-semibold">Administración de plataforma</h1>
       </header>
       <main className="p-4">
-        <Outlet />
+        <Outlet context={{ companies }} />
       </main>
     </div>
   );

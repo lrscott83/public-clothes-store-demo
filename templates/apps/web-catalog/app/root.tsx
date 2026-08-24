@@ -26,18 +26,28 @@ import './app.css';
  * correctly with zero cross-route coupling.
  *
  * PLATFORM BRANCH (design D4): on the reserved `admin` host label, tenant/
- * store resolution is SKIPPED entirely — only the platform routes
- * (`/tiendas`, `/tiendas/nueva`) are served. `/tiendas*` paths return a
- * `{ platform: true }` marker (the `_platform` layout takes over); ANY other
- * admin-host path (`/`, `/productos`, …) redirects to `/tiendas`. The root
- * loader runs BEFORE child loaders, so a statically-matching tenant route is
- * intercepted before any tenant resolution can happen. Non-admin hosts keep
- * the exact pre-existing behavior, untouched.
+ * store resolution is SKIPPED entirely — only platform-surface routes are
+ * served. `/tiendas*` paths return a `{ platform: true }` marker (the
+ * `_platform` layout takes over); ANY other path (`/`, `/productos`, …)
+ * redirects to `/tiendas`. The root loader runs BEFORE child loaders, so a
+ * statically-matching tenant route is intercepted before any tenant
+ * resolution can happen. Non-admin hosts keep the exact pre-existing
+ * behavior, untouched.
+ *
+ * `/admin*` is EXEMPT from the redirect (runtime-proven loop): the console's
+ * own login lives there (design D6 sends every guard redirect to
+ * `/admin/login`), so redirecting it would ping-pong forever between the
+ * root loader and the layout's anonymous-session guard.
  */
 export async function loader({ request }: Route.LoaderArgs) {
   if (isPlatformAdminHost(request)) {
     const { pathname } = new URL(request.url);
-    if (pathname === '/tiendas' || pathname.startsWith('/tiendas/')) {
+    if (
+      pathname === '/tiendas' ||
+      pathname.startsWith('/tiendas/') ||
+      pathname === '/admin' ||
+      pathname.startsWith('/admin/')
+    ) {
       return { platform: true };
     }
     throw redirect('/tiendas');

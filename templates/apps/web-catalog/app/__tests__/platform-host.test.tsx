@@ -51,6 +51,18 @@ describe('root loader — admin host branching (design D4)', () => {
     expect(resolved).toEqual({ platform: true });
   });
 
+  // The console's OWN login lives at /admin/login (design D6 sends every
+  // guard redirect there). Redirecting it to /tiendas would loop forever
+  // (found at runtime): /tiendas → anonymous → /admin/login → root loader →
+  // /tiendas … So the /admin prefix is part of the platform surface.
+  it('admin × /admin/login → platform marker, NOT a redirect (loop prevention)', async () => {
+    const { resolved, redirect } = await loaderResult(
+      requestFor('admin.localhost:3000', '/admin/login'),
+    );
+    expect(redirect).toBeUndefined();
+    expect(resolved).toEqual({ platform: true });
+  });
+
   it('tenant × / → unchanged tenant resolution (StoreConfig)', async () => {
     const { resolved, redirect } = await loaderResult(requestFor('default.localhost:3000', '/'));
     expect(redirect).toBeUndefined();
