@@ -1,59 +1,45 @@
-# web-catalog
+# @store-mgmt/web-catalog
 
-Server-rendered (RR7 SSR) public storefront + `/admin`. The tenant is the
-first label of the request `Host` (design.md §1/§2); the browser never calls
-`api-public` directly — every backend call is server-to-server from a
-loader/action.
+Server-rendered (RR7 SSR) public storefront + per-tenant `/admin` + the
+platform superadmin console. The tenant is the first label of the request
+`Host` header; every backend call is server-to-server from a loader/action —
+the browser never touches the APIs directly.
 
-**Phase 0 status**: bare scaffold. One route (`/`) with a loader that echoes
-`request.headers.get('host')`, nothing else. Real tenant resolution,
-`/productos`, and `/admin` land in Phases 5-6.
+## Hosts
 
-## Spike 0.1b — wildcard-subdomain Host header
+| Host | Superficie |
+|---|---|
+| `<slug>.localhost:3900` | Storefront público del tenant (`/`, `/productos`, `/productos/:id`) + su admin (`/admin/**`, login por sesión) |
+| `admin.localhost:3900` | Consola de plataforma (superadmin): `/tiendas`, `/tiendas/nueva` — sin resolución de tenant; cualquier otra ruta redirige a `/tiendas` |
+| `www` / `api` | Labels reservados — nunca son tenants |
 
-**Question**: does `Host: default.localhost:3000` survive to this app's dev
-server (and into a loader) with the header intact?
-
-**Result: PASS, after one config fix.**
-
-First run failed at Vite's dep-scanner/esbuild step — unrelated to the
-`Host` header:
-
-```
-✘ [ERROR] No matching export in ".../react-router/dist/development/index.mjs"
-  for import "UNSAFE_useRouteId" (via node_modules/react-router-dom/dist/index.js)
-```
-
-Root cause: this template is nested inside a legacy repo whose **root**
-`node_modules` contains `react-router-dom@6`. Vite's dev dep-scanner
-resolved a phantom `react-router-dom` import up into that root copy, whose
-v6 internals reference `UNSAFE_*` exports that don't exist in
-`react-router@7`. `apps/static-store/vite.config.ts` hit and fixed the same
-issue; `apps/web-catalog/vite.config.ts` now carries the identical
-`resolve.alias` (`react-router-dom` → `react-router`) — a config fix, not a
-redesign.
-
-With that fix, the Host-header proof passes:
-
-```
-$ curl -sv -H "Host: default.localhost:3000" http://localhost:3000/
-> GET / HTTP/1.1
-> Host: default.localhost:3000
-< HTTP/1.1 200
-< content-type: text/html
-<p data-testid="host">Host: default.localhost:3000</p>
-```
-
-The loader's echoed value appears verbatim in the server-rendered HTML —
-Vite's dev server did **not** need a `server.allowedHosts` change; it never
-rejected the request in the first place. (Contrast with the design's
-expectation that Vite might reject unrecognised hosts — empirically, this
-version of Vite's dev server only enforces that check when `server.host` is
-set to a specific value; ours is `host: true`.)
+El parser de host vive en `app/shared/lib/tenant.server.ts` y replica la
+gramática de `api-public`'s `host-slug.ts` (mismos labels reservados).
 
 ## Dev
 
+```bash
+pnpm --filter @store-mgmt/web-catalog exec react-router dev --port 3900
+# storefront:
+curl -H "Host: default.localhost:3900" http://localhost:3900/productos
+# consola plataforma:
+curl -H "Host: admin.localhost:3900" http://localhost:3900/tiendas
 ```
-pnpm --filter @store-mgmt/web-catalog dev
-curl -H "Host: default.localhost:3000" http://localhost:3000/
-```
+
+Env vars (see `.env`, gitignored): `SESSION_SECRET`, `API_SALESOPS_URL`
+(default `:3001`), `API_IDP_URL` (default `:3002`), `API_PUBLIC_URL`
+(default `:3003`).
+
+## Admin por tenant (`/admin`)
+
+Login contra `api-idp` (`POST /auth/login`); la sesión guarda el token y el
+guard resuelve `companyId` desde el subdominio (`X-Company-Id` hacia
+`api-salesops`). CRUD de productos y categorías con upload/reemplazo/elimino
+de imágenes (proxy resource route hacia `api-salesops`).
+
+## Consola plataforma (`admin.<host>`)
+
+Solo usuarios con `isSuperadmin` en master. Lista todas las compañías y crea
+tiendas nuevas (nombre + slug + tipo `catalog`) componiendo la creación del
+usuario dueño (login + contraseña temporal mostrada UNA sola vez) con el saga
+de aprovisionamiento vía `POST /platform/companies` en `api-idp`.

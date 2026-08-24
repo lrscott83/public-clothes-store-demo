@@ -19,7 +19,10 @@ that reads `req.user.isSuperadmin` after `JwtAuthGuard` ALONE. `RolesGuard`
 MUST NOT be used: it requires `TenantContextGuard` and fails loud when no
 tenant context exists — unusable by design here. An authenticated caller
 with `isSuperadmin=false` MUST receive `403`; an unauthenticated request
-MUST receive `401`.
+MUST receive `401`. The flag is resolved master-side per request by the JWT
+strategy; revoking it propagates within the strategy's existing ~30s
+identity-cache TTL — the same accepted lag as `isActive` deactivation, never
+baked into the token itself (ADR-2).
 
 #### Scenario: Superadmin passes the gate with no tenant context
 

@@ -28,9 +28,22 @@ const TENANT_SCHEMA_PATH = path.join(PACKAGE_ROOT, 'prisma', 'tenant', 'schema.p
 const OUTPUT_PATH = path.join(PACKAGE_ROOT, 'prisma', 'tenant-schema.sql');
 
 function generateSql(): string {
+  // Invoked as `node <package>/node_modules/prisma/build/index.js` rather
+  // than through `npx`: on Windows there is no exec-able `npx` binary (only
+  // an `npx.cmd` shim `execFileSync` cannot spawn), so the script fails with
+  // ENOENT there. Pointing Node at the same JS entrypoint `npx` wraps is
+  // identical on every platform (same fix as `src/tenant/tenant-migrate.ts`).
   return execFileSync(
-    'npx',
-    ['prisma', 'migrate', 'diff', '--from-empty', '--to-schema', TENANT_SCHEMA_PATH, '--script'],
+    process.execPath,
+    [
+      path.join(PACKAGE_ROOT, 'node_modules', 'prisma', 'build', 'index.js'),
+      'migrate',
+      'diff',
+      '--from-empty',
+      '--to-schema',
+      TENANT_SCHEMA_PATH,
+      '--script',
+    ],
     { cwd: PACKAGE_ROOT, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 },
   );
 }
