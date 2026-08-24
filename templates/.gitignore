@@ -11,3 +11,4 @@ coverage
 !.env.example
 packages/infra-db/generated
 packages/infra-storage/.storage-restart-proof
+.dev-storage
