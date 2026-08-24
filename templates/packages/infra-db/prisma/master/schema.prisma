@@ -41,6 +41,10 @@ model User {
   email        String?
   cellPhone    String?  @map("cell_phone")
   isActive     Boolean  @default(true) @map("is_active")
+  /// Platform superadmin flag (spec: salesops-identity "Platform Superadmin
+  /// Flag on Master User") — a MASTER-level authorization fact, NOT a bit in
+  /// the company-scoped `USER_ROLES` mask and never baked into the JWT.
+  isSuperadmin Boolean  @default(false) @map("is_superadmin")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -92,19 +96,30 @@ enum MembershipStatus {
   SUSPENDED
 }
 
+/// Store kind (spec: salesops-companies "Company Type Metadata Field").
+/// DATA ONLY — no behavioral effect on provisioning or access. Only
+/// `'catalog'` exists today.
+enum CompanyType {
+  catalog
+}
+
 model Company {
-  id         String   @id @default(uuid()) @db.Uuid
+  id         String      @id @default(uuid()) @db.Uuid
   name       String
-  slug       String   @unique
-  isActive   Boolean  @default(true) @map("is_active")
+  slug       String      @unique
+  isActive   Boolean     @default(true) @map("is_active")
   /// Names the tenant Postgres schema (see `schemaNameFor`/`assertSchemaName`,
   /// `packages/infra-db/src/tenant/schema-name.ts`). NULL until the
   /// provisioning saga (design.md D7 step 3) sets it — a Company with a NULL
   /// `schemaName` has no tenant data yet and MUST be treated as inactive by
   /// every tenant-resolution path (design.md D4).
-  schemaName String?  @map("schema_name")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  schemaName String?     @map("schema_name")
+  /// Nullable — existing rows read NULL; the default applies to inserts
+  /// omitting `type` (spec: salesops-companies "New companies default to
+  /// catalog").
+  type       CompanyType? @default(catalog)
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
 
   memberships Membership[]
 
