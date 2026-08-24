@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseProductCsv, toTitleCase } from './import-helpers.js';
+import { parseProductCsv, slugify, toTitleCase } from './import-helpers.js';
 
 const HEADER = 'categoria;nombre;precio;moneda;barcode;sku;descripcion';
 
@@ -80,5 +80,14 @@ describe('toTitleCase', () => {
 
   it('has no Spanish special-casing (no small-word exceptions)', () => {
     expect(toTitleCase('camisa de manga larga')).toBe('Camisa De Manga Larga');
+  });
+});
+
+describe('slugify', () => {
+  it('lowercases, strips accents via NFD, hyphenates non-alphanumerics and collapses repeats', () => {
+    expect(slugify('Climatización')).toBe('climatizacion');
+    expect(slugify('  Ropa   Interior ')).toBe('ropa-interior');
+    expect(slugify('Calzado & Deporte!')).toBe('calzado-deporte');
+    expect(slugify('Máquina--de Coser nº3')).toBe('maquina-de-coser-n-3');
   });
 });

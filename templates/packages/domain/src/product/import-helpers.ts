@@ -101,6 +101,20 @@ export function toTitleCase(name: string): string {
 }
 
 /**
+ * Derives a URL-safe slug: lowercase, NFD accent-strip, every run of
+ * non-alphanumeric characters collapsed to a single `-`, trimmed edges.
+ * "Climatización" → "climatizacion", "Ropa   Interior" → "ropa-interior".
+ */
+export function slugify(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
  * Parses an uploaded CSV buffer into typed rows. Whole-file failures (missing/
  * wrong header, more than `maxRows` data rows) return `{ ok: false, reason }`
  * with a Spanish reason naming either the expected header or the exceeded cap.
