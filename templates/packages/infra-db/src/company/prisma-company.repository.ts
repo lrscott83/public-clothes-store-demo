@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Company as DomainCompany, CreateCompanyInput, ICompanyRepository } from '@store-mgmt/domain';
+import type { Company as DomainCompany, CompanyType, CreateCompanyInput, ICompanyRepository } from '@store-mgmt/domain';
 import { DuplicateCompanySlugError } from '@store-mgmt/domain';
 import { Prisma } from '../../generated/master/client.js';
 import { PrismaMasterService } from '../master-prisma-client.js';
@@ -11,6 +11,7 @@ interface CompanyRow {
   readonly slug: string;
   readonly isActive: boolean;
   readonly schemaName: string | null;
+  readonly type: CompanyType | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -22,6 +23,7 @@ function toDomain(row: CompanyRow): DomainCompany {
     slug: row.slug,
     isActive: row.isActive,
     schemaName: row.schemaName,
+    type: row.type,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

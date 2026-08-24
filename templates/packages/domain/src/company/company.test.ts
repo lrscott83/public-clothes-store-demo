@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createCompany } from './company.js';
+import { createCompany, type CompanyType } from './company.js';
 import { InvalidCompanyError } from './errors.js';
 
 describe('createCompany — provisioning saga step 1 (design D7)', () => {
@@ -13,6 +13,19 @@ describe('createCompany — provisioning saga step 1 (design D7)', () => {
     expect(company.schemaName).toBeNull();
     expect(company.createdAt).toBeInstanceOf(Date);
     expect(company.updatedAt).toBeInstanceOf(Date);
+  });
+
+  // Spec: salesops-companies "New companies default to catalog" — the type
+  // field defaults to 'catalog' and passes through untouched (DATA ONLY).
+  it('defaults type to catalog', () => {
+    const company = createCompany({ name: 'Tienda Nueva', slug: 'tienda-nueva' });
+    expect(company.type).toBe('catalog');
+  });
+
+  it('passes an explicit type through untouched', () => {
+    const explicit: CompanyType | null = null;
+    const company = createCompany({ name: 'Tienda Nueva', slug: 'tienda-nueva' }, explicit);
+    expect(company.type).toBeNull();
   });
 
   it('rejects an empty name', () => {

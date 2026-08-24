@@ -22,6 +22,7 @@ const TEST_COMPANY: Company = {
   slug: 'tienda-nueva',
   isActive: true,
   schemaName: null,
+  type: 'catalog',
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 };
