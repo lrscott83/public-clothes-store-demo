@@ -11,6 +11,7 @@ function activeUser(overrides: Partial<User> = {}): User {
     email: null,
     cellPhone: null,
     isActive: true,
+    isSuperadmin: false,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
@@ -131,5 +132,41 @@ describe('JwtStrategy.validate', () => {
     await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
 
     expect(logged.join('\n')).not.toContain('MISSING_COMPANY_USER');
+  });
+
+  // --- Platform superadmin flag (spec: salesops-identity "Role Resolution
+  // at Authentication Time" MODIFIED) ---
+  // `validate()` resolves ONLY master-side data: { id, login, isActive,
+  // isSuperadmin } — no roles/companyId/companyUserId ever.
+
+  it('resolves isSuperadmin=false for a default user alongside {id, login, isActive}', async () => {
+    const { strategy, findById } = makeStrategy();
+    findById.mockResolvedValue(activeUser());
+
+    const result = await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 'user-1',
+        login: 'juan.perez',
+        isActive: true,
+        isSuperadmin: false,
+      }),
+    );
+    expect(result).not.toHaveProperty('roles');
+    expect(result).not.toHaveProperty('companyId');
+    expect(result).not.toHaveProperty('companyUserId');
+  });
+
+  it('passes a superadmin flag through untouched (true) with no role resolution', async () => {
+    const { strategy, findById } = makeStrategy();
+    findById.mockResolvedValue(activeUser({ isSuperadmin: true }));
+
+    const result = await strategy.validate({ sub: 'user-1', login: 'juan.perez' });
+
+    expect(result.isSuperadmin).toBe(true);
+    expect(result).not.toHaveProperty('roles');
+    expect(result).not.toHaveProperty('companyId');
+    expect(result).not.toHaveProperty('companyUserId');
   });
 });
