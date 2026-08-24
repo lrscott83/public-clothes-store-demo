@@ -67,3 +67,24 @@ export function getRequestHostSlug(request: Request): string | null {
 export function getRequestHost(request: Request): string {
   return request.headers.get('host') ?? '';
 }
+
+/**
+ * True when this request's first host label is the reserved `admin`
+ * (design D4). This is EXACTLY the label `resolveHostSlug` rejects as a
+ * tenant slug — a platform-admin host can never collide with a tenant
+ * storefront host. The root loader branches on this BEFORE any
+ * `resolveStoreConfig` call: on an admin host, tenant/store resolution is
+ * skipped entirely and only platform routes are served. Truth table:
+ * labels[0]==='admin' → true; empty/missing labels or any other label →
+ * false (never throws).
+ */
+export function isPlatformAdminHost(request: Request): boolean {
+  const raw = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  if (!raw) {
+    return false;
+  }
+
+  const withoutPort = stripPort(raw);
+  const labels = withoutPort.toLowerCase().split('.').filter((label) => label.length > 0);
+  return labels[0] === 'admin';
+}

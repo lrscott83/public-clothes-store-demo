@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveHostSlug, getRequestHostSlug, getRequestHost } from './tenant.server';
+import { isPlatformAdminHost, resolveHostSlug, getRequestHostSlug, getRequestHost } from './tenant.server';
 
 /**
  * Rewritten from `api-public`'s `host-slug.ts` (design.md D2/D9 — the two
@@ -63,5 +63,35 @@ describe('getRequestHost', () => {
       headers: { host: 'default.localhost:3000' },
     });
     expect(getRequestHost(request)).toBe('default.localhost:3000');
+  });
+});
+
+// Truth table (design D4): the platform console lives on the reserved first
+// label `admin` — exactly the label `resolveHostSlug` rejects as a tenant.
+describe('isPlatformAdminHost', () => {
+  it('is true when labels[0] is admin', () => {
+    const request = new Request('http://ignored/tiendas', {
+      headers: { host: 'admin.localhost:3000' },
+    });
+    expect(isPlatformAdminHost(request)).toBe(true);
+  });
+
+  it('prefers X-Forwarded-Host, like every other host parse in this app', () => {
+    const request = new Request('http://ignored/', {
+      headers: { host: 'acme.localhost:3000', 'x-forwarded-host': 'admin.localhost:3000' },
+    });
+    expect(isPlatformAdminHost(request)).toBe(true);
+  });
+
+  it('is false for any other first label', () => {
+    const request = new Request('http://ignored/', { headers: { host: 'acme.localhost:3000' } });
+    expect(isPlatformAdminHost(request)).toBe(false);
+  });
+
+  it('is false when there are no labels (bare host / no header)', () => {
+    expect(
+      isPlatformAdminHost(new Request('http://ignored/', { headers: { host: 'localhost:3000' } })),
+    ).toBe(false);
+    expect(isPlatformAdminHost(new Request('http://ignored/'))).toBe(false);
   });
 });
