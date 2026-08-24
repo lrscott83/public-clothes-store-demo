@@ -96,6 +96,29 @@ describe('PrismaUserRepository', () => {
     expect(created.cellPhone).toBe('555-1234');
   });
 
+  // Spec: salesops-identity "Default users are not superadmin" — the DB
+  // column default applies to inserts omitting the flag.
+  it('defaults isSuperadmin to false and round-trips an explicit true', async () => {
+    const defaulted = await repository.create({ login: 'jdoe', passwordHash: VALID_HASH, fullName: 'Jane Doe' });
+    expect(defaulted.isSuperadmin).toBe(false);
+
+    const flagged = await repository.create({
+      login: 'root',
+      passwordHash: VALID_HASH,
+      fullName: 'Root',
+      isSuperadmin: true,
+    });
+    expect(flagged.isSuperadmin).toBe(true);
+  });
+
+  // A P2025 (row not found) is NOT a unique violation — `update()` must let
+  // it propagate untouched rather than misreport it as DuplicateLoginError.
+  it('propagates a non-unique-violation Prisma error from update()', async () => {
+    await expect(
+      repository.update('00000000-0000-0000-0000-000000000000', { fullName: 'Nadie' }),
+    ).rejects.toThrow();
+  });
+
   it('update() persists a partial patch', async () => {
     const created = await repository.create({ login: 'jdoe', passwordHash: VALID_HASH, fullName: 'Jane Doe' });
 
