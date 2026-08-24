@@ -10,6 +10,14 @@ export default [
   // must be a sibling of the guarded block or it guards itself.
   route('admin/login', 'shared/routes/login.tsx'),
   route('admin/logout', 'shared/routes/logout.tsx'),
+  // Platform console (design D4) — served on the reserved `admin` host only.
+  // A SIBLING branch outside `_auth.tsx`, mirroring admin/login's pattern:
+  // its session guard is its own (`_platform.tsx` + `platform-api.server.ts`),
+  // never the tenant-scoped `withAuth`.
+  layout('shared/routes/_platform.tsx', [
+    route('tiendas', 'platform/routes/tiendas.tsx'),
+    route('tiendas/nueva', 'platform/routes/tiendas-nueva.tsx'),
+  ]),
   layout('shared/routes/_auth.tsx', [
     route('admin', 'admin/routes/index.tsx'),
     route('admin/productos', 'admin/routes/productos/index.tsx'),

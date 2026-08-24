@@ -3,12 +3,14 @@ import {
   Links,
   Meta,
   Outlet,
+  redirect,
   Scripts,
   ScrollRestoration,
 } from 'react-router';
 import type { Route } from './+types/root';
 import { Footer } from './shared/components/footer';
 import { Header } from './shared/components/header';
+import { isPlatformAdminHost } from './shared/lib/tenant.server';
 import { resolveStoreConfig } from './shared/lib/store-config.server';
 import { themeColorsToCssVars } from './shared/lib/theme-css-vars';
 
@@ -22,8 +24,25 @@ import './app.css';
  * `store-config.server.ts`'s own comment) rather than threading it through
  * `useRouteLoaderData('root')`, so a direct hit on any route still 404s
  * correctly with zero cross-route coupling.
+ *
+ * PLATFORM BRANCH (design D4): on the reserved `admin` host label, tenant/
+ * store resolution is SKIPPED entirely — only the platform routes
+ * (`/tiendas`, `/tiendas/nueva`) are served. `/tiendas*` paths return a
+ * `{ platform: true }` marker (the `_platform` layout takes over); ANY other
+ * admin-host path (`/`, `/productos`, …) redirects to `/tiendas`. The root
+ * loader runs BEFORE child loaders, so a statically-matching tenant route is
+ * intercepted before any tenant resolution can happen. Non-admin hosts keep
+ * the exact pre-existing behavior, untouched.
  */
 export async function loader({ request }: Route.LoaderArgs) {
+  if (isPlatformAdminHost(request)) {
+    const { pathname } = new URL(request.url);
+    if (pathname === '/tiendas' || pathname.startsWith('/tiendas/')) {
+      return { platform: true };
+    }
+    throw redirect('/tiendas');
+  }
+
   const config = resolveStoreConfig(request);
   return { config };
 }
@@ -47,6 +66,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App({ loaderData }: Route.ComponentProps) {
+  // Platform branch (design D4): a minimal shell — Header/Footer require a
+  // `StoreConfig` that does not exist (and must never resolve) on the admin
+  // host.
+  if ('platform' in loaderData) {
+    return (
+      <div data-testid="platform-shell" className="min-h-screen">
+        <Outlet />
+      </div>
+    );
+  }
+
   const { config } = loaderData;
   const cssVars = themeColorsToCssVars(config.theme.colors);
   const declarations = Object.entries(cssVars)
