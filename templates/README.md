@@ -17,6 +17,53 @@ pnpm --filter @store-mgmt/salesops-mvp dev     # Sales Ops Cockpit -> http://loc
 pnpm --filter @store-mgmt/static-store dev     # Storefront       -> http://localhost:3344
 ```
 
+## Run the local sales catalog stack
+
+The admin catalog (`web-catalog`) is NOT a static SPA — it needs three NestJS
+APIs and a Postgres 17 database. Everything is wired through gitignored
+per-app `.env` files (ports, shared JWT secret, storage path), so once those
+exist the whole stack starts with ONE command.
+
+### One-time setup
+
+Prerequisite: a local **Postgres 17** listening on port `5433` (no
+docker-compose in this repo — the dev DB is a locally installed service).
+Create the databases/store first if needed, then:
+
+```bash
+# from templates/
+pnpm install
+pnpm --filter @store-mgmt/infra-db prisma:generate
+pnpm --filter @store-mgmt/infra-db prisma:migrate:deploy   # apply migrations
+pnpm build                                                  # seeds consume built dist/
+pnpm --filter @store-mgmt/infra-db seed                     # demo data + users
+```
+
+Skip migrate/seed if the database is already populated.
+
+### Start everything (Option A — single command)
+
+```bash
+# from templates/
+pnpm dev:local    # turbo runs all four apps in parallel:
+                  #   api-idp       -> http://localhost:4902  (auth / JWT)
+                  #   api-salesops  -> http://localhost:4901  (admin API: products, imports, images)
+                  #   api-public    -> http://localhost:4903  (public image serving)
+                  #   web-catalog   -> console (pick a port, e.g. --port 3900)
+```
+
+Then open the web console and log in with a seeded cockpit account
+(dev-only password shared by every seeded account):
+
+| Login | Role | Password |
+|-------|------|----------|
+| `owner` | Dueño | `DevPass123!` |
+| `admin` | Administrador | `DevPass123!` |
+
+> The APIs' ports and secrets come from each app's gitignored `.env`
+> (`api-idp`, `api-salesops`, `api-public`, `web-catalog`). If an app fails to
+> boot complaining about env vars or the DB, check those files first.
+
 Verify everything before pushing:
 
 ```bash
@@ -31,6 +78,10 @@ pnpm check      # build + lint + typecheck + test, across the whole workspace
 |-----|---------|----------|------------|
 | Sales Ops Cockpit | `@store-mgmt/salesops-mvp` | 3355 | The sales-operations dashboard (finance, decisions, inventory, orders, FX). Deployed as the default Pages landing. |
 | Storefront | `@store-mgmt/static-store` | 3344 | A themeable storefront built once per **vertical** (`clothes`, `appliances`, `demo`). See its own [README](apps/static-store/README.md). |
+| Admin Catalog | `@store-mgmt/web-catalog` | free (e.g. 3900) | Server-side admin console for the live catalog stack — needs the three APIs below and Postgres. See [Run the local sales catalog stack](#run-the-local-sales-catalog-stack). |
+| Identity API | `@store-mgmt/api-idp` | 4902 | NestJS auth service: login, JWT issue/refresh. |
+| Sales Ops API | `@store-mgmt/api-salesops` | 4901 | NestJS tenant-scoped admin API: products, categories, bulk CSV import, image upload. |
+| Public API | `@store-mgmt/api-public` | 4903 | NestJS public API serving catalog images from the shared storage volume. |
 
 ### Packages (`packages/*`)
 
