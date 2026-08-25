@@ -217,49 +217,52 @@ docker-compose provider) and remains Docker-compatible.
     (`containers.conf` → `[engine] compose_provider`).
   Also git + curl on the VPS.
 - Clone this repo on the VPS.
-- Create `templates/.env` **before the first run** from the committed
-  template:
-
-  ```bash
-  cd templates && cp .env.example .env
-  ```
-
+- Create `templates/.env` **before the first run** (see the next section —
+  no manual editing needed).
   Every variable has a dev default in the compose file, but production MUST
   override at minimum:
   - `JWT_SECRET`, `REFRESH_TOKEN_SECRET` — shared HS256 secrets (ADR-4);
-    the apps refuse to boot in `NODE_ENV=production` if they are unset, so
-    never run with the committed fallbacks.
+    the apps REFUSE TO BOOT in `NODE_ENV=production` if they are missing,
+    so on a VPS these three secrets are mandatory, not optional.
   - `SESSION_SECRET` — web-catalog's cookie-session signing key.
   - Optionally: `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`
     (defaults `postgres/postgres/store_mgmt`) and `PUBLIC_ASSET_BASE_URL`
     once a CDN sits in front of api-public.
 
-#### Generating the secrets locally
+> **Mandatory vs. local dev:** generating the three secrets is only
+> required on the VPS. On your local machine nothing needs to be
+> generated — the per-app dev `.env` files already ship working dev
+> values and run with `NODE_ENV=development`.
 
-Each secret is just high-entropy randomness — any of these works (run on
-your machine, paste the output into `templates/.env`):
+#### Generating the secrets and writing them to `.env`
 
-```bash
-# Linux / macOS / Git Bash / WSL — one line per secret:
-openssl rand -hex 32
-
-# or with Node (any OS):
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-
-# or with PowerShell (Windows):
--join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })
-```
-
-Generate **three independent values** and assign them to `JWT_SECRET`,
-`REFRESH_TOKEN_SECRET` and `SESSION_SECRET`. Never reuse one value for all
-three. Example:
+Each secret is just high-entropy randomness. Run this ONCE on the VPS from
+the repo root — it creates `.env` from the template if missing, generates
+three independent values, and writes/replaces each key IN PLACE (safe to
+re-run; it never duplicates or appends twice):
 
 ```bash
 cd templates
+cp -n .env.example .env   # -n: does not overwrite an existing .env
 for k in JWT_SECRET REFRESH_TOKEN_SECRET SESSION_SECRET; do
-  printf '%s=%s\n' "$k" "$(openssl rand -hex 32)" >> .env
+  val="$(openssl rand -hex 32)"
+  if grep -q "^$k=" .env; then
+    sed -i "s|^$k=.*|$k=$val|" .env     # replace existing line
+  else
+    printf '%s=%s\n' "$k" "$val" >> .env # append if absent
+  fi
 done
 ```
+
+If `openssl` is unavailable on the VPS, swap the generator line for either:
+
+```bash
+val="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+# or PowerShell (Windows host):
+-join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })
+```
+
+Never reuse one value for all three keys.
 
 Keep `.env` out of git (it is already gitignored); only `.env.example` is
 committed.
