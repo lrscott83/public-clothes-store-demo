@@ -41,9 +41,9 @@ Chain strategy: N/A (commits-only delivery)
 
 ## Phase 4 â€” Final Verification
 
-- [ ] 4.1 Full gates: `pnpm turbo run lint typecheck test` monorepo-wide; `test:cov` at each touched package; standalone fix commits if needed.
-- [ ] 4.2 Live round-trip against running stack: import mixed CSV once â†’ report correct; import SAME CSV again â†’ all rows 'actualizada', zero duplicates (S9 live); bad-header and >5MB uploads rejected with Spanish messages (S2/S3-size live).
-- [ ] 4.3 Diff audit: port/entity/schema untouched (proposal Out of Scope); rollback order sanity: remove route â†’ controller/service â†’ helpers.
+- [x] 4.1 Full gates: `pnpm turbo run lint typecheck test` monorepo-wide; `test:cov` at each touched package; standalone fix commits if needed.
+- [x] 4.2 Live round-trip against running stack: import mixed CSV once â†’ report correct; import SAME CSV again â†’ all rows 'actualizada', zero duplicates (S9 live); bad-header and >5MB uploads rejected with Spanish messages (S2/S3-size live).
+- [x] 4.3 Diff audit: port/entity/schema untouched (proposal Out of Scope); rollback order sanity: remove route â†’ controller/service â†’ helpers.
 
 ## Spec Scenario Map
 
