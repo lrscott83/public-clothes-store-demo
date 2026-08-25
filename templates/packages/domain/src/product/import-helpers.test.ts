@@ -74,8 +74,9 @@ describe('toTitleCase', () => {
     expect(toTitleCase('ropa interior  de  invierno')).toBe('Ropa Interior  De  Invierno');
   });
 
-  it('uppercases the first letter but preserves the rest of each word', () => {
-    expect(toTitleCase('ipHONE case')).toBe('IpHONE Case');
+  it('normalizes the rest of each word to lowercase (canonical Camel Case)', () => {
+    expect(toTitleCase('ipHONE case')).toBe('Iphone Case');
+    expect(toTitleCase('OLLAS OOPA')).toBe('Ollas Oopa');
   });
 
   it('has no Spanish special-casing (no small-word exceptions)', () => {

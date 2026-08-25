@@ -8,7 +8,6 @@ import type {
   Product as DomainProduct,
   ProductListFilter,
   ProductUpdateInput,
-  CategoryListFilter,
   CreateCategoryInput,
 } from '@store-mgmt/domain';
 import { CATEGORY_REPOSITORY, PRODUCT_REPOSITORY, money } from '@store-mgmt/domain';
@@ -115,10 +114,9 @@ class FakeCategoryRepo implements ICategoryRepository {
     return this.rows.find((row) => row.slug === slug) ?? null;
   }
 
-  async list(_filter?: CategoryListFilter): Promise<DomainCategory[]> {
+  async list(): Promise<DomainCategory[]> {
     return [...this.rows];
   }
-
   get findBySlugCallCount(): number {
     return this.slugCalls;
   }
@@ -130,13 +128,13 @@ function csvLine(fields: string[]): string {
 
 const HEADER = csvLine(['categoria', 'nombre', 'precio', 'moneda', 'barcode', 'sku', 'descripcion']);
 
-function csvFile(...lines: string[]): Buffer {
-  return Buffer.from([HEADER, ...lines].join('\n'), 'utf8');
+function csvFile(...lines: (string | string[])[]): Buffer {
+  const flat = lines.flatMap((line) => (Array.isArray(line) ? line : [line]));
+  return Buffer.from([HEADER, ...flat].join('\n'), 'utf8');
 }
 
 describe('ImportService', () => {
   let service: ImportService;
-  let productService: ProductService;
   let productRepo: FakeProductRepo;
   let categoryRepo: FakeCategoryRepo;
 
@@ -152,7 +150,6 @@ describe('ImportService', () => {
       ],
     }).compile();
     service = module.get(ImportService);
-    productService = module.get(ProductService);
   });
 
   function seedProduct(overrides: Partial<DomainProduct> & { name: string; categoryId: string }): DomainProduct {
@@ -305,19 +302,30 @@ describe('ImportService', () => {
   });
 
   describe('create defaults (S12)', () => {
-    it('creates with cost 0.00 in the price currency, appended order, active=true', async () => {
-      const cat = seedCategory('Cafeteras');
-      seedProduct({ name: 'Existente', categoryId: cat.id, order: 4 });
+    it('creates with cost 0.00 in the price currency, CSV-appearance order, active=true', async () => {
+      seedCategory('Cafeteras');
       const report = await service.importCsv(
-        csvFile([csvLine(['Cafeteras', 'Nueva', '8.00', 'EUR', '', '', ''])]),
+        csvFile(
+          csvLine(['Cafeteras', 'Nueva', '8.00', 'EUR', '', '', '']),
+          csvLine(['Cafeteras', 'Segunda', '9.00', 'EUR', '', '', '']),
+          csvLine(['Licuadoras', 'Primera Licuadora', '5.00', 'MN', '', '', '']),
+        ),
       );
-      expect(report.created).toBe(1);
-      const created = productRepo.rows.find((row) => row.name === 'Nueva')!;
-      expect(created.cost).toEqual(money(0n, 'EUR'));
-      expect(created.order).toBe(5);
-      expect(created.active).toBe(true);
-      expect(created.percentDiscountPrice).toBe(0n);
-      expect(created.discountPrice).toBe(0n);
+      expect(report.created).toBe(3);
+      const nueva = productRepo.rows.find((row) => row.name === 'Nueva')!;
+      const segunda = productRepo.rows.find((row) => row.name === 'Segunda')!;
+      // Order mirrors the row's appearance order WITHIN its category in the file.
+      expect(nueva.order).toBe(1);
+      expect(segunda.order).toBe(2);
+      expect(nueva.cost).toEqual(money(0n, 'EUR'));
+      expect(nueva.active).toBe(true);
+      expect(nueva.percentDiscountPrice).toBe(0n);
+      expect(nueva.discountPrice).toBe(0n);
+      // Created categories take their own first-appearance sequence.
+      const cafeteras = categoryRepo.rows.find((row) => row.name === 'Cafeteras')!;
+      const licuadoras = categoryRepo.rows.find((row) => row.name === 'Licuadoras')!;
+      expect(cafeteras.order).toBe(1);
+      expect(licuadoras.order).toBe(2);
     });
   });
 

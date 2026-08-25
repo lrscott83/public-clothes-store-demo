@@ -21,7 +21,7 @@ export const PRODUCT_CSV_HEADER = [
 export type ProductCsvColumnName = (typeof PRODUCT_CSV_HEADER)[number];
 
 /** One parsed CSV data row, keyed by column name. All values are raw strings. */
-export interface ProductCsvRow extends Record<ProductCsvColumnName, string> {}
+export type ProductCsvRow = Record<ProductCsvColumnName, string>;
 
 export type ParseProductCsvResult =
   | { ok: true; rows: ProductCsvRow[] }
@@ -92,12 +92,19 @@ function parseCsvRecords(text: string): string[][] {
 }
 
 /**
- * Capitalizes the first letter of every whitespace-separated word. Deliberately
+ * Capitalizes the first letter of every whitespace-separated word and
+ * LOWERCASES the rest of each word — "Camel Case" is a canonical stored form,
+ * so 'OLLAS OOPA' and 'ollas oopa' must both normalize to 'Ollas Oopa' for
+ * the case-insensitive category/product matching to converge. Deliberately
  * NO Spanish special-casing (no small-word exceptions) — "camisa de manga
  * larga" becomes "Camisa De Manga Larga". Interior spacing is preserved.
  */
 export function toTitleCase(name: string): string {
-  return name.replace(/(^|\s)(\S)/g, (_match, leading: string, first: string) => leading + first.toUpperCase());
+  return name.replace(
+    /(^|\s)(\S+)/g,
+    (_match, leading: string, word: string) =>
+      leading + word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
+  );
 }
 
 /**

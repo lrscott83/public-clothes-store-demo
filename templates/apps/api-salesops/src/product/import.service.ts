@@ -8,6 +8,7 @@ import type {
 } from '@store-mgmt/domain';
 import {
   CATEGORY_REPOSITORY,
+  InvalidProductError,
   PRODUCT_REPOSITORY,
   assertValidProductPrice,
   createCategory,
@@ -63,9 +64,11 @@ export class ImportService {
 
   async importCsv(buffer: Buffer): Promise<ImportReport> {
     // Whole-file grammar check first — a bad header or oversized file writes nothing.
+    // InvalidProductError (not bare Error) so the controller's existing
+    // domain-error mapping turns it into a 400 carrying the Spanish reason.
     const parsed = parseProductCsv(buffer, { maxRows: MAX_CSV_DATA_ROWS });
     if (!parsed.ok) {
-      throw new Error(parsed.reason);
+      throw new InvalidProductError(parsed.reason);
     }
 
     // One read per batch → snapshot maps for O(1) idempotency lookups.
@@ -82,7 +85,6 @@ export class ImportService {
 
     const productsBySku = new Map<string, DomainProduct[]>();
     const productsByKey = new Map<string, DomainProduct>();
-    const maxOrderByCategory = new Map<string, number>();
     for (const product of products) {
       if (product.sku) {
         const bucket = productsBySku.get(product.sku.toLowerCase()) ?? [];
@@ -90,11 +92,15 @@ export class ImportService {
         productsBySku.set(product.sku.toLowerCase(), bucket);
       }
       productsByKey.set(this.productKey(product.categoryId, product.name), product);
-      maxOrderByCategory.set(
-        product.categoryId,
-        Math.max(maxOrderByCategory.get(product.categoryId) ?? -1, product.order),
-      );
     }
+
+    // `order` comes from the CSV's own appearance order (owner decision):
+    // products count per category within this file; categories count their
+    // first reference — existing or newly created. Existing rows are never
+    // reordered: order is only assigned on CREATE.
+    const csvOrderByCategory = new Map<string, number>();
+    const categoryCsvOrderByLowerName = new Map<string, number>();
+    let csvCategorySequence = 0;
 
     const rows: ImportRowResult[] = [];
     let created = 0;
@@ -110,7 +116,9 @@ export class ImportService {
           usedSlugs,
           productsBySku,
           productsByKey,
-          maxOrderByCategory,
+          csvOrderByCategory,
+          categoryCsvOrderByLowerName,
+          nextCategoryOrder: () => ++csvCategorySequence,
         });
         if (outcome === 'created') created += 1;
         else updated += 1;
@@ -136,7 +144,9 @@ export class ImportService {
       usedSlugs: Set<string>;
       productsBySku: Map<string, DomainProduct[]>;
       productsByKey: Map<string, DomainProduct>;
-      maxOrderByCategory: Map<string, number>;
+      csvOrderByCategory: Map<string, number>;
+      categoryCsvOrderByLowerName: Map<string, number>;
+      nextCategoryOrder: () => number;
     },
   ): Promise<'created' | 'updated'> {
     const rawCategory = csvRow['categoria']!.trim();
@@ -165,7 +175,18 @@ export class ImportService {
     const categoryName = toTitleCase(rawCategory);
     const productName = toTitleCase(rawName);
 
-    const category = await this.resolveOrCreateCategory(categoryName, context);
+    // Category appearance sequence counts EVERY category the CSV references,
+    // existing or not — so a newly created category lands at the position its
+    // name first appears in the file (Cafeteras=1 even if it pre-existed,
+    // Licuadoras=2…). Only CREATED categories persist this value.
+    const categoryLookupKey = rawCategory.toLowerCase();
+    let categoryCsvOrder = context.categoryCsvOrderByLowerName.get(categoryLookupKey);
+    if (categoryCsvOrder === undefined) {
+      categoryCsvOrder = context.nextCategoryOrder();
+      context.categoryCsvOrderByLowerName.set(categoryLookupKey, categoryCsvOrder);
+    }
+
+    const category = await this.resolveOrCreateCategory(categoryName, categoryCsvOrder, context);
 
     // Idempotency key: sku FIRST (priority), falling back to
     // (categoryId + name) when the sku does not exist yet — so importing a
@@ -205,15 +226,18 @@ export class ImportService {
       return 'updated';
     }
 
-    const nextOrder = (context.maxOrderByCategory.get(category.id) ?? -1) + 1;
-    context.maxOrderByCategory.set(category.id, nextOrder);
+    // `order` = the row's own appearance order in the CSV, counted per
+    // category within this file (first 'Cafeteras' row → 1, second → 2…).
+    // Only assigned on CREATE; updates never reorder anything.
+    const csvOrderForCategory = (context.csvOrderByCategory.get(category.id) ?? 0) + 1;
+    context.csvOrderByCategory.set(category.id, csvOrderForCategory);
     const createdDto = await this.productService.create({
       name: productName,
       description,
       price: { amount: priceRaw, currency },
       cost: { amount: '0.00', currency },
       categoryId: category.id,
-      order: nextOrder,
+      order: csvOrderForCategory,
       active: true,
       ...(skuRaw ? { sku: skuRaw } : {}),
       ...(barcode ? { barcode } : {}),
@@ -236,9 +260,11 @@ export class ImportService {
    */
   private async resolveOrCreateCategory(
     categoryName: string,
+    csvOrder: number,
     context: {
       categoriesByLowerName: Map<string, DomainCategory>;
       usedSlugs: Set<string>;
+      nextCategoryOrder: () => number;
     },
   ): Promise<DomainCategory> {
     const key = categoryName.toLowerCase();
@@ -255,14 +281,20 @@ export class ImportService {
     let suffix = 2;
     while (
       context.usedSlugs.has(slug) ||
-      // eslint-disable-next-line no-await-in-loop -- slug uniqueness must be re-checked against live data per candidate
+       
       (await this.categoryRepository.findBySlug(slug))
     ) {
       slug = `${baseSlug}-${suffix}`;
       suffix += 1;
     }
 
-    const created = createCategory({ name: categoryName, slug });
+    const created = createCategory({
+      name: categoryName,
+      slug,
+      // `order` = the category's own first-appearance order in the CSV
+      // (owner decision), counted across existing AND created categories.
+      order: csvOrder,
+    });
     const persisted = await this.categoryRepository.create({
       name: created.name,
       slug: created.slug,
