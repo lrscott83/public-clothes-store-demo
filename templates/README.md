@@ -200,3 +200,79 @@ it 404s off the domain root. Two rules keep this correct:
 - **Catalog images**: resolve through `resolveCatalogImage()`
   (`salesops-mvp/app/data/catalog.ts`), which prefixes `import.meta.env.BASE_URL`.
   Never hardcode a leading-slash `/catalog/...` path.
+
+## Deploy on a VPS (Podman)
+
+Podman stack defined in `docker-compose.yml`: postgres 17 + one-shot
+migration runner + the three APIs (api-idp, api-salesops, api-public) +
+web-catalog (React Router v7 SSR). The compose file targets
+`podman compose` (the built-in wrapper that delegates to podman-compose or a
+docker-compose provider) and remains Docker-compatible.
+
+### Prerequisites
+
+- **Podman** plus a compose provider reachable through `podman compose`:
+  - `pip install podman-compose`, or
+  - install docker-compose and configure it as Podman's compose provider
+    (`containers.conf` → `[engine] compose_provider`).
+  Also git + curl on the VPS.
+- Clone this repo on the VPS.
+- Create `templates/.env` **before the first run**. The compose file ships
+  dev defaults for everything, but production MUST override at minimum:
+  - `JWT_SECRET`, `REFRESH_TOKEN_SECRET` — shared HS256 secrets (ADR-4);
+    the apps refuse to boot in `NODE_ENV=production` if they are unset, so
+    never run with the committed fallbacks.
+  - `SESSION_SECRET` — web-catalog's cookie-session signing key.
+  - Optionally: `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`
+    (defaults `postgres/postgres/store_mgmt`) and `PUBLIC_ASSET_BASE_URL`
+    once a CDN sits in front of api-public.
+
+Rootless-friendly by design: every published host port is unprivileged
+(3900–4903, plus postgres on 5432), and only named volumes are used — they
+are managed by Podman and avoid SELinux relabel issues (`:Z` flags are only
+needed if you swap one for a host bind-mount).
+
+### First deploy
+
+```bash
+# from the repo root
+bash deploy.sh
+# then seed the database explicitly (opt-in, one-shot):
+cd templates && podman compose --profile seed run --rm seed
+```
+
+### Subsequent updates
+
+Re-run `bash deploy.sh` from the repo root. It pulls with
+`git pull --ff-only`, rebuilds images, recreates changed services (postgres
+data lives in the named volume `postgres_data`; nothing is wiped), prunes
+dangling images and prints a health summary.
+
+### Storage volume
+
+Product/category image bytes live in the named Podman volume `storage_data`,
+mounted at `/data/storage` inside BOTH api-salesops (writer) and api-public
+(reader). This replaces the dev-time shared folder configured through
+`STORAGE_PATH`; keep both mounts pointing at that identical path if you
+customize it via `.env`.
+
+### Logs & debugging
+
+```bash
+podman compose logs -f api-salesops   # follow one service
+podman compose ps                     # status of the whole stack
+podman pod ls                         # rootful/rootless pods created by compose
+```
+
+### Service map
+
+| Host port | Service       | Internal URL                |
+|-----------|---------------|-----------------------------|
+| 3900      | web-catalog   | —                           |
+| 4901      | api-salesops  | `http://api-salesops:3001`  |
+| 4902      | api-idp       | `http://api-idp:3002`       |
+| 4903      | api-public    | `http://api-public:3003`    |
+| 5432      | postgres      | `postgres:5432`             |
+
+web-catalog's server-side loaders call the APIs over Podman's internal DNS,
+so its `API_*_URL` env vars use service names, not localhost.

@@ -1,10 +1,20 @@
 # Keep the build context small — everything below is regenerated inside the
-# image or is irrelevant to the build.
+# image or is irrelevant to the build. dist/build outputs are ALWAYS ignored:
+# the Dockerfiles rebuild everything inside the image with turbo.
 **/node_modules
 **/.turbo
 **/build
 **/dist
 **/dist-pages
 **/.react-router
+**/coverage
+# Never bake local env files into images — containers get their environment
+# from docker-compose.yml / templates/.env instead.
+**/.env
+.env.*
+.dev-storage
 .git
+.gitignore
+openspec
+docs
 **/*.log

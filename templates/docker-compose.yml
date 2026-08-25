@@ -1,0 +1,174 @@
+# Catalog stack — VPS deployment (postgres + migrations + 3 APIs + web).
+#
+# Written for `podman compose` (Podman's built-in wrapper that delegates to
+# podman-compose or a docker-compose provider) but stays Docker-compatible:
+# `docker compose up -d` works identically.
+#
+# Rootless Podman notes:
+#   - All published host ports are unprivileged (>= 3900, except postgres on
+#     5432, which rootless can bind thanks to net.ipv4.ip_unprivileged_port_start
+#     defaults in modern Podman / sysctl on the host).
+#   - Only NAMED volumes are used (postgres_data, storage_data). Named volumes
+#     are managed by Podman itself and avoid the SELinux relabeling problems
+#     of host bind-mounts — no `:Z` flags needed. If you ever swap one for a
+#     bind-mount of a host path, add `:Z` so SELinux labels it for the
+#     container.
+#
+# Usage:
+#   podman compose up -d                          # postgres + migrate + all apps
+#   podman compose --profile seed run --rm seed   # explicit, opt-in database seed
+#
+# All build contexts are this directory (templates/) because the pnpm
+# workspace lockfile lives at the root. Per-app Dockerfiles live next to
+# each app's sources.
+#
+# SECURITY: every secret below has a DEV default. On a real VPS create a
+# .env file next to this file and override at minimum JWT_SECRET,
+# REFRESH_TOKEN_SECRET and SESSION_SECRET (see templates/README.md).
+
+name: store-mgmt
+
+# Environment shared by everything that talks to Postgres or needs secrets.
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-store_mgmt}?schema=public}
+  JWT_SECRET: ${JWT_SECRET:-store-mgmt-dev-jwt-secret-change-me}
+  REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-store-mgmt-dev-refresh-secret-change-me}
+  ACCESS_TOKEN_EXPIRES_IN: ${ACCESS_TOKEN_EXPIRES_IN:-15m}
+  REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
+  # Shared image storage: api-salesops writes, api-public reads. Both MUST
+  # see the same path inside their container (replaces the dev shared folder).
+  STORAGE_PATH: ${STORAGE_PATH:-/data/storage}
+  # Optional CDN prefix for public product image URLs; empty = relative paths.
+  PUBLIC_ASSET_BASE_URL: ${PUBLIC_ASSET_BASE_URL:-}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-store_mgmt}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-store_mgmt}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # One-shot schema migration. Reuses the api-idp image on purpose: its
+  # runtime layer ships the whole workspace node_modules (Prisma CLI
+  # included) plus packages/infra-db's built dist, generated Prisma client
+  # and prisma/ migrations directory. No separate runner image needed.
+  migrate:
+    build: &api-idp-build
+      context: .
+      dockerfile: apps/api-idp/Dockerfile
+    image: store-mgmt/api-idp:local
+    restart: "no"
+    working_dir: /app/packages/infra-db
+    command: ["./node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Opt-in only: podman compose --profile seed run --rm seed
+  seed:
+    build: *api-idp-build
+    image: store-mgmt/api-idp:local
+    profiles: ["seed"]
+    restart: "no"
+    working_dir: /app/packages/infra-db
+    command: ["./node_modules/.bin/prisma", "db", "seed"]
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  api-idp:
+    build: *api-idp-build
+    image: store-mgmt/api-idp:local
+    restart: unless-stopped
+    ports:
+      - "4902:3002"
+    environment:
+      <<: *app-env
+      PORT: 3002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  api-salesops:
+    build:
+      context: .
+      dockerfile: apps/api-salesops/Dockerfile
+    image: store-mgmt/api-salesops:local
+    restart: unless-stopped
+    ports:
+      - "4901:3001"
+    volumes:
+      - storage_data:/data/storage
+    environment:
+      <<: *app-env
+      PORT: 3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  api-public:
+    build:
+      context: .
+      dockerfile: apps/api-public/Dockerfile
+    image: store-mgmt/api-public:local
+    restart: unless-stopped
+    ports:
+      - "4903:3003"
+    volumes:
+      - storage_data:/data/storage
+    environment:
+      <<: *app-env
+      PORT: 3003
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web-catalog/Dockerfile
+    image: store-mgmt/web-catalog:local
+    restart: unless-stopped
+    ports:
+      - "3900:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      SESSION_SECRET: ${SESSION_SECRET:-store-mgmt-dev-session-secret-change-me}
+      # Server-to-server calls resolve through Docker's internal DNS, so
+      # these point at the SERVICE names and CONTAINER ports, never localhost.
+      API_IDP_URL: http://api-idp:3002
+      API_SALESOPS_URL: http://api-salesops:3001
+      API_PUBLIC_URL: http://api-public:3003
+    depends_on:
+      - api-idp
+      - api-salesops
+      - api-public
+
+volumes:
+  postgres_data:
+  storage_data:
