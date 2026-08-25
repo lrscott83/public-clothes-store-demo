@@ -22,6 +22,7 @@ export default [
     route('admin', 'admin/routes/index.tsx'),
     route('admin/productos', 'admin/routes/productos/index.tsx'),
     route('admin/productos/nuevo', 'admin/routes/productos/nuevo.tsx'),
+    route('admin/productos/importar', 'admin/routes/productos/importar.tsx'),
     route('admin/productos/:id/editar', 'admin/routes/productos/editar.tsx'),
     route('admin/productos/:id/image', 'admin/routes/productos/image.tsx'),
     route('admin/categorias', 'admin/routes/categorias/index.tsx'),
