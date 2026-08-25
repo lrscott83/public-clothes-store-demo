@@ -1,5 +1,10 @@
 import { makeAuthenticatedRequest } from '../../shared/lib/api.server';
-import type { AdminProductDto, CreateProductInput, UpdateProductInput } from './admin-api.types';
+import type {
+  AdminImportReport,
+  AdminProductDto,
+  CreateProductInput,
+  UpdateProductInput,
+} from './admin-api.types';
 
 /**
  * Thin admin client to `api-salesops`'s product CRUD (design.md D7: this
@@ -86,6 +91,26 @@ export async function uploadProductImage(
 /** Raw upstream `Response` — the proxy route (D5b) streams its body straight through. */
 export async function fetchProductImage(request: Request, companyId: string, id: string): Promise<Response> {
   return makeAuthenticatedRequest(request, companyId, `/products/${encodeURIComponent(id)}/image`);
+}
+
+/**
+ * Calls `api-salesops`'s `POST /products/import` (product-import D2/D6),
+ * field `csv` — a clone of `uploadProductImage`'s multipart handling. No
+ * `Content-Type` header is set here: `fetch` derives the multipart boundary
+ * from the `FormData` body itself; setting one manually would drop the
+ * boundary and break the upload silently. A non-ok response (400 bad header,
+ * 413 oversized, 403 forbidden) is thrown AS THE RAW `Response`.
+ */
+export async function importProducts(
+  request: Request,
+  companyId: string,
+  formData: FormData,
+): Promise<AdminImportReport> {
+  const response = await makeAuthenticatedRequest(request, companyId, '/products/import', {
+    method: 'POST',
+    body: formData,
+  });
+  return parseOrThrow(response);
 }
 
 export async function deleteProductImage(request: Request, companyId: string, id: string): Promise<AdminProductDto> {

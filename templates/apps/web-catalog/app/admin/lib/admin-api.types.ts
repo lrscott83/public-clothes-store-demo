@@ -71,3 +71,23 @@ export interface CreateCategoryInput {
 
 /** Mirrors `apps/api-salesops`'s `UpdateCategoryDto` — every field optional. */
 export type UpdateCategoryInput = Partial<CreateCategoryInput>;
+
+/** Mirrors `apps/api-salesops`'s `ImportRowResult` (`ImportService.importCsv`). */
+export interface AdminImportRowResult {
+  /** 1-based data-row number (the header is not counted). */
+  line: number;
+  status: 'created' | 'updated' | 'failed';
+  /** The normalized product name when one could be derived, else null. */
+  name: string | null;
+  /** Spanish failure reason; present only when status is 'failed'. */
+  reason?: string;
+}
+
+/** Mirrors `apps/api-salesops`'s `ImportReport` (`ImportService.importCsv`). */
+export interface AdminImportReport {
+  totalRows: number;
+  created: number;
+  updated: number;
+  failed: number;
+  rows: AdminImportRowResult[];
+}

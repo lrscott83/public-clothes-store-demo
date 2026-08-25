@@ -7,6 +7,7 @@ import {
   softDeleteProduct,
   uploadProductImage,
   deleteProductImage,
+  importProducts,
 } from './products.server';
 import { createSession } from '../../shared/lib/session.server';
 import type { AdminProductDto, CreateProductInput } from './admin-api.types';
@@ -153,6 +154,39 @@ describe('products.server', () => {
 
     await expect(uploadProductImage(request, 'company-1', 'product-1', formData)).rejects.toMatchObject({
       status: 400,
+    });
+  });
+
+  it('importProducts POSTs a multipart FormData, field "csv", to /products/import', async () => {
+    const request = await sessionRequest();
+    const report = { totalRows: 2, created: 1, updated: 0, failed: 1, rows: [] };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(report), { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const file = new File(['categoria;nombre'], 'productos.csv', { type: 'text/csv' });
+    const formData = new FormData();
+    formData.set('csv', file);
+
+    const result = await importProducts(request, 'company-1', formData);
+
+    expect(result).toEqual(report);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:3001/products/import');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get('csv')).toBe(file);
+    // No explicit Content-Type — fetch must set the multipart boundary itself.
+    const headers = new Headers(init.headers);
+    expect(headers.has('Content-Type')).toBe(false);
+  });
+
+  it('importProducts throws the raw Response on a non-ok result (e.g. 413 oversized CSV)', async () => {
+    const request = await sessionRequest();
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 413 })) as unknown as typeof fetch;
+    const formData = new FormData();
+    formData.set('csv', new File(['bytes'], 'productos.csv', { type: 'text/csv' }));
+
+    await expect(importProducts(request, 'company-1', formData)).rejects.toMatchObject({
+      status: 413,
     });
   });
 
