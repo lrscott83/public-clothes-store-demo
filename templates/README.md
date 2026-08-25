@@ -217,8 +217,15 @@ docker-compose provider) and remains Docker-compatible.
     (`containers.conf` → `[engine] compose_provider`).
   Also git + curl on the VPS.
 - Clone this repo on the VPS.
-- Create `templates/.env` **before the first run**. The compose file ships
-  dev defaults for everything, but production MUST override at minimum:
+- Create `templates/.env` **before the first run** from the committed
+  template:
+
+  ```bash
+  cd templates && cp .env.example .env
+  ```
+
+  Every variable has a dev default in the compose file, but production MUST
+  override at minimum:
   - `JWT_SECRET`, `REFRESH_TOKEN_SECRET` — shared HS256 secrets (ADR-4);
     the apps refuse to boot in `NODE_ENV=production` if they are unset, so
     never run with the committed fallbacks.
@@ -226,6 +233,36 @@ docker-compose provider) and remains Docker-compatible.
   - Optionally: `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`
     (defaults `postgres/postgres/store_mgmt`) and `PUBLIC_ASSET_BASE_URL`
     once a CDN sits in front of api-public.
+
+#### Generating the secrets locally
+
+Each secret is just high-entropy randomness — any of these works (run on
+your machine, paste the output into `templates/.env`):
+
+```bash
+# Linux / macOS / Git Bash / WSL — one line per secret:
+openssl rand -hex 32
+
+# or with Node (any OS):
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# or with PowerShell (Windows):
+-join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })
+```
+
+Generate **three independent values** and assign them to `JWT_SECRET`,
+`REFRESH_TOKEN_SECRET` and `SESSION_SECRET`. Never reuse one value for all
+three. Example:
+
+```bash
+cd templates
+for k in JWT_SECRET REFRESH_TOKEN_SECRET SESSION_SECRET; do
+  printf '%s=%s\n' "$k" "$(openssl rand -hex 32)" >> .env
+done
+```
+
+Keep `.env` out of git (it is already gitignored); only `.env.example` is
+committed.
 
 Rootless-friendly by design: every published host port is unprivileged
 (3900–4903, plus postgres on 5432), and only named volumes are used — they
