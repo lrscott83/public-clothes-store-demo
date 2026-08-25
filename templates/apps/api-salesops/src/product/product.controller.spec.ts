@@ -11,6 +11,7 @@ import {
   overrideTenantContext,
 } from '../test-support/auth-test-helpers.js';
 import { ProductController } from './product.controller.js';
+import { ImportService } from './import.service.js';
 import { ProductService } from './product.service.js';
 
 type ProductServiceMock = {
@@ -20,6 +21,8 @@ type ProductServiceMock = {
   findById: jest.Mock;
   list: jest.Mock;
 };
+
+type ImportServiceMock = { importCsv: jest.Mock };
 
 type ImageStoreMock = { put: jest.Mock; delete: jest.Mock; open: jest.Mock };
 
@@ -76,6 +79,7 @@ async function buildApp(
   service: ProductServiceMock,
   roles: number | null,
   store: ImageStoreMock,
+  importService: ImportServiceMock = { importCsv: jest.fn() },
 ): Promise<INestApplication> {
   const builder = overrideTenantContext(
     overrideJwtAuth(
@@ -83,6 +87,7 @@ async function buildApp(
         controllers: [ProductController],
         providers: [
           { provide: ProductService, useValue: service },
+          { provide: ImportService, useValue: importService },
           { provide: TenantContextService, useValue: mockTenantContextService() },
           { provide: IMAGE_STORE, useValue: store },
           RolesGuard,
@@ -123,6 +128,84 @@ describe('ProductController', () => {
 
   afterEach(async () => {
     await app.close();
+  });
+
+  describe('POST /products/import', () => {
+    const validCsv = Buffer.from(
+      'categoria;nombre;precio;moneda;barcode;sku;descripcion\nCafeteras;Cafetera Uno;10.00;USD;;;',
+      'utf8',
+    );
+    const sampleReport = {
+      totalRows: 1,
+      created: 1,
+      updated: 0,
+      failed: 0,
+      rows: [{ line: 1, status: 'created', name: 'Cafetera Uno' }],
+    };
+
+    it('returns the per-row report for an owner/admin upload', async () => {
+      const importService: ImportServiceMock = { importCsv: jest.fn().mockResolvedValue(sampleReport) };
+      const localApp = await buildApp(service, USER_ROLES.admin, store, importService);
+      const response = await request(localApp.getHttpServer())
+        .post('/products/import')
+        .attach('csv', validCsv, { filename: 'productos.csv', contentType: 'text/csv' });
+      await localApp.close();
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(sampleReport);
+      expect(importService.importCsv).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a sales_operator (not owner/admin) with 403', async () => {
+      const importService: ImportServiceMock = { importCsv: jest.fn() };
+      const localApp = await buildApp(service, USER_ROLES.sales_operator, store, importService);
+      const response = await request(localApp.getHttpServer())
+        .post('/products/import')
+        .attach('csv', validCsv, { filename: 'productos.csv', contentType: 'text/csv' });
+      await localApp.close();
+      expect(response.status).toBe(403);
+      expect(importService.importCsv).not.toHaveBeenCalled();
+    });
+
+    it('rejects an anonymous request with 401 before any role logic runs', async () => {
+      const importService: ImportServiceMock = { importCsv: jest.fn() };
+      const localApp = await buildApp(service, null, store, importService);
+      const response = await request(localApp.getHttpServer())
+        .post('/products/import')
+        .attach('csv', validCsv, { filename: 'productos.csv', contentType: 'text/csv' });
+      await localApp.close();
+      expect(response.status).toBe(401);
+      expect(importService.importCsv).not.toHaveBeenCalled();
+    });
+
+    it('returns 413 for a file over the 5MB cap', async () => {
+      const oversized = Buffer.alloc(5 * 1024 * 1024 + 1, 0x61);
+      const response = await request(app.getHttpServer())
+        .post('/products/import')
+        .attach('csv', oversized, { filename: 'huge.csv', contentType: 'text/csv' });
+      expect(response.status).toBe(413);
+    });
+
+    const extractMessage = (response: { body?: Record<string, unknown>; text?: string }): string =>
+      String((response.body?.message as string | undefined) ?? response.text ?? '');
+
+    it('returns 400 when the csv part is missing', async () => {
+      const response = await request(app.getHttpServer()).post('/products/import');
+      expect(response.status).toBe(400);
+      expect(extractMessage(response)).toMatch(/csv/i);
+    });
+
+    it('maps whole-file rejections from the service to 400 with the Spanish reason', async () => {
+      const importService: ImportServiceMock = {
+        importCsv: jest.fn().mockRejectedValue(new InvalidProductError('Encabezado inválido. El archivo debe comenzar exactamente con: categoria;nombre;precio;moneda;barcode;sku;descripcion')),
+      };
+      const localApp = await buildApp(service, USER_ROLES.admin, store, importService);
+      const response = await request(localApp.getHttpServer())
+        .post('/products/import')
+        .attach('csv', Buffer.from('col_a;col_b\n'), { filename: 'bad.csv', contentType: 'text/csv' });
+      await localApp.close();
+      expect(response.status).toBe(400);
+      expect(extractMessage(response)).toMatch(/Encabezado inválido/);
+    });
   });
 
   describe('POST /products', () => {

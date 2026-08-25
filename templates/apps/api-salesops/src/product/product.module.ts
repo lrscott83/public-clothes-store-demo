@@ -3,6 +3,7 @@ import { CATEGORY_REPOSITORY, PRODUCT_REPOSITORY } from '@store-mgmt/domain';
 import { InfraDbModule, PrismaCategoryRepository, PrismaProductRepository } from '@store-mgmt/infra-db';
 import { InfraStorageModule } from '@store-mgmt/infra-storage';
 import { ProductController } from './product.controller.js';
+import { ImportService } from './import.service.js';
 import { ProductService } from './product.service.js';
 
 @Module({
@@ -10,6 +11,7 @@ import { ProductService } from './product.service.js';
   controllers: [ProductController],
   providers: [
     ProductService,
+    ImportService,
     { provide: PRODUCT_REPOSITORY, useClass: PrismaProductRepository },
     // ProductService also validates `categoryId` existence before create/update.
     { provide: CATEGORY_REPOSITORY, useClass: PrismaCategoryRepository },

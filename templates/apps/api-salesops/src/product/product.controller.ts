@@ -12,6 +12,7 @@ import {
   MaxFileSizeValidator,
   NotFoundException,
   Param,
+  PayloadTooLargeException,
   ParseFilePipe,
   Patch,
   Post,
@@ -39,6 +40,9 @@ import type { Request, Response } from 'express';
 import { assertNotMintedRef } from '../image/assert-not-minted-ref.js';
 import { streamImage } from '../image/stream-image.js';
 import { ALLOWED_IMAGE_MIME_TYPES, MAX_IMAGE_SIZE_BYTES } from '../image/upload-constraints.js';
+import { CSV_FIELD_NAME, MAX_CSV_SIZE_BYTES } from './import-constraints.js';
+import { ImportService } from './import.service.js';
+import type { ImportReport } from './import.service.js';
 import { ProductService } from './product.service.js';
 import type {
   CreateProductDto,
@@ -77,6 +81,7 @@ export class ProductController {
 
   constructor(
     private readonly productService: ProductService,
+    private readonly importService: ImportService,
     tenantContext: TenantContextService,
     @Inject(IMAGE_STORE) private readonly imageStore: IImageStore,
   ) {
@@ -95,6 +100,40 @@ export class ProductController {
     assertNotMintedRef(body.image, 'products');
     return this.runInTenant(req.tenant, () =>
       this.withDomainErrorMapping(() => this.productService.create(body)),
+    );
+  }
+
+  /**
+   * Idempotent bulk import (spec: salesops-product-import). Accepts one CSV
+   * file (`;`-separated, exact header contract) and returns a per-row
+   * report; row failures never abort the batch and re-uploading the same
+   * file updates instead of duplicating. Whole-file rejections (bad header,
+   * row cap) surface as 400 via the shared domain-error mapping.
+   */
+  @Post('import')
+  @HttpCode(HttpStatus.OK)
+  @Roles(USER_ROLES.owner, USER_ROLES.admin)
+  @UseInterceptors(FileInterceptor(CSV_FIELD_NAME))
+  async importProducts(
+    // No ParseFilePipe here: its required-file/size errors would bypass our
+    // Spanish copy (400 'Falta el archivo…' / 413 oversized), so both checks
+    // are done explicitly below.
+    @UploadedFile()
+    file: Express.Multer.File | undefined,
+    @Req() req: TenantScopedRequest,
+  ): Promise<ImportReport> {
+    if (!file) {
+      throw new BadRequestException(
+        `Falta el archivo CSV — adjuntalo como campo "${CSV_FIELD_NAME}" del formulario.`,
+      );
+    }
+    if (file.size > MAX_CSV_SIZE_BYTES) {
+      throw new PayloadTooLargeException(
+        `El archivo supera el límite de ${Math.floor(MAX_CSV_SIZE_BYTES / (1024 * 1024))} MB.`,
+      );
+    }
+    return this.runInTenant(req.tenant, () =>
+      this.withDomainErrorMapping(() => this.importService.importCsv(file.buffer)),
     );
   }
 
