@@ -4,7 +4,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run build && turbo run dev",
-    "dev:local": "turbo run dev:local",
+    "dev:local": "turbo run dev:local --filter=@store-mgmt/api-idp --filter=@store-mgmt/api-salesops --filter=@store-mgmt/api-public --filter=@store-mgmt/web-catalog",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

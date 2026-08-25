@@ -45,11 +45,11 @@ Skip migrate/seed if the database is already populated.
 
 ```bash
 # from templates/
-pnpm dev:local    # turbo runs all four apps in parallel:
+pnpm dev:local    # ONLY the catalog stack (static sites excluded) — turbo runs:
                   #   api-idp       -> http://localhost:4902  (auth / JWT)
                   #   api-salesops  -> http://localhost:4901  (admin API: products, imports, images)
                   #   api-public    -> http://localhost:4903  (public image serving)
-                  #   web-catalog   -> console (pick a port, e.g. --port 3900)
+                  #   web-catalog   -> http://localhost:3900  (admin console)
 ```
 
 Then open the web console and log in with a seeded cockpit account
