@@ -36,8 +36,8 @@ Chain strategy: N/A (commits-only delivery)
 
 ## Phase 3 â€” web-catalog Admin Console
 
-- [ ] 3.1 RED: modify `app/admin/lib/products.server.test.ts` â€” `importProducts()` posts FormData field `csv` WITHOUT Content-Type header and throws raw Response on !ok (mirrors `uploadProductImage`). GREEN: add `importProducts(request, companyId, formData)` (+18). Commit.
-- [ ] 3.2 RED: create `app/admin/routes/productos/__tests__/importar.test.tsx` â€” success response renders report table with totals + per-row Spanish reasons (S17); 400/403/413 raw Response renders mapped Spanish voseo rejection message, no partial table (S18); route registered under `_auth` layout block so anonymous visitor redirects to login (S19). GREEN: register `route('admin/productos/importar', â€¦)` in `routes.ts` (+1) and create `importar.tsx` (+150): loader/action via `withAuth`, action reads `csvFile`, renders form + presentational `ImportReportTable` styled after `productos/index.tsx`. Commit.
+- [x] 3.1 RED: modify `app/admin/lib/products.server.test.ts` â€” `importProducts()` posts FormData field `csv` WITHOUT Content-Type header and throws raw Response on !ok (mirrors `uploadProductImage`). GREEN: add `importProducts(request, companyId, formData)` (+18). Commit.
+- [x] 3.2 RED: create `app/admin/routes/productos/__tests__/importar.test.tsx` â€” success response renders report table with totals + per-row Spanish reasons (S17); 400/403/413 raw Response renders mapped Spanish voseo rejection message, no partial table (S18); route registered under `_auth` layout block so anonymous visitor redirects to login (S19). GREEN: register `route('admin/productos/importar', â€¦)` in `routes.ts` (+1) and create `importar.tsx` (+150): loader/action via `withAuth`, action reads `csvFile`, renders form + presentational `ImportReportTable` styled after `productos/index.tsx`. Commit.
 
 ## Phase 4 â€” Final Verification
 
