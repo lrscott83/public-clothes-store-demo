@@ -1,7 +1,9 @@
 import { type RouteConfig, index, layout, route } from '@react-router/dev/routes';
 
 export default [
-  index('routes/home.tsx'),
+  // The tenant storefront's DEFAULT view IS the catalog (owner decision):
+  // `/` redirects to `/productos` (single canonical catalog URL).
+  index('routes/index.tsx'),
   route('productos', 'catalog/routes/products.tsx'),
   route('productos/:id', 'catalog/routes/product-detail.tsx'),
 

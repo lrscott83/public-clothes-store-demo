@@ -62,7 +62,7 @@ const DEFAULT_COPY = {
 };
 
 const SELECT_CLASS =
-  'w-full rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 lg:min-w-[12rem]';
+  'w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 lg:min-w-[10rem]';
 
 /**
  * Design copied from `static-store/app/routes/products.tsx` (read-only
@@ -86,12 +86,12 @@ export function ProductsPage({ config, result, categories }: ProductsPageProps) 
 
   return (
     <main className="pt-16 min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-surface rounded-lg shadow-card p-4 sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+      <div className="container mx-auto px-2 pt-3 pb-6 sm:px-4">
+        <div className="bg-surface rounded-lg shadow-card p-2 sm:p-3">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:gap-3">
             <div className="relative lg:flex-1">
               <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
+                className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
                 aria-hidden="true"
               />
               <input
@@ -100,7 +100,7 @@ export function ProductsPage({ config, result, categories }: ProductsPageProps) 
                 onChange={(event) => applyPatch({ q: event.target.value })}
                 placeholder={copy.searchPlaceholder}
                 aria-label={copy.searchPlaceholder}
-                className="w-full rounded-md border border-border bg-surface pl-9 pr-3 py-2.5 text-sm text-text placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full rounded-md border border-border bg-surface pl-8 pr-2 py-1.5 text-sm text-text placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
 
@@ -120,39 +120,45 @@ export function ProductsPage({ config, result, categories }: ProductsPageProps) 
               </select>
             </Field>
 
-            <Field label={copy.sortLabel} htmlFor="product-sort">
-              <select
-                id="product-sort"
-                value={filters.orden}
-                onChange={(event) => applyPatch({ orden: event.target.value })}
-                className={SELECT_CLASS}
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            {/* Owner decision: sort + page-size controls are desktop-only —
+                mobile keeps the catalog down to search + category. */}
+            <div className="hidden lg:block">
+              <Field label={copy.sortLabel} htmlFor="product-sort">
+                <select
+                  id="product-sort"
+                  value={filters.orden}
+                  onChange={(event) => applyPatch({ orden: event.target.value })}
+                  className={SELECT_CLASS}
+                >
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
 
-            <Field label={copy.perPageLabel} htmlFor="product-per-page">
-              <select
-                id="product-per-page"
-                value={String(filters.porPagina)}
-                onChange={(event) => applyPatch({ porPagina: Number(event.target.value) })}
-                className={SELECT_CLASS}
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>
-                    {size} {copy.perPageOptionSuffix}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <div className="hidden lg:block">
+              <Field label={copy.perPageLabel} htmlFor="product-per-page">
+                <select
+                  id="product-per-page"
+                  value={String(filters.porPagina)}
+                  onChange={(event) => applyPatch({ porPagina: Number(event.target.value) })}
+                  className={SELECT_CLASS}
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size} {copy.perPageOptionSuffix}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
           </div>
         </div>
 
-        <p className="mt-6 mb-4 text-sm text-text-muted" role="status" aria-live="polite">
+        <p className="mt-3 mb-2 text-sm text-text-muted" role="status" aria-live="polite">
           <span className="font-semibold text-text">{result.total}</span> {resultsNoun}
         </p>
 
@@ -183,7 +189,7 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-text-muted">
+      <label htmlFor={htmlFor} className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">
         {label}
       </label>
       {children}
