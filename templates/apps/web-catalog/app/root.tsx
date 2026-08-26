@@ -17,6 +17,25 @@ import { themeColorsToCssVars } from './shared/lib/theme-css-vars';
 import '@store-mgmt/web-common/styles.css';
 import './app.css';
 
+// Declaring an icon link makes the browser use it instead of auto-requesting
+// `/favicon.ico` (which has no route here and would log a 404 through the
+// SSR router). Same Lucide "Store" glyph + brand blue as salesops-mvp /
+// static-store — see their app/store/favicon.ts for the shared origin.
+const FAVICON_HREF = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" ' +
+    'stroke="rgb(37 99 235)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/>' +
+    '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>' +
+    '<path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/>' +
+    '<path d="M2 7h20"/>' +
+    '<path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7"/>' +
+    '</svg>',
+)}`;
+
+export const links: Route.LinksFunction = () => [
+  { rel: 'icon', type: 'image/svg+xml', href: FAVICON_HREF },
+];
+
 /**
  * Resolves the tenant's `StoreConfig` from the request Host (design.md D9) —
  * an unknown/malformed subdomain throws a 404 `Response` here, caught by
