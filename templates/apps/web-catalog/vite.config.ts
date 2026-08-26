@@ -15,6 +15,13 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
+    watch: {
+      // Exclude the image storage directory from Vite's file watcher —
+      // it lives at monorepo root (templates/.dev-storage) and contains
+      // hundreds of binary files that cause CPU spikes on file-system
+      // events (Explorer navigation, git operations, etc.).
+      ignored: ['**/.dev-storage/**', '**/storage/**'],
+    },
   },
   preview: {
     port: 3000,
