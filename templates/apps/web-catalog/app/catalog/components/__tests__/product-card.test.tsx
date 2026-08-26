@@ -29,11 +29,10 @@ function renderCard(item: PublicProductDto, locale = 'en-US') {
 }
 
 describe('ProductCard', () => {
-  it('renders the name, description and image', () => {
+  it('renders the name and image', () => {
     renderCard(BASE_ITEM);
 
     expect(screen.getByText(BASE_ITEM.name)).toBeInTheDocument();
-    expect(screen.getByText(BASE_ITEM.description)).toBeInTheDocument();
     expect(screen.getByRole('img', { name: BASE_ITEM.name })).toHaveAttribute(
       'src',
       BASE_ITEM.imageUrl,

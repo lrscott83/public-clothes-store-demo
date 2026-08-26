@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 export interface ProductImageProps {
   /** `null` when the row has no image — see design.md D8. */
   src: string | null;
@@ -7,28 +9,12 @@ export interface ProductImageProps {
 }
 
 /**
- * One image element for the whole app (design.md D8). The placeholder is an
- * inline SVG in the SAME box as the real image: no network request, no 404
- * round-trip, no layout shift, and no broken-image glyph. Used by the
- * storefront card and detail, and by both admin lists and forms, so "no image"
- * looks deliberate everywhere instead of accidental in each place.
+ * Inline placeholder SVG rendered when `src` is `null` OR when the real
+ * `<img>` fires `onError` (404, CORS, DNS, etc.).  The box dimensions stay
+ * identical — no layout shift, no broken-image glyph.
  */
-export function ProductImage({ src, alt, className }: ProductImageProps) {
-  if (src !== null) {
-    return <img src={src} alt={alt} className={className} />;
-  }
-
+function Placeholder({ alt, className }: { alt: string; className: string }) {
   return (
-    // `role="group"`, NOT `role="img"`: an explicit `role="img"` here would
-    // give this div the SAME accessible role as a real `<img>`, so
-    // `getByRole('img')` queries (used throughout this app's tests to assert
-    // "no photo rendered") would match the placeholder too — that collision
-    // is exactly what broke the brief's own Step 1 test against its own
-    // Step 3 sample implementation. `role="group"` still gives assistive
-    // tech a real accessible node (unlike the implicit "generic" role a
-    // bare `<div>` would get, which browsers/screen readers are inconsistent
-    // about exposing outside linear reading mode) without colliding with
-    // `"img"`. `aria-label` supplies the accessible name either way.
     <div
       role="group"
       aria-label={`${alt} (sin imagen)`}
@@ -47,5 +33,33 @@ export function ProductImage({ src, alt, className }: ProductImageProps) {
         <path d="m21 15-5-5L5 21" />
       </svg>
     </div>
+  );
+}
+
+/**
+ * One image element for the whole app (design.md D8). The placeholder is an
+ * inline SVG in the SAME box as the real image: no network request, no 404
+ * round-trip, no layout shift, and no broken-image glyph. Used by the
+ * storefront card and detail, and by both admin lists and forms, so "no image"
+ * looks deliberate everywhere instead of accidental in each place.
+ *
+ * When `src` points to a file that doesn't exist on disk (orphan DB ref,
+ * CDN misconfiguration, etc.), the `<img onError>` silently swaps to the
+ * same SVG placeholder so the card never shows a broken-image glyph.
+ */
+export function ProductImage({ src, alt, className }: ProductImageProps) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  if (src === null || imgFailed) {
+    return <Placeholder alt={alt} className={className} />;
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onError={() => setImgFailed(true)}
+    />
   );
 }
