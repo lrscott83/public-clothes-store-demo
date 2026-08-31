@@ -33,4 +33,11 @@ export default [
     route('admin/categorias/:id/editar', 'admin/routes/categorias/editar.tsx'),
     route('admin/categorias/:id/image', 'admin/routes/categorias/image.tsx'),
   ]),
+
+  // Catch-all: matches any URL no other route does (e.g. probes to
+  // `/.well-known/*` from browser DevTools tooling). Returns a clean 404
+  // instead of letting the SSR router throw "No route matches URL" on every
+  // unmatched request. Must be listed last since React Router ranks it
+  // lowest.
+  route('*', 'shared/routes/not-found.tsx'),
 ] satisfies RouteConfig;
