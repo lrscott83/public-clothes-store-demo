@@ -25,27 +25,27 @@ describe('formatMoney', () => {
     expect(result.length).toBeGreaterThan(0);
   });
 
-  it('formats currency "MN" with space thousands separator and comma decimal', () => {
+  it('formats currency "MN" with space thousands separator and period decimal', () => {
     const result = formatMoney('1234.50', { locale: 'en-US', currency: 'MN' });
 
-    expect(result).toBe('1 234,50 MN');
+    expect(result).toBe('1 234.50 MN');
   });
 
   it('formats large MN amounts with space grouping', () => {
     const result = formatMoney('10234015.50', { locale: 'en-US', currency: 'MN' });
 
-    expect(result).toBe('10 234 015,50 MN');
+    expect(result).toBe('10 234 015.50 MN');
   });
 
-  it('formats USD with space thousands separator and comma decimal', () => {
+  it('formats USD with space thousands separator and period decimal', () => {
     const result = formatMoney('10015.50', { locale: 'en-US', currency: 'USD' });
 
-    expect(result).toBe('10 015,50 USD');
+    expect(result).toBe('10 015.50 USD');
   });
 
-  it('formats EUR with space thousands separator and comma decimal', () => {
+  it('formats EUR with space thousands separator and period decimal', () => {
     const result = formatMoney('1999.99', { locale: 'de-DE', currency: 'EUR' });
 
-    expect(result).toBe('1 999,99 EUR');
+    expect(result).toBe('1 999.99 EUR');
   });
 });

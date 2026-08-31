@@ -42,7 +42,7 @@ describe('ProductCard', () => {
   it('shows only the price when the product is not an offer — no strike-through sibling', () => {
     renderCard(BASE_ITEM);
 
-    expect(screen.getByText('100,00 USD')).toBeInTheDocument();
+    expect(screen.getByText('100.00 USD')).toBeInTheDocument();
     expect(screen.queryByTestId('product-card-original-price')).not.toBeInTheDocument();
   });
 
@@ -57,8 +57,8 @@ describe('ProductCard', () => {
     };
     renderCard(item);
 
-    expect(screen.getByText('75,00 USD')).toBeInTheDocument();
-    expect(screen.getByTestId('product-card-original-price')).toHaveTextContent('100,00 USD');
+    expect(screen.getByText('75.00 USD')).toBeInTheDocument();
+    expect(screen.getByTestId('product-card-original-price')).toHaveTextContent('100.00 USD');
   });
 
   it('renders the green "Nuevo" badge when isNew', () => {
@@ -73,7 +73,7 @@ describe('ProductCard', () => {
 
   it('renders the red -$X.XX badge when discountPrice > 0, in the price\'s currency', () => {
     renderCard({ ...BASE_ITEM, discountPrice: '5.00', isOffer: true });
-    expect(screen.getByTestId('product-badge-discount')).toHaveTextContent('-5,00 USD');
+    expect(screen.getByTestId('product-badge-discount')).toHaveTextContent('-5.00 USD');
   });
 
   it('BOTH discount badges appear together when both apply — never collapsed into one', () => {
@@ -88,7 +88,7 @@ describe('ProductCard', () => {
 
     expect(screen.getByTestId('product-badge-new')).toHaveTextContent('Nuevo');
     expect(screen.getByTestId('product-badge-percent')).toHaveTextContent('-10%');
-    expect(screen.getByTestId('product-badge-discount')).toHaveTextContent('-5,00 USD');
+    expect(screen.getByTestId('product-badge-discount')).toHaveTextContent('-5.00 USD');
   });
 
   it('renders an MN price without throwing — the risk formatMoney exists to close', () => {
@@ -98,6 +98,6 @@ describe('ProductCard', () => {
     };
 
     expect(() => renderCard(item, 'en-US')).not.toThrow();
-    expect(screen.getByText('1 234,50 MN')).toBeInTheDocument();
+    expect(screen.getByText('1 234.50 MN')).toBeInTheDocument();
   });
 });

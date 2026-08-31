@@ -38,14 +38,14 @@ describe('ProductDetailPage', () => {
     expect(screen.getByRole('img', { name: PRODUCT.name })).toHaveAttribute('src', PRODUCT.imageUrl);
     expect(screen.getByTestId('product-badge-new')).toBeInTheDocument();
     expect(screen.getByTestId('product-badge-percent')).toHaveTextContent('-20%');
-    expect(screen.getByTestId('product-badge-discount')).toHaveTextContent('-5,00 USD');
+    expect(screen.getByTestId('product-badge-discount')).toHaveTextContent('-5.00 USD');
   });
 
   it('shows finalPrice in accent + the struck-through original price when isOffer', () => {
     renderDetail(PRODUCT);
 
-    expect(screen.getByText('75,00 USD')).toBeInTheDocument();
-    expect(screen.getByTestId('product-detail-original-price')).toHaveTextContent('100,00 USD');
+    expect(screen.getByText('75.00 USD')).toBeInTheDocument();
+    expect(screen.getByTestId('product-detail-original-price')).toHaveTextContent('100.00 USD');
   });
 
   it('degrades gracefully for an unknown id — renders a friendly message, never crashes', () => {
