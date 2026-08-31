@@ -25,22 +25,27 @@ describe('formatMoney', () => {
     expect(result.length).toBeGreaterThan(0);
   });
 
-  it('formats currency "MN" with the amount rendered and the code as a suffix', () => {
+  it('formats currency "MN" with space thousands separator and comma decimal', () => {
     const result = formatMoney('1234.50', { locale: 'en-US', currency: 'MN' });
 
-    expect(result).toBe('1,234.50 MN');
+    expect(result).toBe('1 234,50 MN');
   });
 
-  it('formats USD via standard Intl.NumberFormat currency output', () => {
-    const result = formatMoney('199.99', { locale: 'en-US', currency: 'USD' });
+  it('formats large MN amounts with space grouping', () => {
+    const result = formatMoney('10234015.50', { locale: 'en-US', currency: 'MN' });
 
-    expect(result).toBe(new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(199.99));
-    expect(result).toBe('$199.99');
+    expect(result).toBe('10 234 015,50 MN');
   });
 
-  it('formats EUR via standard Intl.NumberFormat currency output', () => {
+  it('formats USD with space thousands separator and comma decimal', () => {
+    const result = formatMoney('10015.50', { locale: 'en-US', currency: 'USD' });
+
+    expect(result).toBe('10 015,50 USD');
+  });
+
+  it('formats EUR with space thousands separator and comma decimal', () => {
     const result = formatMoney('1999.99', { locale: 'de-DE', currency: 'EUR' });
 
-    expect(result).toBe(new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(1999.99));
+    expect(result).toBe('1 999,99 EUR');
   });
 });

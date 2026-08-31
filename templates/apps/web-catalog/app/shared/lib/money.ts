@@ -3,46 +3,28 @@ export interface FormatMoneyOptions {
   readonly currency: string;
 }
 
-const formatterCache = new Map<string, Intl.NumberFormat>();
-
-function getCachedFormatter(cacheKey: string, build: () => Intl.NumberFormat): Intl.NumberFormat {
-  let formatter = formatterCache.get(cacheKey);
-  if (!formatter) {
-    formatter = build();
-    formatterCache.set(cacheKey, formatter);
-  }
-  return formatter;
-}
-
 /**
- * `web-catalog` owns this formatter (design.md D9 references, spec:
- * "Money Formatting Supports Non-ISO Currencies") because `MN` is not ISO
- * 4217 — `new Intl.NumberFormat({ currency: 'MN' })` throws `RangeError`
- * (spike 0.4, `money.test.ts`'s first assertion proves it). `amount` is a
- * decimal STRING, matching the wire shape (`PublicMoneyDto`, design.md §3)
- * — never a JSON number — and is parsed here only for display, never for
- * further arithmetic.
+ * Format a decimal string amount as `<number> <CODE>` with:
+ * - Regular space (U+0020) as thousands separator: "10 234 015,50"
+ * - Comma as decimal separator: "1 234,50"
+ * - Currency code as suffix with a space: "1 234,50 USD"
  *
- * `USD`/`EUR` (and any other real ISO 4217 code) fall through to standard
- * `Intl.NumberFormat` currency output, one memoized formatter instance per
- * `locale|currency` pair — same pattern as the frozen
- * `packages/storefront/src/config/money.ts` this app must never import
- * (D9), rewritten here because that package is off-limits.
+ * `Intl.NumberFormat` cannot be used here because it emits typographic
+ * spaces (U+202F narrow no-break or U+00A0 no-break) instead of a
+ * regular ASCII space, and MN is not ISO 4217.
+ *
+ * `amount` is a decimal STRING matching the wire shape (`PublicMoneyDto`,
+ * design.md §3) — never a JSON number.
  */
 export function formatMoney(amount: string, options: FormatMoneyOptions): string {
   const value = Number(amount);
+  const negative = value < 0;
+  const abs = Math.abs(value);
 
-  if (options.currency === 'MN') {
-    const formatter = getCachedFormatter(
-      `plain|${options.locale}`,
-      () => new Intl.NumberFormat(options.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    );
-    return `${formatter.format(value)} MN`;
-  }
+  const [intPart, decPart] = abs.toFixed(2).split('.');
+  // Insert space every 3 digits from the right
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const formatted = `${negative ? '-' : ''}${grouped},${decPart}`;
 
-  const formatter = getCachedFormatter(
-    `${options.locale}|${options.currency}`,
-    () => new Intl.NumberFormat(options.locale, { style: 'currency', currency: options.currency }),
-  );
-  return formatter.format(value);
+  return `${formatted} ${options.currency}`;
 }
