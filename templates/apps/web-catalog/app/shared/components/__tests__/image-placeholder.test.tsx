@@ -13,8 +13,8 @@ describe('ProductImage', () => {
     const { container } = render(<ProductImage src={null} alt="Remera" className="h-64" />);
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
-    expect(container.querySelector('svg')).toBeInTheDocument();
     expect(container.firstElementChild).toHaveClass('h-64');
+    expect(container.firstElementChild).toHaveClass('bg-white');
   });
 
   it('labels the placeholder for assistive tech', () => {
