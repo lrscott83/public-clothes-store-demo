@@ -6,6 +6,7 @@ export default [
   index('routes/index.tsx'),
   route('productos', 'catalog/routes/products.tsx'),
   route('productos/:id', 'catalog/routes/product-detail.tsx'),
+  route('imagenes/productos/:id/:imageKey', 'catalog/routes/imagenes-productos.tsx'),
 
   // admin/login and admin/logout sit OUTSIDE the _auth.tsx layout —
   // design.md §6: with one app (unlike poolops's separate web-idp), login

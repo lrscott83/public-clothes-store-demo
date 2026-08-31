@@ -13,11 +13,12 @@ function apiPublicBaseUrl(): string {
 /**
  * Resolves a possibly-relative `imageUrl` (design.md §3 — relative whenever
  * `api-public`'s own `PUBLIC_ASSET_BASE_URL` is unset, the local/dev
- * default) against `api-public`'s own origin. A bare `/public/products/...`
- * path is meaningless to the BROWSER, which loads `<img src>` against
- * `web-catalog`'s different origin/port — this is the one place that gap is
- * closed. `null` (no image, design.md D8) passes through unchanged — there
- * is nothing to resolve.
+ * default) to a same-origin proxy URL served by `web-catalog` itself
+ * (`/imagenes/productos/...`). This avoids the browser hitting `api-public`
+ * directly with a bare `Host` header that carries no tenant subdomain.
+ * Absolute URLs (`http(s)://…`) are returned unchanged — those are the
+ * prod case where `api-public` has `PUBLIC_ASSET_BASE_URL` set.
+ * `null` (no image, design.md D8) passes through unchanged.
  */
 export function resolveImageUrl(imageUrl: string | null): string | null {
   if (imageUrl === null) {
@@ -26,7 +27,11 @@ export function resolveImageUrl(imageUrl: string | null): string | null {
   if (/^https?:\/\//.test(imageUrl)) {
     return imageUrl;
   }
-  return `${apiPublicBaseUrl()}${imageUrl}`;
+  const match = imageUrl.match(/^\/public\/products\/([^/]+)\/image\/(.+)$/);
+  if (match) {
+    return `/imagenes/productos/${match[1]}/${match[2]}`;
+  }
+  return imageUrl;
 }
 
 function withResolvedImage(item: PublicProductDto): PublicProductDto {

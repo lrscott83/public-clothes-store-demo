@@ -14,23 +14,26 @@ import {
  * even though `api-public` runs on its own origin/port.
  */
 describe('resolveImageUrl', () => {
-  const originalEnv = process.env.API_PUBLIC_URL;
-
-  afterEach(() => {
-    process.env.API_PUBLIC_URL = originalEnv;
-  });
-
   it('leaves an already-absolute imageUrl untouched (PUBLIC_ASSET_BASE_URL was set on api-public)', () => {
     expect(resolveImageUrl('https://cdn.example.com/products/a.webp')).toBe(
       'https://cdn.example.com/products/a.webp',
     );
   });
 
-  it('prefixes a relative imageUrl with API_PUBLIC_URL — the browser cannot resolve it against web-catalog\'s own origin', () => {
-    process.env.API_PUBLIC_URL = 'http://localhost:3003';
+  it('rewrites a relative /public/products/{id}/image/{key} to a same-origin proxy URL', () => {
     expect(resolveImageUrl('/public/products/abc/image/def.webp')).toBe(
-      'http://localhost:3003/public/products/abc/image/def.webp',
+      '/imagenes/productos/abc/def.webp',
     );
+  });
+
+  it('preserves dots in imageKey (file extensions) when rewriting to proxy URL', () => {
+    expect(resolveImageUrl('/public/products/abc/image/dda3525521112f76.png')).toBe(
+      '/imagenes/productos/abc/dda3525521112f76.png',
+    );
+  });
+
+  it('returns an unrecognized relative path unchanged', () => {
+    expect(resolveImageUrl('/some/other/path')).toBe('/some/other/path');
   });
 
   it('passes null through unchanged — a product with no image has nothing to resolve', () => {
@@ -77,8 +80,8 @@ describe('public-api.server fetch client', () => {
       'default.localhost:3000',
     );
 
-    // imageUrl on each item is resolved to an absolute URL for the browser.
-    expect(result.items[0].imageUrl).toBe('http://localhost:3003/public/products/1/image/x.webp');
+    // imageUrl on each item is resolved to a same-origin proxy URL for the browser.
+    expect(result.items[0].imageUrl).toBe('/imagenes/productos/1/x.webp');
   });
 
   it('fetchPublicProduct returns null on a 404 (unknown id) — never throws', async () => {
