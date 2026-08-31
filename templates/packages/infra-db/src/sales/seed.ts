@@ -99,7 +99,7 @@ export async function seedOrders(
 
   const productUsd = await tenantClient.product.upsert({
     where: { id: DEMO_PRODUCT_USD_ID },
-    update: {},
+    update: { image: null },
     create: {
       id: DEMO_PRODUCT_USD_ID,
       name: 'Producto Demo USD',
@@ -109,14 +109,14 @@ export async function seedOrders(
       cost: '60.00',
       costCurrency: 'USD',
       categoryId: category.id,
-      image: 'sales-seed/demo-usd.png',
+      image: null,
       order: 1,
       active: true,
     },
   });
   const productMn = await tenantClient.product.upsert({
     where: { id: DEMO_PRODUCT_MN_ID },
-    update: {},
+    update: { image: null },
     create: {
       id: DEMO_PRODUCT_MN_ID,
       name: 'Producto Demo MN',
@@ -126,7 +126,7 @@ export async function seedOrders(
       cost: '21000.00',
       costCurrency: 'MN',
       categoryId: category.id,
-      image: 'sales-seed/demo-mn.png',
+      image: null,
       order: 2,
       active: true,
     },
