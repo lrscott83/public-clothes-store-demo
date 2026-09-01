@@ -256,17 +256,22 @@ describe('DeliveryService', () => {
         }
         if (filter?.status === 'delivered') {
           return [
+            // Relative dates, NOT fixed calendar days: the throughput window
+            // counts back from TODAY, so hardcoded August dates silently
+            // fall out of the window as the calendar moves and the test
+            // rots (it did exactly that on 2026-09-01). One and two days
+            // back stay inside any sane window forever.
             assignment({
               id: 'a2',
               carrierId: 'carrier-busy',
               status: 'delivered',
-              deliveredAt: new Date('2026-08-02T00:00:00.000Z'),
+              deliveredAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
             }),
             assignment({
               id: 'a3',
               carrierId: 'carrier-busy',
               status: 'delivered',
-              deliveredAt: new Date('2026-08-03T00:00:00.000Z'),
+              deliveredAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
             }),
           ];
         }
